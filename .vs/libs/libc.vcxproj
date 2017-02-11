@@ -36,6 +36,7 @@
     <None Include="..\..\libs\libc\dlmalloc.inl" />
     <None Include="..\..\libs\libc\itos.impl.inl" />
     <None Include="..\..\libs\libc\stdio-file.c.inl" />
+    <None Include="..\..\libs\libc\string-wmatch.c.inl" />
     <None Include="..\..\libs\libc\syscall.S" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

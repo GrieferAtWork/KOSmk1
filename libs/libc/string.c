@@ -1235,6 +1235,20 @@ __public char *strtok(char *__restrict str,
 #endif /* !__CONFIG_MIN_BSS__ */
 
 
+#ifndef __CONFIG_MIN_LIBC__
+#ifndef __INTELLISENSE__
+#define STRI
+#define STRN
+#include "string-wmatch.c.inl"
+#define STRI
+#include "string-wmatch.c.inl"
+#define STRN
+#include "string-wmatch.c.inl"
+#include "string-wmatch.c.inl"
+#endif
+#endif /* !__CONFIG_MIN_LIBC__ */
+
+
 #undef ffs
 __public int ffs(int i) {
 #if defined(__GNUC__) || __has_builtin(__builtin_ffs)

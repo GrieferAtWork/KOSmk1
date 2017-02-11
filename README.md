@@ -58,9 +58,10 @@ As usual, this is a <b>one-person project</b>, with development having started o
      - addist+ddist (non-standard primitive)
  - ELF binaries
  - dlopen (Shared libraries)
- - time (time_t/struct timespec)
- - ring #3
+ - Time (time_t/struct timespec)
+ - Ring #3
  - Filesystem
+   - FAT-12/16/32
    - open/read/write/seek/etc.
    - OK:      Read/write existing files
    - MISSING: create/delete/rename files/folders

@@ -360,6 +360,30 @@ extern __wunused __purecall __nonnull((1)) __size_t strnlen __P((char const *__r
 extern __wunused __purecall __nonnull((1,2)) int strcmp __P((char const *__a, char const *__b));
 extern __wunused __purecall __nonnull((1,2)) int strncmp __P((char const *__a, char const *__b, __size_t __maxchars));
 
+#ifndef __CONFIG_MIN_LIBC__
+/* Non-standard wildcard-enabled string comparison functions.
+ * Returns ZERO(0) if a given 'STR' matches a wildcard-enabled pattern 'WILDPATTERN'.
+ * Returns <0 if the first miss-matching character in 'STR' is lower than its 'WILDPATTERN' counterpart.
+ * Returns >0 if the first miss-matching character in 'STR' is greater than its 'WILDPATTERN' counterpart. */
+extern __wunused __purecall __nonnull((1,2)) int _strwcmp __P((char const *__restrict __str, char const *__restrict __wildpattern));
+extern __wunused __purecall __nonnull((1,2)) int _striwcmp __P((char const *__restrict __str, char const *__restrict __wildpattern));
+extern __wunused __purecall __nonnull((1,3)) int _strnwcmp __P((char const *__restrict __str, __size_t __maxstr, char const *__restrict __wildpattern, __size_t __maxpattern));
+extern __wunused __purecall __nonnull((1,3)) int _strinwcmp __P((char const *__restrict __str, __size_t __maxstr, char const *__restrict __wildpattern, __size_t __maxpattern));
+#ifndef __STDC_PURE__
+#ifndef __NO_asmname
+extern __wunused __purecall __nonnull((1,2)) int strwcmp __P((char const *__restrict __str, char const *__restrict __wildpattern)) __asmname("_strwcmp");
+extern __wunused __purecall __nonnull((1,2)) int striwcmp __P((char const *__restrict __str, char const *__restrict __wildpattern)) __asmname("_striwcmp");
+extern __wunused __purecall __nonnull((1,3)) int strnwcmp __P((char const *__restrict __str, __size_t __maxstr, char const *__restrict __wildpattern, __size_t __maxpattern)) __asmname("_strnwcmp");
+extern __wunused __purecall __nonnull((1,3)) int strinwcmp __P((char const *__restrict __str, __size_t __maxstr, char const *__restrict __wildpattern, __size_t __maxpattern)) __asmname("_strinwcmp");
+#else
+#   define strwcmp   _strwcmp
+#   define striwcmp  _striwcmp
+#   define strnwcmp  _strnwcmp
+#   define strinwcmp _strinwcmp
+#endif
+#endif
+#endif /* !__CONFIG_MIN_LIBC__ */
+
 /* Count the amount of leading characters in 'STR', also contained in 'SPANSET':
  * >> result = 0;
  * >> while (strchr(SPANSET,STR[result])) ++result;
