@@ -58,6 +58,8 @@ void k_dosyslog(int level, void (*print_prefix)(int,void *),
  char *appname,*kernel_s;
  size_t partmaxsize; kerrno_t error;
  kassert_kproc(caller);
+#elif defined(KLOG_RAW)
+ if (level <= KLOG_RAW) { k_writesyslog(level,s,maxlen); return; }
 #endif
 
 #ifdef USER
@@ -70,9 +72,13 @@ void k_dosyslog(int level, void (*print_prefix)(int,void *),
    assert(partmaxsize <= maxlen);
 #define s      kernel_s
 #define maxlen partmaxsize
+#ifdef KLOG_RAW
+   if (level <= KLOG_RAW) {
+    k_writesyslog(level,s,maxlen);
+   } else
+#endif /* KLOG_RAW */
 #endif /* USER */
-   end = (flush_start = iter = s)+maxlen;
-   for (;;) {
+   for (end = (flush_start = iter = s)+maxlen;;) {
     if (iter == end || !*iter || *iter++ == '\n') {
      int haslf = (iter != s && iter[-1] == '\n');
      new_state = old_state = caller->p_sand.ts_state;

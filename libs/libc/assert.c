@@ -64,15 +64,18 @@ __DECL_BEGIN
 #endif
 
 
-#ifdef __KERNEL__
-#define ASSERT_PRINTF(...)           (serial_printf(SERIAL_01,__VA_ARGS__),tty_printf(__VA_ARGS__))
-#define ASSERT_VPRINTF(format,args) (serial_vprintf(SERIAL_01,format,args),tty_vprintf(format,args))
+#if defined(__KERNEL__) && defined(KLOG_RAW)
+#   define ASSERT_PRINTF(...)           (k_syslogf(KLOG_RAW,__VA_ARGS__),tty_printf(__VA_ARGS__))
+#   define ASSERT_VPRINTF(format,args) (k_vsyslogf(KLOG_RAW,format,args),tty_vprintf(format,args))
+#elif defined(__KERNEL__)
+#   define ASSERT_PRINTF(...)           (serial_printf(SERIAL_01,__VA_ARGS__),tty_printf(__VA_ARGS__))
+#   define ASSERT_VPRINTF(format,args) (serial_vprintf(SERIAL_01,format,args),tty_vprintf(format,args))
 #elif USE_USERSPACE_SYSLOG
-#define ASSERT_PRINTF(...)           (dprintf(STDERR_FILENO,__VA_ARGS__),k_syslogf(KLOG_ERROR,__VA_ARGS__))
-#define ASSERT_VPRINTF(format,args) (vdprintf(STDERR_FILENO,format,args),k_vsyslogf(KLOG_ERROR,format,args))
+#   define ASSERT_PRINTF(...)           (dprintf(STDERR_FILENO,__VA_ARGS__),k_syslogf(KLOG_ERROR,__VA_ARGS__))
+#   define ASSERT_VPRINTF(format,args) (vdprintf(STDERR_FILENO,format,args),k_vsyslogf(KLOG_ERROR,format,args))
 #else
-#define ASSERT_PRINTF(...)           dprintf(STDERR_FILENO,__VA_ARGS__)
-#define ASSERT_VPRINTF(format,args) vdprintf(STDERR_FILENO,format,args)
+#   define ASSERT_PRINTF(...)           dprintf(STDERR_FILENO,__VA_ARGS__)
+#   define ASSERT_VPRINTF(format,args) vdprintf(STDERR_FILENO,format,args)
 #endif
 
 
@@ -143,8 +146,7 @@ void __assertion_failedf(__LIBC_DEBUG_PARAMS_ char const *expr,
 #endif
  
 __public uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
- 
-__public __noreturn void __stack_chk_fail(void) {
+__public __noreturn __noinline void __stack_chk_fail(void) {
  __assertion_failedf(NULL,-1,NULL,"STACK VIOLATION",1,NULL);
 }
 

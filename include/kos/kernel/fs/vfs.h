@@ -138,6 +138,9 @@ extern kerrno_t kvproxyfile_flush(struct kfile *__restrict self);
 extern kerrno_t kvproxyfile_readdir(struct kfile *__restrict self, __ref struct kinode **__restrict inode, struct kdirentname **__restrict name, __u32 flags); /*< Returns KS_EMPTY when the end is reached. */
 extern __ref struct kinode *kvproxyfile_getinode(struct kfile *__restrict self);
 extern __ref struct kdirent *kvproxyfile_getdirent(struct kfile *__restrict self);
+#ifdef __INTELLISENSE__
+#define KVPROXYFILE_TYPE_INIT /* nothing */
+#else
 #define KVPROXYFILE_TYPE_INIT \
  .ft_size = sizeof(struct kvproxyfile), .ft_quit = &kvproxyfile_quit,\
  .ft_read = &kvproxyfile_read, .ft_write = &kvproxyfile_write,\
@@ -147,6 +150,7 @@ extern __ref struct kdirent *kvproxyfile_getdirent(struct kfile *__restrict self
  .ft_trunc = &kvproxyfile_trunc, .ft_flush = &kvproxyfile_flush,\
  .ft_readdir = &kvproxyfile_readdir, .ft_getinode = &kvproxyfile_getinode,\
  .ft_getdirent = &kvproxyfile_getdirent,
+#endif
 
 
 #ifdef __MAIN_C__

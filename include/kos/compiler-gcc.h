@@ -182,9 +182,17 @@
 #define __compiler_assume   __builtin_assume
 #endif
 #endif
+
 #ifndef __INTELLISENSE__
 #ifndef __fastcall
 #define __fastcall  __attribute__((__fastcall__))
+#endif
+#ifndef __STATIC_ASSERT_M
+#define __STATIC_ASSERT_M(expr,msg) \
+ __xblock({ extern __attribute__((__error__(msg))) void STATIC_ASSERTION_FAILED(void);\
+            if (!(expr)) STATIC_ASSERTION_FAILED();\
+            (void)0;\
+ })
 #endif
 #endif
 

@@ -37,14 +37,16 @@
 
 __DECL_BEGIN
 
-#define KLOG_ERROR  0
-#define KLOG_WARN   1
-#define KLOG_MSG    2
-#define KLOG_INFO   3
-#define KLOG_DEBUG  4
-#define KLOG_TRACE  5
-#define KLOG_INSANE 6
-#define KLOG_COUNT  7
+#define KLOG_RAW  (-1)
+#define KLOG_CRIT   0
+#define KLOG_ERROR  1
+#define KLOG_WARN   2
+#define KLOG_MSG    3
+#define KLOG_INFO   4
+#define KLOG_DEBUG  5
+#define KLOG_TRACE  6
+#define KLOG_INSANE 7
+#define KLOG_COUNT  8
 
 #ifndef __KERNEL__
 #ifdef __INTELLISENSE__

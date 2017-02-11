@@ -128,10 +128,6 @@ SYSCALL(sys_kmem_validate) {
   }
   kproc_unlock(procself,KPROC_LOCK_SHM);
  }
- enum{
-  x = __REGION_IN_NESTED(ISCRIT),
-  y = __REGION_IN_RUNTIM(ISCRIT),
- };
  KTASK_CRIT_END
  RETURN(error);
 }

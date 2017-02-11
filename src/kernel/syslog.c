@@ -85,7 +85,11 @@ void k_dosyslogf(int level, void (*print_prefix)(int,void *), void *closure,
 
 char const *k_sysloglevel_mnemonic(int level) {
  switch (level) {
-  default         : return "#E";
+  default:
+#ifdef KLOG_RAW
+   if (level <= KLOG_RAW) return "";
+#endif
+   return "#E";
   case KLOG_WARN  : return "#W";
   case KLOG_MSG   : return "#M";
   case KLOG_INFO  : return "#I";

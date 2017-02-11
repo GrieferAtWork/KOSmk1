@@ -87,24 +87,26 @@ static __atomic int __in_formatprintf_check = 0;
 #define __printf_assert
 #endif
 
+#define print(p,s) \
+do if __unlikely((error = (*printer)(p,s,closure)) != 0) return error;\
+while(0)
+#define quote(p,s,flags) \
+do if __unlikely((error = format_quote(printer,closure,p,s,flags)) != 0) return error;\
+while(0)
+#define printf(...) \
+do if __unlikely((error = format_printf(printer,closure,__VA_ARGS__)) != 0) return error;\
+while(0)
+
 __public int format_vprintf(pformatprinter printer, void *closure,
                             char const *__restrict format, va_list args) {
  char const *format_begin,*iter; char ch; int error;
 #if defined(__KERNEL__) && defined(__DEBUG__)
 #define readch() (__printf_assert(kassertbyte(iter)),*iter++)
 #define peekch() (__printf_assert(kassertbyte(iter)),*iter)
-#define print(p,s) \
-do{ __printf_assert(assert(1 || strnlen(p,s)));\
-    if __unlikely((error = (*printer)(p,s,closure)) != 0) return error;\
-}while(0)
 #else
 #define readch() (*iter++)
 #define peekch() (*iter)
-#define print(p,s) \
-do if __unlikely((error = (*printer)(p,s,closure)) != 0) return error;\
-while(0)
 #endif
-
  iter = format_begin = format;
  __printf_assert(kassertbyte(printer));
  for (;;) {
@@ -267,10 +269,15 @@ flag_next: // Flags
      {
       char const *arg;
      case 's':
+     case 'q':
       arg = va_arg(args,char const *);
       if __unlikely(!arg) arg = "(null)";
-      print(arg,(flags&PRINTF_FLAG_HASPREC) ? (size_t)precision : (size_t)-1);
-      if __unlikely(error != 0) return error;
+      if (ch == 's') {
+       print(arg,(flags&PRINTF_FLAG_HASPREC) ? (size_t)precision : (size_t)-1);
+      } else {
+       quote(arg,(flags&PRINTF_FLAG_HASPREC) ? (size_t)precision : (size_t)-1,
+            (flags&PRINTF_FLAG_PREFIX) ? FORMAT_QUOTE_FLAG_PRINTRAW : FORMAT_QUOTE_FLAG_NONE);
+      }
       break;
      }
 
@@ -343,7 +350,6 @@ end:
  if (format_begin != iter) {
   print(format_begin,(size_t)(iter-format_begin));
  }
-#undef print
 #undef peekch
 #undef readch
  return 0;
@@ -618,20 +624,10 @@ int format_strftime(pformatprinter printer, void *closure,
 #if defined(__KERNEL__) && defined(__DEBUG__)
 #define readch() (__printf_assert(kassertbyte(iter)),*iter++)
 #define peekch() (__printf_assert(kassertbyte(iter)),*iter)
-#define print(p,s) \
-do{ __printf_assert(assert(1 || strnlen(p,s)));\
-    if __unlikely((error = (*printer)(p,s,closure)) != 0) return error;\
-}while(0)
 #else
 #define readch() (*iter++)
 #define peekch() (*iter)
-#define print(p,s) \
-do if __unlikely((error = (*printer)(p,s,closure)) != 0) return error;\
-while(0)
 #endif
-#define printf(...) \
-do if __unlikely((error = format_printf(printer,closure,__VA_ARGS__)) != 0) return error;\
-while(0)
 
  iter = format_begin = format;
  __printf_assert(kassertbyte(printer));
@@ -780,13 +776,111 @@ end:
  if (format_begin != iter) {
   print(format_begin,(size_t)(iter-format_begin));
  }
-#undef print
 #undef peekch
 #undef readch
  return 0;
 }
 
 
+#define tooct(x) ('0'+(x))
+#define __tohex(x) ((x) >= 10 ? (flags&FORMAT_QUOTE_FLAG_UPPERSUF ? 'A' : 'a')+((x)-10) : '0'+(x))
+#define tohex(x) __xblock({ __u8 const __x = (x); __xreturn __tohex(__x); })
+
+int
+format_quote(pformatprinter printer, void *closure,
+             char const *__restrict text, size_t maxtext,
+             __u32 flags) {
+ char encoded_text[4];
+ size_t encoded_text_size;
+ int error; char ch;
+ char const *iter,*end,*flush_start;
+ __printf_assert(kassertbyte(printer));
+ end = (iter = flush_start = text)+maxtext;
+ encoded_text[0] = '\\';
+ if (!(flags&FORMAT_QUOTE_FLAG_PRINTRAW)) print("\"",1);
+ while (iter != end) {
+  ch = *iter;
+  if (ch < 32 || ch >= 127 || ch == '\'' || ch == '\"' || ch == '\\') {
+   /* Character requires special encoding. */
+   if (!ch && !(flags&FORMAT_QUOTE_FLAG_QUOTEALL)) goto end;
+   /* Flush unprinted text. */
+   if (iter != flush_start) {
+    print(flush_start,(size_t)(iter-flush_start));
+    flush_start = iter+1;
+   }
+   if (ch < 32) {
+    /* Control character. */
+    if (flags&FORMAT_QUOTE_FLAG_NOCTRL) {
+default_ctrl:
+     if (flags&FORMAT_QUOTE_FLAG_FORCEHEX) goto encode_hex;
+encode_oct:
+     if ((__u8)ch <= 0x07) {
+      encoded_text[1] = tooct(((__u8)ch & 0x07));
+      encoded_text_size = 2;
+     } else if ((__u8)ch <= 0x38) {
+      encoded_text[1] = tooct(((__u8)ch & 0x38) >> 3);
+      encoded_text[2] = tooct(((__u8)ch & 0x07));
+      encoded_text_size = 3;
+     } else {
+      encoded_text[1] = tooct(((__u8)ch & 0xC0) >> 6);
+      encoded_text[2] = tooct(((__u8)ch & 0x38) >> 3);
+      encoded_text[3] = tooct(((__u8)ch & 0x07));
+      encoded_text_size = 4;
+     }
+     goto print_encoded;
+    }
+special_control:
+    switch (ch) {
+     case '\a':   ch = 'a'; break;
+     case '\b':   ch = 'b'; break;
+     case '\f':   ch = 'f'; break;
+     case '\n':   ch = 'n'; break;
+     case '\r':   ch = 'r'; break;
+     case '\t':   ch = 't'; break;
+     case '\v':   ch = 'v'; break;
+     case '\033': ch = 'e'; break;
+     case '\\': case '\'': case '\"': break;
+     default: goto default_ctrl;
+    }
+    encoded_text[1] = ch;
+    encoded_text_size = 2;
+    goto print_encoded;
+   } else if ((ch == '\\' || ch == '\'' || ch == '\"') &&
+             !(flags&FORMAT_QUOTE_FLAG_NOCTRL)) {
+    goto special_control;
+   } else {
+    /* Non-ascii character. */
+/*default_nonascii:*/
+    if (flags&FORMAT_QUOTE_FLAG_FORCEOCT) goto encode_oct;
+encode_hex:
+    encoded_text[1] = flags&FORMAT_QUOTE_FLAG_UPPERPRE ? 'X' : 'x';
+    if ((__u8)ch <= 0xf) {
+     encoded_text[2] = tohex((__u8)ch);
+     encoded_text_size = 3;
+    } else {
+     encoded_text[2] = tohex(((__u8)ch & 0xf0) >> 4);
+     encoded_text[3] = tohex( (__u8)ch & 0x0f);
+     encoded_text_size = 4;
+    }
+print_encoded:
+    print(encoded_text,encoded_text_size);
+    goto next;
+   }
+  }
+next:
+  ++iter;
+ }
+end:
+ if (iter != flush_start) print(flush_start,(size_t)(iter-flush_start));
+ if (!(flags&FORMAT_QUOTE_FLAG_PRINTRAW)) print("\"",1);
+ return 0;
+}
+
+
+
+#undef printf
+#undef quote
+#undef print
 
 
 __DECL_END

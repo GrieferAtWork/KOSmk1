@@ -108,11 +108,6 @@ void test_taskstat(void) {
 }
 
 
-
-#ifndef __STATIC_ASSERT_M
-#   define __STATIC_ASSERT_M(expr) __STATIC_ASSERT(expr)
-#endif
-
 void kernel_main(void) {
 
  // TODO: Parse explicit environ input in exec
@@ -163,6 +158,8 @@ void kernel_main(void) {
  //RUN(test_terminate_suspended_critical);
 #undef RUN
  //test_taskstat();
+ k_syslogf(KLOG_INFO,"My name is %q\n","foo\"\e\nbar");
+
 
  run_init();
 
