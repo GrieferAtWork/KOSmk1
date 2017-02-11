@@ -1,0 +1,48 @@
+
+#### Lib-K ####
+[project = lib:static:k] \
+[define(__KERNEL__ = 1)] \
+[define(__CONFIG_MIN_BSS__ = 1)] \
+[define(__CONFIG_MIN_LIBC__ = 1)] \
+[define(__BUILDING_LIBC__ = 1)] \
+{
+	./libc/*.c;
+	./libc/*.S;
+	./libc/sys/*.c;
+}
+[project = lib:static:kfdlibm] \
+[define(__KERNEL__ = 1)] \
+[flags(-Wno-parentheses,-Wno-unused-but-set-variable,-Wno-misleading-indentation,-Wno-unknown-pragmas)] {
+	[define(lint = 1)] ./libfdlibm/*.c;
+}
+
+#### Lib-C ####
+[project = lib:shared:c] \
+[diskfile = /usr/lib/libc.so] \
+[define(__BUILDING_LIBC__ = 1)] {
+	./libc/*.c;
+	./libc/*.S;
+	./libc/sys/*.c;
+	# isnan() is used by libc to implement 'dtos' (double-to-string)
+	# >> To prevent a dependency on fdlibm (which would cause everything to depend on it)
+	#    the single source file defining that function is simply included (much less overhead)
+	[flags(-Wno-parentheses)] ./libfdlibm/s_isnan.c;
+}
+
+# Statically linked against any ring-3 application
+# >> This library implements the '_start' function that eventually calls main()
+[project = lib:static:_start] { ./_start/start.c; }
+
+# Various shared libraries
+[project = lib:shared:fdlibm]  [diskfile = /usr/lib/libfdlibm.so] [define(lint = 1)] \
+[flags(-Wno-parentheses,-Wno-unused-but-set-variable,-Wno-misleading-indentation,-Wno-unknown-pragmas)] { ./libfdlibm/*.c; }
+[project = lib:shared:pthread] [diskfile = /usr/lib/libpthread.so] { ./libpthread/*.c; }
+[project = lib:shared:dl]      [diskfile = /usr/lib/libdl.so] { ./libdl/*.c; }
+[project = lib:shared:rline]   [diskfile = /usr/lib/librline.so] { ./librline/*.c; }
+[project = lib:shared:term]    [diskfile = /usr/lib/libterm.so] { ./libterm/*.c; }
+[project = lib:shared:curses]  [diskfile = /usr/lib/libcurses.so] [define(__BUILTIN_LIBCURSES__ = 1)] { ./libcurses/*.c; }
+
+
+
+
+

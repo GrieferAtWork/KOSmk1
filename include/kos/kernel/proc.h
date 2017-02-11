@@ -1,0 +1,816 @@
+/* MIT License
+ *
+ * Copyright (c) 2017 GrieferAtWork
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+#ifndef __KOS_KERNEL_PROC_H__
+#define __KOS_KERNEL_PROC_H__ 1
+
+#include <kos/config.h>
+#ifdef __KERNEL__
+#include <kos/compiler.h>
+#include <kos/kernel/fdman.h>
+#include <kos/kernel/mutex.h>
+#include <kos/kernel/mmutex.h>
+#include <kos/kernel/object.h>
+#include <kos/kernel/procenv.h>
+#include <kos/kernel/procmodules.h>
+#include <kos/kernel/types.h>
+#ifndef __KOS_KERNEL_SHM_H__
+#include <kos/kernel/shm.h>
+#endif
+#include <kos/task.h>
+#include <stdint.h>
+#ifndef __INTELLISENSE__
+#include <string.h>
+#endif
+
+__DECL_BEGIN
+
+// NOTE: kproc (Processes) were originally called ktaskctx (task-contexts).
+//       At some point I realized that's a really $h177y name and started
+//       calling it by what is really just simply is.
+//       So if see me mention ktaskctx anywhere, I'm talking about processes.
+
+struct ktask;
+struct kproc;
+struct kshlib;
+
+#define KOBJECT_MAGIC_PROC  0x960C // PROC
+#define kassert_kproc(self) kassert_refobject(self,p_refcnt,KOBJECT_MAGIC_PROC)
+
+
+struct kprocsand {
+ // (expected) ORDER: ts_gpbarrier >= ts_spbarrier >= ts_gmbarrier >= ts_smbarrier
+ //                  (Where >= means ktask_issameorchildof(rhs,lhs))
+ // [1..1] Barriers describing privilege levels of a given task.
+ __atomic __ref struct ktask *ts_gpbarrier; /*< GETPROP/VISIBLE. */
+ __atomic __ref struct ktask *ts_spbarrier; /*< SETPROP. */
+ __atomic __ref struct ktask *ts_gmbarrier; /*< GETMEM. */
+ __atomic __ref struct ktask *ts_smbarrier; /*< SETMEM. */
+ // NOTE: Priority limits only affect a task's ability of setting
+ //       the priorities of other tasks. If 
+ __atomic ktaskprio_t ts_priomin; /*< Lowest allowed priority to be set. */
+ __atomic ktaskprio_t ts_priomax; /*< Greatest allowed priority to be set. */
+#if KCONFIG_HAVE_TASKNAMES
+ __atomic __size_t    ts_namemax; /*< Max allowed task name length to be set. */
+#endif
+ // NOTE: The [-] means that the flag can only ever be removed, but never (re-)added.
+#define KPROCSAND_FLAG_NONE          0x00000000
+#define KPROCSAND_FLAG_FORKROOT      0x00000001 /*< [-] Allow forkas without password (required for 'su -l <username>'). */
+#define KPROCSAND_FLAG_PRIOSUSPENDED 0x00000002 /*< [-] Allow 'KTASK_PRIORITY_SUSPENDED'-priority tasks (even if 'st_priomin..st_priomax' would prevent it) */
+#define KPROCSAND_FLAG_PRIOREALTIME  0x00000004 /*< [-] Allow 'KTASK_PRIORITY_REALTIME'-priority tasks (even if 'st_priomin..st_priomax' would prevent it) */
+#define KPROCSAND_FLAG_CHTIME        0x10000000 /*< [-] Process is allowed to change the machine's time. */
+ __atomic __u32       ts_flags;   /*< Misc flags specifying enabled features. */
+#define KPROCSTATE_FLAG_NONE      0x00000000
+#define KPROCSTATE_FLAG_SYSLOGINL 0x00000001 /*< The syslog didn't end with a linefeed (continue writing in-line) */
+#define KPROCSTATE_SHIFT_LOGPRIV  28
+#define KPROCSTATE_MASK_LOGPRIV   0xf0000000 /*< Mask specifying the syslog privilege level of this process.
+                                                 NOTE: The process may only log with levels >= this value. */
+ __atomic __u32       ts_state;   /*< [atomic] Process-specific state flags. */
+};
+#define KPROCSAND_INITROOT \
+ {ktask_zero(),ktask_zero(),ktask_zero(),ktask_zero()\
+ ,KTASKPRIO_MIN,KTASKPRIO_MAX,(__size_t)-1,0xffffffff\
+ ,KPROCSTATE_FLAG_NONE}
+extern __crit kerrno_t kprocsand_initroot(struct kprocsand *self);
+
+
+struct kproc {
+ KOBJECT_HEAD
+ __atomic __u32       p_refcnt;   /*< Reference counter. */
+ __u32                p_pid;      /*< Process ID (unsigned to prevent negative numbers). */
+#define KPROC_LOCK_MODS    KMMUTEX_LOCK(0)
+#define KPROC_LOCK_FDMAN   KMMUTEX_LOCK(1)
+#define KPROC_LOCK_SHM     KMMUTEX_LOCK(2)
+#define KPROC_LOCK_SAND    KMMUTEX_LOCK(3)
+#define KPROC_LOCK_TLSMAN  KMMUTEX_LOCK(4)
+#define KPROC_LOCK_THREADS KMMUTEX_LOCK(5)
+#define KPROC_LOCK_ENVIRON KMMUTEX_LOCK(6)
+ struct kmmutex       p_lock;     /*< Lock for the task context. */
+ struct kprocmodules  p_modules;  /*< [lock(KPROC_LOCK_MODS)] Shared libraries associated with this process. */
+ struct kfdman        p_fdman;    /*< [lock(KPROC_LOCK_FDMAN)] File descriptor manager. */
+ struct kshm          p_shm;      /*< [lock(KPROC_LOCK_SHM)] Shared memory management & page directory. */
+ struct kprocsand     p_sand;     /*< [lock(KPROC_LOCK_SAND)] Tasking related, sandy limits. */
+ struct ktlsman       p_tlsman;   /*< [lock(KPROC_LOCK_TLSMAN)] TLS identifiers. */
+ struct ktasklist     p_threads;  /*< [lock(KPROC_LOCK_THREADS)] List of tasks using this context. */
+ struct kprocenv      p_environ;  /*< [lock(KPROC_LOCK_ENVIRON)] Process environment variables. */
+};
+
+#define kproc_islocked(self,lock)  kmmutex_islocked(&(self)->p_lock,lock)
+#define kproc_trylock(self,lock)   kmmutex_trylock(&(self)->p_lock,lock)
+#define kproc_lock(self,lock)      kmmutex_lock(&(self)->p_lock,lock)
+#define kproc_unlock(self,lock)    kmmutex_unlock(&(self)->p_lock,lock)
+#define kproc_islockeds(self,lock) kmmutex_islockeds(&(self)->p_lock,lock)
+#define kproc_trylocks(self,lock)  kmmutex_trylocks(&(self)->p_lock,lock)
+#define kproc_locks(self,lock)     kmmutex_locks(&(self)->p_lock,lock)
+#define kproc_unlocks(self,lock)   kmmutex_unlocks(&(self)->p_lock,lock)
+
+#define kproc_fdman(self)  (&(self)->p_fdman)
+#define kproc_uid(self)       0 /*< TODO */
+#define kproc_gid(self)       0 /*< TODO */
+#define kproc_pagedir(self)  (self)->p_shm.sm_pd
+
+#define KPROC_INITROOT(root,pagedir) \
+ {KOBJECT_INIT(KOBJECT_MAGIC_PROC) 0xffff\
+ ,0,KMMUTEX_INIT,KPROCMODULES_INIT,KFDMAN_INITROOT(root)\
+ ,KSHM_INITROOT(pagedir),KPROCSAND_INITROOT\
+ ,KTLSMAN_INITROOT,KTASKLIST_INIT,KPROCENV_INIT_ROOT}
+
+#define __kassert_kproc(self) kassert_object(self,KOBJECT_MAGIC_PROC)
+__local KOBJECT_DEFINE_INCREF(kproc_incref,struct kproc,p_refcnt,kassert_kproc);
+__local KOBJECT_DEFINE_TRYINCREF(kproc_tryincref,struct kproc,p_refcnt,__kassert_kproc);
+__local KOBJECT_DEFINE_DECREF(kproc_decref,struct kproc,p_refcnt,kassert_kproc,kproc_destroy);
+#undef __kassert_kproc
+
+extern struct kproc __kproc_kernel;
+#define kproc_kernel()  (&__kproc_kernel)
+
+#define kpagedir_user()            kproc_pagedir(kproc_self())
+#define kpagedir_ismappedu_ro(p,s) kpagedir_ismappedex_b(kpagedir_user(),p,s,PAGEDIR_FLAG_USER,PAGEDIR_FLAG_USER)
+#define kpagedir_ismappedu_rw(p,s) kpagedir_ismappedex_b(kpagedir_user(),p,s,PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE,PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE)
+
+//////////////////////////////////////////////////////////////////////////
+// Create a new root task context (with all permissions enabled)
+extern __crit __ref struct kproc *kproc_newroot(void);
+
+// === Helper functions for implementing fork()-exec() through system-calls.
+
+//////////////////////////////////////////////////////////////////////////
+// Copies a given task context, returning the new copy.
+// NOTES:
+//     marked with 'KFD_FLAG_CLOEXEC' will not be copied.
+//   - It is possible to copy a closed (Zombie) process to create another closed one.
+//   - The thread list of the returned process will
+//     only contain a copy of the calling thread.
+//   - The child process will immediately fork into
+//     user-space with the given set of registers.
+//   - 'ktask_fork' requires the calling task to not be a kernel-task.
+//   - The returned task will be suspended at first
+// @return: NULL: Failed to copy the task context (assume out-of-memory)
+extern __crit __ref struct ktask *
+ktask_fork(__u32 flags, struct kirq_userregisters const *__restrict userregs);
+extern __crit __ref struct kproc *
+kproc_copy4fork(__u32 flags, struct kproc *__restrict proc);
+
+//////////////////////////////////////////////////////////////////////////
+// @return: KE_OK:     The given process and EIP can perform a root fork.
+// @return: KE_NOENT:  The given EIP is not associated with any module/memory tab.
+// @return: KE_NOEXEC: The given EIP is not part of an executable section.
+// @return: KE_EXISTS: Memory at the given EIP was modified since module loading.
+// @return: KE_ACCES:  The associated module does not have the SETUID bit enabled.
+extern __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *eip);
+#define kproc_canrootfork(self,eip) KTASK_CRIT(kproc_canrootfork_c(self,eip))
+
+
+struct kexecargs;
+
+//////////////////////////////////////////////////////////////////////////
+// #1: Terminate all threads (excluding the calling one)
+// #2: Unload all currently loaded libraries/executables.
+// #3: Free up all user-level shared memory tabs
+//    (except for the calling thread's user-level stack, if any).
+// #4: Delete all TLS variables.
+// #5: Close all file descriptors marked with O_CLOEXEC.
+// #6: Load the given 'exec_main' and all its dependencies.
+// #7: Overwrite the given registers to point to the base
+//     of the calling thread's user-stack, and set its EIP
+//     to jump to the entry point of the given exec_main.
+extern __crit kerrno_t
+kproc_exec(struct kshlib *__restrict exec_main,
+           struct kirq_userregisters *__restrict userregs,
+           struct kexecargs *args, int args_members_are_kernel);
+
+
+//////////////////////////////////////////////////////////////////////////
+// Closes a given task context
+// @return: KE_OK:        The context was successfully closed
+// @return: KS_UNCHANGED: The context was already closed
+extern __nonnull((1)) kerrno_t kproc_close(struct kproc *__restrict self);
+
+//////////////////////////////////////////////////////////////////////////
+// Set the barrier level of a given task
+// NOTE: Userland tasks can only set the barrier to themselves (for now...)
+// NOTE: The given level (0..4) describes the level of sandbox enclosure.
+// @return: KE_DESTROYED: The given task context was closed.
+// @return: KE_OVERFLOW:  Failed to acquire a new reference to the given new task
+extern __crit __nonnull((1,2)) kerrno_t
+kproc_barrier(struct kproc *__restrict self,
+                 struct ktask *__restrict barrier,
+                 ksandbarrier_t mode);
+
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1)) struct ktask *kproc_getgpbarrier(struct kproc const *__restrict self);
+extern __wunused __nonnull((1)) struct ktask *kproc_getspbarrier(struct kproc const *__restrict self);
+extern __wunused __nonnull((1)) struct ktask *kproc_getgmbarrier(struct kproc const *__restrict self);
+extern __wunused __nonnull((1)) struct ktask *kproc_getsmbarrier(struct kproc const *__restrict self);
+extern __wunused __nonnull((1))         __u32 kproc_getsandflags(struct kproc const *__restrict self);
+extern __wunused __nonnull((1))          bool kproc_hassandflag(struct kproc const *__restrict self, __u32 flag);
+#else
+#define kproc_getgpbarrier(self) katomic_load((self)->p_sand.ts_gpbarrier)
+#define kproc_getspbarrier(self) katomic_load((self)->p_sand.ts_spbarrier)
+#define kproc_getgmbarrier(self) katomic_load((self)->p_sand.ts_gmbarrier)
+#define kproc_getsmbarrier(self) katomic_load((self)->p_sand.ts_smbarrier)
+#define kproc_getsandflags(self) katomic_load((self)->p_sand.ts_flags)
+#define kproc_hassandflag(self,flag) ((kproc_getsandflags(self)&(flag))==(flag))
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Returns the barrier that is used to restrict access as described by 'mode'.
+// @return: NULL: [*_r] Failed to acquire a new reference.
+// @return: NULL:       The task context was closed.
+extern __wunused __nonnull((1))       struct ktask *kproc_getbarrier_impl(struct kproc const *__restrict self, ksandbarrier_t mode);
+extern __wunused __nonnull((1)) __ref struct ktask *kproc_getbarrier_r_impl(struct kproc const *__restrict self, ksandbarrier_t mode);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1))       struct ktask *kproc_getbarrier(struct kproc const *__restrict self, ksandbarrier_t mode);
+extern __wunused __nonnull((1)) __ref struct ktask *kproc_getbarrier_r(struct kproc const *__restrict self, ksandbarrier_t mode);
+#else
+// Allow for compiler optimizations of known barrier modes
+#define kproc_getbarrier(self,mode) \
+ (__builtin_constant_p(mode) ? (\
+   (mode) == KSANDBOX_BARRIER_NOGETPROP ? kproc_getgpbarrier(self) :\
+   (mode) == KSANDBOX_BARRIER_NOSETPROP ? kproc_getspbarrier(self) :\
+   (mode) == KSANDBOX_BARRIER_NOGETMEM  ? kproc_getgmbarrier(self) :\
+   (mode) == KSANDBOX_BARRIER_NOSETMEM  ? kproc_getsmbarrier(self) :\
+    kproc_getbarrier_impl(self,mode))\
+  : kproc_getbarrier_impl(self,mode))
+#define kproc_getbarrier_r(self,mode) kproc_getbarrier_r_impl(self,mode)
+#endif
+
+
+//////////////////////////////////////////////////////////////////////////
+// Checks permissions to ensure that a given task 'caller' is allowed to
+// access the task 'self', where 'mode' specifies a set of required permissions.
+__local int ktask_access_ex(struct ktask const *__restrict self, ksandbarrier_t mode,
+                            struct ktask const *__restrict caller) {
+ return !ktask_isusertask(caller) /*< Skip access checks for kernel tasks (Those guys could have just called *_k if they wanted...). */
+      || ktask_issameorchildof(self,caller) /*< 'self' is a child of 'caller' (parents can do everything) */
+      || ktask_issameorchildof(self,kproc_getbarrier(ktask_getproc(caller),mode)); /*< Check for barrier-restrictive access. */
+}
+
+#ifdef __INTELLISENSE__
+extern __wunused int ktask_access(struct ktask const *__restrict self, ksandbarrier_t mode);
+#else
+#define ktask_access(self,mode) ktask_access_ex(self,mode,ktask_self())
+#endif
+
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,2)) bool ktask_accessgp_ex(struct ktask const *__restrict self, struct ktask const *__restrict caller);
+extern __wunused __nonnull((1,2)) bool ktask_accesssp_ex(struct ktask const *__restrict self, struct ktask const *__restrict caller);
+extern __wunused __nonnull((1,2)) bool ktask_accessgm_ex(struct ktask const *__restrict self, struct ktask const *__restrict caller);
+extern __wunused __nonnull((1,2)) bool ktask_accesssm_ex(struct ktask const *__restrict self, struct ktask const *__restrict caller);
+extern __wunused __nonnull((1))   bool ktask_accessgp(struct ktask const *__restrict self);
+extern __wunused __nonnull((1))   bool ktask_accesssp(struct ktask const *__restrict self);
+extern __wunused __nonnull((1))   bool ktask_accessgm(struct ktask const *__restrict self);
+extern __wunused __nonnull((1))   bool ktask_accesssm(struct ktask const *__restrict self);
+#else
+#define ktask_accessgp_ex(self,caller) ktask_access_ex(self,KSANDBOX_BARRIER_NOGETPROP,caller)
+#define ktask_accesssp_ex(self,caller) ktask_access_ex(self,KSANDBOX_BARRIER_NOSETPROP,caller)
+#define ktask_accessgm_ex(self,caller) ktask_access_ex(self,KSANDBOX_BARRIER_NOGETMEM,caller)
+#define ktask_accesssm_ex(self,caller) ktask_access_ex(self,KSANDBOX_BARRIER_NOSETMEM,caller)
+#define ktask_accessgp(self)           ktask_accessgp_ex(self,ktask_self())
+#define ktask_accesssp(self)           ktask_accesssp_ex(self,ktask_self())
+#define ktask_accessgm(self)           ktask_accessgm_ex(self,ktask_self())
+#define ktask_accesssm(self)           ktask_accesssm_ex(self,ktask_self())
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Perform various operations on file descriptors
+// NOTE: Upon success, 'kproc_closefd' will delete the fd entry associated with 'fd'
+// @return: KE_OK:   The specified descriptor was successfully closed.
+// @return: KE_BADF: The given file descriptor was invalid.
+// @return: * :      A Descriptor-specific error occurred during closing.
+extern __nonnull((1)) kerrno_t
+kproc_closefd(struct kproc *__restrict self, int fd);
+
+//////////////////////////////////////////////////////////////////////////
+// Closes all file descriptors within a given range.
+// @return: * : The amount of successfully closed descriptors.
+extern __nonnull((1)) unsigned int
+kproc_closeall(struct kproc *__restrict self, int low, int high);
+
+//////////////////////////////////////////////////////////////////////////
+// Returns a reference to a given file by its fd number.
+// NOTE: The caller must destroy the returned context using 'kfdentry_quit'
+// @return: KE_OK:       A valid 'struct kfd' is stored in '*result'
+// @return: KE_BADF:     Invalid file descriptor.
+// @return: KE_OVERFLOW: Too many references to the specified resource.
+extern __crit __wunused __nonnull((1,3)) kerrno_t
+kproc_getfd(struct kproc const *__restrict self, int fd,
+            struct kfdentry *__restrict result);
+
+#if 0
+//////////////////////////////////////////////////////////////////////////
+// Pops a given resource from the fd manager, returning it in '*result'
+// @return: KE_OVERFLOW: Failed to acquire a reference to the associated file
+// @return: KE_BADF:     The given file descriptor was invalid
+extern __wunused __nonnull((1,2)) kerrno_t
+kproc_popfd(struct kproc const *__restrict self,
+            int fd, struct kfd *__restrict result);
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Inserts a given fd entry into the given task context.
+// NOTE: 'kproc_insfdat_inherited' will also close an existing fd under the given number
+// @return: KE_OK:    The given descriptor was inserted
+// @return: KE_MFILE: The fdman is configured to not allow descriptors as high as 'fd' (Caller still owns the data reference)
+// @return: KE_NOMEM: Not enough available memory (can happen when extending the allocated vector; Caller still owns the data reference)
+// @return: KS_FOUND: [kproc_insfdat_inherited] An existing fd was closed (NOT AN ERROR)
+extern __nonnull((1,2,3)) kerrno_t   kproc_insfd_inherited(struct kproc *__restrict self, int *__restrict fd, struct kfdentry const *__restrict entry);
+extern __nonnull((1,3))   kerrno_t kproc_insfdat_inherited(struct kproc *__restrict self, int fd, struct kfdentry const *__restrict entry);
+extern __nonnull((1,3))   kerrno_t  kproc_insfdh_inherited(struct kproc *__restrict self, int hint, int *__restrict fd, struct kfdentry const *__restrict entry);
+
+//////////////////////////////////////////////////////////////////////////
+// Duplicate a given file descriptor
+// NOTE: 'kproc_dupfdh*' will choose the closest, free descriptor slot following 'hintfd'
+// @return: KE_OK:       The given descriptor was inserted
+// @return: KE_BADF:     The given 'oldfd' was invalid
+// @return: KE_MFILE:    The new file descriptor was out-of-bounds.
+// @return: KE_NOMEM:    Not enough memory available (can happen when extending the allocated vector)
+// @return: KS_FOUND:    [kproc_dupfd2*] An existing fd was closed (NOT AN ERROR)
+extern __crit __wunused __nonnull((1,3)) kerrno_t kproc_dupfd_c (struct kproc *__restrict self, int oldfd, int *__restrict newfd, kfdflag_t flags);
+extern __crit __wunused __nonnull((1))   kerrno_t kproc_dupfd2_c(struct kproc *__restrict self, int oldfd, int newfd, kfdflag_t flags);
+extern __crit __wunused __nonnull((1))   kerrno_t kproc_dupfdh_c(struct kproc *__restrict self, int oldfd, int hintfd, int *__restrict newfd, kfdflag_t flags);
+#ifdef __INTELLISENSE__
+extern        __wunused __nonnull((1,3)) kerrno_t kproc_dupfd (struct kproc *__restrict self, int oldfd, int *__restrict newfd, kfdflag_t flags);
+extern        __wunused __nonnull((1))   kerrno_t kproc_dupfd2(struct kproc *__restrict self, int oldfd, int newfd, kfdflag_t flags);
+extern        __wunused __nonnull((1))   kerrno_t kproc_dupfdh(struct kproc *__restrict self, int oldfd, int hintfd, int *__restrict newfd, kfdflag_t flags);
+#else
+#define kproc_dupfd(self,oldfd,newfd,flags)         KTASK_CRIT(kproc_dupfd_c(self,oldfd,newfd,flags))
+#define kproc_dupfd2(self,oldfd,newfd,flags)        KTASK_CRIT(kproc_dupfd2_c(self,oldfd,newfd,flags))
+#define kproc_dupfdh(self,oldfd,hintfd,newfd,flags) KTASK_CRIT(kproc_dupfdh_c(self,oldfd,hintfd,newfd,flags))
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Get varios types of objects from file descriptors.
+// @return: NULL: Invalid descriptor/type, or reference overflow.
+extern __crit __wunused __nonnull((1)) __ref struct kfile *kproc_getfdfile(struct kproc *__restrict self, int fd);
+extern __crit __wunused __nonnull((1)) __ref struct ktask *kproc_getfdtask(struct kproc *__restrict self, int fd);
+extern __crit __wunused __nonnull((1)) __ref struct kproc *kproc_getfdproc(struct kproc *__restrict self, int fd);
+extern __crit __wunused __nonnull((1)) __ref struct kinode *kproc_getfdinode(struct kproc *__restrict self, int fd);
+extern __crit __wunused __nonnull((1)) __ref struct kdirent *kproc_getfddirent(struct kproc *__restrict self, int fd);
+
+//////////////////////////////////////////////////////////////////////////
+// Returns the root task of a given process
+// @return: NULL: The given process was closed, or no threads are running within.
+extern __crit __wunused __nonnull((1)) __ref struct ktask *
+kproc_getroottask(struct kproc const *__restrict self);
+
+//////////////////////////////////////////////////////////////////////////
+// Returns the root binary of a given process
+// @return: NULL: The given process was closed.
+extern __crit __wunused __nonnull((1)) __ref struct kshlib *
+kproc_getrootexe(struct kproc const *__restrict self);
+
+//////////////////////////////////////////////////////////////////////////
+// Returns TRUE (non-ZERO) if the given process's root task is visible to the caller.
+// NOTE: If the process has no root task (i.e. is a Zombie), return FALSE (ZERO).
+extern __crit __wunused __nonnull((1)) int kproc_isrootvisible_c(struct kproc const *__restrict self);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1)) int kproc_isrootvisible(struct kproc const *__restrict self);
+#else
+#define kproc_isrootvisible(self) KTASK_CRIT(kproc_isrootvisible_c(self))
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Returns the physical address of a resource described by 'fd'.
+// WARNING: Do not attempt to dereference that resource.
+//          This function is only meant to abstract comparing of file descriptors.
+// @return: NULL: Invalid file descriptor, or the task context was closed.
+extern        __wunused __nonnull((1)) void *kproc_getresourceaddr(struct kproc const *__restrict self, int fd);
+extern __crit __wunused __nonnull((1)) void *kproc_getresourceaddr_c(struct kproc const *__restrict self, int fd);
+
+#ifdef __INTELLISENSE__
+//////////////////////////////////////////////////////////////////////////
+// Returns true if two given file descriptors are equal to each other.
+// WARNING: The caller is responsible to ensure that the descriptors
+//          are not re-assigned before the equality information
+//          is put to use (otherwise they might no longer be equal).
+extern        __wunused __nonnull((1)) int kproc_equalfd  (struct kproc const *__restrict self, int fda, int fdb);
+extern __crit __wunused __nonnull((1)) int kproc_equalfd_c(struct kproc const *__restrict self, int fda, int fdb);
+#else
+#define kproc_equalfd(self,fda,fdb) \
+ __xblock({ struct kproc const *const __ktcqfself = (self);\
+            __xreturn kproc_getresourceaddr(__ktcqfself,fda)\
+                   == kproc_getresourceaddr(__ktcqfself,fdb);\
+ })
+#define kproc_equalfd_c(self,fda,fdb) \
+ __xblock({ struct kproc const *const __ktcqfself = (self);\
+            __xreturn kproc_getresourceaddr_c(__ktcqfself,fda)\
+                   == kproc_getresourceaddr_c(__ktcqfself,fdb);\
+ })
+#endif
+
+
+
+extern __crit __wunused __nonnull((1,3,5))   kerrno_t kproc_readfd_c(struct kproc *__restrict self, int fd, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
+extern __crit __wunused __nonnull((1,3,5))   kerrno_t kproc_writefd_c(struct kproc *__restrict self, int fd, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
+extern __crit __wunused __nonnull((1,4,6))   kerrno_t kproc_preadfd_c(struct kproc *__restrict self, int fd, __pos_t pos, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
+extern __crit __wunused __nonnull((1,4,6))   kerrno_t kproc_pwritefd_c(struct kproc *__restrict self, int fd, __pos_t pos, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
+extern __crit __wunused __nonnull((1))       kerrno_t kproc_seekfd_c(struct kproc *__restrict self, int fd, __off_t off, int whence, __pos_t *newpos);
+extern __crit __wunused __nonnull((1))       kerrno_t kproc_truncfd_c(struct kproc *__restrict self, int fd, __pos_t size);
+extern __crit __wunused __nonnull((1))       kerrno_t kproc_fcntlfd_c(struct kproc *__restrict self, int fd, int cmd, __user void *arg);
+extern __crit __wunused __nonnull((1))       kerrno_t kproc_ioctlfd_c(struct kproc *__restrict self, int fd, kattr_t cmd, __user void *arg);
+extern __crit __wunused __nonnull((1))       kerrno_t kproc_flushfd_c(struct kproc *__restrict self, int fd);
+extern __crit __wunused __nonnull((1,4))     kerrno_t kproc_getattrfd_c(struct kproc *__restrict self, int fd, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
+extern __crit __wunused __nonnull((1,4))     kerrno_t kproc_setattrfd_c(struct kproc *__restrict self, int fd, kattr_t attr, void const *__restrict buf, __size_t bufsize);
+extern __crit __wunused __nonnull((1,3,4,5)) kerrno_t kproc_readdirfd_c(struct kproc *__restrict self, int fd, __ref struct kinode **__restrict inode,
+                                                                        struct kdirentname **__restrict name, __ref struct kfile **__restrict fp, __u32 flags);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,3,5))   kerrno_t kproc_readfd(struct kproc *__restrict self, int fd, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
+extern __wunused __nonnull((1,3,5))   kerrno_t kproc_writefd(struct kproc *__restrict self, int fd, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
+extern __wunused __nonnull((1,4,6))   kerrno_t kproc_preadfd(struct kproc *__restrict self, int fd, __pos_t pos, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
+extern __wunused __nonnull((1,4,6))   kerrno_t kproc_pwritefd(struct kproc *__restrict self, int fd, __pos_t pos, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
+extern __wunused __nonnull((1))       kerrno_t kproc_seekfd(struct kproc *__restrict self, int fd, __off_t off, int whence, __pos_t *newpos);
+extern __wunused __nonnull((1))       kerrno_t kproc_truncfd(struct kproc *__restrict self, int fd, __pos_t size);
+extern __wunused __nonnull((1))       kerrno_t kproc_fcntlfd(struct kproc *__restrict self, int fd, int cmd, __user void *arg);
+extern __wunused __nonnull((1))       kerrno_t kproc_ioctlfd(struct kproc *__restrict self, int fd, kattr_t cmd, __user void *arg);
+extern __wunused __nonnull((1))       kerrno_t kproc_flushfd(struct kproc *__restrict self, int fd);
+extern __wunused __nonnull((1,4))     kerrno_t kproc_getattrfd(struct kproc *__restrict self, int fd, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,4))     kerrno_t kproc_setattrfd(struct kproc *__restrict self, int fd, kattr_t attr, void const *__restrict buf, __size_t bufsize);
+#else
+#define kproc_readfd(self,fd,buf,bufsize,rsize)           KTASK_CRIT(kproc_readfd_c(self,fd,buf,bufsize,rsize))
+#define kproc_writefd(self,fd,buf,bufsize,wsize)          KTASK_CRIT(kproc_writefd_c(self,fd,buf,bufsize,wsize))
+#define kproc_preadfd(self,fd,pos,buf,bufsize,rsize)      KTASK_CRIT(kproc_preadfd_c(self,fd,pos,buf,bufsize,rsize))
+#define kproc_pwritefd(self,fd,pos,buf,bufsize,wsize)     KTASK_CRIT(kproc_pwritefd_c(self,fd,pos,buf,bufsize,wsize))
+#define kproc_seekfd(self,fd,off,whence,newpos)           KTASK_CRIT(kproc_seekfd_c(self,fd,off,whence,newpos))
+#define kproc_truncfd(self,fd,size)                       KTASK_CRIT(kproc_truncfd_c(self,fd,size))
+#define kproc_fcntlfd(self,fd,cmd,arg)                    KTASK_CRIT(kproc_fcntlfd_c(self,fd,cmd,arg))
+#define kproc_ioctlfd(self,fd,cmd,arg)                    KTASK_CRIT(kproc_ioctlfd_c(self,fd,cmd,arg))
+#define kproc_flushfd(self,fd)                            KTASK_CRIT(kproc_flushfd_c(self,fd))
+#define kproc_getattrfd(self,fd,attr,buf,bufsize,reqsize) KTASK_CRIT(kproc_getattrfd_c(self,fd,attr,buf,bufsize,reqsize))
+#define kproc_setattrfd(self,fd,attr,buf,bufsize)         KTASK_CRIT(kproc_setattrfd_c(self,fd,attr,buf,bufsize))
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Allocate/Free a TLS identifiers
+// @return: KE_DESTROYED: The given process was closed
+// @return: KE_NOMEM:     Not enough memory to allocate a new identifier
+// @return: KE_ACCES:     The process has reached its maximum amount of TLS identifiers
+extern __crit __wunused __nonnull((1,2)) kerrno_t kproc_alloctls_c(struct kproc *__restrict self, __ktls_t *__restrict result);
+extern __crit           __nonnull((1))       void kproc_freetls_c(struct kproc *__restrict self, __ktls_t slot);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,2)) kerrno_t kproc_alloctls(struct kproc *__restrict self, __ktls_t *__restrict result);
+extern           __nonnull((1))       void kproc_freetls(struct kproc *__restrict self, __ktls_t slot);
+#else
+#define kproc_alloctls(self,result) KTASK_CRIT(kproc_alloctls_c(self,result))
+#define kproc_freetls(self,slot)    KTASK_CRIT(kproc_freetls_c(self,slot))
+#endif
+
+
+typedef kerrno_t (*penumenv)(char const *name, __size_t namesize, char const *value, __size_t valuesize, void *closure);
+typedef kerrno_t (*penumcmd)(char const *arg, void *closure);
+
+//////////////////////////////////////////////////////////////////////////
+// Environment variables interface (mp-safe)
+// WARNING: The callback given to for environ enumeration must be
+//          self-contained and not invoke other env-related functions!
+//         (e.g.: Don't attempt to delete an environment variable)
+// @return: KE_ACCES:     GETMEM/SETMEM permissions for the root task are
+//                        required for accessing environment variables.
+// @return: KE_DESTROYED: The given process is a zombie.
+extern __crit __wunused __nonnull((1,2,4)) kerrno_t kproc_getenv_ck(struct kproc *__restrict self, char const *__restrict name, __size_t namemax, char *buf, __size_t bufsize, __size_t *reqsize);
+extern __crit __wunused __nonnull((1,2,4)) kerrno_t kproc_setenv_ck(struct kproc *__restrict self, char const *__restrict name, __size_t namemax, char const *__restrict value, __size_t valuemax, int override);
+extern __crit __wunused __nonnull((1,2))   kerrno_t kproc_delenv_ck(struct kproc *__restrict self, char const *__restrict name, __size_t namemax);
+extern __crit __wunused __nonnull((1,2))   kerrno_t kproc_enumenv_ck(struct kproc *__restrict self, penumenv callback, void *closure);
+extern __crit __wunused __nonnull((1,2,4)) kerrno_t kproc_getenv_c(struct kproc *__restrict self, char const *__restrict name, __size_t namemax, char *buf, __size_t bufsize, __size_t *reqsize);
+extern __crit __wunused __nonnull((1,2,4)) kerrno_t kproc_setenv_c(struct kproc *__restrict self, char const *__restrict name, __size_t namemax, char const *__restrict value, __size_t valuemax, int override);
+extern __crit __wunused __nonnull((1,2))   kerrno_t kproc_delenv_c(struct kproc *__restrict self, char const *__restrict name, __size_t namemax);
+extern __crit __wunused __nonnull((1,2))   kerrno_t kproc_enumenv_c(struct kproc *__restrict self, penumenv callback, void *closure);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,2,4)) kerrno_t kproc_getenv_k(struct kproc *__restrict self, char const *__restrict name, __size_t namemax, char *buf, __size_t bufsize, __size_t *reqsize);
+extern __wunused __nonnull((1,2,4)) kerrno_t kproc_setenv_k(struct kproc *__restrict self, char const *__restrict name, __size_t namemax, char const *__restrict value, __size_t valuemax, int override);
+extern __wunused __nonnull((1,2))   kerrno_t kproc_delenv_k(struct kproc *__restrict self, char const *__restrict name, __size_t namemax);
+extern __wunused __nonnull((1,2))   kerrno_t kproc_enumenv_k(struct kproc *__restrict self, penumenv callback, void *closure);
+extern __wunused __nonnull((1,2,4)) kerrno_t kproc_getenv(struct kproc *__restrict self, char const *__restrict name, __size_t namemax, char *buf, __size_t bufsize, __size_t *reqsize);
+extern __wunused __nonnull((1,2,4)) kerrno_t kproc_setenv(struct kproc *__restrict self, char const *__restrict name, __size_t namemax, char const *__restrict value, __size_t valuemax, int override);
+extern __wunused __nonnull((1,2))   kerrno_t kproc_delenv(struct kproc *__restrict self, char const *__restrict name, __size_t namemax);
+extern __wunused __nonnull((1,2))   kerrno_t kproc_enumenv(struct kproc *__restrict self, penumenv callback, void *closure);
+#else
+#define kproc_getenv_k(self,name,namemax,buf,bufsize,reqsize)     KTASK_CRIT(kproc_getenv_ck(self,name,namemax,buf,bufsize,reqsize))
+#define kproc_setenv_k(self,name,namemax,value,valuemax,override) KTASK_CRIT(kproc_setenv_ck(self,name,namemax,value,valuemax,override))
+#define kproc_delenv_k(self,name,namemax)                         KTASK_CRIT(kproc_delenv_ck(self,name,namemax))
+#define kproc_enumenv_k(self,callback,closure)                    KTASK_CRIT(kproc_enumenv_ck(self,callback,closure))
+#define kproc_getenv(self,name,namemax,buf,bufsize,reqsize)       KTASK_CRIT(kproc_getenv_c(self,name,namemax,buf,bufsize,reqsize))
+#define kproc_setenv(self,name,namemax,value,valuemax,override)   KTASK_CRIT(kproc_setenv_c(self,name,namemax,value,valuemax,override))
+#define kproc_delenv(self,name,namemax)                           KTASK_CRIT(kproc_delenv_c(self,name,namemax))
+#define kproc_enumenv(self,callback,closure)                      KTASK_CRIT(kproc_enumenv_c(self,callback,closure))
+#endif
+
+
+//////////////////////////////////////////////////////////////////////////
+// Commandline interface (mp-safe)
+// WARNING: The callback given to for environ enumeration must be
+//          self-contained and not invoke other env-related functions!
+//         (e.g.: Don't attempt to delete an environment variable)
+// @return: KE_DESTROYED: The given process is a zombie.
+extern __crit __wunused __nonnull((1,2)) kerrno_t kproc_enumcmd_ck(struct kproc *__restrict self, penumcmd callback, void *closure);
+#ifdef __INTELLISENSE__
+extern        __wunused __nonnull((1,2)) kerrno_t kproc_enumcmd_k(struct kproc *__restrict self, penumcmd callback, void *closure);
+extern __crit __wunused __nonnull((1,2)) kerrno_t kproc_enumcmd_c(struct kproc *__restrict self, penumcmd callback, void *closure);
+extern        __wunused __nonnull((1,2)) kerrno_t kproc_enumcmd(struct kproc *__restrict self, penumcmd callback, void *closure);
+#else
+#define kproc_enumcmd_k(self,callback,closure) KTASK_CRIT(kproc_enumcmd_ck(self,callback,closure))
+#define kproc_enumcmd_c kproc_enumcmd_ck
+#define kproc_enumcmd   kproc_enumcmd_k
+#endif
+
+
+
+// ===============================================
+// Process --> task interface
+// >> Since a task context is basically a process,
+//    all of its tasks are considered its threads.
+// ===============================================
+
+//////////////////////////////////////////////////////////////////////////
+// Return the a given task by its thread id (tid)
+// @return: NULL: Invalid tid/dead task/task context was closed
+extern __crit __wunused __nonnull((1)) __ref struct ktask *
+kproc_getthread(struct kproc const *__restrict self, __ktid_t tid);
+extern __crit __nonnull((1,2)) int
+kproc_enumthreads_c(struct kproc const *__restrict self,
+                    int (*callback)(struct ktask *__restrict thread,
+                                    void *closure),
+                    void *closure);
+#ifdef __INTELLISENSE__
+extern __crit __nonnull((1,2)) int
+kproc_enumthreads(struct kproc const *__restrict self,
+                  int (*callback)(struct ktask *__restrict thread,
+                                  void *closure),
+                  void *closure);
+#else
+#define kproc_enumthreads(self,callback,closure) \
+ KTASK_CRIT(kproc_enumthreads_c(self,callback,closure))
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Add a given task to the context's list of tasks.
+// @return: KE_NOMEM:     Not enough memory to allocate the task.
+// @return: KE_DESTROYED: The given context was closed.
+extern __wunused __nonnull((1,2)) kerrno_t kproc_addtask(struct kproc *__restrict self, struct ktask *__restrict task);
+extern           __nonnull((1,2))     void kproc_deltask(struct kproc *__restrict self, struct ktask *__restrict task);
+
+//////////////////////////////////////////////////////////////////////////
+// Get/Set generic attributes of a given process
+// NOTE: Unrecognized attributes are passed to the root task of the given process.
+// @return: KE_DESTROYED: The given process is a zombie (or doesn't have a root task.)
+extern __crit __wunused __nonnull((1,3)) kerrno_t
+kproc_getattr_c(struct kproc *__restrict self, kattr_t attr,
+                void *__restrict buf, __size_t bufsize,
+                __size_t *__restrict reqsize);
+extern __crit __wunused __nonnull((1,3)) kerrno_t
+kproc_setattr_c(struct kproc *__restrict self, kattr_t attr,
+                void const *__restrict buf, __size_t bufsize);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,3)) kerrno_t
+kproc_getattr(struct kproc *__restrict self, kattr_t attr,
+              void *__restrict buf, __size_t bufsize,
+              __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t
+kproc_setattr(struct kproc *__restrict self, kattr_t attr,
+              void const *__restrict buf, __size_t bufsize);
+#else
+#define kproc_getattr(self,attr,buf,bufsize,reqsize) KTASK_CRIT(kproc_getattr_c(self,attr,buf,bufsize,reqsize))
+#define kproc_setattr(self,attr,buf,bufsize)         KTASK_CRIT(kproc_setattr_c(self,attr,buf,bufsize))
+#endif
+
+
+//////////////////////////////////////////////////////////////////////////
+// Load a given module into a process
+//  - If possible, the module will be relocated to a free memory
+//    location, unless it must be linked statically, in which case the load
+//    process may fail when the requested area of memory is already in use.
+//  - [*_unlocked] The caller must be holding the 'KPROC_LOCK_SHM' and 'KPROC_LOCK_MODS' locks.
+//  - Modules not unloaded when the a process is closed
+//    (aka. turns into a zombie) are unloaded automatically.
+//  - kproc_insmod_single_unlocked: Upon success, the caller must not free() 'depids'
+// NOTE: [!*_single*] will not just load the given module, but all of its dependencies as well.
+// @return: KE_RANGE:     One or more sections with fixed addresses overlap with already
+//                        mapped virtual memory. (The executable and its dependencies
+//                        cannot run in this configuration)
+// @return: KE_NOMEM:     Not enough available memory.
+// @return: KE_NOSPC:     Failed to find an unused region of virtual memory
+//                        big enough to fit a position-independent section.
+// @return: KE_OVERFLOW:  Failed to acquire a new reference to the given module.
+// @return: KS_UNCHANGED: The given module was already loaded (a recursive load-counter was incremented, though)
+// @return: DE_DESTROYED: [!*_unlocked] The given process is a zombie.
+extern __crit __wunused __nonnull((1,2,3,4)) kerrno_t
+kproc_insmod_single_unlocked(struct kproc *__restrict self,
+                             struct kshlib *__restrict module,
+                             kmodid_t *__restrict module_id,
+                             kmodid_t *__restrict depids);
+extern __crit __wunused __nonnull((1,2,3)) kerrno_t
+kproc_insmod_unlocked(struct kproc *__restrict self,
+                      struct kshlib *__restrict module,
+                      kmodid_t *module_id);
+extern __crit __wunused __nonnull((1,2,3)) kerrno_t
+kproc_insmod(struct kproc *__restrict self,
+             struct kshlib *__restrict module,
+             kmodid_t *module_id);
+
+//////////////////////////////////////////////////////////////////////////
+// Unload a given module from a process after it had previously been loaded.
+//  - [!*_single*] will also unload all dependencies of the given module.
+//  - kproc_delmod_single_unlocked: '*dep_idv' and '*dep_idc' is filled with a 
+//    vector of dependency module ids that must be unloaded by the caller.
+//    NOTE: The caller must also 'free(*dep_idv)' when they are done.
+// @return: KE_OK:        The module was unloaded successfully.
+// @return: KE_NOENT:     The given module wasn't loaded in this process.
+// @return: KS_UNCHANGED: The module was loaded more than once (its load
+//                        counter was decremented, but didn't reach ZERO)
+// @return: DE_DESTROYED: [!*_unlocked] The given process is a zombie.
+extern __crit __nonnull((1,3,4)) kerrno_t
+kproc_delmod_single_unlocked(struct kproc *__restrict self, kmodid_t module_id,
+                             kmodid_t **dep_idv, __size_t *dep_idc);
+extern __crit __nonnull((1)) kerrno_t
+kproc_delmod_unlocked(struct kproc *__restrict self,
+                      kmodid_t module_id);
+extern __crit __nonnull((1)) kerrno_t
+kproc_delmod(struct kproc *__restrict self,
+             kmodid_t module_id);
+
+#ifndef __ksymhash_t_defined
+#define __ksymhash_t_defined 1
+typedef __size_t       ksymhash_t;
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Resolves a module symbol from the module with the given ID by its name.
+// NOTE: [*_unlocked] requires the caller holding the 'KPROC_LOCK_MODS' lock.
+// WARNING: The returned pointer, even when non-NULL, may not be mapped
+// @return: NULL: No such symbol was found.
+extern __crit __wunused __nonnull((1)) __user void *
+kproc_dlsymex_unlocked(struct kproc *__restrict self,
+                       kmodid_t module_id, char const *__restrict name,
+                       __size_t name_size, ksymhash_t name_hash);
+extern __crit __wunused __nonnull((1)) __user void *
+kproc_dlsymex_c(struct kproc *__restrict self,
+                kmodid_t module_id, char const *__restrict name,
+                __size_t name_size, ksymhash_t name_hash);
+__local __crit __wunused __nonnull((1)) __user void *
+kproc_dlsym_unlocked(struct kproc *__restrict self,
+                     kmodid_t module_id, char const *__restrict name);
+__local __crit __wunused __nonnull((1)) __user void *
+kproc_dlsym_c(struct kproc *__restrict self,
+              kmodid_t module_id, char const *__restrict name);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1)) __user void *
+kproc_dlsymex(struct kproc *__restrict self,
+              kmodid_t module_id, char const *__restrict name,
+              __size_t name_size, ksymhash_t name_hash);
+extern __wunused __nonnull((1)) __user void *
+kproc_dlsym(struct kproc *__restrict self,
+            kmodid_t module_id, char const *__restrict name);
+#else
+#define kproc_dlsymex(self,module_id,name,name_size,name_hash) KTASK_CRIT(kproc_dlsymex_c(self,module_id,name,name_size,name_hash))
+#define kproc_dlsym(self,module_id,name)                       KTASK_CRIT(kproc_dlsym_c(self,module_id,name))
+#endif
+
+
+// Max allowed PID value.
+// >> Posix wants this to be a signed value, so
+//    there goes half of all possible values...
+#define PID_MAX    INT32_MAX
+
+//////////////////////////////////////////////////////////////////////////
+// Global list of processes
+struct kproclist {
+ struct kmutex  pl_lock;  /*< Lock for all members below (closed during shutdown to prevent new processes from spawning). */
+ __u32          pl_free;  /*< [lock(pl_lock)] A hint towards a free slot (May be used, or out-of-bounds). */
+ __u32          pl_proca; /*< [lock(pl_lock)] Allocated vector size. */
+ struct kproc **pl_procv; /*< [0..1][0..pl_proca][owned][lock(pl_lock)] Vector of processes. */
+};
+#define KPROCLIST_INIT  {KMUTEX_INIT,0,0,NULL}
+
+
+#ifdef __INTELLISENSE__
+//////////////////////////////////////////////////////////////////////////
+// Returns the global process list
+extern __retnonnull __constcall struct kproclist *kproclist_global(void);
+#else
+#define kproclist_global() (&__kproclist_global)
+extern struct kproclist __kproclist_global;
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Adds a given process to the global process list,
+// initializing its 'p_pid' member along the way.
+// @return: KE_DESTROYED: The process list was destroyed (No new processes may be spawed).
+// @return: KE_NOMEM:     Not enough memory to reallocate the global process vector.
+// @return: KE_OVERFLOW:  The resulting PID would have been too great (> PID_MAX)
+extern __crit __nonnull((1)) kerrno_t kproclist_addproc(struct kproc *__restrict proc);
+extern __crit __nonnull((1))     void kproclist_delproc(struct kproc *__restrict proc);
+
+//////////////////////////////////////////////////////////////////////////
+// Closes the process list, thus preventing any new processes from spawning.
+// @return: KS_UNCHANGED: The process list was already closed.
+extern __crit kerrno_t kproclist_close(void);
+
+
+//////////////////////////////////////////////////////////////////////////
+// Returns a reference to the process associated with a given PID
+// NOTE: Permissions are checked to ensure that the caller is
+//       allowed to view the process associated with the given PID.
+// @return: NULL: Invalid PID or the caller has insufficient
+//                permissions to open access process, or the system
+//                is shutting down (in which case no PID is valid).
+extern __crit __wunused __ref struct kproc *kproclist_getproc(__u32 pid);
+extern __crit __wunused __ref struct kproc *kproclist_getproc_k(__u32 pid);
+
+//////////////////////////////////////////////////////////////////////////
+// Enumerate all process ids visible to the caller.
+// @return: KE_DESTROYED: The process list was destroyed (No new processes may be spawed).
+extern __crit kerrno_t kproclist_enumpid(__pid_t *__restrict pidv,
+                                         __size_t pidc, __size_t *__restrict reqpidc);
+
+
+
+#ifdef __MAIN_C__
+extern __crit void kernel_initialize_process(void);
+extern __crit void kernel_finalize_process(void);
+#endif /* __MAIN_C__ */
+
+#ifndef __INTELLISENSE__
+#define kshm_kernel() (&kproc_kernel()->p_shm)
+__local __nonnull((1,3)) __size_t
+__kshm_memcpy_k2u_fast(struct kshm const *__restrict self, __user void *dst,
+                       __kernel void const *__restrict src, __size_t bytes) {
+ if (self == kshm_kernel()) return __kpagedir_memcpy_k2k(dst,src,bytes);
+ return __kshm_memcpy_k2u(self,dst,src,bytes);
+}
+__local __wunused __nonnull((1,2)) __size_t
+__kshm_memcpy_u2k_fast(struct kshm const *__restrict self, __kernel void *__restrict dst,
+                       __user void const *src, __size_t bytes) {
+ if (self == kshm_kernel()) return __kpagedir_memcpy_k2k(dst,src,bytes);
+ return __kshm_memcpy_u2k(self,dst,src,bytes);
+}
+__local __nonnull((1)) __size_t
+__kshm_memcpy_u2u_fast(struct kshm const *__restrict self, __user void *dst,
+                       __user void const *src, __size_t bytes) {
+ if (self == kshm_kernel()) return __kpagedir_memcpy_k2k(dst,src,bytes);
+ return __kshm_memcpy_u2u(self,dst,src,bytes);
+}
+__local __wunused __nonnull((1,3)) __kernel void *
+__kshm_translate_1_fast(struct kshm const *__restrict self, __user void const *addr,
+                        __size_t *__restrict max_bytes, int read_write) {
+ if (self == kshm_kernel()) { *max_bytes = (__size_t)-1; return (void *)addr; }
+ return __kshm_translate_1(self,addr,max_bytes,read_write);
+}
+__local __wunused __nonnull((1,3)) __kernel void *
+__kshm_translate_u_fast(struct kshm const *__restrict self, __user void const *addr,
+                        __size_t *__restrict max_bytes, int read_write) {
+ if (self == kshm_kernel()) return (void *)addr;
+ return __kshm_translate_u(self,addr,max_bytes,read_write);
+}
+#define kshm_memcpy_k2u  __kshm_memcpy_k2u_fast
+#define kshm_memcpy_u2k  __kshm_memcpy_u2k_fast
+#define kshm_memcpy_u2u  __kshm_memcpy_u2u_fast
+#define kshm_translate_1 __kshm_translate_1_fast
+#define kshm_translate_u __kshm_translate_u_fast
+#endif
+
+#ifndef __INTELLISENSE__
+#ifndef __ksymhash_of_defined
+#define __ksymhash_of_defined 1
+extern __wunused __nonnull((1)) ksymhash_t
+ksymhash_of(char const *__restrict text, __size_t size);
+#endif
+
+__local __crit __user void *
+kproc_dlsym_unlocked(struct kproc *__restrict self,
+                     kmodid_t module_id, char const *__restrict name) {
+ __size_t name_size = strlen(name);
+ return kproc_dlsymex_unlocked(self,module_id,name,name_size,
+                               ksymhash_of(name,name_size));
+}
+__local __crit __user void *
+kproc_dlsym_c(struct kproc *__restrict self,
+              kmodid_t module_id, char const *__restrict name) {
+ __size_t name_size = strlen(name);
+ return kproc_dlsymex_c(self,module_id,name,name_size,
+                        ksymhash_of(name,name_size));
+}
+#endif
+
+__DECL_END
+#endif /* __KERNEL__ */
+
+#endif /* !__KOS_KERNEL_PROC_H__ */

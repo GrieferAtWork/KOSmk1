@@ -1,0 +1,24 @@
+
+# Bootstraps
+[project = kernel] \
+[define(__KERNEL__ = 1)] \
+[define(__CONFIG_MIN_BSS__ = 1)] \
+[define(__CONFIG_MIN_LIBC__ = 1)] \
+[define(__BUILDING_KERNEL__ = 1)] \
+{
+	[arch = i386] {
+		[compiler = asm] kernel/arch/x86/*.S;
+	}
+	main.c;
+	kernel/*.c;
+	kernel/*.S;
+	kernel/dev/*.c;
+	kernel/fs/*.c;
+	kernel/sched/*.c;
+	kernel/sched/*.S;
+	kernel/sched/sync/*.c;
+	kernel/test/*.c;
+	kernel/syscall/*.c;
+}
+
+

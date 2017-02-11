@@ -1,0 +1,29 @@
+
+[project = userland:ls]           [diskfile = /bin/ls]           { ./ls.c; }
+[project = userland:ps]           [diskfile = /bin/ps]           { ./ps.c; }
+[project = userland:init]         [diskfile = /bin/init]         { ./init.c; }
+[project = userland:cat]          [diskfile = /bin/cat]          { ./cat.c; }
+[project = userland:echo]         [diskfile = /bin/echo]         { ./echo.c; }
+[project = userland:env]          [diskfile = /bin/env]          { ./env.c; }
+[project = userland:mkdir]        [diskfile = /bin/mkdir]        { ./mkdir.c; }
+[project = userland:rmdir]        [diskfile = /bin/rmdir]        { ./rmdir.c; }
+[project = userland:true]         [diskfile = /bin/true]         [no(libc)] { ./true.c; }
+[project = userland:false]        [diskfile = /bin/false]        [no(libc)] { ./false.c; }
+[project = userland:sh]           [diskfile = /bin/sh]           [libs(rline)] { ./sh/*.c; }
+[project = userland:terminal-vga] [diskfile = /bin/terminal-vga] [libs(term)] { ./terminal-vga.c; }
+
+# Nano
+#[project = userland:nano][diskfile = /bin/nano][libs(curses)] \
+#[flags(-include strings.h)]\
+#[define(\
+#   HAVE_VSNPRINTF = 1\
+#  ,HAVE_LIMITS_H = 1\
+#  ,HAVE_STDARG_H = 1\
+#  ,HAVE_ISBLANK = 1\
+#  ,HAVE_STRCASECMP = 1\
+#  ,HAVE_STRNCASECMP = 1\
+#  ,HAVE_STRCASESTR = 1\
+#  ,NANO_TINY = 1\
+#  ,RETSIGTYPE = int\
+#  ,DISABLE_COLOR = 1\
+#)] { ./nano/*.c; }

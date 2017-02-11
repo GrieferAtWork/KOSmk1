@@ -1,0 +1,1036 @@
+/* MIT License
+ *
+ * Copyright (c) 2017 GrieferAtWork
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+//
+// Automatically update all changed sources,
+// re-link everything if needed, flush stuff
+// to the disk image & start qemu.
+// >> Basically, do all the ~magic~
+//
+// HINT: This script is what you need deemon for...
+//
+
+#include <file>
+#include <sys>
+#include <fs>
+#include <util>
+#include <error>
+#include <process>
+#include <time>
+#include <pipe>
+#include <thread>
+
+local arch = "i386";
+local arch_toolchain = "i686";
+local verbose = 0;
+local force = false;
+local force_disk = false;
+local build_only = false;
+local format_messages_to_msvc = false;
+local gen_pp = false;
+local gen_asm = false;
+local remote = false;
+local run_only = false;
+local hosted = false;
+local optimize = false;
+local single = false;
+local ndebug = false;
+local addr2line_exe = "bin/kos_kernel.bin";
+local kernel_args = [];
+local rebuild_on_dot_sources_changed = false;
+//local addr2line_exe = "bin/userland/ls";
+
+// Amount of parallel instance of gcc
+// >> Drastically reduces compilation time
+local max_compilers_processes = 8;
+
+// Paths
+local executables = dict {
+#ifdef __WINDOWS__
+	.asm       = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc.exe",
+	.c         = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc.exe",
+	.ar        = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ar.exe",
+	.ld        = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ld.exe",
+	.cxx       = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-g++.exe",
+	.mkisofs   = "binutils/build-mkisofs-md5-2.01/mkisofs.exe",
+	.addr2line = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-addr2line.exe",
+	.qemu      = "D:\\qemu\\qemu-system-i386.exe",
+#else
+	.asm       = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc",
+	.c         = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc",
+	.ar        = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ar",
+	.ld        = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ld",
+	.cxx       = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-g++",
+	.mkisofs   = "mkisofs",
+	.addr2line = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-addr2line",
+	.qemu      = "qemu-system-i386",
+#endif
+};
+
+fs::chdir(fs::path::head(__FILE__));
+
+local default_sources_files = list {
+	"src/.sources",
+	"libs/.sources",
+	"userland/.sources",
+};
+local sources_files = default_sources_files;
+
+local default_attrib = dict {
+	.define = {
+		"__"+arch+"__"      : "1",
+		"__DATE_DAY__"      : str __DATE_DAY__,
+		"__DATE_WDAY__"     : str __DATE_WDAY__,
+		"__DATE_YDAY__"     : str __DATE_YDAY__,
+		"__DATE_MONTH__"    : str __DATE_MONTH__,
+		"__DATE_YEAR__"     : str __DATE_YEAR__,
+		"__TIME_HOUR__"     : str __TIME_HOUR__,
+		"__TIME_MIN__"      : str __TIME_MIN__,
+		"__TIME_SEC__"      : str __TIME_SEC__,
+		"_FILE_OFFSET_BITS" : "64",
+	},
+	.libs = list {},
+	.flags = list {
+		// "-std=gnu99",
+		"-ffreestanding",
+		"-nostdlib",
+		"-fvisibility=hidden",
+		"-Wall",
+		"-Wno-nonnull-compare",
+	},
+	.include = list {
+		"include",
+	},
+};
+
+//executables["c"] = executables["cxx"];
+
+function help() {
+	print "Usage: deemon magic.dee [ARGS...] [DOT-SOURCES...] [:KERNEL-ARGS...]";
+	print "ARGS:";
+	print "\t-f|--force               Force (re-)compile everything";
+	print "\t-V[V[V]]|--verbose       Enable some verbose output";
+	print "\t-S|--asm                 Generate assembly dumps instead of object files";
+	print "\t-E|--gen-pp              Generate preprocessed text dumps instead of object files";
+	print "\t--force-disk             Force complete rebuilding of the disk (WARNING: Will override any old disk contents)";
+	print "\t--build-only             Only build objects/binaries (don't start the emulator)";
+	print "\t--format-error-messages  Format gcc error messages to something recognized by Visual Studio";
+	print "\t--remote                 Enable remote debugging using a GDB-compatible client";
+	print "\t--run-only               Only start the emulator (don't re-compile changed sources)";
+	print "\t--optimize               Enable generation of optimized code (-O3)";
+	print "\t--ndebug                 #define NDEBUG and disable generation of debug info (-g)";
+	print "\t--single                 Disable parallel compilation of source files";
+	print "\t--help                   Display this help message and exit";
+	print "DOT-SOURCES:";
+	print "\tSpace-seperated list of filenames to parse as .sources files";
+	print "\tWhen not specified, the following list of files is used instead:";
+	for (local s: default_sources_files) print "\t\t"+repr s;
+	print "KERNEL-ARGS:";
+	print "\tEverything following a ':' character is passed onto the kernel";
+}
+
+local args = sys.argv[1:];
+while (args && args.front().startswith("-")) {
+	local arg = args.pop_front();
+	switch (arg) {
+		case "-f":
+		case "--force":
+			::force = true;
+			break;
+		case "-V":
+		case "--verbose":
+			::verbose = 1;
+			break;
+		case "-VV":
+			::verbose = 2;
+			break;
+		case "-VVV":
+			::verbose = 3;
+			break;
+		case "--force-disk":
+			::force_disk = true;
+			break;
+		case "--build-only":
+			::build_only = true;
+			break;
+		case "--format-error-messages":
+			::format_messages_to_msvc = true;
+			break;
+		case "-E":
+		case "--gen-pp":
+			::gen_pp = true;
+			::force = true;
+			break;
+		case "-S":
+		case "--asm":
+			::gen_asm = true;
+			::force = true;
+			break;
+		case "--remote":
+			::remote = true;
+			break;
+		case "--run-only":
+			::run_only = true;
+			break;
+		case "--hosted":
+			::hosted = true;
+			break;
+		case "--optimize":
+			::optimize = true;
+			break;
+		case "--ndebug":
+			::ndebug = true;
+			break;
+		case "--single":
+			::single = true;
+			break;
+		case "--help":
+			help();
+			return 0;
+		default:
+			print "Unknown argument:",repr arg;
+			break;
+	}
+}
+if (args) {
+	for (local i,a: util::enumerate(args)) {
+		if (a.startswith(":")) {
+			kernel_args = args[i:];
+			kernel_args[0] = kernel_args[0].lstrip(":").strip();
+			args = args[:i];
+			break;
+		}
+	}
+	if (args) {
+		sources_files = args;
+	}
+}
+
+
+
+local _force_changed_files = list {};
+local _mtime_cache = dict {};
+function fast_getmtime(filename) {
+	if (filename in _force_changed_files) return time.years(99999);
+	filename = fs::path::abs(filename).replace("/","\\");
+	try return _mtime_cache[filename]; catch (...);
+	local result = fs::getmtime(filename);
+	_mtime_cache[filename] = result;
+	return result;
+}
+
+function read_dependency_file(fp) {
+	local text = fp.read();
+	text = text.replace("\r\n","\n").replace("\r","\n");
+	text = text.replace("\\\n","").replace("\n"," ");
+	text = text.partition(":")[2];
+	for (local part: text.split(" ")) {
+		if (part) yield part;
+	}
+}
+
+
+local running_compilers = [];
+#define wait_all_compilers() \
+	({ while (#running_compilers) thread.sleep(1); })
+
+function run_compiler_process(proc) {
+	if (format_messages_to_msvc) {
+		local r,w = pipe.new()...;
+		proc.stderr = w;
+		proc.start();
+		w.close();
+		for (local line: r) {
+			if (line.startswith("include") || line.startswith("src") ||
+			    line.startswith("userland") || line.startswith("libs")) {
+				local filename,lno,col,rest;
+				try filename,lno,col,rest = line.scanf("%[^:]:%[^:]:%[^:]:%[^]")...;
+				catch (...) { print line,; continue; }
+				if (col.isalnum()) {
+					print "..\\"+filename+"("+lno+","+col+") : "+rest,;
+				} else {
+					print "..\\"+filename+"("+lno+") : "+col+" : "+rest,;
+				}
+			} else if (line.startswith("/cygdrive/")) {
+				local filename,lno,rest;
+				line = line[#"/cygdrive/":];
+				local drive,none,path = line.partition("/")...;
+				try filename,lno,rest = path.scanf("%[^:]:%[^:]:%[^]")...;
+				catch (...) { print line,; continue; }
+				path = drive.upper()+":\\"+filename.replace("/","\\");
+				rest = rest.strip();
+				if (!rest.lower().startswith("error") &&
+				    !rest.lower().startswith("warning")) {
+					rest = "Error : "+rest;
+				}
+				print path+"("+lno+") : "+rest;
+			} else {
+				print line,;
+			}
+		}
+	} else {
+		proc.start();
+	}
+	while (#running_compilers >= max_compilers_processes) thread.sleep(1);
+	running_compilers.append(proc);
+	local t = thread([]{
+		local error = proc.join();
+		running_compilers.remove(proc);
+		if (error != 0) {
+			print "Process failed:",repr proc.cmd;
+			sys.exit(error);
+		}
+	});
+	t.start();
+	if (::single) t.join();
+	return t;
+}
+
+
+function check_dependencies(source_file,object_file,dependency_file,fp_last_changed) {
+	if (!fs::exists(object_file)) return true; // No object file
+	local last_object_change = fast_getmtime(object_file);
+	if (fast_getmtime(source_file) > last_object_change)
+		return true; // original source has changed
+	if (rebuild_on_dot_sources_changed && fp_last_changed > last_object_change)
+		return true; // .sources file has changed
+	local depfp;
+	try {
+		depfp = file.open(dependency_file);
+	} catch (Error.IOError.FileNotFound) {
+		// No dependeny file, but has an object file
+		// >> No dependencies / don't recompile
+		return false;
+	}
+	local deps = read_dependency_file(depfp);
+	for (local dep: deps) try {
+		local dep_time = fast_getmtime(dep);
+		if (dep_time > last_object_change) {
+			// Dependency has changed
+			if (verbose >= 3) {
+				print "Dependency has changed:";
+				print "\tAffected:",repr source_file;
+				print "\tChanged: ",repr dep;
+			}
+			return true;
+		}
+	} catch (...) {
+		return true;
+	}
+	if (verbose >= 2) print "No changed in",repr source_file;
+	return false; // No recompile required
+}
+
+
+local existing_paths = [];
+function fast_mkdir(path) {
+	path = fs::path::abs(path);
+	if (path !in existing_paths) {
+		existing_paths.append(path);
+		try fs::mkdir(path);
+		catch (...);
+	}
+}
+function force_mkdir(path) {
+	path = fs::path::exctrail(path);
+	local head = fs::path::head(path);
+	local tail = fs::path::tail(path);
+	if (head && !fs::exists(head)) force_mkdir(head);
+	try fast_mkdir(path); catch (...);
+}
+
+fast_mkdir("bin");
+fast_mkdir("bin/libs");
+fast_mkdir("bin/userland");
+
+class Project {
+	this() {
+		this.objects  = [];
+		this.libs     = [];
+		this.libpaths = [];
+		this.diskfile = none;
+		this.options  = none;
+	}
+};
+
+local projects = dict {};
+function parse_single_source(path,attrib,filename,fp_last_changed) {
+	local target_arch   = attrib.get("arch","*");
+	local compiler      = attrib.get("compiler","c");
+	local libpaths      = attrib.get("libpaths",[]);
+	local libraries     = attrib.get("libs",[]);
+	local more_flags    = attrib.get("flags",[]);
+	local defines       = attrib.get("define",dict{});
+	local project       = attrib.get("project",none);
+	local diskfile      = attrib.get("diskfile",none);
+	local include_paths = [(
+		for (local x: attrib.get("include",[]))
+			fs::path::rel(x).replace("\\","/")
+	)...];
+
+	if (project is none) {
+		throw Error("Source file not part of any project: "+repr filename);
+	}
+
+	// Make sure this source file is meant to target this arch
+	if (!::arch.wmatch(target_arch)) {
+		print repr ::arch,repr target_arch;
+		if (verbose >= 2) print "Unused arch:",repr filename;
+		return;
+	}
+
+	filename = fs::path::rel(fs::path::abs(filename,path)).replace("\\","/");
+	local raw_build_file = fs::path::rel(fs::path::join(
+		"build",project,fs::path::file(
+		filename.replace("/","_")))).replace("\\","/");
+	raw_build_file = raw_build_file.replace(":","/").replace("//","/");
+	raw_build_file += "_"+fs::path::ext(filename)[1:];
+	force_mkdir(fs::path::head(raw_build_file));
+
+	local object_file = raw_build_file+".o";
+	local dependency_file = raw_build_file+".mf";
+
+	local proj = projects.setdefault(project,Project());
+	proj.objects.append(object_file);
+	local old_options = proj.options;
+	if (old_options is none) proj.options = attrib;
+	else {
+		local new_options = dict {};
+		for (local name,value: attrib) {
+			if (old_options.get(name,none) == value)
+				new_options[name] = value;
+		}
+		proj.options = new_options;
+	}
+	local proj_libs = proj.libs;
+	for (local lib: libraries) if (lib !in proj_libs) proj_libs.append(lib);
+	local proj_libpaths = proj.libpaths;
+	for (local libpath: libpaths) if (libpath !in proj_libpaths) proj_libpaths.append(libpath);
+	if (diskfile !is none) {
+		if (proj.diskfile is none) proj.diskfile = diskfile;
+		else if (proj.diskfile != diskfile) {
+			print "Differing disk names for",repr filename;
+			print "\tOld:",repr proj.diskfile;
+			print "\tNew:",repr diskfile;
+		}
+	}
+
+	if (!force && !check_dependencies(
+		filename,object_file,dependency_file,
+		fp_last_changed)) return; // No changes required
+
+	_force_changed_files.append(object_file);
+	yield pack(project,filename,object_file,executables[compiler],[
+		(for (local x: libpaths) "-L"+x)...,
+		(for (local name,value: defines) "-D"+name+"="+(value ?: "1"))...,
+		((compiler == "asm" || filename.endswith(".S")) ? ["-D__ASSEMBLY__"] : [])...,
+		(for (local x: include_paths) "-I"+x)...,
+		(optimize ? ["-O3"] : [])...,
+		(ndebug ? ["-DNDEBUG"] : ["-fstack-protector-strong","-g"])...,
+		more_flags...,
+		"-MMD","-c",filename,
+		(gen_pp ? ["-E"] : [])...,
+		(gen_asm ? ["-S"] : [])...,
+		"-o",gen_asm ? object_file+".S" :
+		     gen_pp ? object_file+".E" : object_file,
+		"-MF",dependency_file,
+	]);
+}
+
+function parse_wmatch_source(path,attrib,filename,fp_last_changed) {
+	local filename_tail = fs::path::tail(filename);
+	if ("*" in filename_tail) {
+		local filename_head = fs::path::head(filename);
+		for (local f: fs::query(fs::path::abs(filename,path))) {
+			yield parse_single_source(path,attrib,fs::path::join(filename_head,f),fp_last_changed)...;
+		}
+	} else {
+		yield parse_single_source(path,attrib,filename,fp_last_changed)...;
+	}
+}
+
+function parse_data_block(path,attrib,text,fp_last_changed) {
+	while (text) {
+		local used_attrib = attrib.__deepcopy__();
+		while (text.startswith("[")) {
+			local attrib_end = text.index("]",1);
+			local attrib_text = text[1:attrib_end].strip();
+			try {
+				local name,value = attrib_text.scanf("%[^(] ( %[^)] )")...;
+				name = name.strip();
+				local group = used_attrib.setdefault(name,[]);
+				for (local part: value.split(",")) {
+					if (group is list) {
+						group.append(part);
+						if (name == "no") {
+							used_attrib.setdefault("define",dict {})
+								["__NO_"+part.upper()+"__"] = "1";
+						}
+					} else {
+						local part_name,none,part_value = part.partition("=")...;
+						if (part_value) {
+							used_attrib.setdefault(name,dict {})[part_name.strip()] = part_value.strip();
+						} else if (group is dict) {
+							group[part] = "";
+						} else {
+							group.append(part);
+						}
+					}
+				}
+			} catch (...) {
+				local name,none,value = attrib_text.partition("=")...;
+				used_attrib[name.strip()] = value.strip();
+			}
+			text = text[attrib_end+1:].strip();
+		}
+		if (text.startswith("{")) {
+			local block_end = text.rindex("}");
+			yield parse_data_block(path,used_attrib,text[1:block_end].strip(),fp_last_changed)...;
+			text = text[block_end+1:].strip();
+		} else {
+			local block_end = text.find(";");
+			if (block_end == -1) block_end = #text;
+			local block = text[:block_end].strip();
+			if (block) {
+				yield parse_wmatch_source(path,used_attrib,block,fp_last_changed)...;
+			}
+			text = text[block_end+1:].strip();
+		}
+	}
+}
+
+// Returns a list of commandlines that should be
+// executed, as described in a given .sources file
+function parse_dot_sources_fp(path,fp,fp_last_changed) {
+	local compiler_mode = none;
+	dict result = {};
+	local text = ";".join(
+		fp.read()
+			.replace("\r\n","\n")
+			.replace("\r","\n")
+			.replace("\\\n","")
+			.replace("\t"," ")
+			.strip()
+			.splitlines(false)
+			.locate_all([](x) -> !x.lstrip().startswith("#")));
+	while (true) {
+		local new_text = text
+			.replace("{;","{")
+			.replace(";{","{")
+			.replace("};","}")
+			.replace(";}","}")
+			.replace(";;",";")
+			.replace("}{","};{");
+		if (new_text == text) break;
+		text = new_text;
+	}
+	while (text) {
+		local line_end = text.find(";");
+		if (line_end == -1) line_end = #text;
+		local block_begin = text[:line_end].find("{");
+		local block_end;
+		if (block_begin != -1) {
+			local recursion = 1;
+			for (block_end = block_begin+1; block_end < #text; ++block_end) {
+				if (text[block_end] == "{") ++recursion;
+				else if (text[block_end] == "}") {
+					if (!--recursion) break;
+				}
+			}
+		} else {
+			block_end = line_end;
+		}
+		local block = text[:block_end+1];
+		text = text[block_end+1:].strip();
+		yield parse_data_block(path,default_attrib.__deepcopy__(),block,fp_last_changed)...;
+	}
+}
+function parse_dot_sources(filename) {
+	if (verbose >= 1) print "Scanning .sources:",repr filename;
+	local fp = file.open(filename);
+	yield parse_dot_sources_fp(fs::path::head(filename),fp,fast_getmtime(filename))...;
+}
+
+function compile_dot_sources(filename) {
+	for (local project,sourcefile,object_file,compiler,args: parse_dot_sources(filename)) {
+		local error;
+		print "Compiling:",sourcefile;
+		local p = process(compiler,[" "+args[0],args[1:]...]);
+		run_compiler_process(p);
+	}
+}
+
+if (!run_only) {
+	for (local s: sources_files) {
+		compile_dot_sources(s);
+	}
+	if (gen_asm || gen_pp) return;
+}
+
+function any_file_newer_than(files,compare_against) {
+	for (local filename: files) {
+		if (fast_getmtime(filename) > compare_against)
+			return true;
+	}
+	return false;
+}
+
+local changed_libs = [];
+local changed_disk_files = dict {};
+local disk_was_missing = (int)force_disk;
+
+function createmissingdisk() {
+	if (!fs::exists("disk/kos.img") || force_disk) {
+		::disk_was_missing := 1;
+		local p = process("bash",["disk/makedisk.sh"]);
+		p.start();
+		return p.join();
+	}
+}
+
+function creatediskpath(path) {
+	local parts = path.split("/");
+	local total_path = "";
+	for (local part: parts) if (part) {
+		total_path += "/"+part;
+		local p = process("bash",["disk/mkdir.sh",total_path]);
+		p.start();
+		local error = p.join();
+	}
+}
+
+function updatediskfile(path,diskpath) {
+	print "Updating disk:",repr path,"-->",repr diskpath;
+	local p = process("bash",["disk/putfile.sh",path,diskpath]);
+	p.stdout = p.stderr = file.open("NUL");
+	p.start();
+	local error = p.join();
+	if (error != 0) {
+		creatediskpath(fs::path::head(diskpath));
+		p = process("bash",["disk/putfile.sh",path,diskpath]);
+		p.start();
+		error = p.join();
+		if (error != 0) {
+			print "Failed to update disk:",repr error;
+			// Try to remove the source file (so next time this is repeated)
+			try fs::unlink(path);
+			catch (...);
+		}
+	}
+	return error;
+}
+
+function compile_userland_app(name,proj) {
+	local objects = proj.objects;
+	// Userland application
+	local output = "bin/userland/"+name;
+	local libs = proj.libs;
+	local no = proj.options.get("no",[]);
+	if ("libc" !in no) {
+		libs.remove("_start");
+		libs.remove("c");
+		libs.append("_start","c");
+	}
+	if ("libgcc" !in no) {
+		libs.remove("gcc");
+		libs.append("gcc");
+	}
+	if (fs::exists(output) && !any_file_newer_than(
+		objects,fast_getmtime(output))) {
+		for (local l: libs) {
+			if (l in changed_libs) {
+				goto do_compile_userland;
+			}
+		}
+		if (disk_was_missing && proj.diskfile) {
+			changed_disk_files[output] = proj.diskfile;
+		}
+		return false;
+	}
+do_compile_userland:
+	local libpaths = proj.libpaths;
+	if ("bin/libs" !in libpaths) libpaths.append("bin/libs");
+	local p = process(executables["c"],[
+		"-static-libgcc",
+		"-o",output,(optimize ? ["-O2"] : [])...,
+		"-nostdlib",
+		(for (local l: libpaths) "-L"+l)...,
+		objects...,
+		(for (local l: libs) "-l"+l)...,
+		// "-llibc",
+		// "-lgcc",
+		// "-lfdlibm",
+		]);
+	_force_changed_files.append(output);
+	print "Re-linking:",repr output;
+	local t = run_compiler_process(p);
+	if (proj.diskfile) {
+		changed_disk_files[output] = proj.diskfile;
+	}
+	return true;
+}
+
+function compile_static_library(name,proj) {
+	local objects = proj.objects;
+	local output = "bin/libs/lib"+name+".a";
+	if (fs::exists(output) && !any_file_newer_than(
+		objects,fast_getmtime(output))) return false;
+	local p = process(executables["ar"],[
+		"rcs",output,objects...,
+		]);
+	_force_changed_files.append(output);
+	print "Re-linking:",repr output;
+	changed_libs.append(name);
+	run_compiler_process(p);
+	return true;
+}
+function compile_shared_library(name,proj) {
+	local objects = proj.objects;
+	// Userland application
+	local output = "bin/libs/lib"+name+".so";
+	local libs = proj.libs;
+	local no = proj.options.get("no",[]);
+	if ("libc" !in no) {
+		libs.remove("c");
+		if (name != "c") libs.append("c");
+	}
+	if ("libgcc" !in no) {
+		libs.remove("gcc");
+		libs.append("gcc");
+	}
+	if (fs::exists(output) && !any_file_newer_than(
+		objects,fast_getmtime(output))) {
+		for (local l: libs) {
+			if (l in changed_libs) {
+				goto do_compile_sharedlib;
+			}
+		}
+		if (disk_was_missing && proj.diskfile) {
+			changed_disk_files[output] = proj.diskfile;
+		}
+		return false;
+	}
+do_compile_sharedlib:
+	if (proj.diskfile) {
+		changed_disk_files[output] = proj.diskfile;
+	}
+	local libpaths = proj.libpaths;
+	if ("bin/libs" !in libpaths) libpaths.append("bin/libs");
+	libpaths.append("binutils/build-gcc-i686-elf/i686-elf/libgcc");
+	local p = process(executables["ld"],[
+		(for (local l: libpaths) "-L"+l)...,
+		//"-static-libgcc",(optimize ? ["-O2"] : [])...,
+		"-nostdlib","-shared","-o",output,
+		objects...,
+		(for (local l: libs) "-l"+l)...,
+		]);
+	_force_changed_files.append(output);
+	print "Re-linking:",repr output;
+	// Not needed for shared libraries
+	//changed_libs.append(name);
+	run_compiler_process(p);
+	return true;
+}
+
+function compile_project(name,proj) {
+	wait_all_compilers();
+	if (name.startswith("userland:")) {
+		return compile_userland_app(name[#"userland:":],proj);
+	}
+	if (name.startswith("lib:shared:")) {
+		return compile_shared_library(name[#"lib:shared:":],proj);
+	}
+	if (name.startswith("lib:static:")) {
+		return compile_static_library(name[#"lib:static:":],proj);
+	}
+
+	switch (name) {
+		case "kernel": {
+			local output = "bin/kos_kernel.bin";
+			local libs = proj.libs;
+			local objects = proj.objects;
+			libs.remove("k");
+			libs.remove("gcc");
+			libs.remove("fdlibm");
+			libs.append("k","gcc","kfdlibm");
+			if (fs::exists(output) && !any_file_newer_than(
+				objects,fast_getmtime(output))) {
+				for (local l: libs) {
+					if (l in changed_libs) {
+						goto do_compile_kernel;
+					}
+				}
+				return false;
+			}
+do_compile_kernel:
+			local libpaths = proj.libpaths;
+			if ("bin/libs" !in libpaths) libpaths.append("bin/libs");
+			local p = process(executables["c"],[
+				"-static-libgcc",
+				"-T","src/kernel/arch/x86/linker.ld",
+				"-o",output,"-ffreestanding",
+				(optimize ? ["-O2"] : [])...,
+				"-nostdlib",
+				(for (local l: libpaths) "-L"+l)...,
+				objects...,
+				(for (local l: libs) "-l"+l)...,
+			]);
+			_force_changed_files.append(output);
+			print "Re-linking:",repr output;
+			run_compiler_process(p);
+		} break;
+
+		case "libc":
+		case "libk":
+			return compile_static_library(name,proj);
+
+		default:
+			print "Unknown project:",repr name;
+			print "\tObjects:",repr proj.objects;
+			break;
+	}
+	return false;
+}
+
+if (!run_only) {
+	function compile_project_group(prefix) {
+		local projects_changed = false;
+		for (local name,proj: projects) {
+			if (name.startswith(prefix+":") &&
+			    compile_project(name,proj)) {
+				projects_changed = true;
+			}
+		}
+		return projects_changed;
+	}
+	function compile_project_single(name) {
+		if (name !in projects) return false;
+		return compile_project(name,projects[name]);
+	}
+	local projects_changed = false;
+	createmissingdisk();
+	// TODO: Proper dependency ordering
+	if (compile_project_single("lib:shared:c")) projects_changed = true;
+	if (compile_project_single("lib:static:k")) projects_changed = true;
+	if (compile_project_group("lib")) projects_changed = true;
+	if (compile_project_single("kernel")) projects_changed = true;
+	if (compile_project_group("userland")) projects_changed = true;
+
+	wait_all_compilers();
+	if (changed_disk_files) {
+		for (local path,diskname: changed_disk_files) {
+			updatediskfile(path,diskname);
+		}
+	}
+
+	if (build_only) return 0;
+
+//	if (projects_changed) {
+//#if 1
+//		if (remote) {
+//			fs::unlink("\\\\xxxx\\root\\opt\\kos\\kos_kernel.bin");
+//			fs::copy_("bin\\kos_kernel.bin","\\\\xxxx\\root\\opt\\kos\\kos_kernel.bin");
+//		}
+//#else
+//		print "Copying kos_kernel.bin";
+//		try fs::unlink("isodir/boot/kos"); catch (...);
+//		fs::copy_("bin/kos_kernel.bin","isodir/boot/kos");
+//		local p = process(executables["mkisofs"],[
+//			"-R",
+//			"-b","boot/grub/stage2_eltorito",
+//			"-no-emul-boot",
+//			"-boot-load-size 4",
+//			"-boot-info-table",
+//			"-o kos.iso",
+//			"isodir"]);
+//		// Rebuild the ISO
+//		print "Rebuilding .iso";
+//		p.start();
+//		if (p.join() != 0) sys.exit(1);
+//#endif
+//	}
+}
+
+#if 0
+// Finally start QEMU
+local qemu = process(executables["qemu"],[
+	"-cdrom","kos.iso"
+]);
+#endif
+
+
+local addr2line_proc = <>;
+local addr2line_inw = <>;
+local addr2line_outr = <>;
+
+function start_addr2line() {
+	if (!addr2line_proc) {
+		addr2line_proc.set(process(executables["addr2line"],[
+			"-e",addr2line_exe,"-i","-f"
+		]));
+		local inr,inw = pipe.new()...;
+		local outr,outw = pipe.new()...;
+		addr2line_inw.set(inw);
+		addr2line_outr.set(outr);
+		addr2line_proc.get().stdout = outw;
+		addr2line_proc.get().stdin = inr;
+		addr2line_proc.get().start();
+		outw.close();
+		inr.close();
+	}
+}
+
+
+// -> (string filename,string line,string function)
+function run_addr2line(addr) {
+	start_addr2line();
+	addr2line_inw.get().write(str(addr)+"\n");
+	local func = addr2line_outr.get().readline();
+	local data = addr2line_outr.get().readline();
+	local filename,line = data.scanf("%[^:]:%[A-Fa-f0-9]")...;
+	filename = filename.strip();
+	line = line.strip();
+#ifdef __WINDOWS__
+	if (filename.startswith("/cygdrive/")) {
+		filename = filename[#"/cygdrive/":].strip();
+		local drive,none,path = filename.partition("/")...;
+		filename = drive.upper()+":\\"+path.strip().strip("/").replace("/","\\");
+	}
+	filename = filename.replace("\\\\","\\");
+	filename = "..\\"+fs::path::rel(filename);
+	filename = filename.replace("\\","/");
+#endif
+	return pack filename,line,func;
+}
+
+
+function run_qemu(kernel_binary) {
+	local qemu = process(executables["qemu"],[
+		//(!hosted ? ["-no-reboot","-no-shutdown"] : [])...,
+		"-serial","stdio",
+		(remote ? ["-s","-S"] : [])...,
+		"-kernel",kernel_binary,
+		"-drive","file=disk/kos.img,format=raw,index=0,media=disk",
+		"-device","isa-debug-exit,iobase=0xf4,iosize=0x04",
+		"-vga","std",
+		(kernel_args ? ["-append","\""+
+			" ".join(for (local a: kernel_args) if (a) a)
+		+"\""] : [])...,
+		"-d","guest_errors",
+		
+	]);
+	local r,w = pipe.new()...;
+	// Redirect stdout to format special serial output (tracebacks...)
+	qemu.stdout = w;
+	qemu.start();
+	w.close();
+	// Also redirect to stddbg (OutputDebugString, so stuff shows up in the Vistual Studio log)
+	local outfile = file.io.stddbg|file.io.stderr;
+	while (local c = r.readall(1)) {
+		if (c == '#') {
+			c = r.readall(1);
+			if (c == '!') {
+				c = r.readall(1);
+				if (c == '$') {
+					// Parse special command, as output through serial #01
+					local cmd = r.readline().strip();
+					local name,args;
+					try name,args = cmd.scanf("%[A-Za-z0-9] %[^]")...;
+					catch (...) name = "",args = "";
+					name = name.strip();
+					args = args.strip();
+					try {
+						if (name == "addr2line") {
+							// Quick & dirty way of printing getting tracebacks...
+							// I know this is a really questionable solution.
+							// >> If it looks stupid but works, it ain't stupid!
+							local addr,fmt = args.scanf(" ( %[^)] ) '%[^']'")...;
+							local file,line,func = run_addr2line(addr.strip())...;
+							outfile.write(fmt.format({
+								.file = file.strip(),
+								.line = line.strip(),
+								.func = func.strip(),
+							})+"\n");
+						} else {
+							outfile.write("UNKNOWN CMD:"+repr(name ?: cmd)+"\n");
+						}
+					} catch (e...) {
+						outfile.write("CMD FAILED:"+repr(e)+"\n");
+					}
+				} else outfile.write("#!"+c);
+			} else outfile.write("#"+c);
+		} else outfile.write(c);
+	}
+	qemu.join();
+}
+
+try {
+	if (run_only) start_addr2line();
+	if (verbose >= 1) print "Starting emulator";
+	run_qemu("bin/kos_kernel.bin");
+} finally {
+	if (addr2line_proc) {
+		addr2line_proc.get().terminate();
+		addr2line_proc.del();
+	}
+}
+
+
+
+/*
+#!/bin/bash
+
+ROOT=$(dirname $(readlink -f "$0"))
+export PATH="$ROOT/binutils/build-binutils-i686-elf/bin:$PATH"
+QEMU="/cygdrive/d/qemu/qemu-system-i386.exe"
+PLINK="/cygdrive/d/putty/plink.exe"
+cd "$ROOT"
+
+create_iso() {
+	mkdir -p "$ROOT/isodir/boot/grub"
+	cp "$ROOT/bin/kos_kernel.bin"   "$ROOT/isodir/boot/kos_kernel.bin"
+	cp "$ROOT/grub/grub.cfg" "$ROOT/isodir/boot/grub/grub.cfg"
+	cp -R "$ROOT/isodir" "//xxxx/root/opt/kos"
+	"$PLINK" -i "E:\.ssh\root.key-xxxx_to_xxxx.ppk" \
+		-ssh root@192.168.xxx.xxx -P 90 \
+		"grub-mkrescue -o /opt/kos/kos.iso /opt/kos/isodir/"
+	cp -R "//xxxx/root/opt/kos/kos.iso" "$ROOT/kos.iso"
+}
+
+start_qemu() {
+	$QEMU -cdrom "kos.iso"
+}
+
+create_iso || exit $?
+start_qemu || exit $?
+*/
+
+
+
+
+
+
+
+
+
+

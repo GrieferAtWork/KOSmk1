@@ -1,0 +1,226 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\libs\libfdlibm\e_acos.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_acosh.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_asin.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_atan2.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_atanh.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_cosh.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_exp.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_fmod.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_gamma.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_gamma_r.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_hypot.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_j0.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_j1.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_jn.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_lgamma.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_lgamma_r.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_log.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_log10.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_pow.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_remainder.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_rem_pio2.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_scalb.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_sinh.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\e_sqrt.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\k_cos.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\k_rem_pio2.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\k_sin.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\k_standard.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\k_tan.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_asinh.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_atan.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_cbrt.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_ceil.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_copysign.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_cos.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_erf.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_expm1.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_fabs.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_finite.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_floor.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_frexp.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_ilogb.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_isnan.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_ldexp.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_lib_version.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_log1p.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_logb.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_matherr.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_modf.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_nextafter.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_rint.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_scalbn.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_signgam.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_significand.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_sin.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_tan.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\s_tanh.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_acos.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_acosh.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_asin.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_atan2.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_atanh.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_cosh.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_exp.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_fmod.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_gamma.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_gamma_r.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_hypot.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_j0.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_j1.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_jn.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_lgamma.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_lgamma_r.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_log.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_log10.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_pow.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_remainder.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_scalb.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_sinh.c" />
+    <ClCompile Include="..\..\libs\libfdlibm\w_sqrt.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\libs\libfdlibm\libfdlibm.h" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{DAB19C9A-80FE-47E5-954D-9E51173F3248}</ProjectGuid>
+    <RootNamespace>libfdlibm</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <IntermediateOutputPath>$(ProjectDir)</IntermediateOutputPath>
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <IntermediateOutputPath>$(ProjectDir)</IntermediateOutputPath>
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IntermediateOutputPath>$(ProjectDir)</IntermediateOutputPath>
+    <OutDir>$(SolutionDir)..\</OutDir>
+    <IncludePath>$(SolutionDir)..\include</IncludePath>
+    <IntDir>$(SolutionDir)..\build\.vs\$(ProjectName)\$(Platform)-$(Configuration)\</IntDir>
+    <NMakeReBuildCommandLine>rundll32</NMakeReBuildCommandLine>
+    <NMakeBuildCommandLine>rundll32</NMakeBuildCommandLine>
+    <ReferencePath>
+    </ReferencePath>
+    <LibraryPath>
+    </LibraryPath>
+    <LibraryWPath>
+    </LibraryWPath>
+    <SourcePath>
+    </SourcePath>
+    <ExcludePath />
+    <NMakeCleanCommandLine>
+    </NMakeCleanCommandLine>
+    <NMakeForcedIncludes>$(SolutionDir)..\include\__intellisense_fix.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
+    <AdditionalOptions>/TP</AdditionalOptions>
+    <NMakePreprocessorDefinitions>
+    </NMakePreprocessorDefinitions>
+    <NMakeOutput>
+    </NMakeOutput>
+    <NMakeIncludeSearchPath>
+    </NMakeIncludeSearchPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <IntermediateOutputPath>$(ProjectDir)</IntermediateOutputPath>
+    <OutDir>$(SolutionDir)..\</OutDir>
+    <IncludePath>$(SolutionDir)..\include</IncludePath>
+    <IntDir>$(SolutionDir)..\build\.vs\$(ProjectName)\$(Platform)-$(Configuration)\</IntDir>
+    <NMakeReBuildCommandLine>rundll32</NMakeReBuildCommandLine>
+    <NMakeBuildCommandLine>rundll32</NMakeBuildCommandLine>
+    <ReferencePath>
+    </ReferencePath>
+    <LibraryPath>
+    </LibraryPath>
+    <LibraryWPath>
+    </LibraryWPath>
+    <SourcePath>
+    </SourcePath>
+    <ExcludePath />
+    <NMakeCleanCommandLine>
+    </NMakeCleanCommandLine>
+    <NMakeForcedIncludes>$(SolutionDir)..\include\__intellisense_fix.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
+    <AdditionalOptions>/TP</AdditionalOptions>
+    <NMakePreprocessorDefinitions>
+    </NMakePreprocessorDefinitions>
+    <NMakeOutput>
+    </NMakeOutput>
+    <NMakeIncludeSearchPath>
+    </NMakeIncludeSearchPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>EnableAllWarnings</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>
+      </PreprocessorDefinitions>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <MinimalRebuild>false</MinimalRebuild>
+      <CompileAs>CompileAsCpp</CompileAs>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>EnableAllWarnings</WarningLevel>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>
+      </PreprocessorDefinitions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <CompileAs>CompileAsCpp</CompileAs>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

@@ -1,0 +1,356 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.31101.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "kos_kernel", "kos_kernel.vcxproj", "{B66F916D-44DB-4F6C-88F2-41C17AEFDF74}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "userland", "userland", "{9430368A-404E-4917-982A-DABD0023453A}"
+	ProjectSection(SolutionItems) = preProject
+		..\userland\.sources = ..\userland\.sources
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "libs", "libs", "{2030D081-E96F-4C1C-81A9-6B099CB2D7DB}"
+	ProjectSection(SolutionItems) = preProject
+		..\libs\.sources = ..\libs\.sources
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ls", "userland\ls.vcxproj", "{13155A89-C55C-4312-AE90-F6178664D012}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "init", "userland\init.vcxproj", "{578E1862-541E-4D6C-9CF2-6562018DE15B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libc", "libs\libc.vcxproj", "{A2791917-78D5-45B6-89E4-89AE7D4760D4}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libpthread", "libs\libpthread.vcxproj", "{0F0971C0-1376-429B-B57E-061779BBD0E5}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libfdlibm", "libs\libfdlibm.vcxproj", "{DAB19C9A-80FE-47E5-954D-9E51173F3248}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libk", "libs\libk.vcxproj", "{E14DFDE1-63DF-459D-A14B-B1529884A4CE}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cat", "userland\cat.vcxproj", "{66D88386-3AEE-45B0-865D-0203EAD95558}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "echo", "userland\echo.vcxproj", "{76C807A4-B6CA-424D-B8EE-8D1024D70647}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "_start", "libs\_start.vcxproj", "{841EFC9D-0B78-4E01-80EB-8D199053EBD1}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libdl", "libs\libdl.vcxproj", "{A7916ED4-57E3-4F10-9475-CE8702AA0022}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "include", "include", "{FC824D74-9E67-461A-ACFB-ED2065E7F255}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\__intellisense_fix.h = ..\include\__intellisense_fix.h
+		..\include\__null.h = ..\include\__null.h
+		..\include\alloca.h = ..\include\alloca.h
+		..\include\assert.h = ..\include\assert.h
+		..\include\byteswap.h = ..\include\byteswap.h
+		..\include\cassert = ..\include\cassert
+		..\include\cctype = ..\include\cctype
+		..\include\cerrno = ..\include\cerrno
+		..\include\cfloat = ..\include\cfloat
+		..\include\cstddef = ..\include\cstddef
+		..\include\ctype.h = ..\include\ctype.h
+		..\include\curses.h = ..\include\curses.h
+		..\include\dirent.h = ..\include\dirent.h
+		..\include\dlfcn.h = ..\include\dlfcn.h
+		..\include\elf.h = ..\include\elf.h
+		..\include\envlock.h = ..\include\envlock.h
+		..\include\errno.h = ..\include\errno.h
+		..\include\fcntl.h = ..\include\fcntl.h
+		..\include\features.h = ..\include\features.h
+		..\include\float.h = ..\include\float.h
+		..\include\format-printer.h = ..\include\format-printer.h
+		..\include\getopt.h = ..\include\getopt.h
+		..\include\inttypes.h = ..\include\inttypes.h
+		..\include\iso646.h = ..\include\iso646.h
+		..\include\itos.h = ..\include\itos.h
+		..\include\libgen.h = ..\include\libgen.h
+		..\include\limits.h = ..\include\limits.h
+		..\include\malloc.h = ..\include\malloc.h
+		..\include\math.h = ..\include\math.h
+		..\include\memory.h = ..\include\memory.h
+		..\include\proc.h = ..\include\proc.h
+		..\include\pthread.h = ..\include\pthread.h
+		..\include\pty.h = ..\include\pty.h
+		..\include\sched.h = ..\include\sched.h
+		..\include\semaphore.h = ..\include\semaphore.h
+		..\include\setjmp.h = ..\include\setjmp.h
+		..\include\signal.h = ..\include\signal.h
+		..\include\stdarg.h = ..\include\stdarg.h
+		..\include\stdatomic.h = ..\include\stdatomic.h
+		..\include\stdbool.h = ..\include\stdbool.h
+		..\include\stddef.h = ..\include\stddef.h
+		..\include\stdint.h = ..\include\stdint.h
+		..\include\stdio.h = ..\include\stdio.h
+		..\include\stdlib.h = ..\include\stdlib.h
+		..\include\string.h = ..\include\string.h
+		..\include\string_utils.h = ..\include\string_utils.h
+		..\include\strings.h = ..\include\strings.h
+		..\include\termios.h = ..\include\termios.h
+		..\include\time.h = ..\include\time.h
+		..\include\traceback.h = ..\include\traceback.h
+		..\include\type_traits = ..\include\type_traits
+		..\include\uchar.h = ..\include\uchar.h
+		..\include\unistd.h = ..\include\unistd.h
+		..\include\utime.h = ..\include\utime.h
+		..\include\vadefs.h = ..\include\vadefs.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kos", "kos", "{0BC61691-24B8-441B-AC00-881A38CA8FF8}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\kos\__alloca.h = ..\include\kos\__alloca.h
+		..\include\kos\__byteswap.h = ..\include\kos\__byteswap.h
+		..\include\kos\aligned_storage.h = ..\include\kos\aligned_storage.h
+		..\include\kos\arch.h = ..\include\kos\arch.h
+		..\include\kos\asm.h = ..\include\kos\asm.h
+		..\include\kos\assert.h = ..\include\kos\assert.h
+		..\include\kos\atomic.h = ..\include\kos\atomic.h
+		..\include\kos\attr.h = ..\include\kos\attr.h
+		..\include\kos\compiler-asm.h = ..\include\kos\compiler-asm.h
+		..\include\kos\compiler-cxx.h = ..\include\kos\compiler-cxx.h
+		..\include\kos\compiler-gcc.h = ..\include\kos\compiler-gcc.h
+		..\include\kos\compiler-intellisense.h = ..\include\kos\compiler-intellisense.h
+		..\include\kos\compiler-msvc.h = ..\include\kos\compiler-msvc.h
+		..\include\kos\compiler.h = ..\include\kos\compiler.h
+		..\include\kos\config.h = ..\include\kos\config.h
+		..\include\kos\endian.h = ..\include\kos\endian.h
+		..\include\kos\errno.h = ..\include\kos\errno.h
+		..\include\kos\fd.h = ..\include\kos\fd.h
+		..\include\kos\fs.h = ..\include\kos\fs.h
+		..\include\kos\keyboard.h = ..\include\kos\keyboard.h
+		..\include\kos\mem.h = ..\include\kos\mem.h
+		..\include\kos\mod.h = ..\include\kos\mod.h
+		..\include\kos\symbol.h = ..\include\kos\symbol.h
+		..\include\kos\syscall.h = ..\include\kos\syscall.h
+		..\include\kos\syscallno.h = ..\include\kos\syscallno.h
+		..\include\kos\sysconf.h = ..\include\kos\sysconf.h
+		..\include\kos\syslog.h = ..\include\kos\syslog.h
+		..\include\kos\task.h = ..\include\kos\task.h
+		..\include\kos\terminal.h = ..\include\kos\terminal.h
+		..\include\kos\time.h = ..\include\kos\time.h
+		..\include\kos\timespec.h = ..\include\kos\timespec.h
+		..\include\kos\types.h = ..\include\kos\types.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sys", "sys", "{6B2DD5AF-00A6-4912-9F39-BA66D9A16997}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\sys\dir.h = ..\include\sys\dir.h
+		..\include\sys\dirent.h = ..\include\sys\dirent.h
+		..\include\sys\elf.h = ..\include\sys\elf.h
+		..\include\sys\errno.h = ..\include\sys\errno.h
+		..\include\sys\io.h = ..\include\sys\io.h
+		..\include\sys\ioctl.h = ..\include\sys\ioctl.h
+		..\include\sys\mman.h = ..\include\sys\mman.h
+		..\include\sys\socket.h = ..\include\sys\socket.h
+		..\include\sys\stat.h = ..\include\sys\stat.h
+		..\include\sys\sysinfo.h = ..\include\sys\sysinfo.h
+		..\include\sys\termios.h = ..\include\sys\termios.h
+		..\include\sys\types.h = ..\include\sys\types.h
+		..\include\sys\unistd.h = ..\include\sys\unistd.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "linux", "linux", "{ABB98500-877C-4A29-BC75-9A6C8FAE735D}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\linux\syscall.h = ..\include\linux\syscall.h
+		..\include\linux\unistd.h = ..\include\linux\unistd.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "windows", "windows", "{CE636388-191E-48B5-9171-57B5A8163395}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\windows\syscall.h = ..\include\windows\syscall.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "arch", "arch", "{41A312AB-6D0F-4D85-B1C7-E9E08720D741}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\kos\arch\asm.h = ..\include\kos\arch\asm.h
+		..\include\kos\arch\io.h = ..\include\kos\arch\io.h
+		..\include\kos\arch\irq.h = ..\include\kos\arch\irq.h
+		..\include\kos\arch\string.h = ..\include\kos\arch\string.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "x86", "x86", "{CEDD95BB-909E-49E8-BC58-C3F84641788A}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\kos\arch\x86\asm.h = ..\include\kos\arch\x86\asm.h
+		..\include\kos\arch\x86\cpuid.h = ..\include\kos\arch\x86\cpuid.h
+		..\include\kos\arch\x86\eflags.h = ..\include\kos\arch\x86\eflags.h
+		..\include\kos\arch\x86\features.h = ..\include\kos\arch\x86\features.h
+		..\include\kos\arch\x86\io.h = ..\include\kos\arch\x86\io.h
+		..\include\kos\arch\x86\irq.h = ..\include\kos\arch\x86\irq.h
+		..\include\kos\arch\x86\mmu.h = ..\include\kos\arch\x86\mmu.h
+		..\include\kos\arch\x86\string.h = ..\include\kos\arch\x86\string.h
+		..\include\kos\arch\x86\vga.h = ..\include\kos\arch\x86\vga.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "generic", "generic", "{BE3E30ED-E050-4CCB-B5ED-A8B33A8ACC47}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\kos\arch\generic\features.h = ..\include\kos\arch\generic\features.h
+		..\include\kos\arch\generic\string.h = ..\include\kos\arch\generic\string.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "net", "net", "{BE6F8AEE-BC5D-4B9D-B1B5-3069E54C7DA5}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\kos\net\if_ether.h = ..\include\kos\net\if_ether.h
+		..\include\kos\net\ipv4_prot.h = ..\include\kos\net\ipv4_prot.h
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ps", "userland\ps.vcxproj", "{C21964E8-0822-4A37-9ED4-4B510DE878F3}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "env", "userland\env.vcxproj", "{17D5DB76-2F98-4302-9FD0-586F725B559C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mkdir", "userland\mkdir.vcxproj", "{A26C1C5E-C445-4632-97BA-58C644A0BB1B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rmdir", "userland\rmdir.vcxproj", "{055EF5C8-C1C4-4C97-9393-7DC7B463C48F}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "false", "userland\false.vcxproj", "{6EECFB5F-FBA8-4F89-A514-CA709BB99BD6}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "true", "userland\true.vcxproj", "{04F5DB17-0D6F-4708-9B28-2C3178AF9193}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "rline", "rline", "{9C060120-B8A5-457A-984C-E007D17CD708}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\rline\rline.h = ..\include\rline\rline.h
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "librline", "libs\librline.vcxproj", "{CB22AEDE-D309-4BFA-886D-4526954B3D65}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sh", "userland\sh.vcxproj", "{E9B676DE-BFF3-44AB-9386-0FCBE338C0CE}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "terminal-vga", "userland\terminal-vga.vcxproj", "{5817AC4F-0DF5-476F-A591-6D8EAF746BFD}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "term", "term", "{C2025DF0-F573-4139-B54B-80028BD05DE6}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\term\term.h = ..\include\term\term.h
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libterm", "libs\libterm.vcxproj", "{CFE0241A-3332-48A2-9D6A-0B39C045A37B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libcurses", "libs\libcurses.vcxproj", "{E7DEA996-55E1-4544-AB9B-530678C0FCB4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B66F916D-44DB-4F6C-88F2-41C17AEFDF74}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B66F916D-44DB-4F6C-88F2-41C17AEFDF74}.Debug|Win32.Build.0 = Debug|Win32
+		{B66F916D-44DB-4F6C-88F2-41C17AEFDF74}.Release|Win32.ActiveCfg = Release|Win32
+		{B66F916D-44DB-4F6C-88F2-41C17AEFDF74}.Release|Win32.Build.0 = Release|Win32
+		{13155A89-C55C-4312-AE90-F6178664D012}.Debug|Win32.ActiveCfg = Debug|Win32
+		{13155A89-C55C-4312-AE90-F6178664D012}.Debug|Win32.Build.0 = Debug|Win32
+		{13155A89-C55C-4312-AE90-F6178664D012}.Release|Win32.ActiveCfg = Release|Win32
+		{13155A89-C55C-4312-AE90-F6178664D012}.Release|Win32.Build.0 = Release|Win32
+		{578E1862-541E-4D6C-9CF2-6562018DE15B}.Debug|Win32.ActiveCfg = Debug|Win32
+		{578E1862-541E-4D6C-9CF2-6562018DE15B}.Debug|Win32.Build.0 = Debug|Win32
+		{578E1862-541E-4D6C-9CF2-6562018DE15B}.Release|Win32.ActiveCfg = Release|Win32
+		{578E1862-541E-4D6C-9CF2-6562018DE15B}.Release|Win32.Build.0 = Release|Win32
+		{A2791917-78D5-45B6-89E4-89AE7D4760D4}.Debug|Win32.ActiveCfg = Debug|Win32
+		{A2791917-78D5-45B6-89E4-89AE7D4760D4}.Debug|Win32.Build.0 = Debug|Win32
+		{A2791917-78D5-45B6-89E4-89AE7D4760D4}.Release|Win32.ActiveCfg = Release|Win32
+		{A2791917-78D5-45B6-89E4-89AE7D4760D4}.Release|Win32.Build.0 = Release|Win32
+		{0F0971C0-1376-429B-B57E-061779BBD0E5}.Debug|Win32.ActiveCfg = Debug|Win32
+		{0F0971C0-1376-429B-B57E-061779BBD0E5}.Debug|Win32.Build.0 = Debug|Win32
+		{0F0971C0-1376-429B-B57E-061779BBD0E5}.Release|Win32.ActiveCfg = Release|Win32
+		{0F0971C0-1376-429B-B57E-061779BBD0E5}.Release|Win32.Build.0 = Release|Win32
+		{DAB19C9A-80FE-47E5-954D-9E51173F3248}.Debug|Win32.ActiveCfg = Debug|Win32
+		{DAB19C9A-80FE-47E5-954D-9E51173F3248}.Debug|Win32.Build.0 = Debug|Win32
+		{DAB19C9A-80FE-47E5-954D-9E51173F3248}.Release|Win32.ActiveCfg = Release|Win32
+		{DAB19C9A-80FE-47E5-954D-9E51173F3248}.Release|Win32.Build.0 = Release|Win32
+		{E14DFDE1-63DF-459D-A14B-B1529884A4CE}.Debug|Win32.ActiveCfg = Debug|Win32
+		{E14DFDE1-63DF-459D-A14B-B1529884A4CE}.Debug|Win32.Build.0 = Debug|Win32
+		{E14DFDE1-63DF-459D-A14B-B1529884A4CE}.Release|Win32.ActiveCfg = Release|Win32
+		{E14DFDE1-63DF-459D-A14B-B1529884A4CE}.Release|Win32.Build.0 = Release|Win32
+		{66D88386-3AEE-45B0-865D-0203EAD95558}.Debug|Win32.ActiveCfg = Debug|Win32
+		{66D88386-3AEE-45B0-865D-0203EAD95558}.Debug|Win32.Build.0 = Debug|Win32
+		{66D88386-3AEE-45B0-865D-0203EAD95558}.Release|Win32.ActiveCfg = Release|Win32
+		{66D88386-3AEE-45B0-865D-0203EAD95558}.Release|Win32.Build.0 = Release|Win32
+		{76C807A4-B6CA-424D-B8EE-8D1024D70647}.Debug|Win32.ActiveCfg = Debug|Win32
+		{76C807A4-B6CA-424D-B8EE-8D1024D70647}.Debug|Win32.Build.0 = Debug|Win32
+		{76C807A4-B6CA-424D-B8EE-8D1024D70647}.Release|Win32.ActiveCfg = Release|Win32
+		{76C807A4-B6CA-424D-B8EE-8D1024D70647}.Release|Win32.Build.0 = Release|Win32
+		{841EFC9D-0B78-4E01-80EB-8D199053EBD1}.Debug|Win32.ActiveCfg = Debug|Win32
+		{841EFC9D-0B78-4E01-80EB-8D199053EBD1}.Debug|Win32.Build.0 = Debug|Win32
+		{841EFC9D-0B78-4E01-80EB-8D199053EBD1}.Release|Win32.ActiveCfg = Release|Win32
+		{841EFC9D-0B78-4E01-80EB-8D199053EBD1}.Release|Win32.Build.0 = Release|Win32
+		{A7916ED4-57E3-4F10-9475-CE8702AA0022}.Debug|Win32.ActiveCfg = Debug|Win32
+		{A7916ED4-57E3-4F10-9475-CE8702AA0022}.Debug|Win32.Build.0 = Debug|Win32
+		{A7916ED4-57E3-4F10-9475-CE8702AA0022}.Release|Win32.ActiveCfg = Release|Win32
+		{A7916ED4-57E3-4F10-9475-CE8702AA0022}.Release|Win32.Build.0 = Release|Win32
+		{C21964E8-0822-4A37-9ED4-4B510DE878F3}.Debug|Win32.ActiveCfg = Debug|Win32
+		{C21964E8-0822-4A37-9ED4-4B510DE878F3}.Debug|Win32.Build.0 = Debug|Win32
+		{C21964E8-0822-4A37-9ED4-4B510DE878F3}.Release|Win32.ActiveCfg = Release|Win32
+		{C21964E8-0822-4A37-9ED4-4B510DE878F3}.Release|Win32.Build.0 = Release|Win32
+		{17D5DB76-2F98-4302-9FD0-586F725B559C}.Debug|Win32.ActiveCfg = Debug|Win32
+		{17D5DB76-2F98-4302-9FD0-586F725B559C}.Debug|Win32.Build.0 = Debug|Win32
+		{17D5DB76-2F98-4302-9FD0-586F725B559C}.Release|Win32.ActiveCfg = Release|Win32
+		{17D5DB76-2F98-4302-9FD0-586F725B559C}.Release|Win32.Build.0 = Release|Win32
+		{A26C1C5E-C445-4632-97BA-58C644A0BB1B}.Debug|Win32.ActiveCfg = Debug|Win32
+		{A26C1C5E-C445-4632-97BA-58C644A0BB1B}.Debug|Win32.Build.0 = Debug|Win32
+		{A26C1C5E-C445-4632-97BA-58C644A0BB1B}.Release|Win32.ActiveCfg = Release|Win32
+		{A26C1C5E-C445-4632-97BA-58C644A0BB1B}.Release|Win32.Build.0 = Release|Win32
+		{055EF5C8-C1C4-4C97-9393-7DC7B463C48F}.Debug|Win32.ActiveCfg = Debug|Win32
+		{055EF5C8-C1C4-4C97-9393-7DC7B463C48F}.Debug|Win32.Build.0 = Debug|Win32
+		{055EF5C8-C1C4-4C97-9393-7DC7B463C48F}.Release|Win32.ActiveCfg = Release|Win32
+		{055EF5C8-C1C4-4C97-9393-7DC7B463C48F}.Release|Win32.Build.0 = Release|Win32
+		{6EECFB5F-FBA8-4F89-A514-CA709BB99BD6}.Debug|Win32.ActiveCfg = Debug|Win32
+		{6EECFB5F-FBA8-4F89-A514-CA709BB99BD6}.Debug|Win32.Build.0 = Debug|Win32
+		{6EECFB5F-FBA8-4F89-A514-CA709BB99BD6}.Release|Win32.ActiveCfg = Release|Win32
+		{6EECFB5F-FBA8-4F89-A514-CA709BB99BD6}.Release|Win32.Build.0 = Release|Win32
+		{04F5DB17-0D6F-4708-9B28-2C3178AF9193}.Debug|Win32.ActiveCfg = Debug|Win32
+		{04F5DB17-0D6F-4708-9B28-2C3178AF9193}.Debug|Win32.Build.0 = Debug|Win32
+		{04F5DB17-0D6F-4708-9B28-2C3178AF9193}.Release|Win32.ActiveCfg = Release|Win32
+		{04F5DB17-0D6F-4708-9B28-2C3178AF9193}.Release|Win32.Build.0 = Release|Win32
+		{CB22AEDE-D309-4BFA-886D-4526954B3D65}.Debug|Win32.ActiveCfg = Debug|Win32
+		{CB22AEDE-D309-4BFA-886D-4526954B3D65}.Debug|Win32.Build.0 = Debug|Win32
+		{CB22AEDE-D309-4BFA-886D-4526954B3D65}.Release|Win32.ActiveCfg = Release|Win32
+		{CB22AEDE-D309-4BFA-886D-4526954B3D65}.Release|Win32.Build.0 = Release|Win32
+		{E9B676DE-BFF3-44AB-9386-0FCBE338C0CE}.Debug|Win32.ActiveCfg = Debug|Win32
+		{E9B676DE-BFF3-44AB-9386-0FCBE338C0CE}.Debug|Win32.Build.0 = Debug|Win32
+		{E9B676DE-BFF3-44AB-9386-0FCBE338C0CE}.Release|Win32.ActiveCfg = Release|Win32
+		{E9B676DE-BFF3-44AB-9386-0FCBE338C0CE}.Release|Win32.Build.0 = Release|Win32
+		{5817AC4F-0DF5-476F-A591-6D8EAF746BFD}.Debug|Win32.ActiveCfg = Debug|Win32
+		{5817AC4F-0DF5-476F-A591-6D8EAF746BFD}.Debug|Win32.Build.0 = Debug|Win32
+		{5817AC4F-0DF5-476F-A591-6D8EAF746BFD}.Release|Win32.ActiveCfg = Release|Win32
+		{5817AC4F-0DF5-476F-A591-6D8EAF746BFD}.Release|Win32.Build.0 = Release|Win32
+		{CFE0241A-3332-48A2-9D6A-0B39C045A37B}.Debug|Win32.ActiveCfg = Debug|Win32
+		{CFE0241A-3332-48A2-9D6A-0B39C045A37B}.Debug|Win32.Build.0 = Debug|Win32
+		{CFE0241A-3332-48A2-9D6A-0B39C045A37B}.Release|Win32.ActiveCfg = Release|Win32
+		{CFE0241A-3332-48A2-9D6A-0B39C045A37B}.Release|Win32.Build.0 = Release|Win32
+		{E7DEA996-55E1-4544-AB9B-530678C0FCB4}.Debug|Win32.ActiveCfg = Debug|Win32
+		{E7DEA996-55E1-4544-AB9B-530678C0FCB4}.Debug|Win32.Build.0 = Debug|Win32
+		{E7DEA996-55E1-4544-AB9B-530678C0FCB4}.Release|Win32.ActiveCfg = Release|Win32
+		{E7DEA996-55E1-4544-AB9B-530678C0FCB4}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{13155A89-C55C-4312-AE90-F6178664D012} = {9430368A-404E-4917-982A-DABD0023453A}
+		{578E1862-541E-4D6C-9CF2-6562018DE15B} = {9430368A-404E-4917-982A-DABD0023453A}
+		{A2791917-78D5-45B6-89E4-89AE7D4760D4} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
+		{0F0971C0-1376-429B-B57E-061779BBD0E5} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
+		{DAB19C9A-80FE-47E5-954D-9E51173F3248} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
+		{E14DFDE1-63DF-459D-A14B-B1529884A4CE} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
+		{66D88386-3AEE-45B0-865D-0203EAD95558} = {9430368A-404E-4917-982A-DABD0023453A}
+		{76C807A4-B6CA-424D-B8EE-8D1024D70647} = {9430368A-404E-4917-982A-DABD0023453A}
+		{841EFC9D-0B78-4E01-80EB-8D199053EBD1} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
+		{A7916ED4-57E3-4F10-9475-CE8702AA0022} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
+		{0BC61691-24B8-441B-AC00-881A38CA8FF8} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
+		{6B2DD5AF-00A6-4912-9F39-BA66D9A16997} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
+		{ABB98500-877C-4A29-BC75-9A6C8FAE735D} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
+		{CE636388-191E-48B5-9171-57B5A8163395} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
+		{41A312AB-6D0F-4D85-B1C7-E9E08720D741} = {0BC61691-24B8-441B-AC00-881A38CA8FF8}
+		{CEDD95BB-909E-49E8-BC58-C3F84641788A} = {41A312AB-6D0F-4D85-B1C7-E9E08720D741}
+		{BE3E30ED-E050-4CCB-B5ED-A8B33A8ACC47} = {41A312AB-6D0F-4D85-B1C7-E9E08720D741}
+		{BE6F8AEE-BC5D-4B9D-B1B5-3069E54C7DA5} = {0BC61691-24B8-441B-AC00-881A38CA8FF8}
+		{C21964E8-0822-4A37-9ED4-4B510DE878F3} = {9430368A-404E-4917-982A-DABD0023453A}
+		{17D5DB76-2F98-4302-9FD0-586F725B559C} = {9430368A-404E-4917-982A-DABD0023453A}
+		{A26C1C5E-C445-4632-97BA-58C644A0BB1B} = {9430368A-404E-4917-982A-DABD0023453A}
+		{055EF5C8-C1C4-4C97-9393-7DC7B463C48F} = {9430368A-404E-4917-982A-DABD0023453A}
+		{6EECFB5F-FBA8-4F89-A514-CA709BB99BD6} = {9430368A-404E-4917-982A-DABD0023453A}
+		{04F5DB17-0D6F-4708-9B28-2C3178AF9193} = {9430368A-404E-4917-982A-DABD0023453A}
+		{9C060120-B8A5-457A-984C-E007D17CD708} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
+		{CB22AEDE-D309-4BFA-886D-4526954B3D65} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
+		{E9B676DE-BFF3-44AB-9386-0FCBE338C0CE} = {9430368A-404E-4917-982A-DABD0023453A}
+		{5817AC4F-0DF5-476F-A591-6D8EAF746BFD} = {9430368A-404E-4917-982A-DABD0023453A}
+		{C2025DF0-F573-4139-B54B-80028BD05DE6} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
+		{CFE0241A-3332-48A2-9D6A-0B39C045A37B} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
+		{E7DEA996-55E1-4544-AB9B-530678C0FCB4} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
+	EndGlobalSection
+EndGlobal

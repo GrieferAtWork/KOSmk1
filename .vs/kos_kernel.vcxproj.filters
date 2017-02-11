@@ -1,0 +1,600 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{1a47fae0-06bc-4d89-82ca-ace33b495eee}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\kernel">
+      <UniqueIdentifier>{f99dedd7-dbee-4cee-a92b-536ec836b5d3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\kernel\fs">
+      <UniqueIdentifier>{d560458d-57ac-4a2f-b4e6-6dc5f5d565e6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\kernel\dev">
+      <UniqueIdentifier>{ee7bdba4-ab50-4760-b675-3dbaf67e1d1a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\kernel\test">
+      <UniqueIdentifier>{45965700-4daa-4ae9-a5bf-62e308a28c1c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{c6f90c89-23bf-4b7c-aac9-74e622ab7795}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\dev">
+      <UniqueIdentifier>{fce7dfa7-be32-4f63-95f8-c8bd5bf5a546}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\fs">
+      <UniqueIdentifier>{f112f964-2eda-40dd-8758-e064c680955b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\kernel\sched">
+      <UniqueIdentifier>{ee12f786-6764-4cdb-b42a-2d6bb3ce0fc7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\kernel\sched\sync">
+      <UniqueIdentifier>{e0ac2916-f11d-4e12-a94c-ef5d17908a43}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\kernel\syscall">
+      <UniqueIdentifier>{3cb16e2b-c113-4e14-840f-2f8e86096789}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\kernel\arch">
+      <UniqueIdentifier>{8cfb2271-3eb5-4fe2-bc37-902b1c7d95ff}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\kernel\arch\x86">
+      <UniqueIdentifier>{997ee39d-97b5-472d-9bbb-92004bf5e278}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\util">
+      <UniqueIdentifier>{c6b183c7-0b68-4dbc-bcb0-528384379a0d}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\include\kos\kernel\fd.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\fdman.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\features.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\fpu.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\gdt.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\interrupts.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\linker.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\multiboot.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\pageframe.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\paging.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\procmodules.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\serial.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\shm.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\tss.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\tty.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\types.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\debug.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\dev\socket.h">
+      <Filter>include\dev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\dev\socket-Ne2000.h">
+      <Filter>include\dev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\dev\storage.h">
+      <Filter>include\dev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\dev\storage-ata.h">
+      <Filter>include\dev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\dev\storage-part.h">
+      <Filter>include\dev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\dev\storage-ramdisk.h">
+      <Filter>include\dev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\dev\device.h">
+      <Filter>include\dev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\dev\fstype.h">
+      <Filter>include\dev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\fs\vfs.h">
+      <Filter>include\fs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\fs\fat.h">
+      <Filter>include\fs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\fs\fat-internal.h">
+      <Filter>include\fs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\fs\hdd-mbr.h">
+      <Filter>include\fs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\socket.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\iobuf.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\sched_yield.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\procenv.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\closelock.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\ddist.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\mmutex.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\mutex.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\object.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\once.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\proc.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\rwlock.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\sem.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\signal.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\signal_v.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\spinlock.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\task.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\time.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\tls.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\fs\fs.h">
+      <Filter>include\fs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\fs\fs-blockfile.h">
+      <Filter>include\fs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\fs\fs-dirfile.h">
+      <Filter>include\fs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\fs\file.h">
+      <Filter>include\fs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\kernel\syscall\syscall-common.h">
+      <Filter>src\kernel\syscall</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\kernel\syscall\syscall-groups.h">
+      <Filter>src\kernel\syscall</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\pipe.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\util\string.h">
+      <Filter>include\util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\keyboard.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\addist.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\reboot.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\pty.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\ioflag.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\rawbuf.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\region.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\syslog.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\fs\vfs-dev.h">
+      <Filter>include\fs</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\src\main.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\pageframe.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\paging.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\tty.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\interrupts.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\serial.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\debug.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\fs\fat.c">
+      <Filter>src\kernel\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\dev\device.c">
+      <Filter>src\kernel\dev</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\test\test.c">
+      <Filter>src\kernel\test</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\fs\vfs.c">
+      <Filter>src\kernel\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\gdt.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\fpu.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\sysconf.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\shm.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\linker.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\dev\socket.c">
+      <Filter>src\kernel\dev</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\socket.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\iobuf.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\procenv.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\fdman.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\sched\task.c">
+      <Filter>src\kernel\sched</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\sched\proc.c">
+      <Filter>src\kernel\sched</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\sched\sync\sync.c">
+      <Filter>src\kernel\sched\sync</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\time.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\fs\fs.c">
+      <Filter>src\kernel\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\syscall\syscall.c">
+      <Filter>src\kernel\syscall</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\pipe.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\string.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\keyboard.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\reboot.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\pty.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\syslog.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\fs\vfs-dev.c">
+      <Filter>src\kernel\fs</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\src\kernel\dev\storage-ata-rwlba.c.inl">
+      <Filter>src\kernel\dev</Filter>
+    </None>
+    <None Include="..\src\kernel\dev\storage-ata.c.inl">
+      <Filter>src\kernel\dev</Filter>
+    </None>
+    <None Include="..\src\kernel\dev\storage-ramdisk.c.inl">
+      <Filter>src\kernel\dev</Filter>
+    </None>
+    <None Include="..\src\kernel\dev\storage-diskinfo512.c.inl">
+      <Filter>src\kernel\dev</Filter>
+    </None>
+    <None Include="..\src\kernel\dev\storage-part.c.inl">
+      <Filter>src\kernel\dev</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fat-internal.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\dev\storage.c.inl">
+      <Filter>src\kernel\dev</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fat-internal-init.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fat-internal-create.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fat-internal-rw.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fat-internal-enum.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fat-internal-fhead.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fat-internal-fatcache.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fat-internal-dos8.3.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fat-internal-enum-impl.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\.sources" />
+    <None Include="..\src\kernel\paging-map.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\gdt.S">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\paging-transfer.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\interrupts.S">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\fd.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\pageframe-alloc.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\tty-print.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\linker-slloaders.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\linker-relocate.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\linker-cache.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\socket-packet.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\dev\socket-allocframe.c.inl">
+      <Filter>src\kernel\dev</Filter>
+    </None>
+    <None Include="..\src\kernel\iobuf-readimpl.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\dev\socket-Ne2000.c.inl">
+      <Filter>src\kernel\dev</Filter>
+    </None>
+    <None Include="..\src\kernel\procmodules.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\proc-tasks.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\task_asm.S">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\task_asm-ring3-bootstrap.S.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\task-attr.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\task-recursive.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\task-sigchain.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\task-timetick.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\task-usercheck.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\task-util.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\tls.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\proc-attr.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\proc-exec.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\proc-fdman.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\proc-fork.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\proc-getbarrier.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\proc-initkernel.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\proc-insmod.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\proc-pid.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\sync\mutex.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\sync\rwlock.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\sync\sem.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\sync\signal.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\sync\signal_v.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\sync\signal-impl.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\sync\closelock.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\sync\ddist.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\sync\mmutex.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\sync\mmutex-impl.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fs-dirent-walk.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fs-dirfile.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fs-generic.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fs-generic-file.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fs-generic-inode.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fs-generic-superblock.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\file.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fs-blockfile.c.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fs-dirent-mkobj.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\fs\fs-dirent-rmobj.inl">
+      <Filter>src\kernel\fs</Filter>
+    </None>
+    <None Include="..\src\kernel\syscall\syscall-kfd.c.inl">
+      <Filter>src\kernel\syscall</Filter>
+    </None>
+    <None Include="..\src\kernel\syscall\syscall-kfs.c.inl">
+      <Filter>src\kernel\syscall</Filter>
+    </None>
+    <None Include="..\src\kernel\syscall\syscall-kmem.c.inl">
+      <Filter>src\kernel\syscall</Filter>
+    </None>
+    <None Include="..\src\kernel\syscall\syscall-kproc.c.inl">
+      <Filter>src\kernel\syscall</Filter>
+    </None>
+    <None Include="..\src\kernel\syscall\syscall-ktask.c.inl">
+      <Filter>src\kernel\syscall</Filter>
+    </None>
+    <None Include="..\src\kernel\syscall\syscall-ktime.c.inl">
+      <Filter>src\kernel\syscall</Filter>
+    </None>
+    <None Include="..\src\kernel\syscall\syscall-mod.c.inl">
+      <Filter>src\kernel\syscall</Filter>
+    </None>
+    <None Include="..\src\kernel\syscall\syscall-nt.c.inl">
+      <Filter>src\kernel\syscall</Filter>
+    </None>
+    <None Include="..\src\kernel\syscall\syscall-unix.c.inl">
+      <Filter>src\kernel\syscall</Filter>
+    </None>
+    <None Include="..\src\kernel\syscall\syscall-generic.c.inl">
+      <Filter>src\kernel\syscall</Filter>
+    </None>
+    <None Include="..\src\kernel\arch\x86\linker.ld">
+      <Filter>src\kernel\arch\x86</Filter>
+    </None>
+    <None Include="..\src\kernel\arch\x86\boot.S">
+      <Filter>src\kernel\arch\x86</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\proc-environ.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\sync\addist.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\syslog-write.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+  </ItemGroup>
+</Project>
