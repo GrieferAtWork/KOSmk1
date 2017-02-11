@@ -117,14 +117,15 @@ __public off_t ftello(FILE *fp) { pos_t filepos; kerrno_t error; if __unlikely(K
 __public void rewind(FILE *fp) { __evalexpr(kfile_rewind(fp)); }
 __public int getchar(void) {
  struct kbevent evt;
- kerrno_t error = kaddist_adduser(&keyboard_input,&evt);
+ struct kaddistticket ticket;
+ kerrno_t error = kaddist_genticket(&keyboard_input,&ticket);
  if __unlikely(KE_ISERR(error)) return error;
  do {
-  error = kaddist_vrecv(&keyboard_input,&evt,&evt);
+  error = kaddist_vrecv(&keyboard_input,&ticket,&evt);
  } while (KE_ISOK(error) && (!KEY_ISUTF8(evt.e_key) ||
                              !KEY_ISDOWN(evt.e_key)
           ));
- kaddist_deluser(&keyboard_input,&evt);
+ kaddist_delticket(&keyboard_input,&ticket);
  if __unlikely(KE_ISERR(error)) return error;
  return (int)KEY_TOUTF8(evt.e_key);
 }

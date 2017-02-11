@@ -744,8 +744,8 @@ extern __crit kerrno_t kproclist_enumpid(__pid_t *__restrict pidv,
 
 
 #ifdef __MAIN_C__
-extern __crit void kernel_initialize_process(void);
-extern __crit void kernel_finalize_process(void);
+extern void kernel_initialize_process(void);
+extern void kernel_finalize_process(void);
 #endif /* __MAIN_C__ */
 
 #ifndef __INTELLISENSE__

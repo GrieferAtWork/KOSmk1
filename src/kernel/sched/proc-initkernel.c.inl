@@ -44,8 +44,7 @@ struct kproc __kproc_kernel = KPROC_INITROOT((struct kfile *)&__kproc_kernel_roo
 
 struct kproclist __kproclist_global = KPROCLIST_INIT;
 
-__crit void kernel_initialize_process(void) {
- KTASK_CRIT_MARK
+void kernel_initialize_process(void) {
  __kproc_kernel.p_threads.t_taskv = (struct ktask **)malloc(1*sizeof(struct ktask *));
  if __unlikely(!__kproc_kernel.p_threads.t_taskv) {
   printf("Failed to initialize kernel task context: KE_NOMEM\n");
@@ -79,8 +78,7 @@ __crit void kernel_initialize_process(void) {
  __kproclist_global.pl_procv[0] = &__kproc_kernel;
 }
 
-__crit void kernel_finalize_process(void) {
- KTASK_CRIT_MARK
+void kernel_finalize_process(void) {
  kproclist_close();
  assertf(__kproc_kernel.p_threads.t_taska == 1,
          "There are still tasks other than 'ktask_zero()' running in 'kproc_kernel()'");

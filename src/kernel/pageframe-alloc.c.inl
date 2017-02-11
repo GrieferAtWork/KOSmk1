@@ -43,7 +43,7 @@ struct kpageframe *kpageframe_alloc(__size_t n_pages)
 #else
  assertf(n_pages,"Cannot allocate ZERO pages!");
 #endif
- k_syslogf(KLOG_TRACE,"=== ALLOCATING FRAMES: %d ===\n_pages",n_pages);
+ k_syslogf(KLOG_TRACE,"Allocating %Iu pages\n",n_pages);
 #ifdef TRYALLOC
  winner = NULL;
 #endif

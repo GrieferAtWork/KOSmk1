@@ -1115,8 +1115,8 @@ ktask_getstat(struct ktask const *__restrict self,
      __ktself->t_flags |= KTASK_FLAG_CRITICAL;\
      NOINTERRUPT_ENDUNLOCK(ktask_unlock(__ktself,KTASK_LOCK_STATE));\
  }while(0)
-#define __ktask_region_crit_is_raw()   ((ktask_self()->t_flags&KTASK_FLAG_CRITICAL)!=0)
-#define __ktask_region_crit_is()       (NOINTERRUPT_P|| !karch_irq_enabled() || __ktask_region_crit_is_raw() || kcpu_global_onetask())
+#define __ktask_region_crit_is_real()  ((ktask_self()->t_flags&KTASK_FLAG_CRITICAL)!=0)
+#define __ktask_region_crit_is()       (!karch_irq_enabled() || __ktask_region_crit_is_real() || kcpu_global_onetask())
 #define __ktask_region_crit_leave()     ktask_unschedule_aftercrit(ktask_self())
 #define __ktask_region_nointr_is()     ((ktask_self()->t_flags&KTASK_FLAG_NOINTR)!=0)
 #ifdef __DEBUG__
@@ -1135,8 +1135,8 @@ ktask_getstat(struct ktask const *__restrict self,
 //////////////////////////////////////////////////////////////////////////
 // Begin/end a critical operation within the calling task.
 // While inside a critical block, the calling task cannot be terminated.
-#define KTASK_CRIT_BEGIN         REGION_TRYENTER(ISCRIT,__ktask_region_crit_is,__ktask_region_crit_tryenter)
-#define KTASK_CRIT_BEGIN_FIRST   REGION_ENTER_FIRST(ISCRIT,__ktask_region_crit_is,__ktask_region_crit_enter)
+#define KTASK_CRIT_BEGIN         REGION_TRYENTER(ISCRIT,__ktask_region_crit_is_real,__ktask_region_crit_tryenter)
+#define KTASK_CRIT_BEGIN_FIRST   REGION_ENTER_FIRST(ISCRIT,__ktask_region_crit_is_real,__ktask_region_crit_enter)
 #define KTASK_CRIT_BREAK         REGION_BREAK(ISCRIT,__ktask_region_crit_leave)
 #define KTASK_CRIT_END           REGION_LEAVE(ISCRIT,__ktask_region_crit_leave)
 #define KTASK_CRIT_MARK          REGION_MARK(ISCRIT,__ktask_region_crit_is)
@@ -1173,19 +1173,20 @@ REGION_DEFINE(ISNOINTR);
 // Returns TRUE(1) if the calling task is protected from sporadic termination.
 // Returns FALSE(0) otherwise.
 // NOTE: 'KTASK_ISCRIT_P' is the compile-time-only version and can
-//        be used to generate optimzed code when used in macros.
+//        be used to generate optimized code when used in macros.
 #define KTASK_ISCRIT_P    (KTASK_CRIT_P || NOINTERRUPT_P)
 #define KTASK_ISCRIT      (KTASK_ISCRIT_P || __ktask_region_crit_is())
+// TODO: The scheduler should implicitly handle 'NOINTERRUPT_P' as critical.
+
 
 //////////////////////////////////////////////////////////////////////////
 // Similar to 'ktask_iscrit', but only returns TRUE(1)
 // if the calling task isn't allowed to be interrupted
 // by KE_INTR-style wake-ups.
 // NOTE: 'KTASK_ISNOINTR_P' is the compile-time-only version and can
-//        be used to generate optimzed code when used in macros.
+//        be used to generate optimized code when used in macros.
 #define KTASK_ISNOINTR_P  (KTASK_NOINTR_P)
 #define KTASK_ISNOINTR    (KTASK_ISNOINTR_P || __ktask_region_nointr_is())
-
 
 #else
 #define KTASK_ISCRIT_P  (NOINTERRUPT_P)
@@ -1211,8 +1212,8 @@ extern int ktask_iscrit(void);
 extern int ktask_isnointr(void);
 #endif
 
-#define ktask_iscrit()    KTASK_ISCRIT
-#define ktask_isnointr()  KTASK_ISNOINTR
+#define ktask_iscrit()    (KTASK_ISCRIT || kcpu_global_onetask())
+#define ktask_isnointr()   KTASK_ISNOINTR
 
 #define KTASK_CRIT(expr) \
  __xblock({ __typeof__(expr) __ktcres;\

@@ -216,9 +216,6 @@
     <ClInclude Include="..\include\kos\kernel\keyboard.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\kos\kernel\addist.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\kos\kernel\reboot.h">
       <Filter>include</Filter>
     </ClInclude>
@@ -239,6 +236,9 @@
     </ClInclude>
     <ClInclude Include="..\include\kos\kernel\fs\vfs-dev.h">
       <Filter>include\fs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\addist.h">
+      <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -590,11 +590,14 @@
     <None Include="..\src\kernel\sched\proc-environ.c.inl">
       <Filter>src\kernel\sched</Filter>
     </None>
+    <None Include="..\src\kernel\syslog-write.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
     <None Include="..\src\kernel\sched\sync\addist.c.inl">
       <Filter>src\kernel\sched\sync</Filter>
     </None>
-    <None Include="..\src\kernel\syslog-write.c.inl">
-      <Filter>src\kernel</Filter>
+    <None Include="..\src\kernel\sched\sync\addist-recv.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
     </None>
   </ItemGroup>
 </Project>

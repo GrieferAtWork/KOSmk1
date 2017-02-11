@@ -41,8 +41,13 @@ __DECL_BEGIN
 
 //////////////////////////////////////////////////////////////////////////
 // === Keyboard ===
+struct kbfile {
+ struct kvfile        b_file;  /*< Underlying virtual file. */
+ struct kaddistticket b_kbtic; /*< Keyboard ticket. */
+};
+#define SELF ((struct kbfile *)self)
 static void vfsfile_dev_kb_quit(struct kfile *__restrict self) {
- kaddist_deluser(&keyboard_input,self);
+ kaddist_delticket(&keyboard_input,&SELF->b_kbtic);
  kvfile_quit(self);
 }
 static kerrno_t
@@ -50,7 +55,7 @@ vfsfile_dev_kb_open(struct kfile *__restrict self, struct kdirent *__restrict di
                     struct kinode *__restrict inode, __openmode_t mode) {
  kerrno_t error = kvfile_open(self,dirent,inode,mode);
  if __likely(KE_ISOK(error)) {
-  error = kaddist_adduser(&keyboard_input,self);
+  error = kaddist_genticket(&keyboard_input,&SELF->b_kbtic);
   if __unlikely(KE_ISERR(error)) kvfile_quit(self);
  }
  return error;
@@ -62,14 +67,14 @@ vfsfile_dev_kbevent_read(struct kfile *__restrict self, void *__restrict buf,
                          size_t bufsize, size_t *__restrict rsize) {
  if (bufsize < sizeof(struct kbevent)) { *rsize = 0; return KE_OK; }
  *rsize = sizeof(struct kbevent);
- return kaddist_vrecv(&keyboard_input,buf,self);
+ return kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,buf);
 }
 static kerrno_t
 vfsfile_dev_kbkey_read(struct kfile *__restrict self, void *__restrict buf,
                        size_t bufsize, size_t *__restrict rsize) {
  struct kbevent event; kerrno_t error;
  if (bufsize < sizeof(kbkey_t)) { *rsize = 0; return KE_OK; }
- error = kaddist_vrecv(&keyboard_input,&event,self);
+ error = kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,&event);
  if __likely(KE_ISOK(error)) {
   *(kbkey_t *)buf = event.e_key;
   *rsize = sizeof(kbkey_t);
@@ -81,7 +86,7 @@ vfsfile_dev_kbscan_read(struct kfile *__restrict self, void *__restrict buf,
                           size_t bufsize, size_t *__restrict rsize) {
  struct kbevent event; kerrno_t error;
  if (bufsize < sizeof(kbscan_t)) { *rsize = 0; return KE_OK; }
- error = kaddist_vrecv(&keyboard_input,&event,self);
+ error = kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,&event);
  if __likely(KE_ISOK(error)) {
   *(kbscan_t *)buf = event.e_scan;
   *rsize = sizeof(kbscan_t);
@@ -95,7 +100,7 @@ vfsfile_dev_kbtext_read(struct kfile *__restrict self, void *__restrict buf,
  if (bufsize < sizeof(char)) { *rsize = 0; return KE_OK; }
  *rsize = sizeof(char);
  do {
-  error = kaddist_vrecv(&keyboard_input,&event,self);
+  error = kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,&event);
   if __unlikely(KE_ISERR(error)) return error;
  } while (!KEY_ISUTF8(event.e_key) || !KEY_ISDOWN(event.e_key));
  *(char *)buf = KEY_TOUTF8(event.e_key);
@@ -103,7 +108,7 @@ vfsfile_dev_kbtext_read(struct kfile *__restrict self, void *__restrict buf,
 }
 
 struct kfiletype kvfiletype_dev_kbevent = {
- .ft_size      = sizeof(struct kvfile),
+ .ft_size      = sizeof(struct kbfile),
  .ft_read      = &vfsfile_dev_kbevent_read,
  .ft_quit      = &vfsfile_dev_kb_quit,
  .ft_open      = &vfsfile_dev_kb_open,
@@ -111,7 +116,7 @@ struct kfiletype kvfiletype_dev_kbevent = {
  .ft_getdirent = &kvfile_getdirent,
 };
 struct kfiletype kvfiletype_dev_kbkey = {
- .ft_size      = sizeof(struct kvfile),
+ .ft_size      = sizeof(struct kbfile),
  .ft_read      = &vfsfile_dev_kbkey_read,
  .ft_quit      = &vfsfile_dev_kb_quit,
  .ft_open      = &vfsfile_dev_kb_open,
@@ -119,7 +124,7 @@ struct kfiletype kvfiletype_dev_kbkey = {
  .ft_getdirent = &kvfile_getdirent,
 };
 struct kfiletype kvfiletype_dev_kbscan = {
- .ft_size      = sizeof(struct kvfile),
+ .ft_size      = sizeof(struct kbfile),
  .ft_read      = &vfsfile_dev_kbscan_read,
  .ft_quit      = &vfsfile_dev_kb_quit,
  .ft_open      = &vfsfile_dev_kb_open,
@@ -127,7 +132,7 @@ struct kfiletype kvfiletype_dev_kbscan = {
  .ft_getdirent = &kvfile_getdirent,
 };
 struct kfiletype kvfiletype_dev_kbtext = {
- .ft_size      = sizeof(struct kvfile),
+ .ft_size      = sizeof(struct kbfile),
  .ft_read      = &vfsfile_dev_kbtext_read,
  .ft_quit      = &vfsfile_dev_kb_quit,
  .ft_open      = &vfsfile_dev_kb_open,

@@ -23,89 +23,6 @@
 #ifndef __MAIN_C__
 #define __MAIN_C__ 1
 
-//
-// === KOS ===
-//
-
-// BUILD REQUIREMENTS:
-//  - GCC cross-compiler build for i386 (No special modifications needed)
-//    - step-by-step instructions here: http://wiki.osdev.org/GCC_Cross-Compiler
-//    - NOTE: I'm using GCC 6.2.0, but older versions should work, too...
-//  - deemon (https://github.com/GrieferAtWork/deemon)
-//    - If the latest commit doesn't work, use this one:
-//      https://github.com/GrieferAtWork/deemon/commit/e9c85beb31e1e3263937c40b4a6f47ca70f54cf3
-//  - QEMU
-// NOTE: Yes, KOS doesn't have what would technically be considered a toolchain.
-//       Instead, everything is done through magic(.dee)
-// 
-// SETUP:
-//  - Potentially need to edit '/magic.dee' to use correct paths for compilers
-//  - Though kind-of strange, I use Visual Studio as IDE and windows as
-//    host platform, with it being possible that compilation in another
-//    environment than my (admittedly _very_ strange) one may require
-//    additional steps to be taken.
-//
-// BUILD+UPDATE+LINK+RUN:
-//  :/$ deemon magic.dee
-//  
-//
-// SUPPORTED:
-//  - i386 (Correct types are always used; x86-64 support is planned)
-//  - QEMU (Real hardware, or other emulators have not been tested (yet))
-//  - multiboot (GRUB)
-//  - dynamic memory (malloc)
-//  - syscall
-//  - multitasking/scheduler
-//    - pid/tid
-//    - low-cpu/true idle
-//    - process
-//      - argc|argv
-//      - environ
-//      - fork
-//      - exec
-//      - pipe (Missing named pipes)
-//      - sandbox-oriented security model (barriers)
-//      - shared memory (Missing from user-space)
-//        - Reference-counted memory (Missing copy-on-write)
-//      - mmap/munmap/brk/sbrk
-//    - threads
-//      - new_thread
-//      - terminate
-//      - suspend/resume
-//      - priorities
-//      - names
-//      - detach/join
-//      - yield
-//      - alarm/pause
-//      - tls
-//    - synchronization primitives (Missing from user-space)
-//      - semaphore
-//      - mutex
-//      - rwlock
-//      - spinlock
-//      - mmutex (non-standard primitive)
-//      - signal+vsignal (non-standard primitive)
-//      - addist+ddist (non-standard primitive)
-//  - ELF binaries
-//  - dlopen (Shared libraries)
-//  - time (time_t/struct timespec)
-//  - ring #3
-//  - Filesystem
-//    - open/read/write/seek/etc.
-//    - OK:      Read/write existing files
-//    - MISSING: create/delete/rename files/folders
-//    - VFS (Virtual filesystem)
-//      - OK:      /dev (incomplete)
-//      - MISSING: /proc, /sys
-//  - Highly posix-compliant
-//  - PS/2 keyboard input
-//  - ANSI-compliant Terminal
-//  - User-space commandline (/bin/sh)
-//
-// UNSUPPORTED:
-//  - High-precision timers
-//  - FPU state saving
-
 #include <assert.h>
 #include <kos/errno.h>
 #include <kos/kernel/dev/socket.h>
@@ -115,6 +32,7 @@
 #include <kos/kernel/gdt.h>
 #include <kos/kernel/interrupts.h>
 #include <kos/kernel/keyboard.h>
+#include <kos/kernel/addist.h>
 #include <kos/kernel/linker.h>
 #include <kos/kernel/pageframe.h>
 #include <kos/kernel/paging.h>
@@ -191,6 +109,7 @@ void test_taskstat(void) {
  ktask_decref(task);
 }
 
+
 void kernel_main(void) {
 
  // TODO: Parse explicit environ input in exec
@@ -242,14 +161,7 @@ void kernel_main(void) {
 #undef RUN
  //test_taskstat();
 
- //_malloc_validate_d();
- //__u8 *p = (__u8 *)malloc(1);
- //_malloc_validate_d();
- //p[-1] = 42;
- //_malloc_validate_d();
- //free(p);
- //_malloc_validate_d();
-
+ //test_addist2();
  lib_test();
 
  karch_irq_disable();

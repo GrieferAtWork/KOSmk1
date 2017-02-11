@@ -114,7 +114,7 @@ template<> struct static_if<true> { bool __is_true__(); };
 #if defined(__DEBUG__) && 1
 /* Leave this on for a while, and if everything works, disable it! */
 #   define COMPILER_REGION_ASSERT(name,is_inside) \
-        assertf(is_inside(),"The compiled said we were supposed to be inside the region!")
+        assertf(is_inside(),"The compiler said we were supposed to be inside the region!")
 #else
 #   define COMPILER_REGION_ASSERT(name,is_inside)
 #endif
@@ -235,7 +235,7 @@ template<> struct static_if<true> { bool __is_true__(); };
    } COMPILER_STATIC_ELSE (__REGION_IN_NESTED(name) != __REGION_NESTED_ONE) {\
     __REGION_IN_RUNTIM(name) = is_inside();\
     (ob) = (readvolatile);\
-    if (__REGION_IN_RUNTIM(name)) for (;;) {\
+    if (!__REGION_IN_RUNTIM(name)) for (;;) {\
      {do_enter();}\
      while (!(trylock)) {\
       volatile int __spinner = 10000;\
@@ -280,7 +280,7 @@ template<> struct static_if<true> { bool __is_true__(); };
    } COMPILER_STATIC_ELSE (__REGION_IN_NESTED(name) != __REGION_NESTED_ONE) {\
     __REGION_IN_RUNTIM(name) = is_inside();\
     (ob) = (readvolatile);\
-    if (__REGION_IN_RUNTIM(name)) for (;;) {\
+    if (!__REGION_IN_RUNTIM(name)) for (;;) {\
      {do_enter();}\
      while (!(trylock)) {\
       volatile int __spinner = 10000;\

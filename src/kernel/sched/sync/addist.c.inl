@@ -24,352 +24,463 @@
 #define __KOS_KERNEL_ADDIST_C_INL__ 1
 
 #include <kos/config.h>
+#include <kos/timespec.h>
 #include <kos/kernel/addist.h>
 #include <kos/kernel/time.h>
-#include <kos/timespec.h>
+#include <kos/kernel/syslog.h>
+#include <malloc.h>
+#include <stdio.h>
+#if KDEBUG_HAVE_TRACKEDDDIST
+#include <traceback.h>
+#endif
+#include <kos/kernel/debug.h>
 #include <kos/kernel/signal_v.h>
 #include <stddef.h>
-#include <kos/syslog.h>
 
 __DECL_BEGIN
 
-#define NO     0
-#define YES    1
-#define MAYBE  2
-#define SIG(self)    (&(self)->add_sigpoll)
-#define LOCK(self)   ksignal_lock_c(SIG(self),KSIGNAL_LOCK_WAIT)
-#define UNLOCK(self) ksignal_unlock_c(SIG(self),KSIGNAL_LOCK_WAIT)
+#define YES      1
+#define NO       0
+#define MAYBE  (-1)
+#define ISDEAD(self) ((self)->ad_nbdat.s_flags&KSIGNAL_FLAG_DEAD)
 
-#ifdef __DEBUG__
-static int kaddist_hasuser(struct kaddist const *self,
-                           void const *ticket) {
- struct kaddistuser *iter = self->add_userp;
- for (; iter; iter = iter->du_next) {
-  if (iter->du_user == ticket) return YES;
- }
+#if KDEBUG_HAVE_TRACKEDDDIST
+static int kassdist2_hasticket(struct kaddist *__restrict self,
+                               struct kaddistticket *__restrict ticket) {
+ struct kaddistticket *iter;
+ for (iter = self->ad_tiready; iter; iter = iter->dt_next) if (iter == ticket) return YES;
+ for (iter = self->ad_tnready; iter; iter = iter->dt_next) if (iter == ticket) return YES;
+ return NO;
+}
+static int kassdist2_hasreadyticket(struct kaddist *__restrict self,
+                                    struct kaddistticket *__restrict ticket) {
+ struct kaddistticket *iter;
+ for (iter = self->ad_tiready; iter; iter = iter->dt_next) if (iter == ticket) return YES;
  return NO;
 }
 #else
-#define kaddist_hasuser(self,user) MAYBE
+#define kassdist2_hasticket(self,ticket)      MAYBE
+#define kassdist2_hasreadyticket(self,ticket) MAYBE
 #endif
 
-__crit kerrno_t kaddist_adduser(struct kaddist *self,
-                                void const *ticket) {
- struct kaddistuser *user;
+
+
+__crit kerrno_t
+_kaddist_genticket_andunlock(struct kaddist *__restrict self,
+                              struct kaddistticket *__restrict ticket) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kaddist(self);
- user = omalloc(struct kaddistuser);
- if __unlikely(!user) return KE_NOMEM;
- user->du_user = ticket;
- LOCK(self);
- if __unlikely(SIG(self)->s_flags&KSIGNAL_FLAG_DEAD) {
-  error = KE_DESTROYED;
-  goto end_fail;
+ kassertobj(ticket);
+ assert(ksignal_islocked(&self->ad_nbdat,KSIGNAL_LOCK_WAIT));
+ assert(self->ad_ready <= self->ad_known);
+ assert(!self->ad_front || !self->ad_front->sd_prev);
+ assert(!self->ad_back || !self->ad_back->sd_next);
+ assert(self->ad_chunkc <= self->ad_chunkmax);
+#if KDEBUG_HAVE_TRACKEDDDIST
+ if (kassdist2_hasticket(self,ticket) == YES) {
+  k_syslogf(KLOG_ERROR
+           ,"[ADDIST] Ticket at %p is already in use\n"
+            "See reference to ticket generation:\n"
+           ,ticket);
+  dtraceback_print(ticket->dt_mk_tb);
+  assertf(0,"Ticket %p is already in use",ticket);
  }
- assertf(kaddist_hasuser(self,user->du_user) != YES,
-         "Caller %p has already been registered",ticket);
- // Set the user version to what will be send next
- // >> That way, we don't run the risk of the caller
- //    possibly receiving packets send before a call
- //    to this function.
- user->du_aver = self->add_nextver;
- user->du_next = self->add_userp;
- self->add_userp = user;
- if __unlikely(self->add_users == (__u32)-1) {
-  error = KE_OVERFLOW;
-end_fail:
-  UNLOCK(self);
-  free(user);
-  return error;
- }
- ++self->add_users;
- UNLOCK(self);
- return KE_OK;
+#endif
+ if __unlikely(ISDEAD(self)) { error = KE_DESTROYED; goto end; }
+ if __unlikely(self->ad_known == (__un(KDDIST_USERBITS))-1) { error = KE_OVERFLOW; goto end; }
+ ++self->ad_known;
+ kobject_init(ticket,KOBJECT_MAGIC_ADDIST2TICKET);
+#if KDEBUG_HAVE_TRACKEDDDIST
+ ticket->dt_dist = self;
+ ticket->dt_mk_tb = dtraceback_captureex(1);
+ ticket->dt_rd_tb = NULL;
+#endif
+ ticket->dt_async = NULL;
+ ticket->dt_prev = NULL;
+ /* Hook the ticket into the list of non-ready tickets. */
+ if ((ticket->dt_next = self->ad_tnready) != NULL)
+  ticket->dt_next->dt_prev = ticket;
+ self->ad_tnready = ticket;
+ error = KE_OK;
+end:
+ ksignal_unlock_c(&self->ad_nbdat,KSIGNAL_LOCK_WAIT);
+ return error;
 }
 
-__crit void kaddist_deluser(struct kaddist *self,
-                            void const *ticket) {
- struct kaddistuser *iter,**piter;
+__crit void
+_kaddist_delticket_andunlock(struct kaddist *__restrict self,
+                              struct kaddistticket *__restrict ticket) {
+ struct kasyncdata *iter;
  KTASK_CRIT_MARK
  kassert_kaddist(self);
- LOCK(self);
- iter = *(piter = &self->add_userp);
- for (;;) {
-  assertf(iter,"Caller %p wasn't registered",ticket);
-  if (iter->du_user == ticket) break;
-  iter = *(piter = &iter->du_next);
+ kassert_kaddistticket(ticket);
+ assert(ksignal_islocked(&self->ad_nbdat,KSIGNAL_LOCK_WAIT));
+ assert(self->ad_ready <= self->ad_known);
+ assert(!self->ad_front || !self->ad_front->sd_prev);
+ assert(!self->ad_back || !self->ad_back->sd_next);
+ assert(self->ad_chunkc <= self->ad_chunkmax);
+#if KDEBUG_HAVE_TRACKEDDDIST
+ assertf(ticket->dt_dist == self,"Ticket %p registered to different ddist (%p) than %p",
+         ticket,ticket->dt_dist,self);
+ if (kassdist2_hasticket(self,ticket) == NO) {
+  k_syslogf(KLOG_ERROR
+           ,"[ADDIST] Ticket at %p was not registered\n"
+            "See reference to ticket generation:\n"
+           ,ticket);
+  dtraceback_print(ticket->dt_mk_tb);
+  assertf(0,"Ticket %p not registered",ticket);
  }
- *piter = iter->du_next;
- assert(self->add_users);
- --self->add_users;
- if (iter->du_aver < self->add_nextver) {
-  size_t n_before = iter->du_aver-self->add_currver;
-  size_t n_drop = self->add_nextver-iter->du_aver;
-  struct kaddistbuf *packet = self->add_async;
-  assert(iter->du_aver >= self->add_currver);
-  while (n_before--) {
-   kassertobj(packet);
-   packet = packet->db_next;
-  }
-  while (n_drop--) {
-   if (!--packet->db_left) {
-    assert(packet == self->add_async);
-    self->add_async = packet->db_next;
-    free(packet);
+ if (kassdist2_hasreadyticket(self,ticket) == YES) {
+  k_syslogf(KLOG_ERROR
+           ,"[ADDIST] Cannot delete ticket in use by a blocking receive operation\n"
+            "See reference to ticket generation:\n"
+           ,ticket);
+  dtraceback_print(ticket->dt_mk_tb);
+  k_syslogf(KLOG_ERROR,"See reference to ticket receive:\n");
+  dtraceback_print(ticket->dt_rd_tb);
+  assertf(0,"Ticket %p used by receive",ticket);
+ }
+#endif
+ /* That this point we can assume the ticket is valid and part
+  * of the non-ready list of tickets.
+  * Now we must remove it from that list and decref all
+  * pending chunks of asynchronous data meant to be read by it. */
+ assert(self->ad_known != 0);
+ assert(self->ad_known != self->ad_ready);
+ assert((ticket->dt_prev != NULL) == (ticket != self->ad_tnready));
+ if (ticket == self->ad_tnready) {
+  if ((self->ad_tnready = ticket->dt_next) != NULL)
+   ticket->dt_next->dt_prev = NULL;
+ } else {
+  ticket->dt_prev->dt_next = ticket->dt_next;
+  if (ticket->dt_next) ticket->dt_next->dt_prev = ticket->dt_prev;
+ }
+#if KDEBUG_HAVE_TRACKEDDDIST
+ ticket->dt_prev = NULL;
+ ticket->dt_next = NULL;
+#endif
+ /* The ticket was removed. - Time to drop all pending chunks of data. */
+ if ((iter = ticket->dt_async) != NULL) {
+  assert((iter->sd_prev != NULL) == (iter != self->ad_front));
+  assert((iter->sd_next != NULL) == (iter != self->ad_back));
+  for (;;) {
+   if (!--iter->sd_pending) {
+    assertf(iter == self->ad_front,"Non-front chunk %p reference count dropped to ZERO",iter);
+    assert(!iter->sd_prev);
+    assert(self->ad_chunkc);
+    /* Update the chunk counter. */
+    --self->ad_chunkc;
+    self->ad_front = iter->sd_next;
+    /* Free the chunk */
+    free(iter);
+    if (self->ad_front == NULL) {
+     /* All chunks have been deallocated. */
+     assert(iter == self->ad_back);
+     assert(!self->ad_chunkc);
+     self->ad_back = NULL;
+     break;
+    }
+    assert(self->ad_chunkc);
+    iter = self->ad_front;
+    /* Break the dead link to the now deallocated previous chunk. */
+    iter->sd_prev = NULL;
    } else {
-    packet = packet->db_next;
+    assert(iter->sd_next != iter);
+    iter = iter->sd_next;
+    if (!iter) break;
    }
   }
+#if KDEBUG_HAVE_TRACKEDDDIST
+  ticket->dt_async = NULL;
+#endif
  }
- UNLOCK(self);
- free(iter);
+ /* Remove the ticket as being known. */
+ --self->ad_known;
+ /* Unlock the distributer. */
+ ksignal_unlock_c(&self->ad_nbdat,KSIGNAL_LOCK_WAIT);
+#if KDEBUG_HAVE_TRACKEDDDIST
+ /* Free debug information. */
+ ticket->dt_dist = NULL;
+ dtraceback_free(ticket->dt_mk_tb);
+ dtraceback_free(ticket->dt_rd_tb);
+#endif
 }
 
-// Receive data from the ddist buffer without blocking.
-// @return: KE_OK:       Data was not received.
-// @return: KS_BLOCKING: Data was received.
-// NOTE: I know these errors make no sense...
-static kerrno_t
-kaddist_bufrecv_unlocked(struct kaddist *__restrict self,
-                         void *__restrict buf,
-                         void const *ticket) {
- struct kaddistuser *user;
- struct kaddistbuf *packet;
- size_t packet_id;
- assertf(self->add_async,"No buffered packets available");
- assertf(self->add_currver != self->add_nextver,
-         "No buffered packets available, but buffer pointer is non-NULL");
- user = self->add_userp;
- for (;;) {
-  assertf(user,"Caller isn't registered");
-#if 0 /* Supposedly ~lost~ packages indicate unbuffered packages. */
-  assertf(user->du_aver >= self->add_currver
-         ,"Task tries to receive lost packet %I32u (current: %I32u)"
-         ,user->du_aver,self->add_currver);
-#endif
-  assertf(user->du_aver <= self->add_nextver
-         ,"Task tries to receive future packet %I32u (latest: %I32u)"
-         ,user->du_aver,self->add_nextver);
-  if (user->du_user == ticket) break;
-  user = user->du_next;
+
+__local __crit kerrno_t
+kaddist_vtryrecv_unlocked(struct kaddist *__restrict self,
+                           struct kaddistticket *__restrict ticket,
+                           void *__restrict buf) {
+ struct kasyncdata *reschunk;
+ KTASK_CRIT_MARK
+ kassert_kaddist(self);
+ kassert_kaddistticket(ticket);
+ assert(ksignal_islocked(&self->ad_nbdat,KSIGNAL_LOCK_WAIT));
+ assert(self->ad_ready <= self->ad_known);
+ assert(!self->ad_front || !self->ad_front->sd_prev);
+ assert(!self->ad_back || !self->ad_back->sd_next);
+ assert(self->ad_chunkc <= self->ad_chunkmax);
+ kassertmem(buf,self->ad_chunksz);
+ if __unlikely(ISDEAD(self)) return KE_DESTROYED;
+#if KDEBUG_HAVE_TRACKEDDDIST
+ assertf(ticket->dt_dist == self,"Ticket %p registered to different ddist (%p) than %p",
+         ticket,ticket->dt_dist,self);
+ if (kassdist2_hasticket(self,ticket) == NO) {
+  k_syslogf(KLOG_ERROR
+           ,"[ADDIST] Ticket at %p was not registered\n"
+            "See reference to ticket generation:\n"
+           ,ticket);
+  dtraceback_print(ticket->dt_mk_tb);
+  assertf(0,"Ticket %p not registered",ticket);
  }
- if (user->du_aver <= self->add_currver) {
-  // Calling task must receive the true next packet.
-  // (aka. the next unbuffered chunk of data)
-  //user->du_aver = self->add_currver;
+ if (kassdist2_hasreadyticket(self,ticket) == YES) {
+  k_syslogf(KLOG_ERROR
+           ,"[ADDIST] Cannot receive ticket in use by a blocking receive operation\n"
+            "See reference to ticket generation:\n"
+           ,ticket);
+  dtraceback_print(ticket->dt_mk_tb);
+  k_syslogf(KLOG_ERROR,"See reference to ticket receive:\n");
+  dtraceback_print(ticket->dt_rd_tb);
+  assertf(0,"Ticket %p used by blocking receive",ticket);
+ }
+#endif
+ if ((reschunk = ticket->dt_async) != NULL) {
+  assert(self->ad_chunkc);
+  /* Found a pending asynchronous chunk of data. */
+  ticket->dt_async = reschunk->sd_next;
+  /* Copy the chunk into the result buffer. */
+  memcpy(buf,reschunk->sd_data,self->ad_chunksz);
+  if (!--reschunk->sd_pending) {
+   assert(!reschunk->sd_prev);
+   assert(reschunk == self->ad_front);
+   /* Last consumer of first chunk. */
+   --self->ad_chunkc;
+   free(reschunk);
+   self->ad_front = reschunk->sd_next;
+   if (!self->ad_front) {
+    assert(!self->ad_chunkc);
+    self->ad_back = NULL;
+   } else {
+    assert(self->ad_chunkc);
+    self->ad_front->sd_next = NULL;
+   }
+  }
   return KE_OK;
  }
- // Select the packet that must be received next
- packet_id = user->du_aver-self->add_currver;
- packet = self->add_async;
- while (packet_id--) {
-  assertf(packet,"Packet id is out-of-bounds");
-  packet = packet->db_next;
- }
- memcpy(buf,packet->db_data,packet->db_size);
- ++user->du_aver;
- // Remove one receiver from the buffered packet.
- // Free and unlink the packet if everyone has received it.
- 
- if (!--packet->db_left) {
-  assertf(packet == self->add_async,
-          "Only the first packet can be dropped, "
-          "as receive order would otherwise break.");
-  k_syslogf(KLOG_INFO,"[addist] Dropping first packet\n");
-  ++self->add_currver;
-  self->add_async = packet->db_next;
-  free(packet);
- }
- return KS_BLOCKING;
-}
-
-kerrno_t kaddist_vrecv(struct kaddist *__restrict self,
-                       void *__restrict buf, void const *ticket) {
- kerrno_t error;
- kassert_kaddist(self);
- ksignal_lock(SIG(self),KSIGNAL_LOCK_WAIT);
- assertf(kaddist_hasuser(self,ticket) != NO,
-         "Caller %p is not a registered user",ticket);
- if (self->add_async) {
-  // Check for receiving buffered data
-  error = kaddist_bufrecv_unlocked(self,buf,ticket);
-  if (error == KS_BLOCKING) {
-   ksignal_unlock_c(SIG(self),KSIGNAL_LOCK_WAIT);
-   goto end;
-  }
- }
- // No asynchronous data in cache for us, or no data at all.
- // >> Actually receive the unbuffered signal!
- assertf(self->add_ready != self->add_users
-        ,"Buf I'm not ready... (%I32u != %I32u)"
-        ,self->add_ready,self->add_users);
- // Increment the ready counter to tell a sending task that
- // one more task is ready for unbuffered transfer of data.
- ++self->add_ready;
- error = _ksignal_vrecv_andunlock_c(&self->add_sigpoll,buf);
-end:
- ksignal_endlock();
- return error;
-}
-kerrno_t kaddist_vtryrecv(struct kaddist *__restrict self,
-                          void *__restrict buf, void const *ticket) {
- kerrno_t error;
- kassert_kaddist(self);
- ksignal_lock(SIG(self),KSIGNAL_LOCK_WAIT);
- assertf(kaddist_hasuser(self,ticket) != NO,
-         "Caller %p is not a registered user",ticket);
- if (self->add_async) {
-  // Check for receiving buffered data
-  error = kaddist_bufrecv_unlocked(self,buf,ticket);
-  if (error != KS_BLOCKING) error = KE_WOULDBLOCK;
- } else {
-  error = KE_WOULDBLOCK;
- }
- ksignal_unlock(SIG(self),KSIGNAL_LOCK_WAIT);
- return error;
-}
-
-kerrno_t kaddist_vtimedrecv(struct kaddist *__restrict self,
-                            struct timespec const *__restrict abstime,
-                            void *__restrict buf, void const *ticket) {
- kerrno_t error;
- kassert_kaddist(self);
- ksignal_lock(SIG(self),KSIGNAL_LOCK_WAIT);
- assertf(kaddist_hasuser(self,ticket) != NO,
-         "Caller %p is not a registered user",ticket);
- if (self->add_async) {
-  // Check for receiving buffered data
-  error = kaddist_bufrecv_unlocked(self,buf,ticket);
-  if (error == KS_BLOCKING) {
-   ksignal_unlock_c(SIG(self),KSIGNAL_LOCK_WAIT);
-   goto end;
-  }
- }
- // No asynchronous data in cache for us, or no data at all.
- // >> Actually receive the unbuffered signal!
- assert(self->add_ready != self->add_users);
- // Increment the ready counter to tell a sending task that
- // one more task is ready for unbuffered transfer of data.
- ++self->add_ready;
- error = _ksignal_vtimedrecv_andunlock_c(&self->add_sigpoll,abstime,buf);
-end:
- ksignal_endlock();
- return error;
-}
-
-kerrno_t kaddist_vtimeoutrecv(struct kaddist *__restrict self,
-                              struct timespec const *__restrict timeout,
-                              void *__restrict buf, void const *ticket) {
- struct timespec abstime;
- ktime_getnoworcpu(&abstime);
- __timespec_add(&abstime,timeout);
- return kaddist_vtimedrecv(self,&abstime,buf,ticket);
+ return KE_WOULDBLOCK;
 }
 
 __crit kerrno_t
-_kaddist_vsend_andunlock(struct kaddist *__restrict self,
-                         void *__restrict buf, __size_t bufsize) {
- size_t n_woken; kerrno_t error;
- struct kaddistbuf *packet,**ppacket;
-#ifdef __DEBUG__
- size_t n_expected = self->add_ready;
- size_t cached_packets = 0;
+_kaddist_vtryrecv_andunlock(struct kaddist *__restrict self,
+                             struct kaddistticket *__restrict ticket,
+                             void *__restrict buf) {
+ kerrno_t error;
+ KTASK_CRIT_MARK
+ error = kaddist_vtryrecv_unlocked(self,ticket,buf);
+ ksignal_unlock_c(&self->ad_nbdat,KSIGNAL_LOCK_WAIT);
+ return error;
+}
+
+#ifndef __INTELLISENSE__
+#define TIMEDRECV
+#include "addist-recv.c.inl"
+#include "addist-recv.c.inl"
 #endif
+
+__crit kerrno_t
+_kaddist_vtimeoutrecv_andunlock(struct kaddist *__restrict self,
+                                 struct kaddistticket *__restrict ticket,
+                                 struct timespec const *__restrict timeout,
+                                 void *__restrict buf) {
+ KTASK_CRIT_MARK
+ struct timespec abstime;
+ ktime_getnoworcpu(&abstime);
+ __timespec_add(&abstime,timeout);
+ return _kaddist_vtimedrecv_andunlock(self,ticket,&abstime,buf);
+}
+
+
+__crit kerrno_t
+_kaddist_vsend_andunlock(struct kaddist *__restrict self,
+                          void const *__restrict buf) {
+ size_t recv_count;
+ kerrno_t error;
+#ifdef __DEBUG__
+ size_t count_not_ready = 0;
+#endif
+ int can_use_unbuffered;
+ struct kasyncdata *reschunk;
+ struct kaddistticket *tickets;
  KTASK_CRIT_MARK
  kassert_kaddist(self);
- assert(ksignal_islocked(SIG(self),KSIGNAL_LOCK_WAIT));
- assert(self->add_ready <= self->add_users);
- assert((self->add_ready != 0) == ksignal_hasrecv_unlocked(&self->add_sigpoll));
- if __unlikely(SIG(self)->s_flags&KSIGNAL_FLAG_DEAD) {
-  error = KE_DESTROYED;
-  goto end_fail;
- }
- if __likely(self->add_ready == self->add_users) {
-  // All users are ready to receive unbuffered data.
-  // >> This (should) be the most likely case, as the
-  //    asynchronous buffer is meant as a fallback in
-  //    situations where a regular ddist would have to
-  //    use preemption within the calling task.
-  self->add_ready = 0; // Consume ready users
-  n_woken = _ksignal_vsendall_andunlock_c(&self->add_sigpoll,buf,bufsize);
-  // NOTE: vsendall returns 0 if the associated signal was destroyed.
-  //       Since destroying a addist effectively sets its user count
-  //       to ZERO(0), the special case of a destroyed distributor
-  //       can be handled without a special exception.
-#ifdef __DEBUG__
-  assertf(n_woken == n_expected
-         ,"Unexpected amount of task woken (Expected %Iu; Got %Iu)"
-         ,n_expected,n_woken);
-#endif
-  return n_woken ? KE_OK : KS_EMPTY;
- }
-#if __SIZEOF_POINTER__ > 4
- if __unlikely((self->add_nextver-self->add_currver) == (__u32)-1) {
-  error = KE_OVERFLOW;
-  goto end_fail;
- }
-#else
- assertf((self->add_nextver-self->add_currver) != (__u32)-1,
-         "How is this possible? You should have run out of memory a long time ago!");
-#endif
- k_syslogf(KLOG_INFO,
-           "[addist] Using packet to transmit %Iu bytes of buffered data to %I32u/%I32u receivers (%I8u)\n",
-           bufsize,self->add_users-self->add_ready,self->add_users,*(__u8 *)buf);
- // This is the difficult case: We must
- // create a new buffer packet and post it.
- packet = (struct kaddistbuf *)malloc(offsetof(struct kaddistbuf,db_data)+bufsize);
- if __unlikely(!packet) {
-  error = KE_NOMEM;
-  goto end_fail;
- }
- packet->db_next = NULL;
- packet->db_size = bufsize;
- memcpy(packet->db_data,buf,bufsize);
+ assert(ksignal_islocked(&self->ad_nbdat,KSIGNAL_LOCK_WAIT));
+ assert(self->ad_ready <= self->ad_known);
+ assert(!self->ad_front || !self->ad_front->sd_prev);
+ assert(!self->ad_back || !self->ad_back->sd_next);
+ assert(self->ad_chunkc <= self->ad_chunkmax);
+ assert((self->ad_front != NULL) == (self->ad_back != NULL));
+ kassertmem(buf,self->ad_chunksz);
+ if __unlikely(ISDEAD(self)) { error = KE_DESTROYED; goto err; }
+ /* Check how many tasks are ready to receive unbuffered data. */
+ recv_count = ksignal_cntrecv_unlocked(&self->ad_nbdat);
+ /* Check for optimized case: Potential for fully unbuffered transmission. */
+ /* Due to a race condition that can arise due to KE_INTR or KE_TIMEDOUT,
+  * tickets may still be registered as ready when their associated tasks
+  * are in fact no longer scheduled.
+  * This is a rare occurrence, but can only be checked for by manually
+  * counting the amount of tasks scheduled in the data signal.
+  * Situations in which a receiver has no chance to recover in case of
+  * termination are impossible due to the fact that the presence of a
+  * real critical block is enforced during signal receive, meaning that we
+  * can assume the true receiver to always perform its part of the cleanup. */
+ /* If all known tasks will actually receive the signal, skip the buffer completely */
+ assert(recv_count <= self->ad_ready);
+ if (recv_count == self->ad_known) {
+  assert(self->ad_ready == recv_count);
+  /* Move the entire ready list to the non-ready stack. */
+  if __unlikely((tickets = self->ad_tiready) == NULL) {
+   assert(!self->ad_ready);
+   assert(!self->ad_known);
+   assert(!self->ad_tnready);
+   /* Special sub-case: No tickets registered (ignore input). */
+   k_syslogf(KLOG_TRACE,"[ADDIST] Not sending data because no tickets are registered\n");
+   error = KS_EMPTY;
+   goto err;
+  }
+  assert(self->ad_ready);
+  assert(self->ad_known);
+  /* Go the the last ready ticket. */
+  while ((assert(!tickets->dt_async),tickets->dt_next)
+         ) tickets = tickets->dt_next;
+  /* Shift the entire list of ready tickets to the non-ready list. */
+  if ((tickets->dt_next = self->ad_tnready) != NULL)
+   tickets->dt_next->dt_prev = tickets;
+  self->ad_tnready = self->ad_tiready;
+  self->ad_tiready = NULL;
+  self->ad_ready = 0;
 
- // NOTE: Only count tasks that will not receive the signal
- //       when we send it below to those that are actually waiting.
- packet->db_left = self->add_users-self->add_ready;
+  error = KE_OK;
+  goto end_unbuffered;
+ }
+ assert(self->ad_known);
+ /* We can only use unbuffered transmission at all when the amount
+  * of actually ready tickets equals the amount of tasks scheduled.
+  * If these numbers don't match, a race condition has occurred that
+  * can only be fixed through use of buffered memory. */
+ can_use_unbuffered = (self->ad_ready == recv_count);
 
- // Append the new packet to the end of the queue
- // NOTE: This case isn't optimized, as it is intended as the fallback.
- ppacket = &self->add_async;
- while (*ppacket) {
-  ppacket = &(*ppacket)->db_next;
+ /* Create/Reuse a data chunk for the new packet we are about to post. */
+ if (self->ad_chunkc == self->ad_chunkmax) {
+  /* Re-use the last chunk.
+   * NOTE: We are allowed to overwrite the reference counter without
+   *       it dropping to zero due to the special circumstances we are
+   *       in right now: All tasks that haven't received this chunk yet
+   *       will still be included in the reference counter below,
+   *       meaning that it will remain consistent. */
+  reschunk = self->ad_back;
+  /* TODO: Don't just always use the last chunk. */
+  if __unlikely(!reschunk) {
+   /* Very special and unlikely case: the distributer isn't allowed to use chunks. */
+   assert(!self->ad_chunkc);
+   assert(!self->ad_chunkmax);
+   if (can_use_unbuffered) { error = KS_FOUND; goto end_unbuffered; }
+   error = KE_BUSY;
+   goto err;
+  }
+  k_syslogf(KLOG_WARN,"[ADDIST] Overwriting existing chunk %Iu at %p because buffer is full\n",
+            self->ad_chunkc,reschunk);
+  error = KS_FULL;
+ } else {
+  /* Create a new chunk. */
+  reschunk = (struct kasyncdata *)malloc(offsetof(struct kasyncdata,sd_data)+
+                                         self->ad_chunksz);
+  if __unlikely(!reschunk) { error = KE_NOMEM; goto err; }
+  ++self->ad_chunkc;
+  error = KS_BLOCKING;
+  reschunk->sd_next = NULL;
+  if ((reschunk->sd_prev = self->ad_back) != NULL) {
+   assert(self->ad_chunkc >= 2);
+   reschunk->sd_prev->sd_next = reschunk;
+  } else {
+   assert(self->ad_chunkc == 1);
+   assert(!self->ad_front);
+   self->ad_front = reschunk;
+  }
+  self->ad_back = reschunk;
+ }
+
+ /* Fill the chunk with memory and configure its reference counter. */
+ memcpy(reschunk->sd_data,buf,self->ad_chunksz);
+
+ /* Register the chunk in all non-ready tickets. */
+ for (tickets = self->ad_tnready; tickets;
+      tickets = tickets->dt_next) {
+  if (!tickets->dt_async)
+   tickets->dt_async = reschunk;
 #ifdef __DEBUG__
-  ++cached_packets;
+  ++count_not_ready;
 #endif
  }
 #ifdef __DEBUG__
- assertf(cached_packets == self->add_nextver-self->add_currver
-        ,"Incorrect amount of buffered packets (Expected %Iu; got %Iu)"
-        ,self->add_nextver-self->add_currver,cached_packets);
+ assert(count_not_ready == self->ad_known-self->ad_ready);
 #endif
- *ppacket = packet;
- // Increment the packet version counter
- ++self->add_nextver;
- self->add_ready = 0; // Consume ready users
-#ifdef __DEBUG__
- n_woken = _ksignal_vsendall_andunlock_c(&self->add_sigpoll,buf,bufsize);
- assertf(n_woken == n_expected
-        ,"Unexpected amount of task woken (Expected %Iu; Got %Iu)"
-        ,n_expected,n_woken);
-#else
- _ksignal_vsendall_andunlock_c(&self->add_sigpoll,buf,bufsize);
-#endif
- return KE_OK;
-end_fail:
- ksignal_unlock_c(SIG(self),KSIGNAL_LOCK_WAIT);
+
+ if (can_use_unbuffered) {
+  assert(recv_count == self->ad_ready);
+  /* Set the pending reference counter to the amount of tickets
+   * that must receive this chunk through unbuffered means. */
+  reschunk->sd_pending = self->ad_known-recv_count;
+ } else {
+  reschunk->sd_pending = self->ad_known;
+  assert((self->ad_ready != 0) == (self->ad_tiready != NULL));
+  if ((tickets = self->ad_tiready) != NULL) {
+   /* Register the asynchronous chunk in all ready tickets.
+    * >> Since we don't know which of the tickets has caused
+    *    the race condition that brought us here, we must
+    *    handle the situation by posting a buffered chunk to
+    *    all ready tickets. */
+   for (;;) {
+    assert(!tickets->dt_async);
+    tickets->dt_async = reschunk;
+    if (!tickets->dt_next) break;
+    tickets = tickets->dt_next;
+   }
+   /* Move the entire ready list to the non-ready stack. */
+   if ((tickets->dt_next = self->ad_tnready) != NULL)
+    tickets->dt_next->dt_prev = tickets;
+   self->ad_tnready = self->ad_tiready;
+   self->ad_tiready = NULL;
+   self->ad_ready = 0;
+  }
+ }
+
+ if (can_use_unbuffered) {
+end_unbuffered:
+  asserte(_ksignal_vsendall_andunlock_c(&self->ad_nbdat,buf,self->ad_chunksz) == recv_count);
+ } else {
+  k_syslogf(KLOG_INFO,
+            "[ADDIST] Must use buffer-based data transmission due "
+                     "to race condition (%Iu tickets, but %Iu tasks)\n",
+            self->ad_ready,recv_count);
+  /* Signal all tasks without transmitting data, causing vrecv to return KS_NODATA,
+   * which will be handled by another attempt at searching for buffer-based data such
+   * as that which we just created. */
+  asserte(_ksignal_sendall_andunlock_c(&self->ad_nbdat) == recv_count);
+ }
+ return error;
+err:
+ ksignal_unlock_c(&self->ad_nbdat,KSIGNAL_LOCK_WAIT);
  return error;
 }
 
 
-#undef UNLOCK
-#undef LOCK
-#undef SIG
+#ifndef __INTELLISENSE__
+#undef ISDEAD
 #undef MAYBE
-#undef YES
 #undef NO
+#undef YES
+#endif
 
 __DECL_END
 

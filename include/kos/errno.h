@@ -80,8 +80,9 @@ typedef int kerrno_t;
 #define KS_UNCHANGED     1  /*< SIGNAL: Nothing/Only part of the object's state has changed. */
 #define KS_EMPTY         2  /*< SIGNAL: The object in question is empty. */
 #define KS_BLOCKING      3  /*< SIGNAL: The object in question is being blocked. */
-#define KS_FOUND         4  /*< SIGNAL: The sought object was found. */
+#define KS_FOUND         4  /*< SIGNAL: The sought after object was found. */
 #define KS_NODATA        5  /*< SIGNAL: No data was transferred (Used for v-signals). */
+#define KS_FULL          6  /*< SIGNAL: A buffer is full and special behavior was invoked. */
 
 __DECL_END
 

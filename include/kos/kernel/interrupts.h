@@ -328,7 +328,7 @@ RUNTIME_REGION_DEFINE(NOINTERRUPT);
 //////////////////////////////////////////////////////////////////////////
 // Initializes interrupts.
 // NOTE: The caller must still enable them via 'karch_irq_enable()'
-extern __crit void kernel_initialize_interrupts(void);
+extern void kernel_initialize_interrupts(void);
 #endif /* __MAIN_C__ */
 
 __DECL_END

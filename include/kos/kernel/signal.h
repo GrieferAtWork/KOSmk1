@@ -360,6 +360,12 @@ extern        __wunused __nonnull((1)) bool ksignal_hasrecv_unlocked(struct ksig
 extern        __wunused __nonnull((1)) bool ksignal_hasrecvs(__size_t sigc, struct ksignal const *const *sigv);
 extern __crit __wunused __nonnull((1)) bool ksignal_hasrecvs_c(__size_t sigc, struct ksignal const *const *sigv);
 extern        __wunused __nonnull((1)) bool ksignal_hasrecvs_unlocked(__size_t sigc, struct ksignal const *const *sigv);
+extern        __wunused __nonnull((1)) __size_t ksignal_cntrecv(struct ksignal const *self);
+extern __crit __wunused __nonnull((1)) __size_t ksignal_cntrecv_c(struct ksignal const *self);
+extern        __wunused __nonnull((1)) __size_t ksignal_cntrecv_unlocked(struct ksignal const *self);
+extern        __wunused __nonnull((1)) __size_t ksignal_cntrecvs(__size_t sigc, struct ksignal const *const *sigv);
+extern __crit __wunused __nonnull((1)) __size_t ksignal_cntrecvs_c(__size_t sigc, struct ksignal const *const *sigv);
+extern        __wunused __nonnull((1)) __size_t ksignal_cntrecvs_unlocked(__size_t sigc, struct ksignal const *const *sigv);
 extern        __wunused __nonnull((1)) bool ksignal_islocked(struct ksignal const *self, __u8 lock);
 extern        __wunused __nonnull((2)) bool ksignal_islockeds(__size_t sigc, struct ksignal const *const *sigv, __u8 lock);
 
@@ -490,6 +496,13 @@ extern void ksignal_init_ex(struct ksignal *self, __u8 flags);
             }\
             __xreturn __ksgpsyres;\
  })
+#define __ksignal_getprops_sizesum(sigc,sigv,single_getter) \
+ __xblock({ struct ksignal *const *__ksgpsyiter,*const *__ksgpsyend; __size_t __ksgpsyres = 0;\
+            __ksgpsyend = (__ksgpsyiter = (struct ksignal *const *)(sigv))+(sigc);\
+            for (;__ksgpsyiter != __ksgpsyend; ++__ksgpsyiter)\
+             __ksgpsyres += single_getter(*__ksgpsyiter);\
+            __xreturn __ksgpsyres;\
+ })
 #define __ksignal_getprops_boolany_(sigc,sigv,single_getter,...) \
  __xblock({ struct ksignal *const *__ksgpsyiter,*const *__ksgpsyend; int __ksgpsyres = 0;\
             __ksgpsyend = (__ksgpsyiter = (struct ksignal *const *)(sigv))+(sigc);\
@@ -514,6 +527,12 @@ extern void ksignal_init_ex(struct ksignal *self, __u8 flags);
             }\
             __xreturn __ksgpsares;\
  })
+#define            ksignal_cntrecv_unlocked(self)  \
+ __xblock({ __size_t __kscrures = 0;\
+            struct ktasksigslot *__kscruiter = (self)->s_wakefirst;\
+            for (; __kscruiter; __kscruiter = __kscruiter->tss_next) ++__kscrures;\
+            __xreturn __kscrures;\
+ })
 
 #define            ksignal_isdead(self)                 __ksignal_getprop(int,self,KSIGNAL_LOCK_WAIT,ksignal_isdead_unlocked)
 #define /*__crit*/ ksignal_isdead_c(self)               __ksignal_getprop_ni(int,self,KSIGNAL_LOCK_WAIT,ksignal_isdead_unlocked)
@@ -521,12 +540,17 @@ extern void ksignal_init_ex(struct ksignal *self, __u8 flags);
 #define            ksignal_hasrecv(self)                __ksignal_getprop(int,self,KSIGNAL_LOCK_WAIT,ksignal_hasrecv_unlocked)
 #define /*__crit*/ ksignal_hasrecv_c(self)              __ksignal_getprop_ni(int,self,KSIGNAL_LOCK_WAIT,ksignal_hasrecv_unlocked)
 #define            ksignal_hasrecv_unlocked(self)     ((self)->s_wakefirst!=NULL)
+#define            ksignal_cntrecv(self)                __ksignal_getprop(__size_t,self,KSIGNAL_LOCK_WAIT,ksignal_cntrecv_unlocked)
+#define /*__crit*/ ksignal_cntrecv_c(self)              __ksignal_getprop_ni(__size_t,self,KSIGNAL_LOCK_WAIT,ksignal_cntrecv_unlocked)
 #define            ksignal_isdeads(sigc,sigv)           __ksignal_getprops_boolany(sigc,sigv,ksignal_isdead)
 #define /*__crit*/ ksignal_isdeads_c(sigc,sigv)         __ksignal_getprops_boolany(sigc,sigv,ksignal_isdead_c)
 #define            ksignal_isdeads_unlocked(sigc,sigv)  __ksignal_getprops_boolany(sigc,sigv,ksignal_isdead_unlocked)
 #define            ksignal_hasrecvs(sigc,sigv)          __ksignal_getprops_boolany(sigc,sigv,ksignal_hasrecv)
 #define /*__crit*/ ksignal_hasrecvs_c(sigc,sigv)        __ksignal_getprops_boolany(sigc,sigv,ksignal_hasrecv_c)
 #define            ksignal_hasrecvs_unlocked(sigc,sigv) __ksignal_getprops_boolany(sigc,sigv,ksignal_hasrecv_unlocked)
+#define            ksignal_cntrecvs(sigc,sigv)          __ksignal_getprops_sizesum(sigc,sigv,ksignal_cntrecv)
+#define /*__crit*/ ksignal_cntrecvs_c(sigc,sigv)        __ksignal_getprops_sizesum(sigc,sigv,ksignal_cntrecv_c)
+#define            ksignal_cntrecvs_unlocked(sigc,sigv) __ksignal_getprops_sizesum(sigc,sigv,ksignal_cntrecv_unlocked)
 #define            ksignal_islocked(self,lock)        ((katomic_load((self)->s_locks)&(lock))!=0)
 #define            ksignal_islockeds(sigc,sigv,lock)    __ksignal_getprops_boolall_(sigc,sigv,ksignal_islocked,lock)
 

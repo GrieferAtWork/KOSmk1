@@ -35,7 +35,9 @@
 
 __DECL_BEGIN
 
-struct kaddist keyboard_input = KADDIST_INIT;
+struct kaddist keyboard_input =
+ KADDIST_INIT(sizeof(struct kbevent),16);
+
 
 #define PS2_DATA   0x60
 #define PS2_STATUS 0x64
@@ -140,7 +142,7 @@ void keyboard_sendscan(kbscan_t scan) {
  // Broadcast the keyboard event through the data distributer
  // NOTE: This needs to be asynchronous because we can't use
  //       preemption as described in the doc of 'set_irq_handler'
- kaddist_vsend(&keyboard_input,&event,sizeof(event));
+ kaddist_vsend(&keyboard_input,&event);
 }
 
 

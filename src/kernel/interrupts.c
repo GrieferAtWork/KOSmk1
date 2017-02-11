@@ -143,8 +143,7 @@ static void (*idt_functions[256])(void) = {
 };
 
 static void set_default_irq_handlers(void);
-__crit void kernel_initialize_interrupts(void) {
- KTASK_CRIT_MARK
+void kernel_initialize_interrupts(void) {
  memset(&idt,0,sizeof(idt));
  set_default_irq_handlers();
 #define ICW1        0x11

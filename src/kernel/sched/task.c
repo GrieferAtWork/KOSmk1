@@ -41,7 +41,7 @@
 
 __DECL_BEGIN
 
-#if defined(__DEBUG__) && 0
+#if defined(__DEBUG__) && 1
 #define KTASK_ONSWITCH(reason,oldtask,newtask) \
  k_syslogf(KLOG_TRACE,"SCHED-SWITCH [%s]: %p:%I32d:%Iu:%s(%p|%p) --> %p:%I32d:%Iu:%s(%p|%p)\n",reason,\
       oldtask,(oldtask) ? ((struct ktask *)(oldtask))->t_proc->p_pid : -1,(oldtask) ? ((struct ktask *)(oldtask))->t_tid : 0,(oldtask) ? ktask_getname((struct ktask *)(oldtask)) : NULL,(oldtask) ? ((struct ktask *)(oldtask))->t_esp : NULL,(oldtask) ? ((struct ktask *)(oldtask))->tr_userpd : NULL,\
@@ -68,53 +68,6 @@ struct kcpu __kcpu_zero = {
  /* c_current            */&__ktask_zero,
  /* c_sleeping           */NULL,
  /* c_tss                */{0,},
-#if KTASK_HAVE_IDLE_TASK
- /* c_idle               */{
- KOBJECT_INIT(KOBJECT_MAGIC_TASK)
- /* c_idle.t_esp         */NULL,
- /* c_idle.tr_userpd      */(struct kpagedir *)kpagedir_kernel(),
- /* c_idle.t_esp0        */NULL,
- /* c_idle.t_refcnt      */0xffff,
- /* c_idle.t_locks       */0,
- /* c_idle.t_state       */KTASK_STATE_RUNNING,
- /* c_idle.t_newstate    */KTASK_STATE_RUNNING,
- /* c_idle.t_flags       */KTASK_FLAG_IDLETASK,
-#if KTASK_HAVE_CRITICAL_TASK
- /* c_idle.t_critical    */1,
-#endif /* KTASK_HAVE_CRITICAL_TASK */
-#if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
- /* c_idle.t_nointr      */0,
-#endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
- /* c_idle.t_exitcode    */NULL,
- /* c_idle.t_cpu         */kcpu_zero(),
- /* c_idle.t_prev        */&kcpu_zero()->c_idle,
- /* c_idle.t_next        */&kcpu_zero()->c_idle,
- /* c_idle.t_abstime     */{0,0},
- /* c_idle.t_suspended   */0,
- /* c_idle.t_setpriority */KTASK_PRIORITY_DEF,
- /* c_idle.t_curpriority */KTASK_PRIORITY_DEF,
- /* c_idle.t_sigval      */NULL,
- /* c_idle.t_sigchain    */KTASKSIG_INIT(&kcpu_zero()->c_idle),
- /* c_idle.t_joinsig     */KSIGNAL_INIT,
- /* c_idle.t_proc        */kproc_kernel(),
- /* c_idle.t_parent      */&kcpu_zero()->c_idle,
- /* c_idle.t_parid       */0,
- /* c_idle.t_tid         */0,
- /* c_idle.t_children    */KTASKLIST_INIT,
- /* c_idle.t_ustackvp    */NULL,
- /* c_idle.t_ustacksz    */0,
- /* c_idle.t_kstackvp    */NULL,
- /* c_idle.t_kstack      */NULL,
- /* c_idle.t_kstackend   */NULL,
-#if KCONFIG_HAVE_TASKNAMES
- /* c_idle.t_name        */(char *)"IDLE",
-#endif /* KCONFIG_HAVE_TASKNAMES */
- /* c_idle.t_tls         */KTLSPT_INIT,
-#if KTASK_HAVE_STATS
- /* c_idle.t_stats       */KTASKSTAT_INIT,
-#endif /* KTASK_HAVE_STATS */
- },
-#endif /* KTASK_HAVE_IDLE_TASK */
 };
 
 struct ktask __ktask_zero = {
@@ -126,7 +79,11 @@ struct ktask __ktask_zero = {
  /* t_locks       */0,
  /* t_state       */KTASK_STATE_RUNNING,
  /* t_newstate    */KTASK_STATE_RUNNING,
+#if KTASK_HAVE_CRITICAL_TASK
+ /* t_flags       */KTASK_FLAG_CRITICAL,
+#else /* KTASK_HAVE_CRITICAL_TASK */
  /* t_flags       */KTASK_FLAG_NONE,
+#endif /* !KTASK_HAVE_CRITICAL_TASK */
  /* t_exitcode    */NULL,
  /* t_cpu         */kcpu_zero(),
  /* t_prev        */ktask_zero(),
@@ -486,7 +443,11 @@ struct kcpu *kcpu_leastload(void) {
 // as caused by yield-calles from spinlocks.
 #undef ktask_tryyield
 #undef ktask_yield
+#if 1
+#define ktask_tryyield() KE_OK
+#else
 #define ktask_tryyield() KS_UNCHANGED
+#endif
 #define ktask_yield()    (void)0
 #endif
 
@@ -1968,6 +1929,7 @@ kerrno_t ktask_tryyield(void) {
 #endif
  }
  oldtask = cpuself->c_current;
+ if __unlikely(KE_ISERR(error = ktask_incref(oldtask))) goto end;
  error = kcpu_rotate_unlocked(cpuself);
  assertf(error != KS_EMPTY,
          "If no tasks are scheduled, and you're calling this, "
@@ -1975,8 +1937,7 @@ kerrno_t ktask_tryyield(void) {
          "that in order to not get a reference leak, you have "
          "'to call ktask_selectnext_anddecref_ni'");
  kassert_ktask(oldtask);
- if (error != KS_UNCHANGED &&
-     __likely(KE_ISOK(error = ktask_incref(oldtask)))) {
+ if __likely(error != KS_UNCHANGED) {
   kcpu_unlock(cpuself,KCPU_LOCK_TASKS);
 #if defined(KTASK_ONLEAVEQUANTUM_NEEDTM) &&\
     defined(KTASK_ONENTERQUANTUM_NEEDTM)
@@ -1996,7 +1957,10 @@ kerrno_t ktask_tryyield(void) {
    NOINTERRUPT_BREAK
    return error;
   }
+ } else {
+  ktask_decref(oldtask);
  }
+end:
  NOINTERRUPT_ENDUNLOCK(kcpu_unlock(cpuself,KCPU_LOCK_TASKS))
  return error;
 }
