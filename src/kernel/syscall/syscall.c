@@ -131,10 +131,10 @@ void ksyscall_trace(struct kirq_registers const *regs) {
 #define ARGS6(a,b,c,d,e,f)   "(" a ", " b ", " c ", " d ", " e ", " f ")"
 #define ARGS7(a,b,c,d,e,f,g) "(" a ", " b ", " c ", " d ", " e ", " f ", " g ")"
 #define X(name,fmt) name " = " fmt
-  CASE2(k_syslog,             ARGS2(X("s","'%s'"),X("maxlen","%Iu")),_s,_I);
+  CASE2(k_syslog,          ARGS2(X("s","%q"),X("maxlen","%Iu")),_s,_I);
   CASE1(k_sysconf,         ARGS1(X("name","%d")),_d);
-  CASE5(kfd_open,          ARGS5(X("cwd","%d"),X("path","'%s'"),X("pathmax","%Iu"),X("mode","%x"),X("perms","%x")),_d,_s,_I,_x,_x);
-  CASE6(kfd_open2,         ARGS6(X("dfd","%d"),X("cwd","%d"),X("path","'%s'"),X("pathmax","%Iu"),X("mode","%x"),X("perms","%x")),_d,_d,_s,_I,_x,_x);
+  CASE5(kfd_open,          ARGS5(X("cwd","%d"),X("path","%q"),X("pathmax","%Iu"),X("mode","%x"),X("perms","%x")),_d,_s,_I,_x,_x);
+  CASE6(kfd_open2,         ARGS6(X("dfd","%d"),X("cwd","%d"),X("path","%q"),X("pathmax","%Iu"),X("mode","%x"),X("perms","%x")),_d,_d,_s,_I,_x,_x);
   CASE1(kfd_close,         ARGS1(X("fd","%d")),_d);
   CASE4(kfd_seek,          ARGS4(X("fd","%d"),X("off","%I64d"),X("whence","%d"),X("newpos","%p")),_d,_I64,_d,_p);
   CASE4(kfd_read,          ARGS4(X("fd","%d"),X("buf","%p"),X("bufsize","%Iu"),X("rsize","%p")),_d,_p,_I,_p);
@@ -152,12 +152,12 @@ void ksyscall_trace(struct kirq_registers const *regs) {
   CASE3(kfd_dup2,          ARGS3(X("fd","%d"),X("dfd","%d"),X("flags","%x")),_d,_d,_x);
   CASE2(kfd_pipe,          ARGS2(X("fd","%p"),X("flags","%x")),_p,_x);
   CASE2(kfd_equals,        ARGS2(X("fda","%d"),X("fdb","%d")),_d,_d);
-  CASE4(kfs_mkdir,         ARGS4(X("dirfd","%d"),X("path","'%s'"),X("pathmax","%Iu"),X("perms","%o")),_d,_s,_I,_o);
-  CASE3(kfs_rmdir,         ARGS3(X("dirfd","%d"),X("path","'%s'"),X("pathmax","%Iu")),_d,_s,_I);
-  CASE3(kfs_unlink,        ARGS3(X("dirfd","%d"),X("path","'%s'"),X("pathmax","%Iu")),_d,_s,_I);
-  CASE3(kfs_remove,        ARGS3(X("dirfd","%d"),X("path","'%s'"),X("pathmax","%Iu")),_d,_s,_I);
-  CASE5(kfs_symlink,       ARGS5(X("dirfd","%d"),X("target","'%s'"),X("targetmax","%Iu"),X("lnk","'%s'"),X("lnkmax","%Iu")),_d,_s,_I,_s,_I);
-  CASE5(kfs_hrdlink,       ARGS5(X("dirfd","%d"),X("target","'%s'"),X("targetmax","%Iu"),X("lnk","'%s'"),X("lnkmax","%Iu")),_d,_s,_I,_s,_I);
+  CASE4(kfs_mkdir,         ARGS4(X("dirfd","%d"),X("path","%q"),X("pathmax","%Iu"),X("perms","%o")),_d,_s,_I,_o);
+  CASE3(kfs_rmdir,         ARGS3(X("dirfd","%d"),X("path","%q"),X("pathmax","%Iu")),_d,_s,_I);
+  CASE3(kfs_unlink,        ARGS3(X("dirfd","%d"),X("path","%q"),X("pathmax","%Iu")),_d,_s,_I);
+  CASE3(kfs_remove,        ARGS3(X("dirfd","%d"),X("path","%q"),X("pathmax","%Iu")),_d,_s,_I);
+  CASE5(kfs_symlink,       ARGS5(X("dirfd","%d"),X("target","%q"),X("targetmax","%Iu"),X("lnk","%q"),X("lnkmax","%Iu")),_d,_s,_I,_s,_I);
+  CASE5(kfs_hrdlink,       ARGS5(X("dirfd","%d"),X("target","%q"),X("targetmax","%Iu"),X("lnk","%q"),X("lnkmax","%Iu")),_d,_s,_I,_s,_I);
   CASE1(ktime_getnow,      ARGS1(X("ptm","%p")),_p);
   CASE1(ktime_setnow,      ARGS1(X("ptm","%p")),_p);
   CASE1(ktime_getcpu,      ARGS1(X("ptm","%p")),_p);

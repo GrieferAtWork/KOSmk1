@@ -158,8 +158,6 @@ void kernel_main(void) {
  //RUN(test_terminate_suspended_critical);
 #undef RUN
  //test_taskstat();
- k_syslogf(KLOG_INFO,"My name is %q\n","foo\"\e\nbar");
-
 
  run_init();
 

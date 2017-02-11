@@ -136,7 +136,7 @@ int exec_unistd(char *exe, char **argv) {
 }
 int exec_system(char *cmd) {
  int result; char **argv;
- if (verbose) dprintf(STDERR_FILENO,"exec: '%s'\n",cmd);
+ if (verbose) dprintf(STDERR_FILENO,"exec: %q\n",cmd);
  argv = split_argv(cmd);
  if (!argv) return (errorlevel = errno);
  result = exec_unistd(cmd,argv);

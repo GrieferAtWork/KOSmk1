@@ -42,7 +42,7 @@ static int recursive = 0;
 
 static void mkdir_error(char const *path) {
  int olderr = errno;
- char *msg = strdupf("mkdir '%s'",path);
+ char *msg = strdupf("mkdir %q",path);
  errno = olderr;
  perror(msg ? msg : path);
  free(msg);
@@ -62,7 +62,7 @@ static void user_mkdir(char const *path) {
   }
   mkdir_error(path);
  } else done: if (verbose) {
-  printf("mkdir: created directory '%s'\n",path);
+  printf("mkdir: created directory %q\n",path);
  }
 }
 

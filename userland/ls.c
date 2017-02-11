@@ -64,7 +64,7 @@ static int ls_path(char const *path) {
  if (!strcmp(path,".")) path = "";
  path_endswith_slash = !*path || strend(path)[-1] == '/';
  if (!d) {
-  printf("Failed to open '%s': %s\n",path,strerror(errno));
+  printf("Failed to open %q: %s\n",path,strerror(errno));
   return EXIT_FAILURE;
  }
  errno = 0;

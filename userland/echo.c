@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
   } while (0);
   if (arg == (*iter)+1) break; // Not really an argument
   if (*arg) {
-   printf("Invalid argument: '%s'\n",*arg);
+   printf("Invalid argument: %q\n",*arg);
    return EXIT_FAILURE;
   }
  }

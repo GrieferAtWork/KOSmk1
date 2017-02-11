@@ -534,7 +534,7 @@ static int init_screen_info(SCREEN *self) {
  if (rsize < 0) return -1;
  if (sscanf(answer,"\033[%d;%dR",&sx,&sy) != 2 || sx <= 1 || sy <= 1) {
   dprintf(STDERR_FILENO,
-          "[CURSES] Unrecognized response to size query: '%s'\n",
+          "[CURSES] Unrecognized response to size query: %q\n",
           answer);
   return ERR;
  }

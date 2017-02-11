@@ -909,7 +909,7 @@ kshlib_load_elf32_sheaders(struct kshlib *self,
     if (hrdtype >= SHT_LOPROC && hrdtype <= SHT_HIPROC) break;
     if (hrdtype >= SHT_LOUSER && hrdtype <= SHT_HIUSER) break;
     k_syslogf_prefixfile(KLOG_WARN,elf_file
-              ,"Unrecognized section header: %d ('%s')\n"
+              ,"Unrecognized section header: %d (%q)\n"
               ,hrdtype,name);
     break;
   }
@@ -1131,7 +1131,7 @@ kshlib_openfile(char const *__restrict filename, size_t filename_max,
  error = kshlib_new(result,fp);
  kfile_decref(fp);
  if (KE_ISOK(error)) {
-  k_syslogf(KLOG_TRACE,"Loaded shlib: '%.*s'\n",
+  k_syslogf(KLOG_TRACE,"Loaded shlib: %.*q\n",
            (unsigned)filename_max,filename);
  }
  return error;

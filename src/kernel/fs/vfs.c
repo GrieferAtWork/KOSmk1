@@ -221,7 +221,7 @@ static void vfs_mount(char const *path, struct ksuperblock *block) {
  error = krootfs_mount(path,(size_t)-1,block,NULL);
  if __unlikely(KE_ISERR(error)) {
   k_syslogf(KLOG_ERROR,
-            "[VFS] Failed to mount virtual filesystem under '%s' (error %d)\n",
+            "[VFS] Failed to mount virtual filesystem under %q (error %d)\n",
             path,error);
  }
 }

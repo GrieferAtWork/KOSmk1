@@ -107,7 +107,7 @@ __public void *dlsym(void *__restrict handle,
  result = kmod_sym(modid,name,(size_t)-1);
  if (!result) {
   // TODO: Include the module's name in this error message
-  dl_seterror("dlsym(%p:%Iu) : Symbol '%s' not found",handle,modid,name);
+  dl_seterror("dlsym(%p:%Iu) : Symbol %q not found",handle,modid,name);
  }
  return result;
 }

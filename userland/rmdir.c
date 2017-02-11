@@ -34,7 +34,7 @@
 
 static void mkdir_error(char const *path) {
  int olderr = errno;
- char *msg = strdupf("rmdir '%s'",path);
+ char *msg = strdupf("rmdir %q",path);
  errno = olderr;
  perror(msg ? msg : path);
  free(msg);
@@ -45,7 +45,7 @@ static int verbose = 0;
 static int recursive = 0;
 
 static void user_rmdir(char const *path) {
- if (verbose) printf("rmdir: removing directory '%s'\n",path);
+ if (verbose) printf("rmdir: removing directory %q\n",path);
  if (rmdir(path) == -1) mkdir_error(path);
  else if (recursive && strchr(path,'/')) {
   // Remove parent directory

@@ -244,7 +244,7 @@ void kernel_initialize_bklayout(void) {
    return;
   }
  }
- k_syslogf(KLOG_ERROR,"Unknown keyboard layout: '%s'\n",layout);
+ k_syslogf(KLOG_ERROR,"Unknown keyboard layout: %q\n",layout);
 }
 
 
