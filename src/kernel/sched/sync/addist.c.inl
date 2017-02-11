@@ -262,7 +262,7 @@ kaddist_vtryrecv_unlocked(struct kaddist *__restrict self,
     self->ad_back = NULL;
    } else {
     assert(self->ad_chunkc);
-    self->ad_front->sd_next = NULL;
+    self->ad_front->sd_prev = NULL;
    }
   }
   return KE_OK;
