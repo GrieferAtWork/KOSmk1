@@ -46,15 +46,19 @@ __DECL_BEGIN
 #define __REGION_NESTED_NO  0 /* NESTED: 0: not in region. */
 #define __REGION_NESTED_ONE 1 /* NESTED: 1: in region; leave must look at runtime-based value. */
 #define __REGION_NESTED_YES 2 /* NESTED: 2: in region; leave is recursive; code was already in region when region was entered. */
+#define __REGION_BFIRST_NO  0 /* BFIRST: 0: Not the first level. */
+#define __REGION_BFIRST_YES 1 /* BFIRST: 0: First level. */
 
 #ifdef __ANSI_COMPILER__
-#define __REGION_IN_NORMAL(name) __REGION_##name##_NORMAL
-#define __REGION_IN_NESTED(name) __REGION_##name##_NESTED
-#define __REGION_IN_RUNTIM(name) __REGION_##name##_RUNTIM
+#   define __REGION_IN_NORMAL(name) __REGION_##name##_NORMAL /*< Compile-time in-region detection. */
+#   define __REGION_IN_NESTED(name) __REGION_##name##_NESTED /*< Compile-time nested-region detection. */
+#   define __REGION_IN_BFIRST(name) __REGION_##name##_BFIRST /*< Compile-time first-region detection. */
+#   define __REGION_IN_RUNTIM(name) __REGION_##name##_RUNTIM /*< Old in-region state compiled at runtime . */
 #else /* __ANSI_COMPILER__ */
-#define __REGION_IN_NORMAL(name) __REGION_/**/name/**/_NORMAL
-#define __REGION_IN_NESTED(name) __REGION_/**/name/**/_NESTED
-#define __REGION_IN_RUNTIM(name) __REGION_/**/name/**/_RUNTIM
+#   define __REGION_IN_NORMAL(name) __REGION_/**/name/**/_NORMAL
+#   define __REGION_IN_NESTED(name) __REGION_/**/name/**/_NESTED
+#   define __REGION_IN_BFIRST(name) __REGION_/**/name/**/_BFIRST
+#   define __REGION_IN_RUNTIM(name) __REGION_/**/name/**/_RUNTIM
 #endif /* !__ANSI_COMPILER__ */
 
 
@@ -106,10 +110,17 @@ template<> struct static_if<true> { bool __is_true__(); };
  */
 #define COMPILER_REGION_DEFINE(name) \
  enum{__REGION_IN_NORMAL(name) = __REGION_NORMAL_NO\
-     ,__REGION_IN_NESTED(name) = __REGION_NESTED_NO}
+     ,__REGION_IN_NESTED(name) = __REGION_NESTED_NO\
+     ,__REGION_IN_BFIRST(name) = __REGION_BFIRST_NO\
+     ,__REGION_IN_RUNTIM(name) = false}
 
 #define COMPILER_REGION_P(name)        (__REGION_IN_NORMAL(name) == __REGION_NORMAL_YES)
 #define COMPILER_REGION_NESTED_P(name) (__REGION_IN_NESTED(name) == __REGION_NESTED_YES)
+#define COMPILER_REGION_FIRST_P(name)  (__REGION_IN_BFIRST(name) == __REGION_BFIRST_YES)
+#define COMPILER_REGION_FIRST(name) \
+ (COMPILER_REGION_FIRST_P(name) || \
+ (__REGION_IN_NESTED(name) == __REGION_NESTED_ONE && \
+ !__REGION_IN_RUNTIM(name)))
 
 #if defined(__DEBUG__) && 1
 /* Leave this on for a while, and if everything works, disable it! */
@@ -156,11 +167,12 @@ template<> struct static_if<true> { bool __is_true__(); };
 #define COMPILER_REGION_ENTER_FIRST(name,is_inside,do_enter) \
  { enum{__REGION_IN_NESTED(name) = __REGION_IN_NORMAL(name)+1\
        ,__REGION_IN_NORMAL(name) = __REGION_NORMAL_YES\
-       ,__REGION_IN_RUNTIM(name) = true};\
- { __STATIC_ASSERT_M(__REGION_IN_NESTED(name) == __REGION_NESTED_ONE,\
+       ,__REGION_IN_BFIRST(name) = __REGION_BFIRST_YES};\
+ { enum{__REGION_IN_RUNTIM(name) = false};\
+   __STATIC_ASSERT_M(__REGION_IN_NESTED(name) == __REGION_NESTED_ONE,\
                      "You're not the first to enter the region! "\
                      "Even I, the compiler know that.");\
-   assertf(is_inside(),"You're not the first to enter the region!");\
+   assertf(!is_inside(),"You're not the first to enter the region!");\
    {do_enter();};
 
 
@@ -307,9 +319,11 @@ template<> struct static_if<true> { bool __is_true__(); };
 
 
 /* Runtime-only version. */
-#define RUNTIME_REGION_DEFINE(name)
-#define RUNTIME_REGION_P(name)        0
-#define RUNTIME_REGION_NESTED_P(name) 0
+#define RUNTIME_REGION_DEFINE(name)     /* nothing */
+#define RUNTIME_REGION_P(name)          0
+#define RUNTIME_REGION_NESTED_P(name)   0
+#define RUNTIME_REGION_FIRST_P(name)    0
+#define RUNTIME_REGION_FIRST(name)    (!__REGION_IN_RUNTIM(name))
 #define RUNTIME_REGION_MARK(name,is_inside) \
  assertf(is_inside(),"Region violation: No actually inside a " #name " region.");
 #define RUNTIME_REGION_ENTER(name,is_inside,do_enter) \
@@ -327,7 +341,7 @@ template<> struct static_if<true> { bool __is_true__(); };
  }
 #define RUNTIME_REGION_ENTER_FIRST(name,is_inside,do_enter) \
  { enum{__REGION_IN_RUNTIM(name) = true};\
-   assertf(is_inside(),"You're not the first to enter the region!");\
+   assertf(!is_inside(),"You're not the first to enter the region!");\
    {do_enter();};
 
 #ifdef KCONFIG_HAVE_SINGLECORE
@@ -413,6 +427,8 @@ template<> struct static_if<true> { bool __is_true__(); };
 #   define REGION_DEFINE              RUNTIME_REGION_DEFINE
 #   define REGION_P                   RUNTIME_REGION_P
 #   define REGION_NESTED_P            RUNTIME_REGION_NESTED_P
+#   define REGION_FIRST_P             RUNTIME_REGION_FIRST_P
+#   define REGION_FIRST               RUNTIME_REGION_FIRST
 #   define REGION_MARK                RUNTIME_REGION_MARK
 #   define REGION_ENTER               RUNTIME_REGION_ENTER
 #   define REGION_TRYENTER            RUNTIME_REGION_TRYENTER
@@ -425,6 +441,8 @@ template<> struct static_if<true> { bool __is_true__(); };
 #   define REGION_DEFINE              COMPILER_REGION_DEFINE
 #   define REGION_P                   COMPILER_REGION_P
 #   define REGION_NESTED_P            COMPILER_REGION_NESTED_P
+#   define REGION_FIRST_P             COMPILER_REGION_FIRST_P
+#   define REGION_FIRST               COMPILER_REGION_FIRST
 #   define REGION_MARK                COMPILER_REGION_MARK
 #   define REGION_ENTER               COMPILER_REGION_ENTER
 #   define REGION_TRYENTER            COMPILER_REGION_TRYENTER

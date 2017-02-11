@@ -105,8 +105,8 @@ extern __crit __nonnull((1)) void kcloselock_quit(struct kcloselock *__restrict 
 // @return: KE_OVERFLOW:  Too many concurrent operations
 // @return: KE_DESTROYED: The associated object was closed/is currently closing.
 //                        >> New tasks are not allowed to being operations
-extern __crit __wunused kerrno_t kcloselock_beginop(struct kcloselock *__restrict self);
-extern __crit               void kcloselock_endop(struct kcloselock *__restrict self);
+extern __crit __wunused __nonnull((1)) kerrno_t kcloselock_beginop(struct kcloselock *__restrict self);
+extern __crit           __nonnull((1))     void kcloselock_endop(struct kcloselock *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
 // Set the lock to its closing state, waiting for all
@@ -127,7 +127,7 @@ extern __crit __wunused __nonnull((1,2)) kerrno_t kcloselock_timeoutclose(struct
 //////////////////////////////////////////////////////////////////////////
 // Resets a close lock after it has already been closed.
 // @return: KS_UNCHANGED: The lock wasn't closed to being with
-extern __crit kerrno_t kcloselock_reset(struct kcloselock *__restrict self);
+extern __crit __nonnull((1)) kerrno_t kcloselock_reset(struct kcloselock *__restrict self);
 
 __DECL_END
 #endif /* __KERNEL__ */

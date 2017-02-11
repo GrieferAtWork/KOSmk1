@@ -116,7 +116,7 @@ extern kerrno_t krawbuf_reset(struct krawbuf *__restrict self);
 #define krawbuf_close(self) \
  __xblock({ struct krawbuf *const __rbcself = (self); kerrno_t __rbcerror;\
             kassert_krawbuf(__rbcself);\
-            NOINTERRUPT_BEGINLOCK(krawbuf_trylock(__rbcself,KRAWBUF_LOCK_DATA));\
+            NOIRQ_BEGINLOCK(krawbuf_trylock(__rbcself,KRAWBUF_LOCK_DATA));\
             if (!(__rbcself->rb_flags&KRAWBUF_FLAG_DEAD)) {\
              free(__rbcself->rb_buffer);\
              __rbcself->rb_flags |= KRAWBUF_FLAG_DEAD;\
@@ -124,13 +124,13 @@ extern kerrno_t krawbuf_reset(struct krawbuf *__restrict self);
             } else {\
              __rbcerror = KS_UNCHANGED;\
             }\
-            NOINTERRUPT_ENDUNLOCK(krawbuf_unlock(__rbrself,KRAWBUF_LOCK_DATA));\
+            NOIRQ_ENDUNLOCK(krawbuf_unlock(__rbrself,KRAWBUF_LOCK_DATA));\
             __xreturn __rbcerror;\
  })
 #define krawbuf_reset(self) \
  __xblock({ struct krawbuf *const __rbrself = (self); kerrno_t __rbcerror;\
             kassert_krawbuf(__rbrself);\
-            NOINTERRUPT_BEGINLOCK(krawbuf_trylock(__rbrself,KRAWBUF_LOCK_DATA));\
+            NOIRQ_BEGINLOCK(krawbuf_trylock(__rbrself,KRAWBUF_LOCK_DATA));\
             if (__rbrself->rb_flags&KRAWBUF_FLAG_DEAD) {\
              __rbcself->rb_flags &= ~(KRAWBUF_FLAG_DEAD);\
             __rbieself->rb_buffer = NULL;\
@@ -142,7 +142,7 @@ extern kerrno_t krawbuf_reset(struct krawbuf *__restrict self);
              assert((__rbieself->rb_bufpos != NULL) == (__rbieself->rb_buffer != NULL));\
              __rbcerror = KS_UNCHANGED;\
             }\
-            NOINTERRUPT_ENDUNLOCK(krawbuf_unlock(__rbrself,KRAWBUF_LOCK_DATA));\
+            NOIRQ_ENDUNLOCK(krawbuf_unlock(__rbrself,KRAWBUF_LOCK_DATA));\
             __xreturn __rbcerror;\
  })
 #endif
@@ -209,7 +209,7 @@ krawbuf_write(struct krawbuf *__restrict self, void const *buf,
  __size_t newsize,bufavail,copysize = 0;
  __u8 *newbuf; kerrno_t error = KE_OK;
  kassert_krawbuf(self); kassertobj(wsize);
- NOINTERRUPT_BEGINLOCK(krawbuf_trylock(self,KRAWBUF_LOCK_DATA));
+ NOIRQ_BEGINLOCK(krawbuf_trylock(self,KRAWBUF_LOCK_DATA));
  assert((self->rb_bufend != NULL) == (self->rb_buffer != NULL));
  assert((self->rb_bufpos != NULL) == (self->rb_buffer != NULL));
  bufavail = (__size_t)(self->rb_bufend-self->rb_bufpos);
@@ -238,7 +238,7 @@ krawbuf_write(struct krawbuf *__restrict self, void const *buf,
  self->rb_bufpos += copysize;
 end:
  *wsize = copysize;
- NOINTERRUPT_ENDUNLOCK(krawbuf_unlock(self,KRAWBUF_LOCK_DATA));
+ NOIRQ_ENDUNLOCK(krawbuf_unlock(self,KRAWBUF_LOCK_DATA));
  return error;
 }
 #endif

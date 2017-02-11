@@ -56,7 +56,7 @@ static kerrno_t __katadev_pio28_readlba
  if (sectors > 0xff) sectors = 0xff;
 #endif
  bus = dev->ad_bus;
- NOINTERRUPT_BEGIN;
+ NOIRQ_BEGIN;
  if __unlikely(KE_ISERR(error = kata_poll(bus,ATA_STATUS_BSY,0))) goto end;
 #ifdef LBA48
  outb(ATA_IOPORT_HDDEVSEL(bus),
@@ -93,7 +93,7 @@ static kerrno_t __katadev_pio28_readlba
  *readsectors = (size_t)seci;
  kata_sleep(bus);
 end:
- NOINTERRUPT_END
+ NOIRQ_END
  return error;
 }
 
@@ -132,7 +132,7 @@ static kerrno_t __katadev_pio28_writelba
  if (sectors > 0xff) sectors = 0xff;
 #endif
  bus = dev->ad_bus;
- NOINTERRUPT_BEGIN;
+ NOIRQ_BEGIN;
  if __unlikely(KE_ISERR(error = kata_poll(bus,ATA_STATUS_BSY,0))) goto end;
 #ifdef LBA48
  outb(ATA_IOPORT_HDDEVSEL(bus),
@@ -174,7 +174,7 @@ static kerrno_t __katadev_pio28_writelba
  kata_sleep(bus);
  *writesectors = (size_t)seci;
 end:
- NOINTERRUPT_END
+ NOIRQ_END
  return error;
 #endif
 }

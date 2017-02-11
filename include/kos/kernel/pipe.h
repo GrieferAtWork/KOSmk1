@@ -38,22 +38,14 @@
 
 __DECL_BEGIN
 
-#define KOBJECT_MAGIC_PIPE 0x919E /*< PIPE. */
-#define kassert_kpipe(self) kassert_refobject(self,p_refcnt,KOBJECT_MAGIC_PIPE)
-
-// TODO: Named pipes
-
 struct kpipe {
- KOBJECT_HEAD // Pipe (basically just a reference-counted I/O buffer)
- __atomic __u32 p_refcnt; /*< Reference counter. */
- struct kiobuf  p_iobuf;  /*< I/O buffer. */
+ struct kinode p_node;  /*< Underlying INode. */
+ struct kiobuf p_iobuf; /*< I/O buffer. */
 };
 
-#define KPIPE_INIT               {KOBJECT_INIT(KOBJECT_MAGIC_PIPE) 0xffff,KIOBUF_INIT}
-#define KPIPE_INIT_EX(max_size)  {KOBJECT_INIT(KOBJECT_MAGIC_PIPE) 0xffff,KIOBUF_INIT_EX(max_size)}
-
-__local KOBJECT_DEFINE_INCREF(kpipe_incref,struct kpipe,p_refcnt,kassert_kpipe);
-__local KOBJECT_DEFINE_DECREF(kpipe_decref,struct kpipe,p_refcnt,kassert_kpipe,kpipe_destroy);
+/* Symbolic superblock for the pipe filesystem. */
+extern struct ksuperblock kpipe_fs;
+extern struct kinodetype kpipe_type;
 
 //////////////////////////////////////////////////////////////////////////
 // Allocates a new pipe with the given max_size
@@ -61,20 +53,29 @@ __local KOBJECT_DEFINE_DECREF(kpipe_decref,struct kpipe,p_refcnt,kassert_kpipe,k
 // @return: NULL: Not enough available memory.
 extern __crit __ref struct kpipe *kpipe_new(__size_t max_size);
 
+//////////////////////////////////////////////////////////////////////////
+// Insert the given pipe into the filesystem
+#define kpipe_insnod(self,path,pathmax,dent) \
+ kuserfs_insnod(path,pathmax,(struct kinode *)(self),dent,KDIRENT_FLAG_VIRT)
 
+
+struct kinode;
+struct kdirent;
 struct kpipefile {
- struct kfile        pr_file; /*< Underlying file. */
- __ref struct kpipe *pr_pipe; /*< [1..1] Associated pipe. */
+ struct kfile        pr_file;   /*< Underlying file. */
+ __ref struct kpipe *pr_pipe;   /*< [1..1] Associated pipe. */
+ struct kdirent     *pr_dirent; /*< [0..1] Associated directory entry. */
 };
 
 //////////////////////////////////////////////////////////////////////////
 // Create and return a new reader/writer for a given pipe.
 // @return: * :   A reference to a newly allocated file.
 // @return: NULL: Not enough available memory.
-extern __crit __ref struct kpipefile *kpipefile_newreader(struct kpipe *__restrict pipe);
-extern __crit __ref struct kpipefile *kpipefile_newwriter(struct kpipe *__restrict pipe);
+extern __crit __ref struct kpipefile *kpipefile_newreader(struct kpipe *__restrict pipe, struct kdirent *dent);
+extern __crit __ref struct kpipefile *kpipefile_newwriter(struct kpipe *__restrict pipe, struct kdirent *dent);
 
 // File types for pipe readers/writers
+extern struct kfiletype kpipesuper_type;
 extern struct kfiletype kpipereader_type;
 extern struct kfiletype kpipewriter_type;
 

@@ -68,6 +68,7 @@ kprocsand_initcopy(struct kprocsand *__restrict self,
 #if KCONFIG_HAVE_TASKNAMES
  self->ts_namemax = katomic_load(right->ts_namemax);
 #endif
+ self->ts_pipemax = katomic_load(right->ts_pipemax);
  self->ts_flags   = katomic_load(right->ts_flags);
  self->ts_state   = katomic_load(right->ts_state);
  return KE_OK;
@@ -155,7 +156,7 @@ ktask_copy4fork(struct ktask *__restrict self,
  if __unlikely((result = omalloc(struct ktask)) == NULL) goto err_procref;
  if __unlikely(KE_ISERR(ktlspt_initcopy(&result->t_tls,&self->t_tls))) goto err_free;
  kobject_init(result,KOBJECT_MAGIC_TASK);
- result->tr_userpd      = kproc_pagedir(proc);
+ result->t_userpd      = kproc_pagedir(proc);
  result->t_refcnt      = 1;
  result->t_locks       = 0;
  result->t_newstate    = KTASK_STATE_RUNNING;
@@ -209,13 +210,13 @@ ktask_copy4fork(struct ktask *__restrict self,
  ktaskstat_init(&result->t_stats);
 #endif /* KTASK_HAVE_STATS */
 
- //kpagedir_print(self->tr_userpd);
- //kpagedir_print(result->tr_userpd);
+ //kpagedir_print(self->t_userpd);
+ //kpagedir_print(result->t_userpd);
 
  // Setup the stack pointer to point to the new kernel stack
  result->t_esp = (__user void *)((uintptr_t)result->t_kstackvp+kstacksize);
  result->t_esp0 = result->t_esp;
- assertf(kpagedir_ismappedp(result->tr_userpd,
+ assertf(kpagedir_ismappedp(result->t_userpd,
          (void *)alignd((uintptr_t)result->t_esp0-1,PAGEALIGN))
         ,"Kernel stack address %p is not mapped",result->t_esp0);
 
@@ -261,7 +262,7 @@ ktask_copy4fork(struct ktask *__restrict self,
   layout.regs.eflags = userregs->eflags&~(KARCH_X86_EFLAGS_IF);
   // Fill the stack as required to call 'ktask_ring3_bootstrap'
   layout.esp0        = result->t_esp;
-  layout.userdir     = result->tr_userpd;
+  layout.userdir     = result->t_userpd;
   // Use the same ESP address as originally set when 'fork()' was called.
   layout.useresp     = (__user void *)userregs->useresp;
   layout.usereip     = (__user void *)userregs->eip;

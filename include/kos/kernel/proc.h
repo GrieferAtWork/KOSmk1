@@ -72,6 +72,7 @@ struct kprocsand {
 #if KCONFIG_HAVE_TASKNAMES
  __atomic __size_t    ts_namemax; /*< Max allowed task name length to be set. */
 #endif
+ __atomic __size_t    ts_pipemax; /*< Max allowed pipe size to be set. */
  // NOTE: The [-] means that the flag can only ever be removed, but never (re-)added.
 #define KPROCSAND_FLAG_NONE          0x00000000
 #define KPROCSAND_FLAG_FORKROOT      0x00000001 /*< [-] Allow forkas without password (required for 'su -l <username>'). */
@@ -88,7 +89,7 @@ struct kprocsand {
 };
 #define KPROCSAND_INITROOT \
  {ktask_zero(),ktask_zero(),ktask_zero(),ktask_zero()\
- ,KTASKPRIO_MIN,KTASKPRIO_MAX,(__size_t)-1,0xffffffff\
+ ,KTASKPRIO_MIN,KTASKPRIO_MAX,(__size_t)-1,(__size_t)-1,0xffffffff\
  ,KPROCSTATE_FLAG_NONE}
 extern __crit kerrno_t kprocsand_initroot(struct kprocsand *self);
 
@@ -394,8 +395,15 @@ extern __wunused __nonnull((1)) int kproc_isrootvisible(struct kproc const *__re
 // WARNING: Do not attempt to dereference that resource.
 //          This function is only meant to abstract comparing of file descriptors.
 // @return: NULL: Invalid file descriptor, or the task context was closed.
-extern        __wunused __nonnull((1)) void *kproc_getresourceaddr(struct kproc const *__restrict self, int fd);
+extern        __wunused __nonnull((1)) void *kproc_getresourceaddr_nc(struct kproc const *__restrict self, int fd);
 extern __crit __wunused __nonnull((1)) void *kproc_getresourceaddr_c(struct kproc const *__restrict self, int fd);
+#ifdef __INTELLISENSE__
+extern        __wunused __nonnull((1)) void *kproc_getresourceaddr(struct kproc const *__restrict self, int fd);
+#else
+#define kproc_getresourceaddr(self,fd) \
+ (KTASK_ISCRIT_P ? kproc_getresourceaddr_c(self,fd)\
+                 : kproc_getresourceaddr_nc(self,fd))
+#endif
 
 #ifdef __INTELLISENSE__
 //////////////////////////////////////////////////////////////////////////
@@ -403,18 +411,13 @@ extern __crit __wunused __nonnull((1)) void *kproc_getresourceaddr_c(struct kpro
 // WARNING: The caller is responsible to ensure that the descriptors
 //          are not re-assigned before the equality information
 //          is put to use (otherwise they might no longer be equal).
-extern        __wunused __nonnull((1)) int kproc_equalfd  (struct kproc const *__restrict self, int fda, int fdb);
-extern __crit __wunused __nonnull((1)) int kproc_equalfd_c(struct kproc const *__restrict self, int fda, int fdb);
+extern __wunused __nonnull((1)) int
+kproc_equalfd(struct kproc const *__restrict self, int fda, int fdb);
 #else
 #define kproc_equalfd(self,fda,fdb) \
  __xblock({ struct kproc const *const __ktcqfself = (self);\
             __xreturn kproc_getresourceaddr(__ktcqfself,fda)\
                    == kproc_getresourceaddr(__ktcqfself,fdb);\
- })
-#define kproc_equalfd_c(self,fda,fdb) \
- __xblock({ struct kproc const *const __ktcqfself = (self);\
-            __xreturn kproc_getresourceaddr_c(__ktcqfself,fda)\
-                   == kproc_getresourceaddr_c(__ktcqfself,fdb);\
  })
 #endif
 
@@ -622,9 +625,11 @@ kproc_insmod_unlocked(struct kproc *__restrict self,
                       struct kshlib *__restrict module,
                       kmodid_t *module_id);
 extern __crit __wunused __nonnull((1,2,3)) kerrno_t
-kproc_insmod(struct kproc *__restrict self,
-             struct kshlib *__restrict module,
-             kmodid_t *module_id);
+kproc_insmod_c(struct kproc *__restrict self,
+               struct kshlib *__restrict module,
+               kmodid_t *module_id);
+#define kproc_insmod(self,module,module_id) \
+ KTASK_CRIT(kproc_insmod_c(self,module,module_id))
 
 //////////////////////////////////////////////////////////////////////////
 // Unload a given module from a process after it had previously been loaded.
@@ -644,8 +649,10 @@ extern __crit __nonnull((1)) kerrno_t
 kproc_delmod_unlocked(struct kproc *__restrict self,
                       kmodid_t module_id);
 extern __crit __nonnull((1)) kerrno_t
-kproc_delmod(struct kproc *__restrict self,
-             kmodid_t module_id);
+kproc_delmod_c(struct kproc *__restrict self,
+               kmodid_t module_id);
+
+#define kproc_delmod(self,module_id) KTASK_CRIT(kproc_delmod_c(self,module_id))
 
 #ifndef __ksymhash_t_defined
 #define __ksymhash_t_defined 1

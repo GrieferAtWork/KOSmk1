@@ -27,6 +27,7 @@
 #ifdef __KERNEL__
 #include <kos/compiler.h>
 #include <kos/types.h>
+#include <kos/kernel/task.h>
 #include <kos/kernel/object.h>
 #ifndef __INTELLISENSE__
 #include <malloc.h>
@@ -89,7 +90,8 @@ extern __nonnull((1)) void kprocenv_initroot(struct kprocenv *self);
 #endif
 
 extern __crit __nonnull((1)) void kprocenv_quit(struct kprocenv *self);
-extern __crit __nonnull((1)) void kprocenv_clear(struct kprocenv *self);
+extern __crit __nonnull((1)) void kprocenv_clear_c(struct kprocenv *self);
+#define kprocenv_clear(self) KTASK_CRIT_V(kprocenv_clear_c(self))
 extern __crit __nonnull((1)) void
 kprocenv_install_after_exec(struct kprocenv *__restrict self,
                             struct kprocenv *__restrict newenv,
@@ -122,7 +124,7 @@ kprocenv_initcopy(struct kprocenv *self,
 // NOTE: The caller is responsible to synchronize this call with set-operations.
 // @return: * :   The value of the environment variable associated with the given name.
 // @return: NULL: The given name doesn't describe a set environment variable.
-extern __wunused __nonnull((1,2)) char const *
+extern __nomp __wunused __nonnull((1,2)) char const *
 kprocenv_getenv(struct kprocenv const *__restrict self,
                 char const *__restrict name, __size_t name_max);
 
@@ -134,18 +136,22 @@ kprocenv_getenv(struct kprocenv const *__restrict self,
 // @return: KE_ACCES:  Allocating a new entry for the given variable would exceed the allowed maximum.
 // @return: KE_NOMEM:  Not enough memory to complete the operation.
 extern __crit __wunused __nonnull((1,2,4)) kerrno_t
-kprocenv_setenv(struct kprocenv *__restrict self,
-                char const *__restrict name, __size_t name_max,
-                char const *__restrict value, __size_t value_max,
-                int override);
+kprocenv_setenv_c(struct kprocenv *__restrict self,
+                  char const *__restrict name, __size_t name_max,
+                  char const *__restrict value, __size_t value_max,
+                  int override);
+#define kprocenv_setenv(self,name,name_max,value,value_max,override) \
+ KTASK_CRIT(kprocenv_setenv_c(self,name,name_max,value,value_max,override))
 
 //////////////////////////////////////////////////////////////////////////
 // Delete a given environment variable.
 // @return: KE_OK:    The given name was successfully deleted.
 // @return: KE_NOENT: The given variable doesn't exist.
 extern __crit __wunused __nonnull((1,2)) kerrno_t
-kprocenv_delenv(struct kprocenv *__restrict self,
-                char const *__restrict name, __size_t name_max);
+kprocenv_delenv_c(struct kprocenv *__restrict self,
+                  char const *__restrict name, __size_t name_max);
+#define kprocenv_delenv(self,name,name_max) \
+ KTASK_CRIT(kprocenv_delenv_c(self,name,name_max))
 
 //////////////////////////////////////////////////////////////////////////
 // Perform putenv-style semantics.
@@ -156,8 +162,9 @@ kprocenv_delenv(struct kprocenv *__restrict self,
 // @return: KE_NOMEM: Not enough memory to complete the operation.
 // @return: KE_NOENT: 'text' requested a delete operation, but the variable didn't exist.
 extern __crit __wunused __nonnull((1,2)) kerrno_t
-kprocenv_putenv(struct kprocenv *__restrict self,
-                char const *__restrict text, __size_t text_max);
+kprocenv_putenv_c(struct kprocenv *__restrict self,
+                  char const *__restrict text, __size_t text_max);
+#define kprocenv_putenv(self,text,text_max) KTASK_CRIT(kprocenv_putenv_c(self,text,text_max))
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -171,13 +178,17 @@ kprocenv_putenv(struct kprocenv *__restrict self,
 // @return: KE_ACCES: The total amount of argument bytes exceeds what is allowed.
 // @return: KE_NOMEM: Not enough memory to complete the operation.
 extern __crit __nonnull((1)) kerrno_t
-kprocenv_setargv(struct kprocenv *__restrict self, __size_t max_argc,
-                 char const __kernel *const __kernel *argv,
-                 __size_t const __kernel *max_arglenv);
+kprocenv_setargv_c(struct kprocenv *__restrict self, __size_t max_argc,
+                   char const __kernel *const __kernel *argv,
+                   __size_t const __kernel *max_arglenv);
 extern __crit __nonnull((1)) kerrno_t
-kprocenv_setargv_u(struct kprocenv *__restrict self, __size_t max_argc,
-                   char const __user *const __user *argv,
-                   __size_t const __user *max_arglenv);
+kprocenv_setargv_cu(struct kprocenv *__restrict self, __size_t max_argc,
+                    char const __user *const __user *argv,
+                    __size_t const __user *max_arglenv);
+#define kprocenv_setargv(self,max_argc,argv,max_arglenv) \
+ KTASK_CRIT(kprocenv_setargv_c(self,max_argc,argv,max_arglenv))
+#define kprocenv_setargv_u(self,max_argc,argv,max_arglenv) \
+ KTASK_CRIT(kprocenv_setargv_cu(self,max_argc,argv,max_arglenv))
 
 
 __DECL_END

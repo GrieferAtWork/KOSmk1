@@ -340,7 +340,10 @@ void __compiler_unreachable_impl __D0() {
 #endif
 
 #ifndef __STATIC_ASSERT
-#   define __STATIC_ASSERT(expr) typedef int __compiler_UNIQUE(sassert)[!!(expr)?1:-1]
+#   define __STATIC_ASSERT(expr)   typedef int __compiler_UNIQUE(sassert)[!!(expr)?1:-1]
+#endif
+#ifndef __STATIC_ASSERT_M
+#   define __STATIC_ASSERT_M(expr,msg) __STATIC_ASSERT(expr)
 #endif
 
 #ifndef __xblock

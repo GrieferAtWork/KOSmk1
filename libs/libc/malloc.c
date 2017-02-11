@@ -844,7 +844,7 @@ int _malloc_enumblocks_ex_d(void *checkpoint,
  int error = 0;
  if __unlikely(!callback) return 0;
 #ifdef __KERNEL__
- NOINTERRUPT_BEGIN
+ NOIRQ_BEGIN
 #endif
  MALL_LOCK_ACQUIRE
  oldtop = mall_top,mall_top = NULL;
@@ -908,7 +908,7 @@ int _malloc_enumblocks_ex_d(void *checkpoint,
  }
  MALL_LOCK_RELEASE
 #ifdef __KERNEL__
- NOINTERRUPT_END
+ NOIRQ_END
 #endif
  return error;
 }

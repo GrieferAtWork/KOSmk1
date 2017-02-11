@@ -739,6 +739,7 @@ kptyfile_ioctl(struct kfile *__restrict self, kattr_t cmd,
                __user void *__restrict arg) {
  return kpty_ioctl(&SELF->pf_pty->fp_pty,cmd,arg);
 }
+#undef SELF
 
 struct kfiletype kptyfile_slave_type = {
  .ft_size      = sizeof(struct kptyfile),

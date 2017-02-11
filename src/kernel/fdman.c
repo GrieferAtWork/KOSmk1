@@ -45,8 +45,7 @@ __crit void kfdman_quit(struct kfdman *self) {
  end = (iter = self->fdm_fdv)+self->fdm_fda;
  for (; iter != end; ++iter) kfdentry_quit(iter);
  free(self->fdm_fdv);
- kfdentry_quit(&self->fdm_root);
- kfdentry_quit(&self->fdm_cwd);
+ KFDMAN_FOREACH_SPECIAL(self,kfdentry_quit);
 }
 
 __crit kerrno_t kfdman_initcopy(struct kfdman *self,

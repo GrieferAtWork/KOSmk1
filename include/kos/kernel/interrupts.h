@@ -167,7 +167,7 @@ extern __nonnull((1)) void __irq_default_handler(struct kirq_registers *__restri
 //          handler would attempt to do the wait for a signal that
 //          would otherwise be send by the task itself (aka. deadlock).
 //       >> NOTE: Locks that can only be acquired while interrupts are
-//                disabled (aka. always entered with 'NOINTERRUPT_BEGINLOCK')
+//                disabled (aka. always entered with 'NOIRQ_BEGINLOCK')
 //                are safe to acquire from inside an IRQ handler, though.
 //               (aka: You are allowed to send signals)
 //       >> If you don't know if a call is preemptive (receives signals),
@@ -197,21 +197,24 @@ extern __wunused __constcall struct irq_siginfo const *irq_getsiginfo(irq_t sign
    being compiled within a specially protected block.
    This way, we can detect such a block at compile-time
    and generate must more optimized code. */
-REGION_DEFINE(NOINTERRUPT);
+REGION_DEFINE(NOIRQ);
 
 /* Returns true if in a no-interrupt block. */
-#   define NOINTERRUPT_P         REGION_P(NOINTERRUPT)
+#   define NOIRQ_P         REGION_P(NOIRQ)
 
 /* Returns true if in a nested no-interrupt block. */
-#   define NOINTERRUPT_NESTED_P  REGION_NESTED_P(NOINTERRUPT)
+#   define NOIRQ_NESTED_P  REGION_NESTED_P(NOIRQ)
+
+/* Returns true if leaving the current noirq block will re-enable interrupts. */
+#   define NOIRQ_FIRST     REGION_FIRST(NOIRQ)
 #else
-RUNTIME_REGION_DEFINE(NOINTERRUPT);
-#   define NOINTERRUPT_P         RUNTIME_REGION_P(NOINTERRUPT)
-#   define NOINTERRUPT_NESTED_P  RUNTIME_REGION_NESTED_P(NOINTERRUPT)
+RUNTIME_REGION_DEFINE(NOIRQ);
+#   define NOIRQ_P         RUNTIME_REGION_P(NOIRQ)
+#   define NOIRQ_NESTED_P  RUNTIME_REGION_NESTED_P(NOIRQ)
 #endif
 #else /* !__ASSEMBLY__ */
-#   define NOINTERRUPT_P         0
-#   define NOINTERRUPT_NESTED_P  0
+#   define NOIRQ_P         0
+#   define NOIRQ_NESTED_P  0
 #endif /* __ASSEMBLY__ */
 
 
@@ -226,7 +229,7 @@ RUNTIME_REGION_DEFINE(NOINTERRUPT);
 //          established through a call to 'KTASK_CRIT_BEGIN', either as a
 //          primary, or as a secondary guard:
 //    -- Don't do this:
-//       >> NOINTERRUPT_BEGIN;
+//       >> NOIRQ_BEGIN;
 //       >> // NO! NO! NO! NO! NO! THIS IS REALLY FUC$ING WRONG!
 //       >> //  -> Even though this lock could safely be acquired, any lock
 //       >> //     that could potentially be held somewhere further up the
@@ -237,7 +240,7 @@ RUNTIME_REGION_DEFINE(NOINTERRUPT);
 //       >> kmutex_lock(&lock);
 //       >> do_something();
 //       >> kmutex_unlock(&lock);
-//       >> NOINTERRUPT_END
+//       >> NOIRQ_END
 //    -- Do this instead:
 //       >> ktask_crt_begin();
 //       >> // OK: The calling task will not be terminated while
@@ -245,15 +248,15 @@ RUNTIME_REGION_DEFINE(NOINTERRUPT);
 //       >> kmutex_lock(&lock);
 //       >> do_something();
 //       >> kmutex_unlock(&lock);
-//       >> NOINTERRUPT_END
+//       >> NOIRQ_END
 #if KCONFIG_HAVE_INTERRUPTS
 #ifdef CONFIG_COMPILETIME_NOINTERRUPT_OPTIMIZATIONS
-#define NOINTERRUPT_BEGIN                         REGION_ENTER(NOINTERRUPT,!karch_irq_enabled,karch_irq_disable)
-#define NOINTERRUPT_END                           REGION_LEAVE(NOINTERRUPT,karch_irq_enable)
-#define NOINTERRUPT_BREAK                         REGION_BREAK(NOINTERRUPT,karch_irq_enable)
-#define NOINTERRUPT_BREAKUNLOCK(unlock) (unlock); REGION_BREAK(NOINTERRUPT,karch_irq_enable)
-#define NOINTERRUPT_BEGINLOCK(trylock) \
- REGION_ENTER_LOCK(NOINTERRUPT,!karch_irq_enabled\
+#define NOIRQ_BEGIN                         REGION_ENTER(NOIRQ,!karch_irq_enabled,karch_irq_disable)
+#define NOIRQ_END                           REGION_LEAVE(NOIRQ,karch_irq_enable)
+#define NOIRQ_BREAK                         REGION_BREAK(NOIRQ,karch_irq_enable)
+#define NOIRQ_BREAKUNLOCK(unlock) (unlock); REGION_BREAK(NOIRQ,karch_irq_enable)
+#define NOIRQ_BEGINLOCK(trylock) \
+ REGION_ENTER_LOCK(NOIRQ,!karch_irq_enabled\
                   ,karch_irq_disable,karch_irq_enable,trylock)
 
 // Begin a nointerrupt block by locking a volatile lock.
@@ -265,34 +268,42 @@ RUNTIME_REGION_DEFINE(NOINTERRUPT);
 // @param: ob:           Cache for the currently loaded volatile instance
 // @param: readvolatile: Reads the volatile memory that contains the real value
 // @param: trylock:      Code used to lock the currently loaded cache of 
-#define NOINTERRUPT_BEGINLOCK_VOLATILE(ob,readvolatile,trylock,unlock) \
- COMPILER_REGION_ENTER_LOCK_VOLATILE(NOINTERRUPT,!karch_irq_enabled,karch_irq_disable,\
+#define NOIRQ_BEGINLOCK_VOLATILE(ob,readvolatile,trylock,unlock) \
+ COMPILER_REGION_ENTER_LOCK_VOLATILE(NOIRQ,!karch_irq_enabled,karch_irq_disable,\
                                      karch_irq_enable,ob,readvolatile,trylock,unlock)
 #else
-#define NOINTERRUPT_BEGIN                         RUNTIME_REGION_ENTER(NOINTERRUPT,!karch_irq_enabled,karch_irq_disable)
-#define NOINTERRUPT_END                           RUNTIME_REGION_LEAVE(NOINTERRUPT,karch_irq_enable)
-#define NOINTERRUPT_BREAK                         RUNTIME_REGION_BREAK(NOINTERRUPT,karch_irq_enable)
-#define NOINTERRUPT_BREAKUNLOCK(unlock) (unlock); RUNTIME_REGION_BREAK(NOINTERRUPT,karch_irq_enable)
-#define NOINTERRUPT_BEGINLOCK(trylock) \
- RUNTIME_REGION_ENTER_LOCK(NOINTERRUPT,!karch_irq_enabled,karch_irq_disable,karch_irq_enable,trylock)
-#define NOINTERRUPT_BEGINLOCK_VOLATILE(ob,readvolatile,trylock,unlock) \
- RUNTIME_REGION_ENTER_LOCK_VOLATILE(NOINTERRUPT,!karch_irq_enabled,karch_irq_disable,\
+#define NOIRQ_BEGIN                         RUNTIME_REGION_ENTER(NOIRQ,!karch_irq_enabled,karch_irq_disable)
+#define NOIRQ_END                           RUNTIME_REGION_LEAVE(NOIRQ,karch_irq_enable)
+#define NOIRQ_BREAK                         RUNTIME_REGION_BREAK(NOIRQ,karch_irq_enable)
+#define NOIRQ_BREAKUNLOCK(unlock) (unlock); RUNTIME_REGION_BREAK(NOIRQ,karch_irq_enable)
+#define NOIRQ_BEGINLOCK(trylock) \
+ RUNTIME_REGION_ENTER_LOCK(NOIRQ,!karch_irq_enabled,karch_irq_disable,karch_irq_enable,trylock)
+#define NOIRQ_BEGINLOCK_VOLATILE(ob,readvolatile,trylock,unlock) \
+ RUNTIME_REGION_ENTER_LOCK_VOLATILE(NOIRQ,!karch_irq_enabled,karch_irq_disable,\
                                     karch_irq_enable,ob,readvolatile,trylock,unlock)
 #endif
 
-#define /*__crit*/ NOINTERRUPT_ENDUNLOCK(unlock) \
- (unlock); NOINTERRUPT_END
+#define /*__crit*/ NOIRQ_ENDUNLOCK(unlock) \
+ (unlock); NOIRQ_END
 
-#define NOINTERRUPT_EVAL(expr) \
+#define NOIRQ_EVAL(expr) \
  __xblock({ __typeof__(expr) __nires;\
-            NOINTERRUPT_BEGIN\
+            NOIRQ_BEGIN\
             __nires = (expr);\
-            NOINTERRUPT_END\
+            NOIRQ_END\
             __xreturn __nires;\
  })
 
+
+#define NOIRQ_EVAL_V(expr) \
+ __xblock({ NOIRQ_BEGIN\
+            (expr);\
+            NOIRQ_END\
+            (void)0;\
+ })
+
 #if 0 /* DELETE ME */
-#define NOINTERRUPT_BEGINLOCK_VOLATILE(ob,readvolatile,trylock,unlock) \
+#define NOIRQ_BEGINLOCK_VOLATILE(ob,readvolatile,trylock,unlock) \
  { __u32 __nistored = karch_irq_enabled();\
   (ob) = (readvolatile);\
   if (__nistored) for (;;) {\
@@ -316,12 +327,14 @@ RUNTIME_REGION_DEFINE(NOINTERRUPT);
 #endif
 
 #else
-#define NOINTERRUPT_BEGIN                 {
-#define NOINTERRUPT_END                   }
-#define NOINTERRUPT_BREAK                 ;
-#define NOINTERRUPT_BEGINLOCK(trylock)  { { while(!(trylock)) ktask_yield(); }
-#define NOINTERRUPT_BREAKUNLOCK(unlock)   (unlock)
-#define NOINTERRUPT_ENDUNLOCK(unlock)     (unlock); }
+#define NOIRQ_BEGIN                 {
+#define NOIRQ_END                   }
+#define NOIRQ_BREAK                 ;
+#define NOIRQ_BEGINLOCK(trylock)  { { while(!(trylock)) ktask_yield(); }
+#define NOIRQ_BREAKUNLOCK(unlock)   (unlock)
+#define NOIRQ_ENDUNLOCK(unlock)     (unlock); }
+#define NOIRQ_EVAL(expr)            (expr)
+#define NOIRQ_EVAL_V(expr)          (expr)
 #endif
 
 #ifdef __MAIN_C__

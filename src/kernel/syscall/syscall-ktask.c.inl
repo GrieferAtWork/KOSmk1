@@ -51,7 +51,7 @@ SYSCALL(sys_ktask_setalarm) {
        struct timespec *,U0(oldabstime));
  struct ktask *task; kerrno_t error;
  if (taskfd == KFD_TASKSELF) RETURN(ktask_setalarm(ktask_self(),abstime,oldabstime));
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  task = kproc_getfdtask(kproc_self(),taskfd);
  if __unlikely(!task) { error = KE_BADF; goto end; }
  error = ktask_setalarm(task,abstime,oldabstime);
@@ -67,7 +67,7 @@ SYSCALL(sys_ktask_getalarm) {
        struct timespec *,U(abstime));
  struct ktask *task; kerrno_t error;
  if (taskfd == KFD_TASKSELF) RETURN(ktask_getalarm(ktask_self(),abstime));
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  task = kproc_getfdtask(kproc_self(),taskfd);
  if __unlikely(!task) { error = KE_BADF; goto end; }
  error = ktask_getalarm(task,abstime);
@@ -89,7 +89,7 @@ sleepself:
                   : ktask_pause(task);
   RETURN(error);
  }
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  task = kproc_getfdtask(kproc_self(),taskfd);
  if __unlikely(!task) { error = KE_BADF; goto end; }
  if (task == ktask_self()) {
@@ -111,7 +111,7 @@ SYSCALL(sys_ktask_terminate) {
        void        *,K(exitcode),
        ktaskopflag_t,K(flags));
  struct kfdentry fdentry; kerrno_t error;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_getfd(kproc_self(),taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_terminate(&fdentry,exitcode,flags);
@@ -127,7 +127,7 @@ SYSCALL(sys_ktask_suspend) {
  LOAD2(int          ,K(taskfd),
        ktaskopflag_t,K(flags));
  struct kfdentry fdentry; kerrno_t error;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_getfd(kproc_self(),taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_suspend(&fdentry,flags);
@@ -142,7 +142,7 @@ SYSCALL(sys_ktask_resume) {
  LOAD2(int          ,K(taskfd),
        ktaskopflag_t,K(flags));
  struct kfdentry fdentry; kerrno_t error;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_getfd(kproc_self(),taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_resume(&fdentry,flags);
@@ -157,7 +157,7 @@ SYSCALL(sys_ktask_openroot) {
  LOAD1(int,K(taskfd));
  struct kfdentry fdentry; kerrno_t error; int fd;
  struct kproc *ctx = kproc_self(); struct ktask *result;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_getfd(ctx,taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_openprocof(&fdentry,&result);
@@ -178,7 +178,7 @@ SYSCALL(sys_ktask_openparent) {
  LOAD1(int,K(taskfd));
  struct kfdentry fdentry; kerrno_t error; int fd;
  struct kproc *ctx = kproc_self(); struct ktask *result;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_getfd(ctx,taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_openparent(&fdentry,&result);
@@ -199,7 +199,7 @@ SYSCALL(sys_ktask_openproc) {
  LOAD1(int,K(taskfd));
  struct kfdentry fdentry; kerrno_t error; int fd;
  struct kproc *ctx = kproc_self(); struct kproc *result;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_getfd(ctx,taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_openctx(&fdentry,&result);
@@ -225,7 +225,7 @@ SYSCALL(sys_ktask_getparid) {
   case KFD_TASKROOT: RETURN(ktask_getparid(ktask_proc()));
   default: break;
  }
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  if __unlikely(KE_ISERR(kproc_getfd(kproc_self(),taskfd,&fdentry))) {
   result = (size_t)-1; goto end;
  }
@@ -245,7 +245,7 @@ SYSCALL(sys_ktask_gettid) {
   case KFD_TASKROOT: RETURN(ktask_gettid(ktask_proc()));
   default: break;
  }
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  if __unlikely(KE_ISERR(kproc_getfd(kproc_self(),taskfd,
   &fdentry))) { result = (size_t)-1; goto end; }
  result = kfdentry_gettid(&fdentry);
@@ -261,7 +261,7 @@ SYSCALL(sys_ktask_openchild) {
        size_t,K(childid));
  struct kfdentry fdentry; kerrno_t error; int fd;
  struct kproc *ctx = kproc_self(); struct ktask *result;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_getfd(ctx,taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_opentask(&fdentry,childid,&result);
@@ -285,7 +285,7 @@ SYSCALL(sys_ktask_enumchildren) {
        size_t *,U0(reqidc));
  struct kfdentry fdentry; kerrno_t error;
  struct kproc *ctx = kproc_self();
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_getfd(ctx,taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_enumtasks(&fdentry,idv,idc,reqidc);
@@ -300,7 +300,7 @@ SYSCALL(sys_ktask_getpriority) {
  LOAD2(int          ,K(taskfd),
        ktaskprio_t *,U(result));
  struct kfdentry fdentry; kerrno_t error;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_getfd(kproc_self(),taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_getpriority(&fdentry,result);
@@ -315,7 +315,7 @@ SYSCALL(sys_ktask_setpriority) {
  LOAD2(int        ,K(taskfd),
        ktaskprio_t,K(value));
  struct kfdentry fdentry; kerrno_t error;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_getfd(kproc_self(),taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_setpriority(&fdentry,value);
@@ -330,7 +330,7 @@ SYSCALL(sys_ktask_join) {
  LOAD2(int    ,K (taskfd),
        void **,U0(exitcode));
  kerrno_t error; struct kfdentry fdentry;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_getfd(kproc_self(),taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  if (fdentry.fd_type == KFDTYPE_PROC) {
@@ -388,7 +388,7 @@ SYSCALL(sys_ktask_tryjoin) {
  LOAD2(int    ,K (taskfd),
        void **,U0(exitcode));
  kerrno_t error; struct ktask *task;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  task = kproc_getfdtask(kproc_self(),taskfd);
  if __unlikely(!task) { error = KE_BADF; goto end; }
  error = ktask_tryjoin(task,exitcode);
@@ -404,7 +404,7 @@ SYSCALL(sys_ktask_timedjoin) {
        struct timespec *,U (abstime),
        void           **,U0(exitcode));
  kerrno_t error; struct ktask *task;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  task = kproc_getfdtask(kproc_self(),taskfd);
  if __unlikely(!task) { error = KE_BADF; goto end; }
  error = ktask_timedjoin(task,abstime,exitcode);
@@ -431,7 +431,7 @@ SYSCALL(sys_ktask_newthread) {
  struct stackframe *userstack;
  struct ktask *caller = ktask_self();
  struct kproc *callerctx = ktask_getproc(caller);
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  if __unlikely(KE_ISERR(error = kproc_lock(callerctx,KPROC_LOCK_SHM))) goto end;
  if __unlikely(!kpagedir_ismappedp(kproc_pagedir(callerctx),
                                   *(void **)&thread_main)
@@ -543,7 +543,7 @@ SYSCALL(sys_ktask_newthreadi) {
                                          PAGEDIR_FLAG_USER,
                                          PAGEDIR_FLAG_USER)) RETURN(KE_FAULT);
  buf = TRANSLATE(buf); kassertmem(buf,bufsize);
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  if __unlikely(KE_ISERR(error = kproc_lock(callerctx,KPROC_LOCK_SHM))) goto end;
  if __unlikely(!kpagedir_ismappedp(kproc_pagedir(callerctx),
                                   *(void **)&thread_main)
@@ -617,7 +617,7 @@ SYSCALL(sys_ktask_fork) {
        __u32      ,K (flags));
  struct kfdentry entry; kerrno_t error; int fd;
  struct kproc *caller = kproc_self();
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  /* Make sure the caller is allowed to, if they want to root-fork. */
  /* TODO: SECURITY: RACECONDITION:
   * Must suspend all threads but the calling one
@@ -672,7 +672,7 @@ SYSCALL(sys_ktask_exec) {
        __u32             ,K(flags));
  kerrno_t error; struct kshlib *lib; char *given_path;
  char const *default_argv[1];
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  given_path = u_strndup_c(path,pathmax);
  if __unlikely(!given_path) { error = KE_NOMEM; goto end; }
  if (uargs) {
@@ -708,7 +708,7 @@ SYSCALL(sys_ktask_fexec) {
        __u32             ,K(flags));
  kerrno_t error; struct kshlib *lib; struct kfile *fp;
  char *default_arg0; char const *default_argv[1];
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  fp = kproc_getfdfile(kproc_self(),fd);
  if __unlikely(!fp) { error = KE_BADF; goto end; }
  if (uargs) {
@@ -757,7 +757,7 @@ SYSCALL(sys_ktask_settls) {
        void    *,K (value),
        void   **,U0(oldvalue));
  kerrno_t error;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = ktask_settls(ktask_self(),slot,value,oldvalue);
  KTASK_CRIT_END
  RETURN(error);
@@ -769,7 +769,7 @@ SYSCALL(sys_ktask_gettlsof) {
        __ktls_t,K(slot));
  void *result; struct ktask *task;
  if (taskfd == KFD_TASKSELF) RETURN(ktask_gettls(ktask_self(),slot));
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  task = kproc_getfdtask(kproc_self(),taskfd);
  if __unlikely(!task) result = NULL;
  else {
@@ -788,7 +788,7 @@ SYSCALL(sys_ktask_settlsof) {
        void   *,K (value),
        void  **,U0(oldvalue));
  kerrno_t error; struct ktask *task;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  task = kproc_getfdtask(kproc_self(),taskfd);
  if __unlikely(!task) error = KE_BADF;
  else {

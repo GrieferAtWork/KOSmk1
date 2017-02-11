@@ -381,7 +381,7 @@ void ktask_stackpush_sp_unlocked(struct ktask *__restrict self,
  //       it is located just out-of-bounds of a whole page (aka. fully aligned)
  //    >> So we must only assert that the new ESP if in bounds!
  assertf((uintptr_t)self->t_esp > s,"Overflow");
- dest = kpagedir_translate(self->tr_userpd,(void *)((uintptr_t)self->t_esp-s));
+ dest = kpagedir_translate(self->t_userpd,(void *)((uintptr_t)self->t_esp-s));
  assertf(dest,"ESP Pointer is not mapped to any page");
  assertf(dest >= self->t_kstack,"ESP is out-of-bounds: %p (below)",dest);
  assertf(dest < self->t_kstackend,"ESP is out-of-bounds: %p (above)",dest);
@@ -393,7 +393,7 @@ void ktask_stackpop_sp_unlocked(struct ktask *__restrict self,
  void *src;
  kassert_ktask(self); kassertmem(p,s);
  assert(ktask_issuspended(self));
- src = kpagedir_translate(self->tr_userpd,self->t_esp);
+ src = kpagedir_translate(self->t_userpd,self->t_esp);
  assertf(src,"ESP Pointer is not mapped to any page");
  assertf(src >= self->t_kstack,"ESP is out-of-bounds (below)");
  assertf(src < self->t_kstackend,"ESP is out-of-bounds (above)");

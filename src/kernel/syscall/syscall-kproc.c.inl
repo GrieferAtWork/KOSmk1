@@ -43,7 +43,7 @@ SYSCALL(sys_kproc_enumfd) {
  struct kfdentry *entry_iter,*entry_end,*entry_begin;
  if __unlikely(!fdv) fdc = 0;
  fdend = (fditer = fdv)+fdc;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  ctx = kproc_getfdproc(kproc_self(),procfd);
  if __unlikely(!ctx) { error = KE_BADF; goto end; }
  error = kmmutex_lock(&ctx->p_lock,KPROC_LOCK_FDMAN);
@@ -69,7 +69,7 @@ SYSCALL(sys_kproc_openfd) {
        int,K(flags));
  __ref struct kproc *ctx,*caller = kproc_self();
  struct kfdentry fdentry; int resfd; kerrno_t error;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  ctx = kproc_getfdproc(caller,procfd);
  if __unlikely(!ctx) { error = KE_BADF; goto end; }
  error = kproc_getfd(ctx,fd,&fdentry);
@@ -92,7 +92,7 @@ SYSCALL(sys_kproc_openfd2) {
        int,K(flags));
  __ref struct kproc *ctx,*caller = kproc_self();
  struct kfdentry fdentry; kerrno_t error;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  ctx = kproc_getfdproc(caller,procfd);
  if __unlikely(!ctx) { error = KE_BADF; goto end; }
  error = kproc_getfd(ctx,fd,&fdentry);
@@ -111,7 +111,7 @@ end:
 SYSCALL(sys_kproc_barrier) {
  LOAD1(ksandbarrier_t,K(mode));
  kerrno_t error; struct ktask *caller = ktask_self();
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_barrier(ktask_getproc(caller),caller,mode);
  KTASK_CRIT_END
  RETURN(error);
@@ -123,7 +123,7 @@ SYSCALL(sys_kproc_openbarrier) {
        ksandbarrier_t,K(level));
  struct kfdentry fdentry; kerrno_t error; int fd;
  struct kproc *proc,*caller = kproc_self();
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  proc = kproc_getfdproc(caller,procfd);
  if __unlikely(!proc) { error = KE_BADF; goto end; }
  fdentry.fd_task = kproc_getbarrier_r(proc,level);
@@ -142,7 +142,7 @@ end:
 SYSCALL(sys_kproc_alloctls) {
  LOAD1(__ktls_t *,U(result));
  kerrno_t error;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_alloctls_c(kproc_self(),result);
  KTASK_CRIT_END
  RETURN(error);
@@ -151,7 +151,7 @@ SYSCALL(sys_kproc_alloctls) {
 /*< _syscall1(kerrno_t,kproc_freetls_c,ktls_t,slot); */
 SYSCALL(sys_kproc_freetls) {
  LOAD1(__ktls_t,K(slot));
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  kproc_freetls_c(kproc_self(),slot);
  KTASK_CRIT_END
  RETURN(KE_OK);
@@ -165,7 +165,7 @@ SYSCALL(sys_kproc_enumtls) {
        size_t   *,U0(reqtlsc));
  struct kproc *proc; struct ktask *roottask; kerrno_t error;
  if (!tlsv) tlsc = 0;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  proc = kproc_getfdproc(kproc_self(),procfd);
  if __unlikely(!proc) error = KE_BADF;
  else {
@@ -207,7 +207,7 @@ SYSCALL(sys_kproc_enumpid) {
        size_t   ,K (pidc),
        size_t  *,U0(reqpidc));
  kerrno_t error; if (!pidv) pidc = 0;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproclist_enumpid(pidv,pidc,reqpidc);
  KTASK_CRIT_END
  RETURN(error);
@@ -217,7 +217,7 @@ SYSCALL(sys_kproc_enumpid) {
 SYSCALL(sys_kproc_openpid) {
  LOAD1(__pid_t,K(pid));
  struct kfdentry fdentry; kerrno_t error; int fd;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  fdentry.fd_proc = kproclist_getproc(pid);
  if __unlikely(!fdentry.fd_proc) { error = KE_INVAL; goto end; }
  fdentry.fd_attr = KFD_ATTR(KFDTYPE_PROC,KFD_FLAG_NONE);
@@ -239,7 +239,7 @@ SYSCALL(sys_kproc_getpid) {
   case KFD_TASKROOT: RETURN(kproc_self()->p_pid);
   default: break;
  }
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  proc = kproc_getfdproc(kproc_self(),taskfd);
  if __unlikely(!proc) { result = (__pid_t)-1; goto end; }
  result = proc->p_pid;
@@ -268,7 +268,7 @@ SYSCALL(sys_kproc_getenv) {
    RETURN(kproc_getenv_k(kproc_self(),name,namemax,buf,bufsize,reqsize));
   default: break;
  }
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  proc = kproc_getfdproc(kproc_self(),self);
  if __unlikely(!proc) { error = KE_BADF; goto end; }
  error = kproc_getenv_c(proc,name,namemax,buf,bufsize,reqsize);
@@ -297,7 +297,7 @@ SYSCALL(sys_kproc_setenv) {
    RETURN(kproc_setenv_k(kproc_self(),name,namemax,value,valuemax,override));
   default: break;
  }
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  proc = kproc_getfdproc(kproc_self(),self);
  if __unlikely(!proc) { error = KE_BADF; goto end; }
  error = kproc_setenv_c(proc,name,namemax,value,valuemax,override);
@@ -322,7 +322,7 @@ SYSCALL(sys_kproc_delenv) {
    RETURN(kproc_delenv_k(kproc_self(),name,namemax));
   default: break;
  }
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  proc = kproc_getfdproc(kproc_self(),self);
  if __unlikely(!proc) { error = KE_BADF; goto end; }
  error = kproc_delenv_c(proc,name,namemax);
@@ -383,7 +383,7 @@ SYSCALL(sys_kproc_enumenv) {
    goto done;
   default: break;
  }
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  proc = kproc_getfdproc(kproc_self(),self);
  if __unlikely(!proc) {
   KTASK_CRIT_BREAK
@@ -436,7 +436,7 @@ SYSCALL(sys_kproc_getcmd) {
    goto done;
   default: break;
  }
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  proc = kproc_getfdproc(kproc_self(),self);
  if __unlikely(!proc) {
   KTASK_CRIT_BREAK

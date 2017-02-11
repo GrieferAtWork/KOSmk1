@@ -45,11 +45,15 @@ struct kfdman {
  unsigned int     fdm_fre;  /*< Index of the last free FD slot (Ring-index; used to speed up locating free entries). */
  unsigned int     fdm_fda;  /*< Allocated amount of file descriptors (aka. highest fd index +1). */
  struct kfdentry *fdm_fdv;  /*< [0..fdm_fda][owned] List of file descriptors. */
- // Special file descriptors
+ /* Special file descriptors */
  struct kfdentry  fdm_root; /*< Descriptor for the fs root (KFD_ROOT). */
  struct kfdentry  fdm_cwd;  /*< Descriptor for the fs cwd (KFD_CWD). */
 };
 #define KFDMAN_FDMAX_TECHNICAL_MAXIMUM   INT_MAX
+#define KFDMAN_FOREACH_SPECIAL(self,callback) \
+do{callback(&(self)->fdm_root);\
+   callback(&(self)->fdm_cwd);\
+}while(0)
 
 #define KFDMAN_INITROOT(rootfp) \
  {KOBJECT_INIT(KOBJECT_MAGIC_FDMAN) 0,KFDMAN_FDMAX_TECHNICAL_MAXIMUM\

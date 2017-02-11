@@ -47,8 +47,9 @@ SYSCALL(sys_kfs_mkdir) {
        mode_t      ,K(mode));
  struct kproc *ctx = kproc_self();
  kerrno_t error; struct kfspathenv env;
+ KTASK_CRIT_BEGIN_FIRST
  env.env_cwd = kproc_getfddirent(ctx,dirfd);
- if __unlikely(!env.env_cwd) RETURN(KE_NOCWD);
+ if __unlikely(!env.env_cwd) { error = KE_NOCWD; goto end; }
  env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
  if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
  env.env_flags = 0;
@@ -59,6 +60,8 @@ SYSCALL(sys_kfs_mkdir) {
  kdirent_decref(env.env_root);
 err_cwd:
  kdirent_decref(env.env_cwd);
+end:
+ KTASK_CRIT_END
  RETURN(error);
 }
 
@@ -70,7 +73,8 @@ SYSCALL(sys_kfs_rmdir) {
  struct kproc *ctx = kproc_self();
  kerrno_t error; struct kfspathenv env;
  env.env_cwd = kproc_getfddirent(ctx,dirfd);
- if __unlikely(!env.env_cwd) RETURN(KE_NOCWD);
+ KTASK_CRIT_BEGIN_FIRST
+ if __unlikely(!env.env_cwd) { error = KE_NOCWD; goto end; }
  env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
  if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
  env.env_flags = 0;
@@ -81,6 +85,8 @@ SYSCALL(sys_kfs_rmdir) {
  kdirent_decref(env.env_root);
 err_cwd:
  kdirent_decref(env.env_cwd);
+end:
+ KTASK_CRIT_END
  RETURN(error);
 }
 
@@ -91,8 +97,9 @@ SYSCALL(sys_kfs_unlink) {
        size_t      ,K(pathmax));
  struct kproc *ctx = kproc_self();
  kerrno_t error; struct kfspathenv env;
+ KTASK_CRIT_BEGIN_FIRST
  env.env_cwd = kproc_getfddirent(ctx,dirfd);
- if __unlikely(!env.env_cwd) RETURN(KE_NOCWD);
+ if __unlikely(!env.env_cwd) { error = KE_NOCWD; goto end; }
  env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
  if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
  env.env_flags = 0;
@@ -103,6 +110,8 @@ SYSCALL(sys_kfs_unlink) {
  kdirent_decref(env.env_root);
 err_cwd:
  kdirent_decref(env.env_cwd);
+end:
+ KTASK_CRIT_END
  RETURN(error);
 }
 
@@ -113,8 +122,9 @@ SYSCALL(sys_kfs_remove) {
        size_t      ,K(pathmax));
  struct kproc *ctx = kproc_self();
  kerrno_t error; struct kfspathenv env;
+ KTASK_CRIT_BEGIN_FIRST
  env.env_cwd = kproc_getfddirent(ctx,dirfd);
- if __unlikely(!env.env_cwd) RETURN(KE_NOCWD);
+ if __unlikely(!env.env_cwd) { error = KE_NOCWD; goto end; }
  env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
  if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
  env.env_flags = 0;
@@ -125,6 +135,8 @@ SYSCALL(sys_kfs_remove) {
  kdirent_decref(env.env_root);
 err_cwd:
  kdirent_decref(env.env_cwd);
+end:
+ KTASK_CRIT_END
  RETURN(error);
 }
 
@@ -138,8 +150,9 @@ SYSCALL(sys_kfs_symlink) {
  struct kdirentname targetname;
  struct kproc *ctx = kproc_self();
  kerrno_t error; struct kfspathenv env;
+ KTASK_CRIT_BEGIN_FIRST
  env.env_cwd = kproc_getfddirent(ctx,dirfd);
- if __unlikely(!env.env_cwd) RETURN(KE_NOCWD);
+ if __unlikely(!env.env_cwd) { error = KE_NOCWD; goto end; }
  env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
  if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
  env.env_flags = 0;
@@ -153,6 +166,8 @@ SYSCALL(sys_kfs_symlink) {
  kdirent_decref(env.env_root);
 err_cwd:
  kdirent_decref(env.env_cwd);
+end:
+ KTASK_CRIT_END
  RETURN(error);
 }
 

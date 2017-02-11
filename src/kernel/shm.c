@@ -817,15 +817,15 @@ end:
 
 // TODO: Access to non-mapped file (aka. SWAP) mappings
 size_t __kshm_memcpy_k2u(struct kshm const *__restrict self, __user void *dst,
-                           __kernel void const *__restrict src, size_t bytes) {
+                         __kernel void const *__restrict src, size_t bytes) {
  return __kpagedir_memcpy_k2u(self->sm_pd,dst,src,bytes);
 }
 size_t __kshm_memcpy_u2k(struct kshm const *__restrict self, __kernel void *__restrict dst,
-                           __user void const *src, size_t bytes) {
+                         __user void const *src, size_t bytes) {
  return __kpagedir_memcpy_u2k(self->sm_pd,dst,src,bytes);
 }
 size_t __kshm_memcpy_u2u(struct kshm const *__restrict self, __user void *dst,
-                           __user void const *src, size_t bytes) {
+                         __user void const *src, size_t bytes) {
  return __kpagedir_memcpy_u2u(self->sm_pd,dst,src,bytes);
 }
 __kernel void *__kshm_translate_1(struct kshm const *__restrict self,

@@ -58,23 +58,24 @@ __local void kshm_delusertabs(struct kshm *self, __user void *keeper_stack) {
  }
 }
 
+#ifdef __DEBUG__
+#define CLOSE_IF_CLOEXEC(x) \
+ if ((x)->fd_flag&KFD_FLAG_CLOEXEC) {\
+  kfdentry_quit(x);\
+  (x)->fd_type = KFDTYPE_NONE;\
+  (x)->fd_data = NULL;\
+ }
+#else
+#define CLOSE_IF_CLOEXEC(x) \
+ if ((x)->fd_flag&KFD_FLAG_CLOEXEC) {\
+  kfdentry_quit(x);\
+  (x)->fd_type = KFDTYPE_NONE;\
+ }
+#endif
 __local void kfdman_close_cloexec(struct kfdman *self) {
  struct kfdentry *iter,*end;
  unsigned int new_alloc;
- if (self->fdm_root.fd_flag&KFD_FLAG_CLOEXEC) {
-  kfdentry_quit(&self->fdm_root);
-  self->fdm_root.fd_type = KFDTYPE_NONE;
-#ifdef __DEBUG__
-  self->fdm_root.fd_data = NULL;
-#endif
- }
- if (self->fdm_cwd.fd_flag&KFD_FLAG_CLOEXEC) {
-  kfdentry_quit(&self->fdm_cwd);
-  self->fdm_cwd.fd_type = KFDTYPE_NONE;
-#ifdef __DEBUG__
-  self->fdm_cwd.fd_data = NULL;
-#endif
- }
+ KFDMAN_FOREACH_SPECIAL(self,CLOSE_IF_CLOEXEC);
  end = (iter = self->fdm_fdv)+self->fdm_fda;
  for (; iter != end; ++iter) {
   if (iter->fd_type != KFDTYPE_NONE &&

@@ -40,9 +40,9 @@
 
 __DECL_BEGIN
 
-#define KDDIST_TASK_IS_REGISTERED_MAYBE (-1)
-#define KDDIST_TASK_IS_REGISTERED_NO      0
-#define KDDIST_TASK_IS_REGISTERED_YES     1
+#define YES     1
+#define NO      0
+#define MAYBE (-1)
 
 #if KDEBUG_HAVE_TRACKEDDDIST
 __local int
@@ -51,16 +51,15 @@ kddist_task_is_registered(struct kddist const *self,
  struct kddist_debug_slot *iter,*end;
  assert(ksignal_islocked(&self->dd_sigpoll,KSIGNAL_LOCK_WAIT));
  if (self->dd_sigpoll.s_flags&KSIGNAL_FLAG_DEAD)
-  return KDDIST_TASK_IS_REGISTERED_MAYBE;
+  return MAYBE;
  iter = (end = self->dd_debug.ddd_regv)+self->dd_debug.ddd_regc;
- while (iter-- != end) if (iter->ds_task == task) return KDDIST_TASK_IS_REGISTERED_YES;
+ while (iter-- != end) if (iter->ds_task == task) return YES;
  return __unlikely(self->dd_debug.ddd_flags&KDDIST_DEBUG_FLAG_NOMEM)
-  ? KDDIST_TASK_IS_REGISTERED_MAYBE
-  : KDDIST_TASK_IS_REGISTERED_NO;
+  ? MAYBE
+  : NO;
 }
 #else
-#define kddist_task_is_registered(self,task) \
- KDDIST_TASK_IS_REGISTERED_MAYBE
+#define kddist_task_is_registered(self,task) MAYBE
 #endif
 
 
@@ -167,8 +166,7 @@ kerrno_t kddist_vrecv(struct kddist *__restrict self,
  kerrno_t error;
  kassert_kddist(self);
  ksignal_lock(&self->dd_sigpoll,KSIGNAL_LOCK_WAIT);
- assertf(kddist_task_is_registered(self,ktask_self()) !=
-         KDDIST_TASK_IS_REGISTERED_NO,
+ assertf(kddist_task_is_registered(self,ktask_self()) != NO,
          "The caller is not a registered consumer thread "
          "(call 'kddist_vrecv_unregistered' instead)");
  if __unlikely(self->dd_sigpoll.s_flags&KSIGNAL_FLAG_DEAD) {
@@ -190,8 +188,7 @@ kerrno_t kddist_vtimedrecv(struct kddist *__restrict self,
  kerrno_t error;
  kassert_kddist(self);
  ksignal_lock(&self->dd_sigpoll,KSIGNAL_LOCK_WAIT);
- assertf(kddist_task_is_registered(self,ktask_self()) !=
-         KDDIST_TASK_IS_REGISTERED_NO,
+ assertf(kddist_task_is_registered(self,ktask_self()) != NO,
          "The caller is not a registered consumer thread "
          "(call 'kddist_vtimedrecv_unregistered' instead)");
  if __unlikely(self->dd_sigpoll.s_flags&KSIGNAL_FLAG_DEAD) {
@@ -224,8 +221,7 @@ kerrno_t kddist_vrecv_unregistered(struct kddist *__restrict self,
  ksignal_lock(&self->dd_sigpoll,KSIGNAL_LOCK_WAIT);
  assertf(!(self->dd_debug.ddd_flags&KDDIST_DEBUG_FLAG_REGONLY),
          "This ddist is configured not to allow unregistered data receivers.");
- assertf(kddist_task_is_registered(self,ktask_self()) !=
-         KDDIST_TASK_IS_REGISTERED_YES,
+ assertf(kddist_task_is_registered(self,ktask_self()) != YES,
          "The caller is a registered consumer thread "
          "(call 'kddist_vrecv' instead)");
  error = _ksignal_vrecv_andunlock_c(&self->dd_sigpoll,buf);
@@ -239,8 +235,7 @@ kerrno_t kddist_vtimedrecv_unregistered(struct kddist *__restrict self,
  ksignal_lock(&self->dd_sigpoll,KSIGNAL_LOCK_WAIT);
  assertf(!(self->dd_debug.ddd_flags&KDDIST_DEBUG_FLAG_REGONLY),
          "This ddist is configured not to allow unregistered data receivers.");
- assertf(kddist_task_is_registered(self,ktask_self()) !=
-         KDDIST_TASK_IS_REGISTERED_YES,
+ assertf(kddist_task_is_registered(self,ktask_self()) != YES,
          "The caller is a registered consumer thread "
          "(call 'kddist_timedvrecv' instead)");
  error = _ksignal_vtimedrecv_andunlock_c(&self->dd_sigpoll,abstime,buf);
@@ -495,7 +490,10 @@ kddist_commitsend_c(struct kddist *__restrict self, __size_t n_tasks,
 #endif
 
 
-
+#undef kddist_task_is_registered
+#undef MAYBE
+#undef NO
+#undef YES
 
 __DECL_END
 

@@ -504,11 +504,11 @@ struct ktask {
  // NOTES
  //  - This is a user-level address
  //  - In a suspended task, this is the address to return to
- //  - 'tr_userpd' describes the last active page directory of the task,
+ //  - 't_userpd' describes the last active page directory of the task,
  //    and usually is either kpagedir_kernel(), or kproc_pagedir(t_proc).
- //  - 't_esp' must be mapped according to 'tr_userpd'
+ //  - 't_esp' must be mapped according to 't_userpd'
  __user void                 *t_esp;
- struct kpagedir             *tr_userpd;
+ struct kpagedir             *t_userpd;
  __user void                 *t_esp0; /*< [1..1][const] This task's ESP0 mapped pointer.
                                            NOTE: This property has no effect in kernel tasks.
                                            NOTE: This pointer is __always__ mapped with 'kproc_pagedir(t_proc)' */
@@ -583,29 +583,6 @@ struct ktask {
 #endif /* KTASK_HAVE_STATS */
 };
 
-#if KTASK_HAVE_CRITICAL_TASK
-#define __KTASK_INIT_IRQ_CRITICAL 1,
-#else /* KTASK_HAVE_CRITICAL_TASK */
-#define __KTASK_INIT_IRQ_CRITICAL
-#endif /* !KTASK_HAVE_CRITICAL_TASK */
-
-#if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
-#define __KTASK_INIT_IRQ_NOINTR 1,
-#else /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
-#define __KTASK_INIT_IRQ_NOINTR
-#endif /* !KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
-
-#if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
-#define __KTASK_INIT_IRQ_NAME(name) (char *)(name),
-#else /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
-#define __KTASK_INIT_IRQ_NAME(name)
-#endif /* !KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
-#if KTASK_HAVE_STATS
-#define __KTASK_INIT_IRQ_STATS KTASKSTAT_INIT,
-#else /* KTASK_HAVE_STATS */
-#define __KTASK_INIT_IRQ_STATS
-#endif /* !KTASK_HAVE_STATS */
-
 #ifdef __INTELLISENSE__
 extern __wunused __nonnull((1)) __u8 ktask_getstate(struct ktask const *__restrict self);
 extern __wunused __nonnull((1)) bool ktask_isusertask(struct ktask const *__restrict self);
@@ -622,7 +599,7 @@ extern __wunused __nonnull((1)) __size_t ktask_getustacksize(struct ktask const 
 extern __wunused __nonnull((1)) __size_t ktask_getkstacksize(struct ktask const *__restrict self);
 #else
 #define ktask_getstate(self)        katomic_load((self)->t_state)
-#define ktask_isusertask(self)     (((self)->t_flags&KTASK_FLAG_USERTASK)!=0)
+#define ktask_isusertask(self)   (((self)->t_flags&KTASK_FLAG_USERTASK)!=0)
 #define ktask_issuspended(self)    (ktask_getstate(self)==KTASK_STATE_SUSPENDED)
 #define ktask_isterminated(self)   (ktask_getstate(self)==KTASK_STATE_TERMINATED)
 #define ktask_iswaiting(self)       KTASK_STATE_ISWAITING(ktask_getstate(self))
@@ -701,11 +678,11 @@ __local KOBJECT_DEFINE_DECREF(ktask_decref,struct ktask,t_refcnt,kassert_ktask,k
 //  - When unscheduling, newstate must not be an active state ('KTASK_STATE_ISACTIVE')
 //  - When 'newstate' is 'KTASK_STATE_TERMINATED' a reference will be dropped.
 //  - 'ktask_reschedule' will set the task's state to 'KTASK_STATE_RUNNING'
-//  - If 'newstate' is 'KTASK_STATE_WAITINGTMO', a 'abstime' may be specified
+//  - If 'newstate' is 'KTASK_STATE_WAITINGTMO', a timeout must be specified as instance of 'struct timespec' in 'arg'
 //  - If 'signal' is non-NULL, the task is added to it and it will be be unlocked after re-scheduling
 //    Also note, that in this case, the caller must disable interrupts before locking the signal.
 //  - When unscheduling a task for termination, its exitcode is set to the integral
-//    value passed through the 'abstime' argument (which then has nothing to do with a timeout)
+//    value passed through the 'arg' argument (which then has nothing to do with a timeout)
 //    >> ktask_unschedule(ktask_self(),KTASK_STATE_TERMINATED,(struct timespec const *)42);
 //    >> // Same as:
 //    >> ktask_exit((void *)42);
@@ -716,7 +693,7 @@ __local KOBJECT_DEFINE_DECREF(ktask_decref,struct ktask,t_refcnt,kassert_ktask,k
 //////////////////////////////////////////////////////////////////////////
 // @return: KE_DESTROYED: The task, or signal has terminated.
 // @return: KE_TIMEDOUT:  'self == ktask_self()', 'newstate == KTASK_STATE_WAITINGTMO',
-//                        'abstime != NULL': The timeout has passed without the task
+//                        'arg != NULL': The timeout has passed without the task
 //                        being re-scheduled for execution by another task.
 //                        NOTE: In this situation, the signal will have been re-locked to remove the given task.
 //                        NOTE: If an alarm is set, this error may also be returned if
@@ -731,7 +708,7 @@ __local KOBJECT_DEFINE_DECREF(ktask_decref,struct ktask,t_refcnt,kassert_ktask,k
 //                        >> Not returned if the task is within a task-level nointr block
 //                        Only returned once, but can be reset.
 //#endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
-#define ktask_unschedule(self,newstate,abstime) ktask_unschedule_ex(self,newstate,abstime,0,NULL)
+#define ktask_unschedule(self,newstate,arg) ktask_unschedule_ex(self,newstate,arg,0,NULL)
 extern __wunused __nonnull((1)) kerrno_t __SCHED_CALL
 ktask_unschedule_ex(struct ktask *__restrict self, __u8 newstate, void *__restrict arg,
                     __size_t sigc, struct ksignal *const *__restrict sigv);
@@ -829,7 +806,7 @@ extern __wunused __nonnull((1)) struct ktaskregisters3 *ktask_getregisters3(stru
 #else
 #define ktask_getkernelesp(self) \
  __xblock({ struct ktask const *const __ktgkeself = (self);\
-            __xreturn kpagedir_translate(__ktgkeself->tr_userpd,__ktgkeself->t_esp);\
+            __xreturn kpagedir_translate(__ktgkeself->t_userpd,__ktgkeself->t_esp);\
  })
 #define ktask_getuseresp(self)      (self)->t_esp
 #define ktask_getregisters(self)   ((struct ktaskregisters *)ktask_getkernelesp(self))
@@ -953,7 +930,7 @@ struct ktask *__ktask_cpuself_spin(void) {
  while (c != kcpu_self());
  return result;
 }
-/* NOTE: 'NOINTERRUPT_P' always evaluates at compile-time,
+/* NOTE: 'NOIRQ_P' always evaluates at compile-time,
          with the optimization potential being that while
          inside a no-interrupt block, we know that our
          current CPU won't change, meaning that we can
@@ -965,7 +942,7 @@ struct ktask *__ktask_cpuself_spin(void) {
 /* NOTE: Must use a macro for this to take
          advantage of compile-time nointerrupt. */
 #define __ktask_cpuself() \
- (NOINTERRUPT_P \
+ (NOIRQ_P \
    ? __ktask_cpuself_volatile() \
    : __ktask_cpuself_spin())
 #else
@@ -974,9 +951,9 @@ struct ktask *__ktask_cpuself_spin(void) {
    the nointerrupt state, so we'll just  */
 #define __ktask_cpuself() \
  __xblock({ register struct ktask *__tsr;\
-            NOINTERRUPT_BEGIN\
+            NOIRQ_BEGIN\
             __tsr = kcpu_self()->c_current;\
-            NOINTERRUPT_END\
+            NOIRQ_END\
             __xreturn __tsr;\
  })
 #endif
@@ -1097,7 +1074,7 @@ ktask_getstat(struct ktask const *__restrict self,
 #ifdef KTASK_FLAG_CRITICAL
 #define __ktask_region_crit_tryenter(did_not_enter) \
  do{ register struct ktask *const __ktself = ktask_self();\
-     NOINTERRUPT_BEGINLOCK(ktask_trylock(__ktself,KTASK_LOCK_STATE));\
+     NOIRQ_BEGINLOCK(ktask_trylock(__ktself,KTASK_LOCK_STATE));\
      assert(__ktself->t_state != KTASK_STATE_TERMINATED);\
      if __likely(__ktself->t_flags&KTASK_FLAG_CRITICAL) {\
       (did_not_enter) = 1;\
@@ -1105,18 +1082,18 @@ ktask_getstat(struct ktask const *__restrict self,
       __ktself->t_flags |= KTASK_FLAG_CRITICAL;\
       (did_not_enter) = 0;\
      }\
-     NOINTERRUPT_ENDUNLOCK(ktask_unlock(__ktself,KTASK_LOCK_STATE));\
+     NOIRQ_ENDUNLOCK(ktask_unlock(__ktself,KTASK_LOCK_STATE));\
  }while(0)
 #define __ktask_region_crit_enter() \
  do{ register struct ktask *const __ktself = ktask_self();\
-     NOINTERRUPT_BEGINLOCK(ktask_trylock(__ktself,KTASK_LOCK_STATE));\
+     NOIRQ_BEGINLOCK(ktask_trylock(__ktself,KTASK_LOCK_STATE));\
      assert(__ktself->t_state != KTASK_STATE_TERMINATED);\
      assert(!(__ktself->t_flags&KTASK_FLAG_CRITICAL));\
      __ktself->t_flags |= KTASK_FLAG_CRITICAL;\
-     NOINTERRUPT_ENDUNLOCK(ktask_unlock(__ktself,KTASK_LOCK_STATE));\
+     NOIRQ_ENDUNLOCK(ktask_unlock(__ktself,KTASK_LOCK_STATE));\
  }while(0)
 #define __ktask_region_crit_is_real()  ((ktask_self()->t_flags&KTASK_FLAG_CRITICAL)!=0)
-#define __ktask_region_crit_is()       (!karch_irq_enabled() || __ktask_region_crit_is_real() || kcpu_global_onetask())
+#define __ktask_region_crit_is()       (NOIRQ_P || !karch_irq_enabled() || __ktask_region_crit_is_real() || kcpu_global_onetask())
 #define __ktask_region_crit_leave()     ktask_unschedule_aftercrit(ktask_self())
 #define __ktask_region_nointr_is()     ((ktask_self()->t_flags&KTASK_FLAG_NOINTR)!=0)
 #ifdef __DEBUG__
@@ -1135,12 +1112,19 @@ ktask_getstat(struct ktask const *__restrict self,
 //////////////////////////////////////////////////////////////////////////
 // Begin/end a critical operation within the calling task.
 // While inside a critical block, the calling task cannot be terminated.
-#define KTASK_CRIT_BEGIN         REGION_TRYENTER(ISCRIT,__ktask_region_crit_is_real,__ktask_region_crit_tryenter)
-#define KTASK_CRIT_BEGIN_FIRST   REGION_ENTER_FIRST(ISCRIT,__ktask_region_crit_is_real,__ktask_region_crit_enter)
-#define KTASK_CRIT_BREAK         REGION_BREAK(ISCRIT,__ktask_region_crit_leave)
-#define KTASK_CRIT_END           REGION_LEAVE(ISCRIT,__ktask_region_crit_leave)
-#define KTASK_CRIT_MARK          REGION_MARK(ISCRIT,__ktask_region_crit_is)
-#define KTASK_CRIT_P             REGION_P(ISCRIT)
+// NOTE: 'KTASK_CRIT_MARK' and 'KTASK_CRIT_TRUEMARK' differ from
+//       each other, in that 'KTASK_CRIT_TRUEMARK' ensures a true
+//       critical block, instead of allowing use of noirq as substitution.
+//       Even though this might sound like what should be the default,
+//       in most situations a noirq region completely suffices.
+#define KTASK_CRIT_BEGIN        REGION_TRYENTER(ISCRIT,__ktask_region_crit_is_real,__ktask_region_crit_tryenter)
+#define KTASK_CRIT_BEGIN_FIRST  REGION_ENTER_FIRST(ISCRIT,__ktask_region_crit_is_real,__ktask_region_crit_enter)
+#define KTASK_CRIT_BREAK        REGION_BREAK(ISCRIT,__ktask_region_crit_leave)
+#define KTASK_CRIT_END          REGION_LEAVE(ISCRIT,__ktask_region_crit_leave)
+#define KTASK_CRIT_MARK         REGION_MARK(ISCRIT,__ktask_region_crit_is)
+#define KTASK_CRIT_TRUEMARK     REGION_MARK(ISCRIT,__ktask_region_crit_is_real)
+#define KTASK_CRIT_P            REGION_P(ISCRIT)
+#define KTASK_CRIT_FIRST        REGION_FIRST(ISCRIT)
 REGION_DEFINE(ISCRIT);
 
 
@@ -1161,12 +1145,14 @@ REGION_DEFINE(ISCRIT);
 //    for termination, but is critical, preventing its immediate shutdown.
 //    When not inside a no-interrupt block, the critical task is then woken,
 //    with its current blocking operation failing with KE_INTR.
-#define KTASK_NOINTR_BEGIN       REGION_ENTER(ISNOINTR,__ktask_region_nointr_is,__ktask_region_nointr_enter)
-#define KTASK_NOINTR_BEGIN_FIRST REGION_ENTER_FIRST(ISNOINTR,__ktask_region_nointr_is,__ktask_region_nointr_enter)
-#define KTASK_NOINTR_BREAK       REGION_BREAK(ISNOINTR,__ktask_region_nointr_leave)
-#define KTASK_NOINTR_END         REGION_LEAVE(ISNOINTR,__ktask_region_nointr_leave)
-#define KTASK_NOINTR_MARK        REGION_MARK(ISNOINTR,__ktask_region_nointr_is)
-#define KTASK_NOINTR_P           REGION_P(ISNOINTR)
+#define KTASK_NOINTR_BEGIN           REGION_ENTER(ISNOINTR,__ktask_region_nointr_is,__ktask_region_nointr_enter)
+#define KTASK_NOINTR_BEGIN_FIRST     REGION_ENTER_FIRST(ISNOINTR,__ktask_region_nointr_is,__ktask_region_nointr_enter)
+#define KTASK_NOINTR_BREAK           REGION_BREAK(ISNOINTR,__ktask_region_nointr_leave)
+#define KTASK_NOINTR_END             REGION_LEAVE(ISNOINTR,__ktask_region_nointr_leave)
+#define KTASK_NOINTR_MARK            REGION_MARK(ISNOINTR,__ktask_region_nointr_is)
+#define KTASK_NOINTR_P               REGION_P(ISNOINTR)
+#define KTASK_NOINTR_FIRST_P         REGION_FIRST_P(ISNOINTR)
+#define KTASK_NOINTR_FIRST           REGION_FIRST(ISNOINTR)
 REGION_DEFINE(ISNOINTR);
 
 //////////////////////////////////////////////////////////////////////////
@@ -1174,9 +1160,10 @@ REGION_DEFINE(ISNOINTR);
 // Returns FALSE(0) otherwise.
 // NOTE: 'KTASK_ISCRIT_P' is the compile-time-only version and can
 //        be used to generate optimized code when used in macros.
-#define KTASK_ISCRIT_P    (KTASK_CRIT_P || NOINTERRUPT_P)
-#define KTASK_ISCRIT      (KTASK_ISCRIT_P || __ktask_region_crit_is())
-// TODO: The scheduler should implicitly handle 'NOINTERRUPT_P' as critical.
+#define KTASK_ISCRIT_P     (KTASK_CRIT_P || NOIRQ_P)
+#define KTASK_ISCRIT       (KTASK_ISCRIT_P || __ktask_region_crit_is())
+#define KTASK_ISTRUECRIT_P (KTASK_CRIT_P)
+#define KTASK_ISTRUECRIT   (KTASK_ISCRIT_P || __ktask_region_crit_is_real())
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -1189,8 +1176,10 @@ REGION_DEFINE(ISNOINTR);
 #define KTASK_ISNOINTR    (KTASK_ISNOINTR_P || __ktask_region_nointr_is())
 
 #else
-#define KTASK_ISCRIT_P  (NOINTERRUPT_P)
-#define KTASK_ISCRIT    (KTASK_ISCRIT_P || !karch_irq_enabled() || kcpu_global_onetask())
+#define KTASK_ISCRIT_P      (NOIRQ_P)
+#define KTASK_ISCRIT        (KTASK_ISCRIT_P || !karch_irq_enabled() || kcpu_global_onetask())
+#define KTASK_ISTRUECRIT_P  (0)
+#define KTASK_ISTRUECRIT    (kcpu_global_onetask())
 #endif
 
 
@@ -1215,6 +1204,12 @@ extern int ktask_isnointr(void);
 #define ktask_iscrit()    (KTASK_ISCRIT || kcpu_global_onetask())
 #define ktask_isnointr()   KTASK_ISNOINTR
 
+#define KTASK_CRIT_V(expr) \
+ __xblock({ KTASK_CRIT_BEGIN\
+            (expr);\
+            KTASK_CRIT_END\
+            (void)0;\
+ })
 #define KTASK_CRIT(expr) \
  __xblock({ __typeof__(expr) __ktcres;\
             KTASK_CRIT_BEGIN\
@@ -1226,7 +1221,6 @@ extern int ktask_isnointr(void);
 
 
 
-
 //////////////////////////////////////////////////////////////////////////
 // Terminates a given task with a given exit code.
 // WARNING: Terminating a task without tracking all of its resources other
@@ -1234,8 +1228,6 @@ extern int ktask_isnointr(void);
 //          Also note, that a task that was meant to emit a signal at
 //          some point meant for other tasks obviously won't not be able
 //          to do so once it has been terminated.
-// TODO: Decide if tasks should track their held mutex locks, thereby
-//       allowing them to automatically be unlocked once the task is destroyed.
 // NOTES:
 //   - It is technically possible to terminate 'ktask_zero()', but
 //     doing so really isn't something you should ever attempt to do.
@@ -1371,9 +1363,9 @@ ktask_gettls(struct ktask const *__restrict self,
 #define ktask_gettls(self,tlsid) \
  __xblock({ void *__tgtres; struct ktask const *const __tgtself = (self);\
             kassert_ktask(__tgtself);\
-            NOINTERRUPT_BEGINLOCK(ktask_trylock((struct ktask *)__tgtself,KTASK_LOCK_TLS));\
+            NOIRQ_BEGINLOCK(ktask_trylock((struct ktask *)__tgtself,KTASK_LOCK_TLS));\
             __tgtres = ktlspt_get(&__tgtself->t_tls,tlsid);\
-            NOINTERRUPT_ENDUNLOCK(ktask_unlock((struct ktask *)__tgtself,KTASK_LOCK_TLS));\
+            NOIRQ_ENDUNLOCK(ktask_unlock((struct ktask *)__tgtself,KTASK_LOCK_TLS));\
             __xreturn __tgtres;\
  })
 #endif

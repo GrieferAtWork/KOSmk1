@@ -154,8 +154,8 @@ struct kddist {
 #define KDDIST_INIT_REGONLY  {KOBJECT_INIT(KOBJECT_MAGIC_DDIST) KSIGNAL_INIT,KSIGNAL_INIT,0 __KDDIST_DEBUG_INIT_REGONLY}
 
 #ifdef __INTELLISENSE__
-extern void kddist_init(struct kddist *self);
-extern void kddist_init_regonly(struct kddist *self);
+extern __nonnull((1)) void kddist_init(struct kddist *self);
+extern __nonnull((1)) void kddist_init_regonly(struct kddist *self);
 
 //////////////////////////////////////////////////////////////////////////
 // Closes a given ddist, causing any successive API calls to to fail
@@ -163,13 +163,13 @@ extern void kddist_init_regonly(struct kddist *self);
 // @return: KE_OK:        The ddist was destroyed.
 // @return: KS_UNCHANGED: The ddist was already destroyed.
 // @return: KS_EMPTY:     The ddist was destroyed, but no consumer were signaled. (NOT AN ERROR)
-extern kerrno_t kddist_close(struct kddist *self);
+extern __nonnull((1)) kerrno_t kddist_close(struct kddist *self);
 
 //////////////////////////////////////////////////////////////////////////
 // Reset a given ddist after it had previously been closed.
 // @return: KE_OK:        The ddist has been reset.
 // @return: KS_UNCHANGED: The ddist was not destroyed.
-extern kerrno_t kddist_reset(struct kddist *self);
+extern __nonnull((1)) kerrno_t kddist_reset(struct kddist *self);
 #else
 #ifdef KSIGNAL_INIT_IS_MEMSET_ZERO
 #define kddist_init(self) \
@@ -227,8 +227,8 @@ extern kerrno_t kddist_reset(struct kddist *self);
 // @return: KE_OK:        The caller was successfully registered as a receiver.
 // @return: KE_OVERFLOW:  Too many other tasks have already been registered as users.
 // @return: KE_DESTROYED: The given ddist was destroyed.
-extern __crit kerrno_t kddist_adduser(struct kddist *self);
-extern __crit void kddist_deluser(struct kddist *self);
+extern __crit __nonnull((1)) kerrno_t kddist_adduser(struct kddist *self);
+extern __crit __nonnull((1)) void kddist_deluser(struct kddist *self);
 
 
 //////////////////////////////////////////////////////////////////////////

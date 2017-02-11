@@ -101,17 +101,21 @@ typedef unsigned int kattr_t;
 #define KATTR_FS_PATHNAME   KATTR_VAR(KATTR_TOKEN_FS,KATTR_GROUP_FS_FILE,1,char) /*< "/tmp/foo.txt". */
 
 #define KATTR_GROUP_FS_METADATA 'M' /*< Filesystem Attribute group for file metadata. */
-#define KATTR_FS_ATTRS  KATTR_VAR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,0,union kinodeattr) /*< Get/Set multiple attributes at once. */
-#define KATTR_FS_ATIME  KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,1,struct timespec)
-#define KATTR_FS_CTIME  KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,2,struct timespec)
-#define KATTR_FS_MTIME  KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,3,struct timespec)
-#define KATTR_FS_PERM   KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,4,__mode_t) /*< Only Permissions. */
-#define KATTR_FS_OWNER  KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,5,__uid_t)
-#define KATTR_FS_GROUP  KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,6,__gid_t)
-#define KATTR_FS_SIZE   KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,7,__pos_t) // READ-ONLY
-#define KATTR_FS_INO    KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,8,__ino_t) // READ-ONLY
-#define KATTR_FS_NLINK  KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,9,__nlink_t) // READ-ONLY (When not supported, you should return '1' in 'n_lnk')
-#define KATTR_FS_KIND   KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,10,__mode_t) /*< Only kind. */
+#define KATTR_FS_ATTRS   KATTR_VAR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,0,union kinodeattr) /*< Get/Set multiple attributes at once. */
+#define KATTR_FS_ATIME   KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,1,struct timespec)
+#define KATTR_FS_CTIME   KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,2,struct timespec)
+#define KATTR_FS_MTIME   KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,3,struct timespec)
+#define KATTR_FS_PERM    KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,4,__mode_t) /*< Only Permissions. */
+#define KATTR_FS_OWNER   KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,5,__uid_t)
+#define KATTR_FS_GROUP   KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,6,__gid_t)
+#define KATTR_FS_SIZE    KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,7,__pos_t) // READ-ONLY
+#define KATTR_FS_INO     KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,8,__ino_t) // READ-ONLY
+#define KATTR_FS_NLINK   KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,9,__nlink_t) // READ-ONLY (When not supported, you should return '1' in 'n_lnk')
+#define KATTR_FS_KIND    KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,10,__mode_t) /*< Only kind. */
+
+/* Uncommand metadata attributes. */
+#define KATTR_FS_BUFSIZE KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,100,__pos_t) // READ-ONLY
+#define KATTR_FS_MAXSIZE KATTR(KATTR_TOKEN_FS,KATTR_GROUP_FS_METADATA,101,__pos_t) /* READ-WRITE (may be restricted). */
 
 
 #define KINODEATTR_HEAD kattr_t a_id; /*< Attribute ID. */

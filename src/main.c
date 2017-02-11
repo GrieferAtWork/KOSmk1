@@ -32,7 +32,6 @@
 #include <kos/kernel/gdt.h>
 #include <kos/kernel/interrupts.h>
 #include <kos/kernel/keyboard.h>
-#include <kos/kernel/addist.h>
 #include <kos/kernel/linker.h>
 #include <kos/kernel/pageframe.h>
 #include <kos/kernel/paging.h>
@@ -46,11 +45,10 @@
 #include <stdlib.h>
 
 
-void lib_test(void) {
+void run_init(void) {
  char const *argv[] = {NULL,NULL};
  char const *path = getenv("init");
  if (!path)  path = "/bin/init";
- //if (!path)  path = "/dev/tty";
  argv[0] = path;
  kerrno_t error; struct kshlib *lib;
  struct kproc *process; struct ktask *root;
@@ -110,6 +108,11 @@ void test_taskstat(void) {
 }
 
 
+
+#ifndef __STATIC_ASSERT_M
+#   define __STATIC_ASSERT_M(expr) __STATIC_ASSERT(expr)
+#endif
+
 void kernel_main(void) {
 
  // TODO: Parse explicit environ input in exec
@@ -161,8 +164,7 @@ void kernel_main(void) {
 #undef RUN
  //test_taskstat();
 
- //test_addist2();
- lib_test();
+ run_init();
 
  karch_irq_disable();
  kernel_finalize_process();

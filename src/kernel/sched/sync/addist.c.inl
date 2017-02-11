@@ -24,18 +24,17 @@
 #define __KOS_KERNEL_ADDIST_C_INL__ 1
 
 #include <kos/config.h>
-#include <kos/timespec.h>
 #include <kos/kernel/addist.h>
-#include <kos/kernel/time.h>
+#include <kos/kernel/debug.h>
+#include <kos/kernel/signal_v.h>
 #include <kos/kernel/syslog.h>
+#include <kos/kernel/time.h>
+#include <kos/timespec.h>
 #include <malloc.h>
-#include <stdio.h>
+#include <stddef.h>
 #if KDEBUG_HAVE_TRACKEDDDIST
 #include <traceback.h>
 #endif
-#include <kos/kernel/debug.h>
-#include <kos/kernel/signal_v.h>
-#include <stddef.h>
 
 __DECL_BEGIN
 
@@ -45,29 +44,29 @@ __DECL_BEGIN
 #define ISDEAD(self) ((self)->ad_nbdat.s_flags&KSIGNAL_FLAG_DEAD)
 
 #if KDEBUG_HAVE_TRACKEDDDIST
-static int kassdist2_hasticket(struct kaddist *__restrict self,
-                               struct kaddistticket *__restrict ticket) {
+static int kaddist_hasticket(struct kaddist *__restrict self,
+                             struct kaddistticket *__restrict ticket) {
  struct kaddistticket *iter;
  for (iter = self->ad_tiready; iter; iter = iter->dt_next) if (iter == ticket) return YES;
  for (iter = self->ad_tnready; iter; iter = iter->dt_next) if (iter == ticket) return YES;
  return NO;
 }
-static int kassdist2_hasreadyticket(struct kaddist *__restrict self,
-                                    struct kaddistticket *__restrict ticket) {
+static int kaddist_hasreadyticket(struct kaddist *__restrict self,
+                                  struct kaddistticket *__restrict ticket) {
  struct kaddistticket *iter;
  for (iter = self->ad_tiready; iter; iter = iter->dt_next) if (iter == ticket) return YES;
  return NO;
 }
 #else
-#define kassdist2_hasticket(self,ticket)      MAYBE
-#define kassdist2_hasreadyticket(self,ticket) MAYBE
+#define kaddist_hasticket(self,ticket)      MAYBE
+#define kaddist_hasreadyticket(self,ticket) MAYBE
 #endif
 
 
 
 __crit kerrno_t
 _kaddist_genticket_andunlock(struct kaddist *__restrict self,
-                              struct kaddistticket *__restrict ticket) {
+                             struct kaddistticket *__restrict ticket) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kaddist(self);
@@ -78,7 +77,7 @@ _kaddist_genticket_andunlock(struct kaddist *__restrict self,
  assert(!self->ad_back || !self->ad_back->sd_next);
  assert(self->ad_chunkc <= self->ad_chunkmax);
 #if KDEBUG_HAVE_TRACKEDDDIST
- if (kassdist2_hasticket(self,ticket) == YES) {
+ if (kaddist_hasticket(self,ticket) == YES) {
   k_syslogf(KLOG_ERROR
            ,"[ADDIST] Ticket at %p is already in use\n"
             "See reference to ticket generation:\n"
@@ -110,7 +109,7 @@ end:
 
 __crit void
 _kaddist_delticket_andunlock(struct kaddist *__restrict self,
-                              struct kaddistticket *__restrict ticket) {
+                             struct kaddistticket *__restrict ticket) {
  struct kasyncdata *iter;
  KTASK_CRIT_MARK
  kassert_kaddist(self);
@@ -123,7 +122,7 @@ _kaddist_delticket_andunlock(struct kaddist *__restrict self,
 #if KDEBUG_HAVE_TRACKEDDDIST
  assertf(ticket->dt_dist == self,"Ticket %p registered to different ddist (%p) than %p",
          ticket,ticket->dt_dist,self);
- if (kassdist2_hasticket(self,ticket) == NO) {
+ if (kaddist_hasticket(self,ticket) == NO) {
   k_syslogf(KLOG_ERROR
            ,"[ADDIST] Ticket at %p was not registered\n"
             "See reference to ticket generation:\n"
@@ -131,7 +130,7 @@ _kaddist_delticket_andunlock(struct kaddist *__restrict self,
   dtraceback_print(ticket->dt_mk_tb);
   assertf(0,"Ticket %p not registered",ticket);
  }
- if (kassdist2_hasreadyticket(self,ticket) == YES) {
+ if (kaddist_hasreadyticket(self,ticket) == YES) {
   k_syslogf(KLOG_ERROR
            ,"[ADDIST] Cannot delete ticket in use by a blocking receive operation\n"
             "See reference to ticket generation:\n"
@@ -210,8 +209,8 @@ _kaddist_delticket_andunlock(struct kaddist *__restrict self,
 
 __local __crit kerrno_t
 kaddist_vtryrecv_unlocked(struct kaddist *__restrict self,
-                           struct kaddistticket *__restrict ticket,
-                           void *__restrict buf) {
+                          struct kaddistticket *__restrict ticket,
+                          void *__restrict buf) {
  struct kasyncdata *reschunk;
  KTASK_CRIT_MARK
  kassert_kaddist(self);
@@ -226,7 +225,7 @@ kaddist_vtryrecv_unlocked(struct kaddist *__restrict self,
 #if KDEBUG_HAVE_TRACKEDDDIST
  assertf(ticket->dt_dist == self,"Ticket %p registered to different ddist (%p) than %p",
          ticket,ticket->dt_dist,self);
- if (kassdist2_hasticket(self,ticket) == NO) {
+ if (kaddist_hasticket(self,ticket) == NO) {
   k_syslogf(KLOG_ERROR
            ,"[ADDIST] Ticket at %p was not registered\n"
             "See reference to ticket generation:\n"
@@ -234,7 +233,7 @@ kaddist_vtryrecv_unlocked(struct kaddist *__restrict self,
   dtraceback_print(ticket->dt_mk_tb);
   assertf(0,"Ticket %p not registered",ticket);
  }
- if (kassdist2_hasreadyticket(self,ticket) == YES) {
+ if (kaddist_hasreadyticket(self,ticket) == YES) {
   k_syslogf(KLOG_ERROR
            ,"[ADDIST] Cannot receive ticket in use by a blocking receive operation\n"
             "See reference to ticket generation:\n"
@@ -273,8 +272,8 @@ kaddist_vtryrecv_unlocked(struct kaddist *__restrict self,
 
 __crit kerrno_t
 _kaddist_vtryrecv_andunlock(struct kaddist *__restrict self,
-                             struct kaddistticket *__restrict ticket,
-                             void *__restrict buf) {
+                            struct kaddistticket *__restrict ticket,
+                            void *__restrict buf) {
  kerrno_t error;
  KTASK_CRIT_MARK
  error = kaddist_vtryrecv_unlocked(self,ticket,buf);
@@ -290,9 +289,9 @@ _kaddist_vtryrecv_andunlock(struct kaddist *__restrict self,
 
 __crit kerrno_t
 _kaddist_vtimeoutrecv_andunlock(struct kaddist *__restrict self,
-                                 struct kaddistticket *__restrict ticket,
-                                 struct timespec const *__restrict timeout,
-                                 void *__restrict buf) {
+                                struct kaddistticket *__restrict ticket,
+                                struct timespec const *__restrict timeout,
+                                void *__restrict buf) {
  KTASK_CRIT_MARK
  struct timespec abstime;
  ktime_getnoworcpu(&abstime);
@@ -303,7 +302,7 @@ _kaddist_vtimeoutrecv_andunlock(struct kaddist *__restrict self,
 
 __crit kerrno_t
 _kaddist_vsend_andunlock(struct kaddist *__restrict self,
-                          void const *__restrict buf) {
+                         void const *__restrict buf) {
  size_t recv_count;
  kerrno_t error;
 #ifdef __DEBUG__
@@ -324,8 +323,7 @@ _kaddist_vsend_andunlock(struct kaddist *__restrict self,
  if __unlikely(ISDEAD(self)) { error = KE_DESTROYED; goto err; }
  /* Check how many tasks are ready to receive unbuffered data. */
  recv_count = ksignal_cntrecv_unlocked(&self->ad_nbdat);
- /* Check for optimized case: Potential for fully unbuffered transmission. */
- /* Due to a race condition that can arise due to KE_INTR or KE_TIMEDOUT,
+ /* Due to a race condition that can arise because of KE_INTR and KE_TIMEDOUT,
   * tickets may still be registered as ready when their associated tasks
   * are in fact no longer scheduled.
   * This is a rare occurrence, but can only be checked for by manually
@@ -336,6 +334,7 @@ _kaddist_vsend_andunlock(struct kaddist *__restrict self,
   * can assume the true receiver to always perform its part of the cleanup. */
  /* If all known tasks will actually receive the signal, skip the buffer completely */
  assert(recv_count <= self->ad_ready);
+ /* Check for optimized case: Potential for fully unbuffered transmission. */
  if (recv_count == self->ad_known) {
   assert(self->ad_ready == recv_count);
   /* Move the entire ready list to the non-ready stack. */

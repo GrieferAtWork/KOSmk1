@@ -83,6 +83,7 @@ __crit kerrno_t kprocsand_initroot(struct kprocsand *self) {
  self->ts_priomin   = KTASKPRIO_MIN;
  self->ts_priomax   = KTASKPRIO_MAX;
  self->ts_namemax   = (size_t)-1;
+ self->ts_pipemax   = (size_t)-1;
  self->ts_flags     = 0xffffffff;
  self->ts_state     = KPROCSTATE_FLAG_NONE;
  return KE_OK;

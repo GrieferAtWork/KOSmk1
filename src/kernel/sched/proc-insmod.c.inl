@@ -399,7 +399,7 @@ kproc_delmod_unlocked(struct kproc *__restrict self,
 
 
 __crit kerrno_t
-kproc_insmod(struct kproc *__restrict self,
+kproc_insmod_c(struct kproc *__restrict self,
              struct kshlib *__restrict module,
              kmodid_t *module_id) {
  kerrno_t error;
@@ -412,7 +412,7 @@ kproc_insmod(struct kproc *__restrict self,
  return error;
 }
 __crit kerrno_t
-kproc_delmod(struct kproc *__restrict self,
+kproc_delmod_c(struct kproc *__restrict self,
              kmodid_t module_id) {
  kerrno_t error;
  KTASK_CRIT_MARK

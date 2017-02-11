@@ -26,10 +26,11 @@
 #include <kos/compiler.h>
 #include <kos/config.h>
 
-__DECL_BEGIN
 
 #ifndef __ASSEMBLY__
 #if defined(__DEBUG__) && !defined(__NO_LIBC__)
+
+__DECL_BEGIN
 extern __noinline __noclone __noreturn __coldcall
 #if    __LIBC_HAVE_DEBUG_PARAMS == 3
        __attribute_vaformat(__printf__,6,7)
@@ -40,8 +41,13 @@ extern __noinline __noclone __noreturn __coldcall
 #endif
 void __assertion_failedf __P((__LIBC_DEBUG_PARAMS_ char const *expr,
                               unsigned int skip, char const *fmt, ...));
-extern __noinline __noclone __noreturn __coldcall __nonnull((1,3))
+extern __noinline __noclone __noreturn __coldcall
+#if __LIBC_HAVE_DEBUG_PARAMS == 3
+       __nonnull((1,3))
+#endif
 void __builtin_unreachable_d __P((__LIBC_DEBUG_PARAMS));
+__DECL_END
+
 #ifndef __INTELLISENSE__
 #   define __builtin_unreachable() __builtin_unreachable_d(__LIBC_DEBUG_ARGS)
 #endif
@@ -67,7 +73,5 @@ void __builtin_unreachable_d __P((__LIBC_DEBUG_PARAMS));
 #   define __assert_heref(sexpr,expr,...) (void)0
 #endif
 #endif /* !__ASSEMBLY__ */
-
-__DECL_END
 
 #endif /* !__KOS_ASSERT_H__ */

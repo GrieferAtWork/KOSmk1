@@ -30,14 +30,14 @@ __DECL_BEGIN
 #ifdef TIMEDRECV
 __crit kerrno_t
 _kaddist_vtimedrecv_andunlock(struct kaddist *__restrict self,
-                               struct kaddistticket *__restrict ticket,
-                               struct timespec const *__restrict abstime,
-                               void *__restrict buf)
+                              struct kaddistticket *__restrict ticket,
+                              struct timespec const *__restrict abstime,
+                              void *__restrict buf)
 #else
 __crit kerrno_t
 _kaddist_vrecv_andunlock(struct kaddist *__restrict self,
-                          struct kaddistticket *__restrict ticket,
-                          void *__restrict buf)
+                         struct kaddistticket *__restrict ticket,
+                         void *__restrict buf)
 #endif
 {
  kerrno_t error;
@@ -82,7 +82,7 @@ again:
  /* Failed to receive data. - Must unregister the ticket due to that failure.
   * NOTE: The race condition between here and after vrecv is what is handled by 'KS_NODATA'. */
  ksignal_lock_c(&self->ad_nbdat,KSIGNAL_LOCK_WAIT);
- assert(kassdist2_hasreadyticket(self,ticket) != NO);
+ assert(kaddist_hasreadyticket(self,ticket) != NO);
  assert(self->ad_ready);
  assert((ticket->dt_prev != NULL) == (ticket != self->ad_tiready));
  --self->ad_ready;

@@ -39,7 +39,11 @@ SYSCALL(sys_ktime_getnow) {
 /* _syscall1(kerrno_t,ktime_setnow,struct timespec *,ptm); */
 SYSCALL(sys_ktime_setnow) {
  LOAD1(struct timespec *,U(ptm));
- RETURN(ktime_setnow(ptm));
+ kerrno_t error;
+ KTASK_CRIT_BEGIN_FIRST
+ error = ktime_setnow(ptm);
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /* _syscall1(kerrno_t,ktime_getcpu,struct timespec *,ptm); */

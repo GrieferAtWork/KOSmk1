@@ -102,13 +102,17 @@ do{ if ((slot)->fd_type != KFDTYPE_NONE) {\
  if (high >= 0) {
   unsigned int end_fd = (unsigned int)min(high,self->p_fdman.fdm_fda-1)+1u;
   assert(end_fd >= max(0,low));
+  /* Close all regular descriptors in the given range. */
   for (i = (unsigned int)max(0,low); i != end_fd; ++i) {
    CLOSE(&self->p_fdman.fdm_fdv[i]);
   }
   if (result) kproc_free_unused_fd_memory(self);
  }
- if (KFD_ROOT >= low && KFD_ROOT <= high) CLOSE(&self->p_fdman.fdm_root);
- if (KFD_CWD >= low && KFD_CWD <= high) CLOSE(&self->p_fdman.fdm_cwd);
+#define INRANGE(x) ((x) >= low && (x) <= high)
+ /* Check for special descriptors. */
+ if (INRANGE(KFD_ROOT)) CLOSE(&self->p_fdman.fdm_root);
+ if (INRANGE(KFD_CWD)) CLOSE(&self->p_fdman.fdm_cwd);
+#undef INRANGE
  kproc_unlock(self,KPROC_LOCK_FDMAN);
 end:
 #undef CLOSE
@@ -117,14 +121,14 @@ end:
 
 
 
-void *kproc_getresourceaddr(struct kproc const *__restrict self, int fd) {
+void *kproc_getresourceaddr_nc(struct kproc const *__restrict self, int fd) {
  void *result; struct kfdentry *slot;
  kassert_kproc(self);
  switch (fd) {
   // Symbolic descriptors
-  case KFD_TASKSELF: return ktask_self();
-  case KFD_TASKROOT: return ktask_proc();
-  case KFD_PROCSELF: return kproc_self();
+  case KFD_TASKSELF: return (void *)ktask_self();
+  case KFD_TASKROOT: return (void *)ktask_proc();
+  case KFD_PROCSELF: return (void *)kproc_self();
   default: break;
  }
  KTASK_CRIT_BEGIN
@@ -138,14 +142,14 @@ void *kproc_getresourceaddr(struct kproc const *__restrict self, int fd) {
  KTASK_CRIT_END
  return result;
 }
-void *kproc_getresourceaddr_c(struct kproc const *__restrict self, int fd) {
+__crit void *kproc_getresourceaddr_c(struct kproc const *__restrict self, int fd) {
  void *result; struct kfdentry *slot;
  kassert_kproc(self);
  switch (fd) {
   // Symbolic descriptors
-  case KFD_TASKSELF: return ktask_self();
-  case KFD_TASKROOT: return ktask_proc();
-  case KFD_PROCSELF: return kproc_self();
+  case KFD_TASKSELF: return (void *)ktask_self();
+  case KFD_TASKROOT: return (void *)ktask_proc();
+  case KFD_PROCSELF: return (void *)kproc_self();
   default: break;
  }
  if __unlikely(KE_ISERR(kproc_lock((struct kproc *)self,KPROC_LOCK_FDMAN))) return NULL;

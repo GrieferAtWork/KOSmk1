@@ -44,6 +44,7 @@ __DECL_BEGIN
 #define KLOG_DEBUG  4
 #define KLOG_TRACE  5
 #define KLOG_INSANE 6
+#define KLOG_COUNT  7
 
 #ifndef __KERNEL__
 #ifdef __INTELLISENSE__

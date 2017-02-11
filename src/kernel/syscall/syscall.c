@@ -252,22 +252,23 @@ void ksyscall_handler(struct kirq_registers *regs) {
         ,"User-task still critical after syscall return (syscall = %I32x)"
         ,original_id);
 #endif
- //printf("ksyscall_handler::begin(%I32x)\n",id);
  if __unlikely(__SYSCALL_GROUP(id) >= __compiler_ARRAYSIZE(sysgroups)) goto noavail;
  group = &sysgroups[__SYSCALL_GROUP(id)];
  if __unlikely((id = __SYSCALL_ID(id)) >= group->callc) goto noavail;
  if __unlikely((call = group->callv[id]) == NULL) goto noavail;
  (*call)(regs);
- //printf("ksyscall_handler::end()\n");
 #ifdef __DEBUG__
- assertf((ktask_self()->t_flags&(KTASK_FLAG_USERTASK|KTASK_FLAG_NOINTR)) !=
-                                (KTASK_FLAG_USERTASK|KTASK_FLAG_NOINTR)
-        ,"User-task still nointr after syscall return (syscall = %I32x)"
-        ,original_id);
- assertf((ktask_self()->t_flags&(KTASK_FLAG_USERTASK|KTASK_FLAG_CRITICAL)) !=
-                                (KTASK_FLAG_USERTASK|KTASK_FLAG_CRITICAL)
-        ,"User-task still critical after syscall return (syscall = %I32x)"
-        ,original_id);
+ {
+  struct ktask *tself = ktask_self();
+  assertf((tself->t_flags&(KTASK_FLAG_USERTASK|KTASK_FLAG_NOINTR)) !=
+                          (KTASK_FLAG_USERTASK|KTASK_FLAG_NOINTR)
+         ,"User-task still nointr after syscall return (syscall = %I32x)"
+         ,original_id);
+  assertf((tself->t_flags&(KTASK_FLAG_USERTASK|KTASK_FLAG_CRITICAL)) !=
+                          (KTASK_FLAG_USERTASK|KTASK_FLAG_CRITICAL)
+         ,"User-task still critical after syscall return (syscall = %I32x)"
+         ,original_id);
+ }
 #endif
  return;
 noavail:

@@ -168,8 +168,6 @@ extern __wunused __constcall ldiv_t ldiv(long __numer, long __denom);
 #ifndef __NO_longlong
 extern __wunused __constcall lldiv_t lldiv(long long __numer, long long __denom);
 #endif /* !__NO_longlong */
-#endif /* !__CONFIG_MIN_LIBC__ */
-
 
 #ifdef __cplusplus
 extern "C++" {
@@ -181,6 +179,7 @@ __local __wunused __constcall lldiv_t div(long long __numer, long long __denom) 
 #endif /* !__NO_longlong */
 }
 #endif
+#endif /* !__CONFIG_MIN_LIBC__ */
 
 __DECL_END
 

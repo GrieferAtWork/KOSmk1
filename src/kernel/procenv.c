@@ -95,7 +95,7 @@ __crit void kprocenv_quit(struct kprocenv *self) {
  kprocenv_quit_args(self);
 }
 
-__crit void kprocenv_clear(struct kprocenv *self) {
+__crit void kprocenv_clear_c(struct kprocenv *self) {
  KTASK_CRIT_MARK
  kprocenv_quit(self);
  memset(&self->pe_memcur,0,
@@ -200,7 +200,7 @@ err_argiter:
 
 
 
-char const *
+__nomp char const *
 kprocenv_getenv(struct kprocenv const *__restrict self,
                 char const *__restrict name, size_t name_max) {
  size_t hash; struct kenventry *bucket;
@@ -220,10 +220,10 @@ kprocenv_getenv(struct kprocenv const *__restrict self,
 
 
 __crit kerrno_t
-kprocenv_setenv(struct kprocenv *__restrict self,
-                char const *__restrict name, size_t name_max,
-                char const *__restrict value, size_t value_max,
-                int override) {
+kprocenv_setenv_c(struct kprocenv *__restrict self,
+                  char const *__restrict name, size_t name_max,
+                  char const *__restrict value, size_t value_max,
+                  int override) {
  struct kenventry *bucket,**buckptr,*newentry;
  size_t hash,newmem;
  KTASK_CRIT_MARK
@@ -269,8 +269,8 @@ kprocenv_setenv(struct kprocenv *__restrict self,
 }
 
 __crit kerrno_t
-kprocenv_delenv(struct kprocenv *__restrict self,
-                char const *__restrict name, size_t name_max) {
+kprocenv_delenv_c(struct kprocenv *__restrict self,
+                  char const *__restrict name, size_t name_max) {
  struct kenventry *bucket,**buckptr;
  size_t hash;
  KTASK_CRIT_MARK
@@ -295,8 +295,8 @@ kprocenv_delenv(struct kprocenv *__restrict self,
 }
 
 __crit kerrno_t
-kprocenv_putenv(struct kprocenv *__restrict self,
-                char const *__restrict text, size_t text_max) {
+kprocenv_putenv_c(struct kprocenv *__restrict self,
+                  char const *__restrict text, size_t text_max) {
  char const *equals_sign;
  KTASK_CRIT_MARK
  if ((equals_sign = strnchr(text,text_max,'=')) == NULL) {
@@ -308,9 +308,9 @@ kprocenv_putenv(struct kprocenv *__restrict self,
 }
 
 kerrno_t
-kprocenv_setargv(struct kprocenv *__restrict self, size_t max_argc,
-                 char const __kernel *const __kernel *argv,
-                 size_t const __kernel *max_arglenv) {
+kprocenv_setargv_c(struct kprocenv *__restrict self, size_t max_argc,
+                   char const __kernel *const __kernel *argv,
+                   size_t const __kernel *max_arglenv) {
  char **new_argv,**arg_iter,**arg_end,*arg;
  char const *const *arg_src; size_t const *arglen_src;
  size_t vector_size,newmem,real_argc; kerrno_t error;
@@ -352,9 +352,9 @@ err_argiter:
 }
 
 kerrno_t
-kprocenv_setargv_u(struct kprocenv *__restrict self, size_t max_argc,
-                   char const __user *const __user *argv,
-                   size_t const __user *max_arglenv) {
+kprocenv_setargv_cu(struct kprocenv *__restrict self, size_t max_argc,
+                    char const __user *const __user *argv,
+                    size_t const __user *max_arglenv) {
  char **new_argv,**temp_argv,*arg; size_t const __user *arglen_src;
  size_t arglen,newmem,curr_argc,curr_arga; kerrno_t error;
  kassert_kprocenv(self);

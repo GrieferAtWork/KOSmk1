@@ -44,8 +44,8 @@ __DECL_BEGIN
 #if defined(__DEBUG__) && 1
 #define KTASK_ONSWITCH(reason,oldtask,newtask) \
  k_syslogf(KLOG_TRACE,"SCHED-SWITCH [%s]: %p:%I32d:%Iu:%s(%p|%p) --> %p:%I32d:%Iu:%s(%p|%p)\n",reason,\
-      oldtask,(oldtask) ? ((struct ktask *)(oldtask))->t_proc->p_pid : -1,(oldtask) ? ((struct ktask *)(oldtask))->t_tid : 0,(oldtask) ? ktask_getname((struct ktask *)(oldtask)) : NULL,(oldtask) ? ((struct ktask *)(oldtask))->t_esp : NULL,(oldtask) ? ((struct ktask *)(oldtask))->tr_userpd : NULL,\
-      newtask,(newtask) ? ((struct ktask *)(newtask))->t_proc->p_pid : -1,(newtask) ? ((struct ktask *)(newtask))->t_tid : 0,(newtask) ? ktask_getname((struct ktask *)(newtask)) : NULL,(newtask) ? ((struct ktask *)(newtask))->t_esp : NULL,(newtask) ? ((struct ktask *)(newtask))->tr_userpd : NULL)
+      oldtask,(oldtask) ? ((struct ktask *)(oldtask))->t_proc->p_pid : -1,(oldtask) ? ((struct ktask *)(oldtask))->t_tid : 0,(oldtask) ? ktask_getname((struct ktask *)(oldtask)) : NULL,(oldtask) ? ((struct ktask *)(oldtask))->t_esp : NULL,(oldtask) ? ((struct ktask *)(oldtask))->t_userpd : NULL,\
+      newtask,(newtask) ? ((struct ktask *)(newtask))->t_proc->p_pid : -1,(newtask) ? ((struct ktask *)(newtask))->t_tid : 0,(newtask) ? ktask_getname((struct ktask *)(newtask)) : NULL,(newtask) ? ((struct ktask *)(newtask))->t_esp : NULL,(newtask) ? ((struct ktask *)(newtask))->t_userpd : NULL)
 #define KTASK_ONTERMINATE(task) \
  k_syslogf(KLOG_TRACE,"ONTERMINATE(%p): %I32d:%Iu:%s (exitcode: %p)\n",\
        task,(task)->t_proc->p_pid,(task)->t_tid,ktask_getname(task),task->t_exitcode)
@@ -73,7 +73,7 @@ struct kcpu __kcpu_zero = {
 struct ktask __ktask_zero = {
  KOBJECT_INIT(KOBJECT_MAGIC_TASK)
  /* t_esp         */stack_top,
- /* tr_userpd      */(struct kpagedir *)kpagedir_kernel(),
+ /* t_userpd      */(struct kpagedir *)kpagedir_kernel(),
  /* t_esp0        */NULL,
  /* t_refcnt      */0xffff,
  /* t_locks       */0,
@@ -126,19 +126,19 @@ __COMPILER_PACK_POP
 size_t kcpu_taskcount(struct kcpu const *__restrict self) {
  size_t result = 0; struct ktask *iter,*start;
  kassert_kcpu(self);
- NOINTERRUPT_BEGINLOCK(kcpu_trylock((struct kcpu *)self,KCPU_LOCK_TASKS));
+ NOIRQ_BEGINLOCK(kcpu_trylock((struct kcpu *)self,KCPU_LOCK_TASKS));
  iter = start = self->c_current;
  if (iter) do ++result; while ((iter = iter->t_next) != start);
- NOINTERRUPT_ENDUNLOCK(kcpu_unlock((struct kcpu *)self,KCPU_LOCK_TASKS));
+ NOIRQ_ENDUNLOCK(kcpu_unlock((struct kcpu *)self,KCPU_LOCK_TASKS));
  return result;
 }
 size_t kcpu_sleepcount(struct kcpu const *__restrict self) {
  size_t result = 0; struct ktask *iter,*start;
  kassert_kcpu(self);
- NOINTERRUPT_BEGINLOCK(kcpu_trylock((struct kcpu *)self,KCPU_LOCK_SLEEP));
+ NOIRQ_BEGINLOCK(kcpu_trylock((struct kcpu *)self,KCPU_LOCK_SLEEP));
  iter = start = self->c_sleeping;
  if (iter) do ++result; while ((iter = iter->t_next) != start);
- NOINTERRUPT_ENDUNLOCK(kcpu_unlock((struct kcpu *)self,KCPU_LOCK_SLEEP));
+ NOIRQ_ENDUNLOCK(kcpu_unlock((struct kcpu *)self,KCPU_LOCK_SLEEP));
  return result;
 }
 
@@ -146,7 +146,7 @@ int kcpu_global_onetask(void) {
  struct kcpu *ccheck; int result;
  // TODO: foreach-cpu
  ccheck = kcpu_zero();
- NOINTERRUPT_BEGIN;
+ NOIRQ_BEGIN;
  for (;;) {
   if (kcpu_trylock(ccheck,KCPU_LOCK_TASKS)) {
    if (kcpu_trylock(ccheck,KCPU_LOCK_SLEEP)) break;
@@ -160,7 +160,7 @@ int kcpu_global_onetask(void) {
            ccheck->c_current->t_next == ccheck->c_current);
  kcpu_unlock(ccheck,KCPU_LOCK_TASKS);
  kcpu_unlock(ccheck,KCPU_LOCK_SLEEP);
- NOINTERRUPT_END
+ NOIRQ_END
  return result;
 }
 
@@ -267,7 +267,7 @@ ktask_newkernel(struct ktask *__restrict parent,
  result->t_esp0        = NULL; /*< The TSS isn't used by kernel tasks. */
  result->t_ustackvp    = NULL;
  result->t_ustacksz    = 0;
- result->tr_userpd      = (struct kpagedir *)kpagedir_kernel();
+ result->t_userpd      = (struct kpagedir *)kpagedir_kernel();
  result->t_kstackend   = (void *)((uintptr_t)result->t_kstack+kstacksize);
  result->t_esp         = result->t_kstackend;
  result->t_proc        = proc; // Inherit reference
@@ -365,7 +365,7 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict ctx,
  result->t_ustacksz    = ustacksize;
  result->t_esp         = (__user void *)((uintptr_t)result->t_kstackvp+kstacksize);
  result->t_esp0        = result->t_esp;
- result->tr_userpd      = kproc_pagedir(ctx);
+ result->t_userpd      = kproc_pagedir(ctx);
  result->t_kstackend   = (void *)((uintptr_t)result->t_kstack+kstacksize);
  result->t_proc        = ctx; // Inherit reference
  result->t_refcnt      = 1;
@@ -562,16 +562,16 @@ rotate_normal:
  currtask = cpuself->c_current;
  assert(prevtask != currtask);
  KTASK_ONSWITCH("IRQ",prevtask,currtask);
- prevtask->tr_userpd = state->pd;
+ prevtask->t_userpd = state->pd;
  prevtask->t_esp    = state->esp;
  KTASK_ONLEAVEQUANTUM(prevtask,cpuself);
  kcpu_unlock(cpuself,KCPU_LOCK_TASKS);
 setcurrtask:
- assertf(kpagedir_translate(currtask->tr_userpd
+ assertf(kpagedir_translate(currtask->t_userpd
                            ,currtask->t_esp
          ) != NULL,"Cannot translate: %p|%p"
-         ,currtask->t_esp,currtask->tr_userpd);
- state->pd           = currtask->tr_userpd;
+         ,currtask->t_esp,currtask->t_userpd);
+ state->pd           = currtask->t_userpd;
  state->esp          = currtask->t_esp;
  cpuself->c_tss.esp0 = (uintptr_t)currtask->t_esp0;
  KTASK_ONENTERQUANTUM(currtask,cpuself);
@@ -768,7 +768,7 @@ __local __crit void ktask_releasedata(struct ktask *__restrict self) {
   assert(self->t_ustackvp == NULL);
   assert(self->t_ustacksz == 0);
   assert(self->t_kstackvp == self->t_kstack);
-  assert(self->tr_userpd == kpagedir_kernel());
+  assert(self->t_userpd == kpagedir_kernel());
   assert(self->t_proc->p_shm.sm_pd == kpagedir_kernel());
   if (self->t_kstack) {
    // In kernel mode, task stacks are allocated through pageframes
@@ -899,12 +899,12 @@ __noinline void ktask_switchdecref(struct ktask *__restrict newtask,
                   : "=g" (esp), "=g" (pd));
  printf("SCHED-SWITCH [YIELD]: ESP(%p) PD(%p)\n",esp,pd);
 #endif
- kassertobj(newtask->tr_userpd);
- assertf(kpagedir_ismappedp(newtask->tr_userpd,newtask->t_esp)
+ kassertobj(newtask->t_userpd);
+ assertf(kpagedir_ismappedp(newtask->t_userpd,newtask->t_esp)
         ,"User ESP %p is not mapped in %p"
-        ,newtask->t_esp,newtask->tr_userpd);
+        ,newtask->t_esp,newtask->t_userpd);
 #if 0
- if (newtask->tr_userpd == kpagedir_kernel()) {
+ if (newtask->t_userpd == kpagedir_kernel()) {
   printf("newtask-before %p:%I32d:%Iu:%s:\n",
          newtask,newtask->t_proc->p_pid,newtask->t_tid,ktask_getname(newtask));
   printregs(newtask->t_esp);
@@ -912,7 +912,7 @@ __noinline void ktask_switchdecref(struct ktask *__restrict newtask,
 #endif
  ktask_switchimpl(newtask,oldtask);
 #if 0
- if (newtask->tr_userpd == kpagedir_kernel()) {
+ if (newtask->t_userpd == kpagedir_kernel()) {
   printf("newtask-after %p:%I32d:%Iu:%s:\n",
          newtask,newtask->t_proc->p_pid,newtask->t_tid,ktask_getname(newtask));
   printregs(newtask->t_esp);
@@ -1003,9 +1003,9 @@ __local void ktask_selectnext_anddecref_ni(struct ktask *__restrict oldtask) {
 struct kcpu *ktask_getcpu(struct ktask *__restrict self) {
  struct kcpu *result;
  kassert_ktask(self);
- NOINTERRUPT_BEGINLOCK(ktask_trylock(self,KTASK_LOCK_STATE))
+ NOIRQ_BEGINLOCK(ktask_trylock(self,KTASK_LOCK_STATE))
  result = self->t_cpu;
- NOINTERRUPT_ENDUNLOCK(ktask_unlock(self,KTASK_LOCK_STATE))
+ NOIRQ_ENDUNLOCK(ktask_unlock(self,KTASK_LOCK_STATE))
 #ifdef __DEBUG__
  if (result) kassert_kcpu(result);
 #endif
@@ -1294,6 +1294,8 @@ reschedule_running:
  return error;
 }
 
+#define KTASK_UNSCHEDULE_NOIRQ_IMPLIES_CRIT
+
 kerrno_t __SCHED_CALL
 ktask_unschedule_ex(struct ktask *__restrict self, __u8 newstate, void *__restrict arg,
                     size_t sigc, struct ksignal *const *__restrict sigv) {
@@ -1317,7 +1319,7 @@ ktask_unschedule_ex(struct ktask *__restrict self, __u8 newstate, void *__restri
   kassertobj((struct timespec *)arg);
  }
 #endif
- NOINTERRUPT_BEGINLOCK(ktask_trylock(self,KTASK_LOCK_STATE));
+ NOIRQ_BEGINLOCK(ktask_trylock(self,KTASK_LOCK_STATE));
  assertf((self->t_cpu != NULL) == KTASK_STATE_HASCPU(self->t_state)
          ,"CPU pointer and state of task %p contradict each other (t_cpu != NULL: %d | state: %d)"
          ,self,(int)(self->t_cpu != NULL),(int)self->t_state);
@@ -1563,10 +1565,7 @@ restart_cputask:
      ktask_unlock(self,KTASK_LOCK_STATE);
     }
 #endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
-    {
-     NOINTERRUPT_BREAK
-     return error;
-    }
+    goto break_end;
    }
 #ifndef KCONFIG_HAVE_SINGLECORE
 restart_reqstate:
@@ -1623,12 +1622,13 @@ unschedule_noncurrent:
 end_decref:
  ktask_unlock(self,KTASK_LOCK_STATE);
  ktask_decref(self);
+break_end:
  {
-  NOINTERRUPT_BREAK
+  NOIRQ_BREAK
   return error;
  }
 end:
- NOINTERRUPT_ENDUNLOCK(ktask_unlock(self,KTASK_LOCK_STATE));
+ NOIRQ_ENDUNLOCK(ktask_unlock(self,KTASK_LOCK_STATE));
  return error;
 }
 
@@ -1637,7 +1637,7 @@ void __SCHED_CALL
 ktask_unschedule_aftercrit(struct ktask *__restrict self) {
  assertf(self == ktask_self(),
          "ktask_unschedule_aftercrit() must be called with ktask_self()");
- NOINTERRUPT_BEGINLOCK(ktask_trylock(self,KTASK_LOCK_STATE));
+ NOIRQ_BEGINLOCK(ktask_trylock(self,KTASK_LOCK_STATE));
 #if KTASK_HAVE_CRITICAL_TASK
  assertf(self->t_flags&KTASK_FLAG_CRITICAL,
          "The 'KTASK_FLAG_CRITICAL' flag was not set. - You're not a critical task!");
@@ -1679,12 +1679,12 @@ ktask_unschedule_aftercrit(struct ktask *__restrict self) {
    ktask_unlock(self,KTASK_LOCK_STATE);
    ktask_selectcurr_anddecref_ni(self);
    {
-    NOINTERRUPT_BREAK
+    NOIRQ_BREAK
     return;
    }
   default: __builtin_unreachable();
  }
- NOINTERRUPT_ENDUNLOCK(ktask_unlock(self,KTASK_LOCK_STATE));
+ NOIRQ_ENDUNLOCK(ktask_unlock(self,KTASK_LOCK_STATE));
 }
 
 #define KTASK_RESCHEDULE_HINT_MASK \
@@ -1710,7 +1710,7 @@ ktask_reschedule_ex_impl(struct ktask *__restrict self, int hint)
  unlock_locks = KTASK_LOCK_STATE|((hint&KTASK_RESCHEDULE_HINTFLAG_UNLOCKSIGVAL)
                                   ? KTASK_LOCK_SIGVAL : 0);
 #endif
- NOINTERRUPT_BEGINLOCK(ktask_trylock(self,KTASK_LOCK_STATE));
+ NOIRQ_BEGINLOCK(ktask_trylock(self,KTASK_LOCK_STATE));
  if (!(hint&KTASK_RESCHEDULE_HINTFLAG_INHERITREF)) {
   error = ktask_incref(self);
   if __unlikely(KE_ISERR(error)) goto end;
@@ -1850,7 +1850,7 @@ do_resched:
     kcpu_unlock(newcpu,KCPU_LOCK_TASKS);
     ktask_switchdecref(self,caller);
     {
-     NOINTERRUPT_BREAK
+     NOIRQ_BREAK
      return KE_OK;
     }
    }
@@ -1889,13 +1889,13 @@ reschedule_first:
  kcpu_unlock(newcpu,KCPU_LOCK_TASKS);
 end:
  {
-  NOINTERRUPT_BREAKUNLOCK(ktask_unlock(self,unlock_locks));
+  NOIRQ_BREAKUNLOCK(ktask_unlock(self,unlock_locks));
   return error;
  }
 end_decref:
  ktask_unlock(self,unlock_locks);
  ktask_decref(self);
- NOINTERRUPT_END
+ NOIRQ_END
  return error;
 #ifdef KCONFIG_HAVE_SINGLECORE
 #undef newcpu
@@ -1916,9 +1916,9 @@ void ktask_yield(void) { (void)ktask_tryyield(); }
 kerrno_t ktask_tryyield(void) {
  kerrno_t error; struct ktask *oldtask;
  struct kcpu *cpuself;
- NOINTERRUPT_BEGINLOCK_VOLATILE(cpuself,kcpu_self(),
-                                kcpu_trylock(cpuself,KCPU_LOCK_TASKS),
-                                kcpu_unlock(cpuself,KCPU_LOCK_TASKS))
+ NOIRQ_BEGINLOCK_VOLATILE(cpuself,kcpu_self(),
+                          kcpu_trylock(cpuself,KCPU_LOCK_TASKS),
+                          kcpu_unlock(cpuself,KCPU_LOCK_TASKS))
 #if KCPU_LOCK_SLEEP != KCPU_LOCK_TASKS
  if (kcpu_trylock(cpuself,KCPU_LOCK_SLEEP))
 #endif
@@ -1954,14 +1954,14 @@ kerrno_t ktask_tryyield(void) {
   ktask_switchdecref(cpuself->c_current,oldtask);
   // Disable interrupts after returning from a yield that re-enabled them.
   {
-   NOINTERRUPT_BREAK
+   NOIRQ_BREAK
    return error;
   }
  } else {
   ktask_decref(oldtask);
  }
 end:
- NOINTERRUPT_ENDUNLOCK(kcpu_unlock(cpuself,KCPU_LOCK_TASKS))
+ NOIRQ_ENDUNLOCK(kcpu_unlock(cpuself,KCPU_LOCK_TASKS))
  return error;
 }
 
@@ -1975,7 +1975,7 @@ ktask_setalarm_k(struct ktask *__restrict self,
  kassert_ktask(self);
  kassertobjnull(abstime);
  kassertobjnull(oldabstime);
- NOINTERRUPT_BEGINLOCK(ktask_trylock(self,KTASK_LOCK_STATE));
+ NOIRQ_BEGINLOCK(ktask_trylock(self,KTASK_LOCK_STATE));
  switch (self->t_state) {
   case KTASK_STATE_TERMINATED: error = KE_DESTROYED; break;
   case KTASK_STATE_WAITING:
@@ -2025,7 +2025,7 @@ ktask_setalarm_k(struct ktask *__restrict self,
    }
    break;
  }
- NOINTERRUPT_ENDUNLOCK(ktask_unlock(self,KTASK_LOCK_STATE));
+ NOIRQ_ENDUNLOCK(ktask_unlock(self,KTASK_LOCK_STATE));
  return error;
 }
 
@@ -2034,7 +2034,7 @@ kerrno_t ktask_getalarm_k(struct ktask const *__restrict self,
  kerrno_t error;
  kassert_ktask(self);
  kassertobj(abstime);
- NOINTERRUPT_BEGINLOCK(ktask_trylock((struct ktask *)self,KTASK_LOCK_STATE));
+ NOIRQ_BEGINLOCK(ktask_trylock((struct ktask *)self,KTASK_LOCK_STATE));
  switch (self->t_state) {
   case KTASK_STATE_TERMINATED: error = KE_DESTROYED; break;
   case KTASK_STATE_WAITING:    error = KS_BLOCKING; break;
@@ -2044,7 +2044,7 @@ kerrno_t ktask_getalarm_k(struct ktask const *__restrict self,
    error = KS_EMPTY;
    break;
  }
- NOINTERRUPT_ENDUNLOCK(ktask_unlock((struct ktask *)self,KTASK_LOCK_STATE));
+ NOIRQ_ENDUNLOCK(ktask_unlock((struct ktask *)self,KTASK_LOCK_STATE));
  return error;
 }
 

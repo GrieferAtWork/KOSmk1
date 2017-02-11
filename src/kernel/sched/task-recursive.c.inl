@@ -84,16 +84,16 @@ resumeall:
 
 kerrno_t ktask_suspend_kr(struct ktask *__restrict self) {
  kerrno_t error;
- NOINTERRUPT_BEGIN;
+ NOIRQ_BEGIN;
  error = __ktask_suspend_kr_impl(self);
- NOINTERRUPT_END
+ NOIRQ_END
  return error;
 }
 kerrno_t ktask_resume_kr(struct ktask *__restrict self) {
  kerrno_t error;
- NOINTERRUPT_BEGIN;
+ NOIRQ_BEGIN;
  error = __ktask_resume_kr_impl(self);
- NOINTERRUPT_END
+ NOIRQ_END
  return error;
 }
 

@@ -36,7 +36,7 @@ __DECL_BEGIN
 
 static pid_t __unix_fork(struct kirq_registers *regs) {
  kerrno_t error; struct ktask *task;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  task = ktask_fork(NULL,&regs->regs);
  if __unlikely(!task) { error = KE_NOMEM; goto end; }
  error = ktask_resume_k(task);
@@ -51,7 +51,7 @@ end:
 static ssize_t __unix_read(int fd, __user void *__restrict buf, size_t count) {
  ssize_t error; size_t rsize;
  if (count > SSIZE_MAX) count = SSIZE_MAX;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  if __unlikely(!kpagedir_ismappedu_rw(buf,count)) { error = KE_FAULT; goto end; }
  error = kproc_readfd(kproc_self(),fd,buf,count,&rsize);
  if __likely(KE_ISOK(error)) error = (ssize_t)rsize;
@@ -63,7 +63,7 @@ end:
 static ssize_t __unix_write(int fd, __user void const *__restrict buf, size_t count) {
  ssize_t error; size_t rsize;
  if (count > SSIZE_MAX) count = SSIZE_MAX;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  if __unlikely(!kpagedir_ismappedu_ro(buf,count)) { error = KE_FAULT; goto end; }
  error = kproc_writefd(kproc_self(),fd,buf,count,&rsize);
  if __likely(KE_ISOK(error)) error = (ssize_t)rsize;

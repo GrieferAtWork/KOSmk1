@@ -433,15 +433,15 @@ extern void ksignal_init_ex(struct ksignal *self, __u8 flags);
  (assert(ktask_iscrit()),!(katomic_fetchor((self)->s_locks,lock)&(lock)))
 #define /*__crit*/ ksignal_unlock_c(self,lock)\
  (assert(ktask_iscrit()),_assertef((katomic_fetchand((self)->s_locks,~(lock))&(lock))!=0,"Lock not held"))
-#define ksignal_lock(self,lock)        NOINTERRUPT_BEGINLOCK(ksignal_trylock_c(self,lock))
-#define ksignal_unlock(self,lock)      NOINTERRUPT_ENDUNLOCK(ksignal_unlock_c(self,lock))
-#define ksignal_breaklock()            NOINTERRUPT_BREAK
-#define ksignal_breakunlock(self,lock) NOINTERRUPT_BREAKUNLOCK(ksignal_unlock_c(self,lock))
-#define ksignal_endlock()              NOINTERRUPT_END
+#define ksignal_lock(self,lock)        NOIRQ_BEGINLOCK(ksignal_trylock_c(self,lock))
+#define ksignal_unlock(self,lock)      NOIRQ_ENDUNLOCK(ksignal_unlock_c(self,lock))
+#define ksignal_breaklock()            NOIRQ_BREAK
+#define ksignal_breakunlock(self,lock) NOIRQ_BREAKUNLOCK(ksignal_unlock_c(self,lock))
+#define ksignal_endlock()              NOIRQ_END
 
-#define ksignal_breaklocks()                 NOINTERRUPT_BREAK
-#define ksignal_breakunlocks(sigc,sigv,lock) NOINTERRUPT_BREAKUNLOCK(ksignal_unlocks_c(sigc,sigv,lock))
-#define ksignal_endlocks()                   NOINTERRUPT_END
+#define ksignal_breaklocks()                 NOIRQ_BREAK
+#define ksignal_breakunlocks(sigc,sigv,lock) NOIRQ_BREAKUNLOCK(ksignal_unlocks_c(sigc,sigv,lock))
+#define ksignal_endlocks()                   NOIRQ_END
 #define /*__crit*/ ksignal_locks_c(sigc,sigv,lock) \
  __xblock({ struct ksignal *const *const __kslssigv = (sigv);\
             __size_t const __kslssigc = (sigc); __u8 const __kslslock = (lock);\
@@ -457,8 +457,8 @@ extern void ksignal_init_ex(struct ksignal *self, __u8 flags);
             }\
             (void)0;\
  })
-#define ksignal_locks(sigc,sigv,lock)   NOINTERRUPT_BEGINLOCK(ksignal_trylocks_c(sigc,sigv,lock))
-#define ksignal_unlocks(sigc,sigv,lock) NOINTERRUPT_ENDUNLOCK(ksignal_unlocks_c(sigc,sigv,lock))
+#define ksignal_locks(sigc,sigv,lock)   NOIRQ_BEGINLOCK(ksignal_trylocks_c(sigc,sigv,lock))
+#define ksignal_unlocks(sigc,sigv,lock) NOIRQ_ENDUNLOCK(ksignal_unlocks_c(sigc,sigv,lock))
 
 #define __ksignal_getprop(T,self,lock,unlocked_getter) \
  __xblock({ struct ksignal const *const __ksgpself = (self); T __ksgpres;\

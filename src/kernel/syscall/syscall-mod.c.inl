@@ -37,7 +37,7 @@ SYSCALL(sys_kmod_open) {
        __u32       ,K(flags));
  kerrno_t error; struct kshlib *lib;
  struct kproc *proc_self = kproc_self();
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  (void)flags; // TODO
  error = kshlib_open(name,namemax,&lib);
  if __unlikely(KE_ISERR(error)) goto end;
@@ -55,7 +55,7 @@ SYSCALL(sys_kmod_fopen) {
        __u32       ,K(flags));
  kerrno_t error; struct kshlib *lib; struct kfile *fp;
  struct kproc *proc_self = kproc_self();
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  fp = kproc_getfdfile(proc_self,fd);
  if __unlikely(!fp) { error = KE_BADF; goto end; }
  (void)flags; // TODO
@@ -73,7 +73,7 @@ end:
 SYSCALL(sys_kmod_close) {
  LOAD1(kmodid_t,U(modid));
  kerrno_t error;
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_delmod(kproc_self(),modid);
  KTASK_CRIT_END
  RETURN(error);

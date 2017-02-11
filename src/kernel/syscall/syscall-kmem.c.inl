@@ -58,7 +58,7 @@ SYSCALL(sys_kmem_map) {
  if (!hint) hint = KPAGEDIR_MAPANY_HINT_UHEAP;
  else hint = (void *)alignd((uintptr_t)hint,PAGEALIGN);
  prot &= (PROT_READ|PROT_WRITE|PROT_EXEC); /*< Don't reveil the hidden flags. */
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  fp = (flags&MAP_ANONYMOUS) ? NULL : kproc_getfdfile(procself,fd);
  result = kshm_mmap(&procself->p_shm,hint,length,prot,flags,fp,offset);
  if (fp) kfile_decref(fp);
@@ -79,7 +79,7 @@ SYSCALL(sys_kmem_mapdev) {
  if (!result) result = KPAGEDIR_MAPANY_HINT_UDEV;
  else result = (void *)alignd((uintptr_t)result,PAGEALIGN);
  prot &= (PROT_READ|PROT_WRITE|PROT_EXEC); /*< Don't reveil the hidden flags. */
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kshm_mmapdev(&procself->p_shm,&result,length,prot,flags,physptr);
  if (__likely(KE_ISOK(error)) && __unlikely(u_set(hint_and_result,result))) {
   kshm_munmap(&procself->p_shm,result,length,0);
@@ -96,7 +96,7 @@ SYSCALL(sys_kmem_unmap) {
        size_t,K(length));
  kerrno_t error;
  struct kproc *procself = kproc_self();
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  /* Don't allow unmapping the kernel pages. */
  error = kshm_munmap(&procself->p_shm,addr,length,0);
  KTASK_CRIT_END
@@ -110,7 +110,7 @@ SYSCALL(sys_kmem_validate) {
        size_t,K(bytes));
  kerrno_t error;
  struct kproc *procself = kproc_self();
- KTASK_CRIT_BEGIN
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_lock(procself,KPROC_LOCK_SHM);
  if __likely(KE_ISOK(error)) {
   void *pageaddr = (void *)alignd((uintptr_t)addr,PAGEALIGN);
@@ -128,6 +128,10 @@ SYSCALL(sys_kmem_validate) {
   }
   kproc_unlock(procself,KPROC_LOCK_SHM);
  }
+ enum{
+  x = __REGION_IN_NESTED(ISCRIT),
+  y = __REGION_IN_RUNTIM(ISCRIT),
+ };
  KTASK_CRIT_END
  RETURN(error);
 }

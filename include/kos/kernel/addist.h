@@ -105,7 +105,9 @@ struct kaddist {
  ,0,0,NULL,NULL,chunksize,chunkmax,0,NULL,NULL}
 
 #ifdef __INTELLISENSE__
-extern void kaddist_init(struct kaddist *__restrict self, __size_t chunksize, __size_t chunkmax);
+extern __nonnull((1)) void
+kaddist_init(struct kaddist *__restrict self,
+             __size_t chunksize, __size_t chunkmax);
 
 //////////////////////////////////////////////////////////////////////////
 // Closes a given ddist, causing any successive API calls to to fail
@@ -113,27 +115,30 @@ extern void kaddist_init(struct kaddist *__restrict self, __size_t chunksize, __
 // @return: KE_OK:        The ddist was destroyed.
 // @return: KS_UNCHANGED: The ddist was already destroyed.
 // @return: KS_EMPTY:     The ddist was destroyed, but no consumer were signaled. (NOT AN ERROR)
-extern kerrno_t kaddist_close(struct kaddist *__restrict self);
+extern __nonnull((1)) kerrno_t kaddist_close(struct kaddist *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
 // Reset a given ddist after it had previously been closed.
 // @return: KE_OK:        The ddist has been reset.
 // @return: KS_UNCHANGED: The ddist was not destroyed.
-extern kerrno_t kaddist_reset(struct kaddist *__restrict self);
+extern __nonnull((1)) kerrno_t kaddist_reset(struct kaddist *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the size of a single chunk of data, as
 // send/received by a given asynchronous data distributer.
-extern __wunused __constcall size_t kaddist_chunksize(struct kaddist const *__restrict self);
+extern __wunused __constcall __nonnull((1)) size_t
+kaddist_chunksize(struct kaddist const *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the max amount of chunks allowed in a given data
 // distributer before existing chunks start getting overwritten.
-extern __wunused __constcall size_t kaddist_chunkmax(struct kaddist const *__restrict self);
+extern __wunused __constcall __nonnull((1)) size_t
+kaddist_chunkmax(struct kaddist const *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the currently used amount of chunks.
-extern __wunused size_t kaddist_chunkcur(struct kaddist const *__restrict self);
+extern __wunused __nonnull((1)) size_t
+kaddist_chunkcur(struct kaddist const *__restrict self);
 #else
 #define kaddist_init(self,chunksize,chunkmax) \
  __xblock({ struct kaddist *const __kadself = (self);\
@@ -169,17 +174,17 @@ extern __wunused size_t kaddist_chunkcur(struct kaddist const *__restrict self);
 // @return: KE_OK:        The ticket was successfully created.
 // @return: KE_DESTROYED: The given distributer was closed.
 // @return: KE_OVERFLOW:  Too many existing tickets.
-extern __crit kerrno_t
+extern __crit __wunused __nonnull((1,2)) kerrno_t
 kaddist_genticket(struct kaddist *__restrict self,
-                   struct kaddistticket *__restrict ticket);
+                  struct kaddistticket *__restrict ticket);
 
 //////////////////////////////////////////////////////////////////////////
 // Deletes a given ticket, dropping any pending data from being received
 // and causing undefined behavior if the ticket is continued to be used.
 // @param: ticket: The same pointer as passed in a prior call to 'kaddist_genticket'.
-extern __crit void
+extern __crit __nonnull((1,2)) void
 kaddist_delticket(struct kaddist *__restrict self,
-                   struct kaddistticket *__restrict ticket);
+                  struct kaddistticket *__restrict ticket);
 #else
 #define kaddist_genticket(self,ticket) \
  __xblock({ struct kaddist *const __advgtself = (self);\
@@ -194,8 +199,12 @@ kaddist_delticket(struct kaddist *__restrict self,
             __xreturn _kaddist_delticket_andunlock(__advdtself,ticket);\
  })
 #endif
-extern __crit kerrno_t _kaddist_genticket_andunlock(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket);
-extern __crit void _kaddist_delticket_andunlock(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket);
+extern __crit __wunused __nonnull((1,2)) kerrno_t
+_kaddist_genticket_andunlock(struct kaddist *__restrict self,
+                             struct kaddistticket *__restrict ticket);
+extern __crit __nonnull((1,2)) void
+_kaddist_delticket_andunlock(struct kaddist *__restrict self,
+                             struct kaddistticket *__restrict ticket);
 
 
 struct timespec;
@@ -218,10 +227,10 @@ struct timespec;
 // @return: KE_TIMEDOUT:   [kaddist_v(timed|timeout)recv] The given timeout has expired.
 // @return: KE_WOULDBLOCK: [kaddist_vtryrecv] Failed to immediately read a packet from cache.
 // @return: KE_INTR:      [!kaddist_vtryrecv] The calling task was interrupted.
-extern kerrno_t kaddist_vrecv(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, void *__restrict buf);
-extern kerrno_t kaddist_vtryrecv(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, void *__restrict buf);
-extern kerrno_t kaddist_vtimedrecv(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, struct timespec const *__restrict abstime, void *__restrict buf);
-extern kerrno_t kaddist_vtimeoutrecv(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, struct timespec const *__restrict timeout, void *__restrict buf);
+extern __wunused __nonnull((1,2,3))   kerrno_t kaddist_vrecv(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, void *__restrict buf);
+extern __wunused __nonnull((1,2,3))   kerrno_t kaddist_vtryrecv(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, void *__restrict buf);
+extern __wunused __nonnull((1,2,3,4)) kerrno_t kaddist_vtimedrecv(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, struct timespec const *__restrict abstime, void *__restrict buf);
+extern __wunused __nonnull((1,2,3,4)) kerrno_t kaddist_vtimeoutrecv(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, struct timespec const *__restrict timeout, void *__restrict buf);
 #else
 #define kaddist_vrecv(self,ticket,buf) \
  __xblock({ struct kaddist *const __advrself = (self);\
@@ -264,10 +273,10 @@ extern kerrno_t kaddist_vtimeoutrecv(struct kaddist *__restrict self, struct kad
             __xreturn __advrerr;\
  })
 #endif
-extern __crit kerrno_t _kaddist_vrecv_andunlock(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, void *__restrict buf);
-extern __crit kerrno_t _kaddist_vtryrecv_andunlock(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, void *__restrict buf);
-extern __crit kerrno_t _kaddist_vtimedrecv_andunlock(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, struct timespec const *__restrict abstime, void *__restrict buf);
-extern __crit kerrno_t _kaddist_vtimeoutrecv_andunlock(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, struct timespec const *__restrict timeout, void *__restrict buf);
+extern __crit __wunused __nonnull((1,2,3))   kerrno_t _kaddist_vrecv_andunlock(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, void *__restrict buf);
+extern __crit __wunused __nonnull((1,2,3))   kerrno_t _kaddist_vtryrecv_andunlock(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, void *__restrict buf);
+extern __crit __wunused __nonnull((1,2,3,4)) kerrno_t _kaddist_vtimedrecv_andunlock(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, struct timespec const *__restrict abstime, void *__restrict buf);
+extern __crit __wunused __nonnull((1,2,3,4)) kerrno_t _kaddist_vtimeoutrecv_andunlock(struct kaddist *__restrict self, struct kaddistticket *__restrict ticket, struct timespec const *__restrict timeout, void *__restrict buf);
 
 #ifdef __INTELLISENSE__
 //////////////////////////////////////////////////////////////////////////
@@ -282,7 +291,9 @@ extern __crit kerrno_t _kaddist_vtimeoutrecv_andunlock(struct kaddist *__restric
 // @return: KE_OK:        All data was send using non-blocking and unbuffered data transfer.
 // @return: KE_DESTROYED: The data distributor was destroyed.
 // @return: KE_NOMEM:     Not all tickets were ready, but not enough memory was available to allocate a new chunk.
-extern kerrno_t kaddist_vsend(struct kaddist *__restrict self, void const *__restrict buf);
+extern __nonnull((1,2)) kerrno_t
+kaddist_vsend(struct kaddist *__restrict self,
+              void const *__restrict buf);
 #else
 #define kaddist_vsend(self,buf) \
  __xblock({ struct kaddist *const __advsself = (self);\
@@ -293,7 +304,9 @@ extern kerrno_t kaddist_vsend(struct kaddist *__restrict self, void const *__res
             __xreturn __advserr;\
  })
 #endif
-extern __crit kerrno_t _kaddist_vsend_andunlock(struct kaddist *__restrict self, void const *__restrict buf);
+extern __crit __nonnull((1,2)) kerrno_t
+_kaddist_vsend_andunlock(struct kaddist *__restrict self,
+                         void const *__restrict buf);
 
 
 __DECL_END

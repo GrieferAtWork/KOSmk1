@@ -25,63 +25,110 @@
 
 #include <kos/config.h>
 #include <kos/kernel/pipe.h>
+#include <kos/kernel/proc.h>
 #include <malloc.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 
 __DECL_BEGIN
 
-void kpipe_destroy(struct kpipe *self) {
- kassert_object(self,KOBJECT_MAGIC_PIPE);
- kiobuf_quit(&self->p_iobuf);
- free(self);
+struct ksuperblock kpipe_fs;
+
+#define FIX_MAXSIZE(size) \
+ min(size,katomic_load(kproc_self()->p_sand.ts_pipemax))
+
+
+#define SELF ((struct kpipe *)self)
+static void pipe_quit(struct kinode *self) { kiobuf_quit(&SELF->p_iobuf); }
+static kerrno_t pipe_getattr(struct kinode const *self, __size_t ac, union kinodeattr *av) {
+ kerrno_t error;
+ for (; ac; --ac,++av) switch (av->ia_common.a_id) {
+  {
+   size_t cursize;
+   if (0) { case KATTR_FS_SIZE: error = kiobuf_getrsize(&SELF->p_iobuf,&cursize); }
+   if (0) { case KATTR_FS_BUFSIZE: error = kiobuf_getwsize(&SELF->p_iobuf,&cursize); }
+   if (0) { case KATTR_FS_MAXSIZE: error = kiobuf_getmaxsize(&SELF->p_iobuf,&cursize); }
+   if __unlikely(KE_ISERR(error)) return error;
+   av->ia_size.sz_size = (pos_t)cursize;
+   break;
+  }
+  default:
+   error = kinode_generic_getattr(self,1,av);
+   if __unlikely(KE_ISERR(error)) return error;
+   break;
+ }
+ return KE_OK;
 }
+static kerrno_t pipe_setattr(struct kinode *self, __size_t ac, union kinodeattr const *av) {
+ kerrno_t error;
+ for (; ac; --ac,++av) switch (av->ia_common.a_id) {
+  {
+   size_t new_max_size;
+  case KATTR_FS_MAXSIZE:
+   new_max_size = FIX_MAXSIZE(av->ia_size.sz_size);
+   error = kiobuf_setmaxsize(&SELF->p_iobuf,new_max_size,NULL);
+   if __unlikely(KE_ISERR(error)) return error;
+   break;
+  }
+  default:
+   error = kinode_generic_setattr(self,1,av);
+   if __unlikely(KE_ISERR(error)) return error;
+   break;
+ }
+ return KE_OK;
+}
+struct kinodetype kpipe_type = {
+ .it_size    = sizeof(struct kpipe),
+ .it_quit    = &pipe_quit,
+ .it_getattr = &pipe_getattr,
+ .it_setattr = &pipe_setattr,
+};
 
 __crit __ref struct kpipe *kpipe_new(size_t max_size) {
  __ref struct kpipe *result;
  KTASK_CRIT_MARK
- if __unlikely((result = omalloc(struct kpipe)) == NULL) return NULL;
- kobject_init(result,KOBJECT_MAGIC_PIPE);
- result->p_refcnt = 1;
- kiobuf_init_ex(&result->p_iobuf,max_size);
+ /* Create the pipe INode. */
+ result = (__ref struct kpipe *)__kinode_alloc(&kpipe_fs,&kpipe_type,
+                                               &kpipesuper_type,
+                                               S_IFIFO);
+ if __unlikely(!result) return NULL;
+ kiobuf_init_ex(&result->p_iobuf,FIX_MAXSIZE(max_size));
  return result;
 }
+
 
 
 __local __crit __ref struct kpipefile *
 kpipefile_new(struct kfiletype *__restrict type,
-              struct kpipe *__restrict pipe) {
+              struct kpipe *__restrict pipe,
+              struct kdirent *dent) {
  __ref struct kpipefile *result;
  KTASK_CRIT_MARK
- if __unlikely(KE_ISERR(kpipe_incref(pipe))) return NULL;
- if __unlikely((result = omalloc(struct kpipefile)) == NULL) goto err_pipe;
+ if __unlikely(KE_ISERR(kinode_incref((struct kinode *)pipe))) return NULL;
+ if __unlikely(dent && KE_ISERR(kdirent_incref(dent))) goto err_pipe;
+ if __unlikely((result = omalloc(struct kpipefile)) == NULL) goto err_dent;
  kfile_init(&result->pr_file,type);
- result->pr_pipe = pipe; // Inherit reference
+ result->pr_pipe = pipe; /* Inherit reference */
+ result->pr_dirent = dent; /* Inherit reference */
  return result;
-err_pipe:
- kpipe_decref(pipe);
+err_dent: if (dent) kdirent_decref(dent);
+err_pipe: kinode_decref((struct kinode *)pipe);
  return NULL;
 }
-
-__crit __ref struct kpipefile *
-kpipefile_newreader(struct kpipe *__restrict pipe) {
- KTASK_CRIT_MARK
- return kpipefile_new(&kpipereader_type,pipe);
-}
-__crit __ref struct kpipefile *
-kpipefile_newwriter(struct kpipe *__restrict pipe) {
- KTASK_CRIT_MARK
- return kpipefile_new(&kpipewriter_type,pipe);
-}
+__crit __ref struct kpipefile *kpipefile_newreader(struct kpipe *__restrict pipe, struct kdirent *dent) { KTASK_CRIT_MARK return kpipefile_new(&kpipereader_type,pipe,dent); }
+__crit __ref struct kpipefile *kpipefile_newwriter(struct kpipe *__restrict pipe, struct kdirent *dent) { KTASK_CRIT_MARK return kpipefile_new(&kpipewriter_type,pipe,dent); }
 
 
 static void
 kpipefile_quit(struct kpipefile *__restrict self) {
- kpipe_decref(self->pr_pipe);
+ kinode_decref((struct kinode *)self->pr_pipe);
+ if (self->pr_dirent) kdirent_decref(self->pr_dirent);
 }
 static kerrno_t
 kpipefile_read(struct kpipefile *__restrict self,
                void *__restrict buf, size_t bufsize,
                size_t *__restrict rsize) {
+ /* TODO: Blocking behavior can be configured through fcntl. */
  return kiobuf_read(&self->pr_pipe->p_iobuf,buf,bufsize,rsize,
                     KIO_BLOCKFIRST|KIO_NONE);
 }
@@ -89,6 +136,7 @@ static kerrno_t
 kpipefile_write(struct kpipefile *__restrict self,
                 void const *__restrict buf, size_t bufsize,
                 size_t *__restrict wsize) {
+ /* TODO: Blocking behavior can be configured through fcntl. */
  return kiobuf_write(&self->pr_pipe->p_iobuf,buf,bufsize,wsize,
                      KIO_BLOCKFIRST|KIO_NONE);
 }
@@ -96,7 +144,7 @@ static kerrno_t
 kpipefile_seek(struct kpipefile *__restrict self, off_t off,
                int whence, pos_t *__restrict newpos) {
  kerrno_t error; size_t did_skip;
- if (whence != SEEK_CUR || off < 0) return KE_NOSYS;
+ if __unlikely(whence != SEEK_CUR || off < 0) return KE_NOSYS;
  error = kiobuf_skip(&self->pr_pipe->p_iobuf,(size_t)off,&did_skip,
                      KIO_BLOCKNONE|KIO_NONE);
  if (__likely(KE_ISOK(error)) && newpos) *newpos = (pos_t)did_skip;
@@ -108,6 +156,13 @@ kpipefile_flush(struct kpipefile *__restrict self) {
 }
 
 
+struct kfiletype kpipesuper_type = {
+ .ft_size  = sizeof(struct kpipefile),
+ .ft_quit  = (void(*)(struct kfile *__restrict))&kpipefile_quit,
+ .ft_read  = (kerrno_t(*)(struct kfile *__restrict,void *__restrict,size_t,size_t *__restrict))&kpipefile_read,
+ .ft_write = (kerrno_t(*)(struct kfile *__restrict,void const *__restrict,size_t,size_t *__restrict))&kpipefile_write,
+ .ft_seek  = (kerrno_t(*)(struct kfile *__restrict,off_t,int,pos_t *__restrict))&kpipefile_seek,
+};
 struct kfiletype kpipereader_type = {
  .ft_size = sizeof(struct kpipefile),
  .ft_quit = (void(*)(struct kfile *__restrict))&kpipefile_quit,

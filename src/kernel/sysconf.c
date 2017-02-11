@@ -34,17 +34,17 @@ __DECL_BEGIN
 
 static __size_t __get_argmax(void) {
  __size_t result; struct kproc *proc = kproc_self();
- NOINTERRUPT_BEGINLOCK(kproc_trylock(proc,KPROC_LOCK_ENVIRON));
+ NOIRQ_BEGINLOCK(kproc_trylock(proc,KPROC_LOCK_ENVIRON));
  result = proc->p_environ.pe_memmax;
- NOINTERRUPT_ENDUNLOCK(kproc_unlock(proc,KPROC_LOCK_ENVIRON));
+ NOIRQ_ENDUNLOCK(kproc_unlock(proc,KPROC_LOCK_ENVIRON));
  return result;
 }
 
 static unsigned int __get_openmax(void) {
  unsigned int result; struct kproc *proc = kproc_self();
- NOINTERRUPT_BEGINLOCK(kproc_trylock(proc,KPROC_LOCK_FDMAN));
+ NOIRQ_BEGINLOCK(kproc_trylock(proc,KPROC_LOCK_FDMAN));
  result = proc->p_fdman.fdm_max;
- NOINTERRUPT_ENDUNLOCK(kproc_unlock(proc,KPROC_LOCK_FDMAN));
+ NOIRQ_ENDUNLOCK(kproc_unlock(proc,KPROC_LOCK_FDMAN));
  return result;
 }
 static size_t __get_avphyspages(void) {
