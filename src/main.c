@@ -128,6 +128,17 @@ void stress_malloc(void) {
 }
 #endif
 
+void test_write_file(void) {
+ struct kfile *fp; kerrno_t error;
+ error = krootfs_remove("/bigfile.h",(size_t)-1);
+ assertf(KE_ISOK(error),"%d",error);
+ //error = krootfs_open("/test.txt",(size_t)-1,O_CREAT|O_WRONLY,0,NULL,&fp);
+ //assertf(KE_ISOK(error),"%d",error);
+ //kfile_decref(fp);
+
+}
+
+
 
 void kernel_main(void) {
 
@@ -180,6 +191,7 @@ void kernel_main(void) {
 #undef RUN
  //test_taskstat();
 
+ test_write_file();
  run_init();
 
  karch_irq_disable();

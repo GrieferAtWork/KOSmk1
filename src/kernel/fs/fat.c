@@ -76,6 +76,11 @@ static kerrno_t kfat_walkcallback(struct kfatfs *fs, struct kfatfilepos const *f
                                   struct kfatfileheader const *file,
                                   char const *filename, size_t filename_size,
                                   struct kfat_walkdata *data) {
+/*
+ printf("FAT Directory entry: %.*q (Looking for %.*q)\n",
+        (unsigned)filename_size,filename,
+        (unsigned)data->name_len,data->name_str);
+*/
  if (data->name_len == filename_size &&
      memcmp(data->name_str,filename,filename_size*sizeof(char)) == 0) {
   // Found it
@@ -264,13 +269,14 @@ static kerrno_t kfatinode_unlink(struct kfatinode *self,
                                  struct kdirentname const *name,
                                  struct kfatinode *inode) {
  struct kfatfs *fatfs; kerrno_t error;
- assert(self->fi_inode.i_type == &kfatinode_dir_type);
+ assert(self->fi_inode.i_type == &kfatinode_dir_type ||
+        self->fi_inode.i_type == &kfatsuperblock_type.st_node);
  assert(inode->fi_inode.i_type == &kfatinode_file_type);
  fatfs = &((struct kfatsuperblock *)kinode_superblock(&self->fi_inode))->f_fs;
  error = kfatfs_delheader(fatfs,inode->fi_pos.fm_headpos);
  if (KE_ISOK(error)) {
-  kfatfs_delchain(fatfs,kfatfileheader_getcluster(&((struct kfatinode *)inode)->fi_file));
-  // TODO: Free unused sectors from 'self'
+  /* Free unused sectors from 'self' */
+  error = kfatfs_fat_freeall(fatfs,kfatfileheader_getcluster(&((struct kfatinode *)inode)->fi_file));
  }
  return error;
 }
@@ -282,8 +288,8 @@ static kerrno_t kfatinode_rmdir(struct kfatinode *self,
  assert(inode->fi_inode.i_type == &kfatinode_dir_type);
  fatfs = &((struct kfatsuperblock *)kinode_superblock(&self->fi_inode))->f_fs;
  error = kfatfs_delheader(fatfs,inode->fi_pos.fm_headpos);
- if (KE_ISOK(error)) {
-  kfatfs_delchain(fatfs,kfatfileheader_getcluster(&((struct kfatinode *)inode)->fi_file));
+ if __likely(KE_ISOK(error)) {
+  error = kfatfs_fat_freeall(fatfs,kfatfileheader_getcluster(&((struct kfatinode *)inode)->fi_file));
  }
  return error;
 }
@@ -304,21 +310,25 @@ struct kinodetype kfatinode_dir_type = {
 };
 
 
+#define FILE       (self)
+#define FATNODE   ((struct kfatinode *)FILE->bf_inode)
+#define FATSUPER  ((struct kfatsuperblock *)FILE->bf_inode->i_sblock)
+#define FATFS     (&FATSUPER->f_fs)
 static kerrno_t kfatfile_loadchunk(struct kblockfile const *self,
                                    struct kfilechunk const *chunk, void *__restrict buf) {
- struct kfatfs const *fs = &((struct kfatsuperblock *)self->bf_inode->i_sblock)->f_fs;
+ struct kfatfs const *fs = FATFS;
  return kfatfs_loadsectors(fs,kfatfs_clusterstart(fs,(kfatcls_t)chunk->fc_data),
                            fs->f_sec4clus,buf);
 }
 static kerrno_t kfatfile_savechunk(struct kblockfile *self,
                                    struct kfilechunk const *chunk, void const *__restrict buf) {
- struct kfatfs *fs = &((struct kfatsuperblock *)self->bf_inode->i_sblock)->f_fs;
+ struct kfatfs *fs = FATFS;
  return kfatfs_savesectors(fs,kfatfs_clusterstart(fs,(kfatcls_t)chunk->fc_data),
                            fs->f_sec4clus,buf);
 }
 static kerrno_t kfatfile_nextchunk(struct kblockfile *self, struct kfilechunk *chunk) {
  kerrno_t error; kfatcls_t target;
- struct kfatfs *fs = &((struct kfatsuperblock *)self->bf_inode->i_sblock)->f_fs;
+ struct kfatfs *fs = FATFS;
  assertf(chunk->fc_data < fs->f_clseof,"The given chunk contains invalid data");
  error = kfatfs_fat_readandalloc(fs,(kfatcls_t)chunk->fc_data,&target);
  if __likely(KE_ISOK(error)) chunk->fc_data = (__u64)target;
@@ -326,13 +336,13 @@ static kerrno_t kfatfile_nextchunk(struct kblockfile *self, struct kfilechunk *c
 }
 static kerrno_t kfatfile_findchunk(struct kblockfile *self, struct kfilechunk *chunk) {
  kfatcls_t rescls,newcls; kerrno_t error; __u64 count;
- struct kfatinode *fatnode = (struct kfatinode *)self->bf_inode;
+ struct kfatinode *fatnode = FATNODE;
  struct kfatfs *fs = &((struct kfatsuperblock *)fatnode->fi_inode.i_sblock)->f_fs;
  rescls = kfatfileheader_getcluster(&fatnode->fi_file);
- if __unlikely(rescls >= fs->f_clseof) {
+ if __unlikely(kfatfs_iseofcluster(fs,rescls)) {
   // Allocate the initial chunk
   if __unlikely(KE_ISERR(error = kfatfs_fat_allocfirst(fs,&rescls))) return error;
-  assert(rescls < fs->f_clseof);
+  assert(!kfatfs_iseofcluster(fs,rescls));
   // Link the file header to point to that first chunk
   fatnode->fi_file.f_clusterlo = leswap_16((__u16)(rescls));
   fatnode->fi_file.f_clusterhi = leswap_16((__u16)(rescls >> 16));
@@ -349,24 +359,36 @@ static kerrno_t kfatfile_findchunk(struct kblockfile *self, struct kfilechunk *c
  chunk->fc_data = rescls;
  return KE_OK;
 }
-//kerrno_t (*bft_releasechunks)(struct kblockfile *self, __u64 cindex);
+static kerrno_t kfatfile_releasechunks(struct kblockfile *self, __u64 cindex) {
+ kfatcls_t rescls,newcls; kerrno_t error;
+ struct kfatinode *fatnode = FATNODE;
+ struct kfatfs *fs = &((struct kfatsuperblock *)fatnode->fi_inode.i_sblock)->f_fs;
+ rescls = kfatfileheader_getcluster(&fatnode->fi_file);
+ /* The following shouldn't happen, but left be careful. */
+ if __unlikely(kfatfs_iseofcluster(fs,rescls)) return KE_OK;
+ if (cindex) while (--cindex) {
+  error = kfatfs_fat_read(fs,rescls,&newcls);
+  if __unlikely(KE_ISERR(error)) return error;
+  rescls = newcls;
+ }
+ return kfatfs_fat_freeall(fs,rescls);
+}
 static kerrno_t kfatfile_getsize(struct kblockfile const *self, __pos_t *fsize) {
- *fsize = (__pos_t)kfatfileheader_getsize(&((struct kfatinode *)self->bf_inode)->fi_file);
+ *fsize = (__pos_t)kfatfileheader_getsize(&(FATNODE)->fi_file);
  return KE_OK;
 }
 static kerrno_t kfatfile_setsize(struct kblockfile *self, __pos_t fsize) {
- struct kfatinode *fatinode = (struct kfatinode *)self->bf_inode;
- struct kfatfs *fs = &((struct kfatsuperblock *)self->bf_inode->i_sblock)->f_fs;
+ struct kfatinode *fatinode = FATNODE;
+ struct kfatfs *fs = FATFS;
 #ifdef __USE_FILE_OFFSET64
  if __unlikely(fsize > (__pos_t)(__u32)-1) return KE_NOSPC;
 #endif
  fatinode->fi_file.f_size = leswap_32((__u32)fsize);
- kfatfs_savefileheader(fs,fatinode->fi_pos.fm_headpos,&fatinode->fi_file);
  return kfatfs_savefileheader(fs,fatinode->fi_pos.fm_headpos,&fatinode->fi_file);
 }
 static kerrno_t kfatfile_getchunksize(struct kblockfile const *self, size_t *chsize) {
  struct kfatfs const *fatfs;
- fatfs = &((struct kfatsuperblock *)self->bf_inode->i_sblock)->f_fs;
+ fatfs = FATFS;
  *chsize = fatfs->f_secsize*fatfs->f_sec4clus;
  return KE_OK;
 }
@@ -378,8 +400,7 @@ struct kblockfiletype kfatfile_file_type = {
  .bft_savechunk = kfatfile_savechunk,
  .bft_nextchunk = kfatfile_nextchunk,
  .bft_findchunk = kfatfile_findchunk,
- //kerrno_t (*bft_releasechunks)(struct kblockfile *self, __u64 cindex);
- //kerrno_t (*bft_acquirechunks)(struct kblockfile *self, __u64 cindex);
+ .bft_releasechunks = kfatfile_releasechunks,
  .bft_getsize = kfatfile_getsize,
  .bft_setsize = kfatfile_setsize,
  .bft_getchunksize = kfatfile_getchunksize,

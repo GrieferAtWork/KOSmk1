@@ -137,6 +137,26 @@ kerrno_t kfatfs_savefileheader(struct kfatfs *self, __u64 headpos,
  return kfatfs_savesectors(self,headsec,1,secbuf);
 }
 
+kerrno_t kfatfs_delheader(struct kfatfs *self, __u64 headpos) {
+ kfatsec_t headsec; void *secbuf; kerrno_t error;
+ struct kfatfileheader *headbuf;
+ kassertobj(self); kassertobj(header);
+ headsec = (kfatsec_t)(headpos/self->f_secsize);
+ secbuf = alloca(self->f_secsize);
+ /* Load the sector that contains the file's header */
+ error = kfatfs_loadsectors(self,headsec,1,secbuf);
+ if __unlikely(KE_ISERR(error)) return error;
+ headbuf = (struct kfatfileheader *)((uintptr_t)secbuf+(size_t)(headpos % self->f_secsize));
+ assertf(headbuf+1 <= (struct kfatfileheader *)((uintptr_t)secbuf+self->f_secsize),
+         "File header spans multiple sectors.");
+ k_syslogf(KLOG_TRACE,"Updating FAT file header @ %I64u: '%.8s.%.3s'\n",
+           headpos,headbuf->f_name,headbuf->f_ext);
+ headbuf->f_marker = KFATFILE_MARKER_UNUSED;
+ /* Save the sector again */
+ return kfatfs_savesectors(self,headsec,1,secbuf);
+}
+
+
 __DECL_END
 
 #endif /* !__KOS_KERNEL_FS_FAT_INTERNAL_FHEAD_C_INL__ */

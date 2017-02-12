@@ -21,8 +21,7 @@ fi
 md                 /etc
 md                 /usr
 pf hdd/etc/passwd  /etc/passwd
-pf color-test      /usr/color-test
-pf ponies          /usr/ponies
+pf bigfile.h       /bigfile.h
 
 # disk_put readme.txt
 # disk_mkdir /bin

@@ -34,46 +34,104 @@
 #include <sys/types.h>
 #include <stdio.h>
 #include <kos/syslog.h>
+#include <limits.h>
 
 __DECL_BEGIN
 
+/* Bits used in FAT metadata. */
+#define FATMETA_CHANGED  01 /*< The  */
+#define FATMETA_LOADED   02
+#define FATMETA_BITS      2
+#define FATMETA_PERBYTE  (CHAR_BIT/FATMETA_BITS)
+
+#define FATMETA_ADDR(cluster)                          ((cluster)/FATMETA_PERBYTE)
+#define FATMETA_MASK(cluster,bits) ((byte_t)((bits) << ((cluster)%FATMETA_PERBYTE)*FATMETA_BITS))
+
+#if FATMETA_BITS > CHAR_BIT || CHAR_BIT % FATMETA_BITS
+#error "FIXME: Invalid amount of FAT meta bits"
+#endif
+
+#define SELF                       (self)
+#define FAT_VALIDCLUSTER(cluster) ((cluster) < ceildiv(SELF->f_fatsize,SELF->f_sec4fat))
+
+
+#define FATBIT_ON(cluster,bits) \
+ (assertf(FAT_VALIDCLUSTER(cluster),"Invalid cluster: %Iu",(size_t)(cluster)),\
+  SELF->f_fatmeta[FATMETA_ADDR(cluster)] |= FATMETA_MASK(cluster,bits))
+#define FATBIT_OFF(cluster,bits) \
+ (assertf(FAT_VALIDCLUSTER(cluster),"Invalid cluster: %Iu",(size_t)(cluster)),\
+  SELF->f_fatmeta[FATMETA_ADDR(cluster)] &= ~FATMETA_MASK(cluster,bits))
+#define FAT_CHANGED(cluster) \
+ (FATBIT_ON(cluster,FATMETA_CHANGED),\
+  SELF->f_flags |= KFATFS_FLAG_FATCHANGED)\
+
+#define FAT_WRITE(cluster,value)  ((*SELF->f_writefat)(SELF,cluster,value))
+#define FAT_WRITE_AND_UPDATE(cluster,value) \
+ (FAT_WRITE(cluster,value),FAT_CHANGED(cluster))
+
+
+typedef kfatsec_t kfatoff_t;
+
+/* Returns the sector offset associated with a given cluster. */
+#define /*kfatoff_t*/FAT_GETCLUSTEROFFSET(cluster) (*SELF->f_getfatsec)(SELF,cluster)
+#define /*kfatsec_t*/FAT_GETCLUSTERADDR(offset)    (SELF->f_firstfatsec+(offset))
+
+
+#define LOCK_WRITE_BEGIN()   krwlock_beginwrite(&SELF->f_fatlock)
+#define LOCK_WRITE_END()     krwlock_endwrite(&SELF->f_fatlock)
+#define LOCK_READ_BEGIN()    krwlock_beginread(&SELF->f_fatlock)
+#define LOCK_READ_END()      krwlock_endread(&SELF->f_fatlock)
+#define LOCK_DOWNGRADE()     krwlock_downgrade(&SELF->f_fatlock)
+
+
+kerrno_t _kfatfs_fat_freeall_unlocked(struct kfatfs *self, kfatcls_t first) {
+ kerrno_t error; kfatcls_t next;
+ error = _kfatfs_fat_read_unlocked(self,first,&next);
+ if __unlikely(KE_ISERR(error)) return error;
+ if (!kfatfs_iseofcluster(self,next)) {
+  error = _kfatfs_fat_freeall_unlocked(self,next);
+  if __unlikely(KE_ISERR(error)) return error;
+ }
+ /* Actually mark the cluster as unused. */
+ FAT_WRITE_AND_UPDATE(first,KFATFS_CUSTER_UNUSED);
+ return KE_OK;
+}
+
+kerrno_t kfatfs_fat_freeall(struct kfatfs *self, kfatcls_t first) {
+ kerrno_t error;
+ if __unlikely(KE_ISERR(error = LOCK_WRITE_BEGIN())) return error;
+ error = _kfatfs_fat_freeall_unlocked(self,first);
+ LOCK_WRITE_END();
+ return error;
+}
+
 kerrno_t kfatfs_fat_allocfirst(struct kfatfs *self, kfatcls_t *target) {
- kerrno_t error; size_t valaddr; __u8 valmask;
- if __unlikely(KE_ISERR(error = krwlock_beginwrite(&self->f_fatlock))) return error;
+ kerrno_t error;
+ if __unlikely(KE_ISERR(error = LOCK_WRITE_BEGIN())) return error;
  error = _kfatfs_fat_getfreecluster_unlocked(self,target,0);
  if __likely(KE_ISOK(error)) {
-  // If a cluster was found, link the previous one,
-  // and mark the new one as pointing to EOF
-  (*self->f_writefat)(self,*target,self->f_clseof_marker);
-  // Also need to mark the newly allocated cluster as modified
-  valaddr = (*target)/4,valmask = (__u8)(1 << ((*target)%4)*2);
-  self->f_fatmeta[valaddr] |= valmask;
-  // Finally, set the global flag indicating a change
-  self->f_flags |= KFATFS_FLAG_FATCHANGED;
+  /* If a cluster was found, link the previous one,
+   * and mark the new one as pointing to EOF */
+  FAT_WRITE_AND_UPDATE(*target,self->f_clseof_marker);
  }
- krwlock_endwrite(&self->f_fatlock);
+ LOCK_WRITE_END();
  return error;
 }
 kerrno_t kfatfs_fat_readandalloc(struct kfatfs *self, kfatcls_t index, kfatcls_t *target) {
- kerrno_t error; size_t valaddr;
- __u8 valmask,valval; kfatsec_t fatsec;
+ kerrno_t error; size_t meta_addr;
+ byte_t meta_mask,meta_val; kfatoff_t fat_index;
  kassertobj(self);
  kassertbyte(self->f_readfat);
  kassertbyte(self->f_writefat);
- kassertbyte(self->f_getfatsec);
  kassertmem(self->f_fatv,self->f_fatsize);
- kassertmem(self->f_fatmeta,ceildiv(self->f_fatsize,self->f_sec4fat*4));
  assert(self->f_secsize);
  assertf(index < self->f_clseof,"Given FAT byte is out-of-bounds");
-#if 1
- fatsec = (*self->f_getfatsec)(self,index);
-#else
- fatsec = index/self->f_secsize;
-#endif
- valaddr = fatsec/4,valmask = (__u8)(2 << ((fatsec%4)*2));
+ fat_index = FAT_GETCLUSTEROFFSET(index);
+ meta_addr = FATMETA_ADDR(fat_index);
+ meta_mask = FATMETA_MASK(fat_index,FATMETA_LOADED);
  if __unlikely(KE_ISERR(error = krwlock_beginread(&self->f_fatlock))) return error;
- valval = self->f_fatmeta[valaddr];
- if (valval&valmask) {
+ meta_val = self->f_fatmeta[meta_addr];
+ if (meta_val&meta_mask) {
   // Entry is already cached (no need to start writing)
   *target = (*self->f_readfat)(self,index);
   krwlock_endread(&self->f_fatlock);
@@ -81,25 +139,26 @@ kerrno_t kfatfs_fat_readandalloc(struct kfatfs *self, kfatcls_t index, kfatcls_t
  } else {
   krwlock_endread(&self->f_fatlock);
  }
-
- if __unlikely(KE_ISERR(error = krwlock_beginwrite(&self->f_fatlock))) return error;
- valval = self->f_fatmeta[valaddr];
+ if __unlikely(KE_ISERR(error = LOCK_WRITE_BEGIN())) return error;
+ meta_val = self->f_fatmeta[meta_addr];
  // Make sure that no other task loaded the
  // FAT while we were switching to write-mode.
- if (valval&valmask) {
+ if (meta_val&meta_mask) {
   *target = (*self->f_readfat)(self,index);
  } else {
   // Entry is not cached --> Load the fat's entry.
-  error = kfatfs_loadsectors(self,self->f_firstfatsec+fatsec,1,
-                            (void *)((uintptr_t)self->f_fatv+fatsec*self->f_secsize));
+  error = kfatfs_loadsectors(self,FAT_GETCLUSTERADDR(fat_index),1,
+                            (void *)((uintptr_t)self->f_fatv+fat_index*self->f_secsize));
   if __unlikely(KE_ISERR(error)) goto end_write;
   *target = (*self->f_readfat)(self,index);
   // Mark the FAT cache entry as loaded
-  assert(self->f_fatmeta[valaddr] == valval);
-  self->f_fatmeta[valaddr] = valval|valmask;
+  assert(self->f_fatmeta[meta_addr] == meta_val);
+  self->f_fatmeta[meta_addr] = meta_val|meta_mask;
  }
  if (kfatfs_iseofcluster(self,*target)) {
-  k_syslogf(KLOG_INFO,"Allocating FAT cluster after EOF %I32u (out-of-bounds for %I32u)\n",*target,self->f_clseof);
+  k_syslogf(KLOG_INFO
+           ,"Allocating FAT cluster after EOF %I32u from %I32u (out-of-bounds for %I32u)\n"
+           ,*target,index,self->f_clseof);
   // Search for a free cluster (We prefer to use the nearest chunk to reduce fragmentation)
   error = _kfatfs_fat_getfreecluster_unlocked(self,target,index+1);
   if __likely(KE_ISOK(error)) {
@@ -107,107 +166,138 @@ kerrno_t kfatfs_fat_readandalloc(struct kfatfs *self, kfatcls_t index, kfatcls_t
    // and mark the new one as pointing to EOF
    (*self->f_writefat)(self,index,*target);
    (*self->f_writefat)(self,*target,self->f_clseof_marker);
-   // Don't forget to mark the cache as modifed
-   self->f_fatmeta[valaddr] |= valmask|(valmask >> 1);
-   // Also need to mark the newly allocated cluster as modified
-   fatsec = *target/self->f_secsize;
-   valaddr = fatsec/4,valmask = (__u8)(1 << (fatsec%4)*2);
-   self->f_fatmeta[valaddr] |= valmask;
-   // Finally, set the global flag indicating a change
+   /* Don't forget to mark the cache as modified */
+   self->f_fatmeta[meta_addr] |= meta_mask|(meta_mask >> 1);
+   /* Also need to mark the newly allocated cluster as modified */
+   fat_index = FAT_GETCLUSTEROFFSET(*target);
+   meta_addr = FATMETA_ADDR(fat_index);
+   meta_mask = FATMETA_MASK(fat_index,FATMETA_CHANGED);
+   self->f_fatmeta[meta_addr] |= meta_mask;
+   /* Finally, set the global flag indicating a change */
    self->f_flags |= KFATFS_FLAG_FATCHANGED;
   }
  }
 end_write:
- krwlock_endwrite(&self->f_fatlock);
+ LOCK_WRITE_END();
 end:
  return error;
 }
 
-kerrno_t kfatfs_fat_read(struct kfatfs *self, kfatcls_t index, kfatcls_t *target) {
- kerrno_t error; size_t valaddr;
- __u8 valmask,valval; kfatsec_t fatsec;
+kerrno_t _kfatfs_fat_read_unlocked(struct kfatfs *self, kfatcls_t index, kfatcls_t *target) {
+ kerrno_t error; size_t meta_addr;
+ byte_t meta_mask,meta_val; kfatoff_t fat_index;
  kassertobj(self);
  kassertbyte(self->f_readfat);
  kassertbyte(self->f_writefat);
  kassertmem(self->f_fatv,self->f_fatsize);
- kassertmem(self->f_fatmeta,ceildiv(self->f_fatsize,self->f_sec4fat*4));
  assert(self->f_secsize);
  assertf(index < self->f_clseof,"Given FAT byte is out-of-bounds");
-#if 1
- fatsec = (*self->f_getfatsec)(self,index);
-#else
- fatsec = index/self->f_secsize;
-#endif
- valaddr = fatsec/4,valmask = (__u8)(2 << ((fatsec%4)*2));
+ assert(FAT_VALIDCLUSTER(index));
+ fat_index = FAT_GETCLUSTEROFFSET(index);
+ meta_addr = FATMETA_ADDR(fat_index);
+ meta_mask = FATMETA_MASK(fat_index,FATMETA_LOADED);
+ meta_val  = self->f_fatmeta[meta_addr];
+ if (meta_val&meta_mask) {
+  /* Entry is already cached */
+  *target = (*self->f_readfat)(self,index);
+  return KE_OK;
+ }
+ meta_val = self->f_fatmeta[meta_addr];
+ // Make sure that no other task loaded the
+ // FAT while we were switching to write-mode.
+ if __unlikely(meta_val&meta_mask) {
+  *target = (*self->f_readfat)(self,index);
+  LOCK_WRITE_END();
+  return KE_OK;
+ }
+ // Entry is not cached --> Load the fat's entry.
+ error = kfatfs_loadsectors(self,FAT_GETCLUSTERADDR(fat_index),1,
+                           (void *)((uintptr_t)self->f_fatv+fat_index*self->f_secsize));
+ if __likely(KE_ISOK(error)) {
+  *target = (*self->f_readfat)(self,index);
+  // Mark the FAT cache entry as loaded
+  assert(self->f_fatmeta[meta_addr] == meta_val);
+  self->f_fatmeta[meta_addr] = meta_val|meta_mask;
+ }
+ return error;
+}
+kerrno_t kfatfs_fat_read(struct kfatfs *self, kfatcls_t index, kfatcls_t *target) {
+ kerrno_t error; size_t meta_addr;
+ byte_t meta_mask,meta_val; kfatoff_t fat_index;
+ kassertobj(self);
+ kassertbyte(self->f_readfat);
+ kassertbyte(self->f_writefat);
+ kassertmem(self->f_fatv,self->f_fatsize);
+ assert(self->f_secsize);
+ assertf(index < self->f_clseof,"Given FAT byte is out-of-bounds");
+ fat_index = FAT_GETCLUSTEROFFSET(index);
+ meta_addr = FATMETA_ADDR(fat_index);
+ meta_mask = FATMETA_MASK(fat_index,FATMETA_LOADED);
  if __unlikely(KE_ISERR(error = krwlock_beginread(&self->f_fatlock))) return error;
- valval = self->f_fatmeta[valaddr];
- if (valval&valmask) {
+ meta_val = self->f_fatmeta[meta_addr];
+ if (meta_val&meta_mask) {
   // Entry is already cached (no need to start writing)
   *target = (*self->f_readfat)(self,index);
   krwlock_endread(&self->f_fatlock);
   return KE_OK;
  }
  krwlock_endread(&self->f_fatlock);
- if __unlikely(KE_ISERR(error = krwlock_beginwrite(&self->f_fatlock))) return error;
- valval = self->f_fatmeta[valaddr];
+ if __unlikely(KE_ISERR(error = LOCK_WRITE_BEGIN())) return error;
+ meta_val = self->f_fatmeta[meta_addr];
  // Make sure that no other task loaded the
  // FAT while we were switching to write-mode.
- if __unlikely(valval&valmask) {
+ if __unlikely(meta_val&meta_mask) {
   *target = (*self->f_readfat)(self,index);
-  krwlock_endwrite(&self->f_fatlock);
+  LOCK_WRITE_END();
   return KE_OK;
  }
  // Entry is not cached --> Load the fat's entry.
- error = kfatfs_loadsectors(self,self->f_firstfatsec+fatsec,1,
-                           (void *)((uintptr_t)self->f_fatv+fatsec*self->f_secsize));
+ error = kfatfs_loadsectors(self,FAT_GETCLUSTERADDR(fat_index),1,
+                           (void *)((uintptr_t)self->f_fatv+fat_index*self->f_secsize));
  if __likely(KE_ISOK(error)) {
   *target = (*self->f_readfat)(self,index);
   // Mark the FAT cache entry as loaded
-  assert(self->f_fatmeta[valaddr] == valval);
-  self->f_fatmeta[valaddr] = valval|valmask;
+  assert(self->f_fatmeta[meta_addr] == meta_val);
+  self->f_fatmeta[meta_addr] = meta_val|meta_mask;
  }
- krwlock_endwrite(&self->f_fatlock);
+ LOCK_WRITE_END();
  return error;
 }
 kerrno_t kfatfs_fat_write(struct kfatfs *self, kfatcls_t index, kfatcls_t target) {
- kerrno_t error; size_t valaddr; __u8 valmask,valval;
- kfatsec_t fatsec;
+ kerrno_t error; size_t meta_addr; byte_t meta_mask,meta_val;
+ kfatoff_t fat_index;
  kassertobj(self);
  kassertbyte(self->f_readfat);
  kassertbyte(self->f_writefat);
  kassertmem(self->f_fatv,self->f_fatsize);
- kassertmem(self->f_fatmeta,ceildiv(self->f_fatsize,self->f_sec4fat*4));
  assert(self->f_secsize);
  assertf(index < self->f_clseof,"Given FAT byte is out-of-bounds");
-#if 1
- fatsec = (*self->f_getfatsec)(self,index);
-#else
- fatsec = index/self->f_secsize;
-#endif
- valaddr = fatsec/4,valmask = (__u8)(2 << ((fatsec%4)*2));
+ fat_index = FAT_GETCLUSTEROFFSET(index);
+ meta_addr = FATMETA_ADDR(fat_index);
+ meta_mask = FATMETA_MASK(fat_index,FATMETA_LOADED);
 
  // Make sure the FAT cache is loaded
- if __unlikely(KE_ISERR(error = krwlock_beginwrite(&self->f_fatlock))) return error;
- valval = self->f_fatmeta[valaddr];
- if (!(valval&valmask)) { // Load the fat's entry.
-  error = kfatfs_loadsectors(self,self->f_firstfatsec+fatsec,1,
-                            (void *)((uintptr_t)self->f_fatv+fatsec*self->f_secsize));
-  if __unlikely(KE_ISERR(error)) { krwlock_endwrite(&self->f_fatlock); return error; }
-  valval |= valmask;
+ if __unlikely(KE_ISERR(error = LOCK_WRITE_BEGIN())) return error;
+ meta_val = self->f_fatmeta[meta_addr];
+ if (!(meta_val&meta_mask)) { // Load the fat's entry.
+  error = kfatfs_loadsectors(self,FAT_GETCLUSTERADDR(fat_index),1,
+                            (void *)((uintptr_t)self->f_fatv+fat_index*self->f_secsize));
+  if __unlikely(KE_ISERR(error)) { LOCK_WRITE_END(); return error; }
+  meta_val |= meta_mask;
  }
- valmask >>= 1; // Switch to the associated changed-mask
- assert(valmask);
+ meta_mask >>= 1; // Switch to the associated changed-mask
+ assert(meta_mask);
  // Actually write the cache
  (*self->f_writefat)(self,index,target);
- if (!(valval&valmask)) {
+ if (!(meta_val&meta_mask)) {
   // New change --> mark the chunk as such
   // Also update the changed flag in the FS (which is used to speed up flushing)
   self->f_flags |= KFATFS_FLAG_FATCHANGED;
-  valval |= valmask;
+  meta_val |= meta_mask;
  }
  // Update the metadata flags
- self->f_fatmeta[valaddr] = valval;
- krwlock_endwrite(&self->f_fatlock);
+ self->f_fatmeta[meta_addr] = meta_val;
+ LOCK_WRITE_END();
  return KE_OK;
 }
 
@@ -217,14 +307,13 @@ kerrno_t kfatfs_fat_flush(struct kfatfs *self) {
  kassertbyte(self->f_readfat);
  kassertbyte(self->f_writefat);
  kassertmem(self->f_fatv,self->f_fatsize);
- kassertmem(self->f_fatmeta,ceildiv(self->f_fatsize,self->f_sec4fat*4));
- if __unlikely(KE_ISERR(error = krwlock_beginwrite(&self->f_fatlock))) return error;
+ if __unlikely(KE_ISERR(error = LOCK_WRITE_BEGIN())) return error;
  if (self->f_flags&KFATFS_FLAG_FATCHANGED) {
   // Changes were made, so we need to flush them!
   error = _kfatfs_fat_doflush_unlocked(self);
   if __likely(KE_ISOK(error)) self->f_flags &= ~(KFATFS_FLAG_FATCHANGED);
  }
- krwlock_endwrite(&self->f_fatlock);
+ LOCK_WRITE_END();
  return error;
 }
 kerrno_t _kfatfs_fat_doflush_unlocked(struct kfatfs *self) {
@@ -234,12 +323,11 @@ kerrno_t _kfatfs_fat_doflush_unlocked(struct kfatfs *self) {
  kassertbyte(self->f_readfat);
  kassertbyte(self->f_writefat);
  kassertmem(self->f_fatv,self->f_fatsize);
- kassertmem(self->f_fatmeta,ceildiv(self->f_fatsize,self->f_sec4fat*4));
  assert(self->f_fatsize == self->f_secsize*self->f_sec4fat);
  for (i = 0; i < self->f_sec4fat; ++i) {
-  fat_data = (byte_t *)self->f_fatv+(i*self->f_secsize);
-  meta_data = (byte_t *)self->f_fatmeta+(i/4);
-  metamask = (__u8)(1 << ((i%4)*2));
+  fat_data  = (byte_t *)self->f_fatv+(i*self->f_secsize);
+  meta_data = (byte_t *)self->f_fatmeta+FATMETA_ADDR(i);
+  metamask  = FATMETA_MASK(i,FATMETA_CHANGED);
   if (*meta_data&metamask) {
    // Modified fat sector (flush it)
    k_syslogf(KLOG_MSG,"Saving modified FAT sector %I32u (%I8x %I8x)\n",i,*meta_data,metamask);
@@ -255,31 +343,33 @@ kerrno_t _kfatfs_fat_doflush_unlocked(struct kfatfs *self) {
  return KE_OK;
 }
 
-kerrno_t _kfatfs_fat_getfreecluster_unlocked(
- struct kfatfs *self, kfatcls_t *result, kfatcls_t hint) {
- kerrno_t error; kfatcls_t cls; size_t valaddr;
- __u8 valmask,valval; kfatsec_t fatsec;
+kerrno_t
+_kfatfs_fat_getfreecluster_unlocked(struct kfatfs *self,
+                                    kfatcls_t *result,
+                                    kfatcls_t hint) {
+ kerrno_t error; kfatcls_t cls; size_t meta_addr;
+ byte_t meta_mask,meta_val; kfatoff_t fat_index;
  kassertobj(self);
  kassertbyte(self->f_readfat);
  kassertbyte(self->f_writefat);
  kassertmem(self->f_fatv,self->f_fatsize);
- kassertmem(self->f_fatmeta,ceildiv(self->f_fatsize,self->f_sec4fat*4));
  assert(self->f_secsize);
- // TODO: Start searching for an empty cluster at 'hint' (but only if it's 'hint > 2')
+ /* TODO: Start searching for an empty cluster at 'hint' (but only if it's 'hint > 2') */
  for (cls = 2; cls < self->f_clseof; ++cls) {
-  fatsec = cls/self->f_secsize;
-  valaddr = fatsec/4,valmask = (__u8)(2 << ((fatsec%4)*2));
-  valval = self->f_fatmeta[valaddr];
-  if __unlikely(!(valval&valmask)) {
-   // Load the FAT entry, if it wasn't already
-   error = kfatfs_loadsectors(self,self->f_firstfatsec+fatsec,1,
-                             (void *)((uintptr_t)self->f_fatv+fatsec*self->f_secsize));
+  fat_index = FAT_GETCLUSTEROFFSET(cls);
+  meta_addr = FATMETA_ADDR(fat_index);
+  meta_mask = FATMETA_MASK(fat_index,FATMETA_LOADED);
+  meta_val = self->f_fatmeta[meta_addr];
+  if __unlikely(!(meta_val&meta_mask)) {
+   /* Load the FAT entry, if it wasn't already */
+   error = kfatfs_loadsectors(self,FAT_GETCLUSTERADDR(fat_index),1,
+                             (void *)((uintptr_t)self->f_fatv+fat_index*self->f_secsize));
    if __unlikely(KE_ISERR(error)) return error;
-   assert(self->f_fatmeta[valaddr] == valval);
-   self->f_fatmeta[valaddr] = valval|valmask;
+   assert(self->f_fatmeta[meta_addr] == meta_val);
+   self->f_fatmeta[meta_addr] = meta_val|meta_mask;
   }
   if ((*self->f_readfat)(self,cls) == KFATFS_CUSTER_UNUSED) {
-   // Found an unused cluster
+   /* Found an unused cluster */
    *result = cls;
    return KE_OK;
   }

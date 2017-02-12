@@ -203,18 +203,21 @@ __STATIC_ASSERT(sizeof(struct kfatfileheader) == 32);
 #endif
 
 typedef __u32     kfatsec_t; /*< Sector number. */
-typedef __u32     kfatcls_t; /*< Cluster number. */
+typedef __u32     kfatcls_t; /*< Cluster/Fat index number. */
+typedef kfatsec_t kfatoff_t; /*< Sector offset in the FAT table (Add to 'f_firstfatsec' to get a 'kfatsec_t'). */
 typedef kfatsec_t kfatdir_t;
 
 struct kfatfs;
 
 #define KFATFS_CUSTER_UNUSED 0 /*< Cluster number found in the FAT, marking an unused cluster. */
-typedef kfatsec_t (*pkfatfs_getfatsector)(struct kfatfs *self, kfatcls_t index);
+typedef kfatoff_t (*pkfatfs_getfatsector)(struct kfatfs *self, kfatcls_t index);
 typedef kfatcls_t (*pkfatfs_readfat)(struct kfatfs *self, kfatcls_t cluster);
 typedef void (*pkfatfs_writefat)(struct kfatfs *self, kfatcls_t cluster, kfatcls_t value);
 
 #define kfatfs_iseofcluster(self,cls) \
  ((cls) >= (self)->f_clseof/* || (cls) < 2*/)
+
+
 
 struct kfatfs {
  __ref struct ksdev *f_dev;           /*< [1..1][const] Storage device used for this FAT. */
@@ -235,8 +238,8 @@ union{
  __u32               f_fatcount;      /*< [const] Amount of consecutive FAT copies. */
  __size_t            f_fatsize;       /*< [const] == f_sec4fat*f_secsize. */
  kfatcls_t           f_clseof;        /*< [const] Cluster indices greater than or equal to this are considered EOF. */
- kfatcls_t           f_clseof_marker; /*< [const] Marker that should be used to mark EOF entires with the FAT. */
- pkfatfs_getfatsector f_getfatsec;    /*< [const][1..1] Get the sector number of a given FAT entry. */
+ kfatcls_t           f_clseof_marker; /*< [const] Marker that should be used to mark EOF entires in the FAT. */
+ pkfatfs_getfatsector f_getfatsec;    /*< [const][1..1] Get the sector offset of a given FAT entry (From 'f_firstfatsec' where the FAT table portion is written to). */
  pkfatfs_readfat     f_readfat;       /*< [const][1..1] Read a FAT entry at a given position. */
  pkfatfs_writefat    f_writefat;      /*< [const][1..1] Write a FAT entry at a given position. */
  struct krwlock      f_fatlock;       /*< R/W lock for the CACHE (meaning to modify the cache, by reading from disk, you need to write-lock this) */
@@ -257,19 +260,24 @@ extern kerrno_t kfatfs_fat_write(struct kfatfs *self, kfatcls_t index, kfatcls_t
 extern kerrno_t kfatfs_fat_flush(struct kfatfs *self);
 extern kerrno_t kfatfs_fat_readandalloc(struct kfatfs *self, kfatcls_t index, kfatcls_t *target);
 extern kerrno_t kfatfs_fat_allocfirst(struct kfatfs *self, kfatcls_t *target);
+extern kerrno_t kfatfs_fat_freeall(struct kfatfs *self, kfatcls_t first); /*< Free all clusters in a chain starting at 'first'. */
 extern kerrno_t _kfatfs_fat_doflush_unlocked(struct kfatfs *self);
+extern kerrno_t _kfatfs_fat_read_unlocked(struct kfatfs *self, kfatcls_t index, kfatcls_t *target);
 extern kerrno_t _kfatfs_fat_load_unlocked(struct kfatfs *self, kfatcls_t index);
 extern kerrno_t _kfatfs_fat_getfreecluster_unlocked(struct kfatfs *self, kfatcls_t *result, kfatcls_t hint);
+extern kerrno_t _kfatfs_fat_freeall_unlocked(struct kfatfs *self, kfatcls_t first);
 
 
 __local __wunused __nonnull((1)) kfatsec_t
 kfatfs_clusterstart(struct kfatfs const *self, kfatcls_t cluster) {
  return ((cluster-2)*self->f_sec4clus)+self->f_firstdatasec;
 }
+/*
 __local __wunused __nonnull((1)) kfatcls_t
 kfatfs_sec2clus(struct kfatfs const *self, kfatsec_t sector) {
  return ((sector-self->f_firstdatasec)/self->f_sec4clus)+2;
 }
+*/
 
 extern kerrno_t kfatfs_savefileheader(struct kfatfs *self, __u64 headpos,
                                       struct kfatfileheader const *header);
@@ -318,14 +326,6 @@ extern __wunused __nonnull((1)) kerrno_t
 kfatfs_delheader(struct kfatfs *self, __u64 headpos);
 
 //////////////////////////////////////////////////////////////////////////
-// Recursively delete a chain of clusters, starting at 'start'
-// NOTE: Since this function will only modify the existing FAT cache,
-//       it can safely be implemented as noexcept (which is why is can't fail)
-extern void kfatfs_delchain(struct kfatfs *self, kfatcls_t start);
-
-
-
-//////////////////////////////////////////////////////////////////////////
 // Create a Dos 8.3 short filename.
 // The caller is responsible for checking if the generated name already
 // exists, and if it does, they should increment 'retry' by one and call try again.
@@ -355,9 +355,9 @@ extern int kdos83_makeshort(char const *__restrict name, __size_t namesize,
 
 
 
-extern kfatsec_t kfatfs_getfatsec_12(struct kfatfs *self, kfatcls_t index);
-extern kfatsec_t kfatfs_getfatsec_16(struct kfatfs *self, kfatcls_t index);
-extern kfatsec_t kfatfs_getfatsec_32(struct kfatfs *self, kfatcls_t index);
+extern kfatoff_t kfatfs_getfatsec_12(struct kfatfs *self, kfatcls_t index);
+extern kfatoff_t kfatfs_getfatsec_16(struct kfatfs *self, kfatcls_t index);
+extern kfatoff_t kfatfs_getfatsec_32(struct kfatfs *self, kfatcls_t index);
 extern kfatcls_t kfatfs_readfat_12(struct kfatfs *self, kfatcls_t cluster);
 extern kfatcls_t kfatfs_readfat_16(struct kfatfs *self, kfatcls_t cluster);
 extern kfatcls_t kfatfs_readfat_32(struct kfatfs *self, kfatcls_t cluster);

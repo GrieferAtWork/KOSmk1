@@ -484,14 +484,14 @@ kerrno_t _kblockfile_trunc(struct kblockfile *self, pos_t size) {
  oldchunks = ceildiv(self->bf_filesize,self->bf_chunksize);
  newchunks = ceildiv(size,self->bf_chunksize);
  if (newchunks > oldchunks) {
-  // Allocate more chunks
+  /* Allocate more chunks */
   struct kfilechunk chunk; chunk.fc_index = (newchunks-1);
   error = (*kblockfile_type(self)->bft_findchunk)(self,&chunk);
  } else if (newchunks < oldchunks) {
-  // Release old chunks
+  /* Release old, existing chunks */
   error = (*kblockfile_type(self)->bft_releasechunks)(self,newchunks);
-  // If our current chunk is now out-of-bounds, make sure to invalidate
-  // it, and it's data
+  /* If our current chunk is now out-of-bounds,
+   * make sure to invalidate it, and it's data */
   if (self->bf_currchunk.fc_index >= newchunks) {
    self->bf_flags &= ~(KBLOCKFILE_FLAG_BUFDATA|
                        KBLOCKFILE_FLAG_CHANGED|
@@ -499,17 +499,16 @@ kerrno_t _kblockfile_trunc(struct kblockfile *self, pos_t size) {
                        KBLOCKFILE_FLAG_WASPREV);
   }
  } else {
-  // If the chunk count didn't change, the actual size
-  // may have changed, and if we're currently selecting
-  // the last chunk, the buffer end 'bf_bufend' must be
-  // updated.
+  /* If the chunk count didn't change, the actual size may
+   * have changed, and if we're currently selecting the last
+   * chunk, the buffer end 'bf_bufend' must be updated. */
   if (self->bf_currchunk.fc_index == newchunks-1) {
    self->bf_bufend = self->bf_buffer+(size % self->bf_chunksize);
   }
   error = KE_OK;
  }
  if __likely(KE_ISOK(error)) {
-  // Update the stored file size
+  /* Update the stored file size */
   self->bf_filesize = size;
  }
 end:

@@ -166,6 +166,9 @@ nomem_dev:
 
  krwlock_init(&self->f_fatlock);
  self->f_flags = KFATFS_FLAG_NONE;
+
+ /* Do some sanity assertions. */
+ kassertmem(self->f_fatmeta,ceildiv(self->f_fatsize,self->f_sec4fat*4));
  return KE_OK;
 }
 
