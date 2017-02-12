@@ -28,8 +28,10 @@
 #ifndef __ASSEMBLY__
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <termios.h>
 
 __DECL_BEGIN
 
@@ -119,6 +121,8 @@ struct screen {
     struct window *d_top;  /*< [0..1] Top z-ordering window. */
     struct devtext d_scr;  /*< Virtual representation of what has changed on-screen. */
     chtype         d_attr; /*< Text attributes currently set in the terminal. */
+    struct termios d_oios; /*< Old Terminal IO settings. */
+    struct termios d_cios; /*< Current Terminal IO settings. */
 };
 
 
@@ -137,34 +141,40 @@ struct wintext {
 #define __CURSES_WINDOWFLAG_NONE    0x00000000
 #define __CURSES_WINDOWFLAG_SCRLOK  0x00000001 /*< [0] Scroll-lock is enabled. */
 #define __CURSES_WINDOWFLAG_CLROK   0x00000002 /*< [0] Clear the window completely on the next call to wrefresh(). */
-#define __CURSES_WINDOWFLAG_IDLOK   0x00000004 /*< [0] Attempt to use hardward-support for line insert/erase. */
-#define __CURSES_WINDOWFLAG_IDCOK   0x00000008 /*< [1] Attempt to use hardward-support for character insert/erase. */
+#define __CURSES_WINDOWFLAG_IDLOK   0x00000004 /*< [0] Attempt to use hardware-support for line insert/erase. */
+#define __CURSES_WINDOWFLAG_IDCOK   0x00000008 /*< [1] Attempt to use hardware-support for character insert/erase. */
 #define __CURSES_WINDOWFLAG_LEAVEOK 0x00000010 /*< [0] The hardware cursor can be left where-ever. */
 #define __CURSES_WINDOWFLAG_IMMEDOK 0x00000020 /*< [0] Immediately mirror changes on-screen. */
+#define __CURSES_WINDOWFLAG_SYNCOK  0x00000040 /*< [0] Unused by this curses implementation. */
+#define __CURSES_WINDOWFLAG_NODELAY 0x00010000 /*< [1] When set, wait indefinitely for input in read. */
 
 struct window {
-    struct window *w_zprev;  /*< [0..1] Nearest window with a lower z-order. */
-    struct window *w_znext;  /*< [0..1] Nearest window with a greater z-order. */
-    struct screen *w_dev;    /*< [1..1] Associated curses terminal device. */
-    struct window *w_parent; /*< [0..1] Parent of this window. */
-    struct spoint  w_ppos;   /*< Window position in parent window (== {0,0} if no parent is set). */
-    struct spoint  w_begin;  /*< Start coords of this window (in w_dev). */
-    struct spoint  w_end;    /*< End coords of this window (in w_dev). */
-    struct point   w_dim;    /*< Window dimensions (== w_end-w_begin) */
-    struct wintext w_text;   /*< Window text buffer. */
-    chtype        *w_curpos; /*< [1..1][in(w_text.wl_textbuf..w_text.wl_textend)] Cursor in the text buffer. */
-    chtype         w_bkgd;   /*< Background character & attributes. */
-    flag_t         w_flags;  /*< Special window flags (Set of 'W_*' flags). */
+    struct screen  *w_dev;    /*< [1..1] Associated curses terminal device. */
+    struct window  *w_parent; /*< [0..1] Parent of this window, or NULL for top-level window. */
+    size_t          w_childc; /*< Amount of child windows. */
+    struct window **w_childv; /*< [1..1][0..w_childc][owned] Vector of child windows. */
+    struct spoint   w_ppos;   /*< Window position in parent window (== w_begin if no parent is set). */
+    struct spoint   w_begin;  /*< Start coords of this window (in w_dev). */
+    struct spoint   w_end;    /*< End coords of this window (in w_dev). */
+    struct point    w_dim;    /*< Window dimensions (== w_end-w_begin) */
+    struct wintext  w_text;   /*< Window text buffer. */
+    chtype         *w_curpos; /*< [1..1][in(w_text.wl_textbuf..w_text.wl_textend)] Cursor in the text buffer. */
+    chtype          w_bkgd;   /*< Background character & attributes. */
+    flag_t          w_flags;  /*< Special window flags (Set of 'W_*' flags). */
+    int             w_delay;  /*< Delay using during blocking reads. */
 };
 
 #ifdef __BUILTIN_LIBCURSES__
-#define W_NONE    __CURSES_WINDOWFLAG_NONE
-#define W_SCRLOK  __CURSES_WINDOWFLAG_SCRLOK
-#define W_CLROK   __CURSES_WINDOWFLAG_CLROK
-#define W_IDLOK   __CURSES_WINDOWFLAG_IDLOK
-#define W_IDCOK   __CURSES_WINDOWFLAG_IDCOK
-#define W_LEAVEOK __CURSES_WINDOWFLAG_LEAVEOK
-#define W_IMMEDOK __CURSES_WINDOWFLAG_IMMEDOK
+#define W_DEFAULT (W_IDCOK|W_NODELAY)
+#define W_NONE     __CURSES_WINDOWFLAG_NONE
+#define W_SCRLOK   __CURSES_WINDOWFLAG_SCRLOK
+#define W_CLROK    __CURSES_WINDOWFLAG_CLROK
+#define W_IDLOK    __CURSES_WINDOWFLAG_IDLOK
+#define W_IDCOK    __CURSES_WINDOWFLAG_IDCOK
+#define W_LEAVEOK  __CURSES_WINDOWFLAG_LEAVEOK
+#define W_IMMEDOK  __CURSES_WINDOWFLAG_IMMEDOK
+#define W_SYNCOK   __CURSES_WINDOWFLAG_SYNCOK
+#define W_NODELAY  __CURSES_WINDOWFLAG_NODELAY
 #endif
 
 typedef struct screen SCREEN;
@@ -203,13 +213,7 @@ extern int doupdate(void);
 extern int wrefresh(WINDOW *win);
 extern int wredrawln(WINDOW *win, int beg_line, int num_lines);
 extern int redrawwin(WINDOW *win);
-extern int __ddoupdate(struct screen *dev);
 #define refresh()  wrefresh(stdsrc)
-#ifndef __INTELLISENSE__
-#if 1
-#define doupdate() __ddoupdate(__curterm)
-#endif
-#endif
 
 /* move curses window cursor. */
 extern int wmove(WINDOW *win, int y, int x);
@@ -379,29 +383,87 @@ extern __attribute_vaformat(__printf__,4,5) int mvwprintw(WINDOW *win, int y, in
 extern __attribute_vaformat(__printf__,2,0) int vwprintw(WINDOW *win, const char *fmt, va_list varglist);
 extern __attribute_vaformat(__printf__,2,0) int vw_printw(WINDOW *win, const char *fmt, va_list varglist);
 
+/* overlay and manipulate overlapped curses windows. */
+extern int copywin(WINDOW const *srcwin, WINDOW *dstwin, int sminrow, int smincol,
+                   int dminrow, int dmincol, int dmaxrow, int dmaxcol, int overlay);
+#ifdef __INTELLISENSE__
+extern int overlay(WINDOW const *srcwin, WINDOW *dstwin);
+extern int overwrite(WINDOW const *srcwin, WINDOW *dstwin);
+#else
+#define overlay(srcwin,dstwin)   copywin(srcwin,dstwin,0,0,0,0,getmaxx(dstwin),getmaxy(dstwin),1)
+#define overwrite(srcwin,dstwin) copywin(srcwin,dstwin,0,0,0,0,getmaxx(dstwin),getmaxy(dstwin),0)
+#endif
+
+/* create curses windows. */
+extern WINDOW *newwin(int nlines, int ncols, int begin_y, int begin_x);
+extern int delwin(WINDOW *win);
+extern int mvwin(WINDOW *win, int y, int x);
+extern WINDOW *subwin(WINDOW *orig, int nlines, int ncols, int begin_y, int begin_x);
+extern WINDOW *derwin(WINDOW *orig, int nlines, int ncols, int begin_y, int begin_x);
+extern int mvderwin(WINDOW *win, int par_y, int par_x);
+extern WINDOW *dupwin(WINDOW *win);
+extern void wsyncup(WINDOW *win);
+extern void wcursyncup(WINDOW *win);
+extern void wsyncdown(WINDOW *win);
+#ifdef __INTELLISENSE__
+extern int syncok(WINDOW *win, bool bf);
+#else
+#define syncok(win,bf)  __curses_wsetflag(win,bf,__CURSES_WINDOWFLAG_SYNCOK)
+#endif
+
+/* curses input options. */
+extern int cbreak(void);
+extern int nocbreak(void);
+extern int keypad(WINDOW *win, bool bf);
+extern int raw(void);
+extern int noraw(void);
+extern int typeahead(int fd);
+extern int __curses_setlflag(tcflag_t flag, int enabled);
+#ifdef __INTELLISENSE__
+extern int echo(void);
+extern int noecho(void);
+extern int halfdelay(int tenths);
+extern int intrflush(WINDOW *win, bool bf);
+extern int meta(WINDOW *win, bool bf);
+extern int nodelay(WINDOW *win, bool bf);
+extern void noqiflush(void);
+extern void qiflush(void);
+extern int notimeout(WINDOW *win, bool bf);
+extern void timeout(int delay);
+extern void wtimeout(WINDOW *win, int delay);
+#else
+#define echo()   __curses_setlflag(ECHO,1)
+#define noecho() __curses_setlflag(ECHO,0)
+#define halfdelay(tenths) (void)0 /* ??? */
+#define intrflush(win,bf) (void)0 /* ??? */
+#define meta(win,bf)      (void)0 /* TODO */
+#define nodelay           notimeout /* ??? */
+#define noqiflush()       (void)0 /* ??? */
+#define qiflush()         (void)0 /* ??? */
+#define notimeout(win,bf) \
+ ((win) ? ((bf) ? ((win)->w_flags |=  __CURSES_WINDOWFLAG_NODELAY),\
+                : ((win)->w_delay ~= (__CURSES_WINDOWFLAG_NODELAY)),OK) : ERR)
+#define timeout(delay)      wtimeout(stdsrc,delay)
+#define wtimeout(win,delay) \
+ ((win) ? (void)((win)->w_flags ~= (__CURSES_WINDOWFLAG_NODELAY),\
+                 (win)->w_delay = (delay)) : (void)0)
+#endif
+
+
 extern int curs_set(int visibility);
 extern int napms(int ms); /*< Seems like every library has one of these... */
 extern int beep(void);
 extern int flash(void);
 
 #if 0
-extern int copywin(WINDOW const *oldwin, WINDOW *newwin,int,int,int,int,int,int,int);
-extern int delwin(WINDOW *win);
-extern WINDOW *derwin(WINDOW *win, int,int,int,int);
-extern WINDOW *dupwin(WINDOW *win);
 
-extern int intrflush(WINDOW *win, bool);
 extern bool is_linetouched(WINDOW *win, int);
 extern bool is_wintouched(WINDOW *win);
-extern int keypad(WINDOW *win, bool);
-extern int meta(WINDOW *win, bool);
-extern int mvderwin(WINDOW *win, int, int);
 extern int mvwchgat(WINDOW *win, int, int, int, attr_t, pair_t, const void *);
 extern int mvwdelch(WINDOW *win, int, int);
 extern int mvwgetch(WINDOW *win, int, int);
 extern int mvwgetnstr(WINDOW *win, int, int, char *, int);
 extern int mvwgetstr(WINDOW *win, int, int, char *);
-extern int mvwin(WINDOW *win, int,int);
 extern chtype mvwinch(WINDOW *win, int, int);
 extern int mvwinchnstr(WINDOW *win, int, int, chtype *, int);
 extern int mvwinchstr(WINDOW *win, int, int, chtype *);
@@ -412,17 +474,11 @@ extern int mvwinsstr(WINDOW *win, int, int, const char *);
 extern int mvwinstr(WINDOW *win, int, int, char *);
 extern __attribute_vaformat(__scanf__,4,5) int mvwscanw(WINDOW *win, int,int, char const *, ...);
 extern WINDOW *newpad (int,int);
-extern WINDOW *newwin (int,int,int,int);
-extern int nodelay(WINDOW *win, bool);
-extern int notimeout(WINDOW *win, bool);
-extern int overlay (WINDOW const *oldwin, WINDOW *newwin);
-extern int overwrite (WINDOW const *oldwin, WINDOW *newwin);
 extern int pechochar(WINDOW *win, chtype const);
 extern int pnoutrefresh (WINDOW *win, int,int,int,int,int,int);
 extern int prefresh(WINDOW *win, int,int,int,int,int,int);
 extern int ripoffline (int, int (*)(WINDOW *win, int));
 extern WINDOW *subpad(WINDOW *win, int, int, int, int);
-extern WINDOW *subwin(WINDOW *win, int, int, int, int);
 extern int syncok(WINDOW *win, bool);
 extern int touchline(WINDOW *win, int, int);
 extern int touchwin(WINDOW *win);
@@ -438,7 +494,6 @@ extern int wattr_off(WINDOW *win, attr_t, void *);
 extern int wattr_set(WINDOW *win, attr_t, pair_t, void *);
 extern int wchgat(WINDOW *win, int, attr_t, pair_t, const void *);
 extern int wcolor_set (WINDOW *win, pair_t,void*);
-extern void wcursyncup(WINDOW *win);
 extern int wdelch(WINDOW *win);
 extern int wdeleteln(WINDOW *win);
 extern int wgetch(WINDOW *win);
@@ -457,9 +512,6 @@ extern int winstr(WINDOW *win, char *);
 extern __attribute_vaformat(__scanf__,2,3) int wscanw(WINDOW *win, const char *,...);
 extern int wstandout(WINDOW *win);
 extern int wstandend(WINDOW *win);
-extern void wsyncdown(WINDOW *win);
-extern void wsyncup(WINDOW *win);
-extern void wtimeout(WINDOW *win, int);
 extern int wtouchln(WINDOW *win, int,int,int);
 extern int wresize(WINDOW *win, int, int);
 #endif
@@ -467,20 +519,20 @@ extern int wresize(WINDOW *win, int, int);
 
 
 /*
-extern bool is_cleared (const WINDOW *win);
-extern bool is_idcok (const WINDOW *win);
-extern bool is_idlok (const WINDOW *win);
-extern bool is_immedok (const WINDOW *win);
-extern bool is_keypad (const WINDOW *win);
-extern bool is_leaveok (const WINDOW *win);
-extern bool is_nodelay (const WINDOW *win);
-extern bool is_notimeout (const WINDOW *win);
-extern bool is_pad (const WINDOW *win);
-extern bool is_scrollok (const WINDOW *win);
-extern bool is_subwin (const WINDOW *win);
-extern bool is_syncok (const WINDOW *win);
-extern int wgetdelay (const WINDOW *win);
-extern int wgetscrreg (const WINDOW *win, int *, int *);
+extern bool is_cleared (WINDOW const *win);
+extern bool is_idcok (WINDOW const *win);
+extern bool is_idlok (WINDOW const *win);
+extern bool is_immedok (WINDOW const *win);
+extern bool is_keypad (WINDOW const *win);
+extern bool is_leaveok (WINDOW const *win);
+extern bool is_nodelay (WINDOW const *win);
+extern bool is_notimeout (WINDOW const *win);
+extern bool is_pad (WINDOW const *win);
+extern bool is_scrollok (WINDOW const *win);
+extern bool is_subwin (WINDOW const *win);
+extern bool is_syncok (WINDOW const *win);
+extern int wgetdelay (WINDOW const *win);
+extern int wgetscrreg (WINDOW const *win, int *, int *);
 */
 
 

@@ -79,7 +79,7 @@ void kpty_init(struct kpty *self,
  else {
   memset(&self->ty_ios,0,sizeof(struct termios));
   self->ty_ios.c_iflag      = ICRNL|BRKINT;
-  self->ty_ios.c_oflag      = /*ONLCR|*/OPOST;
+  self->ty_ios.c_oflag      = ONLCR|OPOST;
   self->ty_ios.c_lflag      = ECHO|ECHOE|ECHOK|ICANON|ISIG|IEXTEN;
   self->ty_ios.c_cflag      = CREAD;
   self->ty_ios.c_cc[VMIN]   =  1; /* Just use KIO_BLOCKFIRST-style behavior by default. */
