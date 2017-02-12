@@ -42,8 +42,8 @@ struct longnamebuffer {
 
 __local kerrno_t longnamebuffer_insertfile(struct longnamebuffer *self, struct kfatfileheader *file) {
  struct longnamebufferentry *newvec,*inspos,*insend; __u8 prio; char *namedata;
- newvec = (struct longnamebufferentry *)realloc(
-  self->ln_entryv,(self->ln_entryc+1)*sizeof(struct longnamebufferentry));
+ newvec = (struct longnamebufferentry *)realloc(self->ln_entryv,(self->ln_entryc+1)*
+                                                sizeof(struct longnamebufferentry));
  if __unlikely(!newvec) return KE_NOMEM;
  self->ln_entryv = newvec;
  insend = (inspos = newvec)+(self->ln_entryc++);

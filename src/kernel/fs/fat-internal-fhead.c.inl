@@ -137,24 +137,130 @@ kerrno_t kfatfs_savefileheader(struct kfatfs *self, __u64 headpos,
  return kfatfs_savesectors(self,headsec,1,secbuf);
 }
 
-kerrno_t kfatfs_delheader(struct kfatfs *self, __u64 headpos) {
+kerrno_t kfatfs_rmheaders(struct kfatfs *self, __u64 headpos, unsigned int count) {
  kfatsec_t headsec; void *secbuf; kerrno_t error;
  struct kfatfileheader *headbuf;
  kassertobj(self); kassertobj(header);
- headsec = (kfatsec_t)(headpos/self->f_secsize);
+ assert(count != 0);
  secbuf = alloca(self->f_secsize);
- /* Load the sector that contains the file's header */
- error = kfatfs_loadsectors(self,headsec,1,secbuf);
- if __unlikely(KE_ISERR(error)) return error;
- headbuf = (struct kfatfileheader *)((uintptr_t)secbuf+(size_t)(headpos % self->f_secsize));
- assertf(headbuf+1 <= (struct kfatfileheader *)((uintptr_t)secbuf+self->f_secsize),
-         "File header spans multiple sectors.");
- k_syslogf(KLOG_TRACE,"Updating FAT file header @ %I64u: '%.8s.%.3s'\n",
-           headpos,headbuf->f_name,headbuf->f_ext);
- headbuf->f_marker = KFATFILE_MARKER_UNUSED;
- /* Save the sector again */
- return kfatfs_savesectors(self,headsec,1,secbuf);
+ /* TODO: This is a really bad way of doing this... */
+ do {
+  headsec = (kfatsec_t)(headpos/self->f_secsize);
+  /* Load the sector that contains the file's header */
+  error = kfatfs_loadsectors(self,headsec,1,secbuf);
+  if __unlikely(KE_ISERR(error)) break;
+  headbuf = (struct kfatfileheader *)((uintptr_t)secbuf+(size_t)(headpos % self->f_secsize));
+  assertf(headbuf+1 <= (struct kfatfileheader *)((uintptr_t)secbuf+self->f_secsize),
+          "File header spans multiple sectors.");
+  k_syslogf(KLOG_TRACE,"Updating FAT file header @ %I64u: '%.8s.%.3s'\n",
+            headpos,headbuf->f_name,headbuf->f_ext);
+  headbuf->f_marker = KFATFILE_MARKER_UNUSED;
+  /* Save the sector again */
+  error = kfatfs_savesectors(self,headsec,1,secbuf);
+  if __unlikely(KE_ISERR(error)) break;
+  ++headpos;
+ } while (--count);
+ return error;
 }
+
+kerrno_t
+kfatfs_allocheaders(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
+                    struct kfatfileheader const *first_header,
+                    size_t header_count, struct kfatfilepos *filepos) {
+ /* TODO. */
+ debug_hexdump(first_header,header_count*sizeof(struct kfatfileheader));
+ return KE_NOSYS;
+}
+
+
+__u8 kfat_genlfnchecksum(char const short_name[KFATFILE_NAMEMAX+KFATFILE_EXTMAX]) {
+ __u8 result = 0; char const *iter,*end;
+ /* Algorithm can be found here:
+  * https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system
+  */
+ end = (iter = short_name)+(KFATFILE_NAMEMAX+KFATFILE_EXTMAX);
+ for (; iter != end; ++iter) result = ((result & 1) << 7) + (result >> 1) + *iter;
+ return result;
+}
+
+__local void fill_lfn_entry(struct kfatfileheader *header,
+                            char const text[KFAT_LFN_NAME]) {
+ int i;
+#define COPYPART(field,start,n) \
+ { for (i = 0; i < (n); ++i) field[i] = (kfat_usc2char)text[(start)+i]; }
+ COPYPART(header->lfn_name_1,0,KFAT_LFN_NAME1);
+ COPYPART(header->lfn_name_2,KFAT_LFN_NAME1,KFAT_LFN_NAME2);
+ COPYPART(header->lfn_name_3,KFAT_LFN_NAME1+KFAT_LFN_NAME2,KFAT_LFN_NAME3);
+#undef COPYPART
+ header->lfn_attr = KFATFILE_ATTR_LONGFILENAME;
+ header->lfn_type = 0;
+ header->lfn_clus = leswap_16(0u);
+}
+
+kerrno_t
+kfatfs_mklongheader(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
+                    struct kfatfileheader const *header,
+                    char const *long_name, size_t long_name_size,
+                    struct kfatfilepos *filepos) {
+ /* Long filename entries. */
+ struct kfatfileheader *all_headers,*header_iter;
+ size_t req_headers; __u8 checksum;
+ checksum = kfat_genlfnchecksum(header->f_nameext);
+ req_headers = ceildiv(long_name_size,KFAT_LFN_NAME);
+ /* Make sure we are allowed to allocate this many LFN entries. */
+ if (req_headers > KFAT_LFN_SEQNUM_MAXCOUNT) return KE_NAMETOOLONG;
+ ++req_headers; /*< +1 for the final, actual file header itself. */
+ all_headers = (struct kfatfileheader *)alloca(req_headers*sizeof(struct kfatfileheader));
+ header_iter = all_headers;
+ while (long_name_size >= KFAT_LFN_NAME) {
+  header_iter->lfn_seqnum = KFAT_LFN_SEQNUM_MIN+(header_iter-all_headers);
+  header_iter->lfn_csum   = checksum;
+  fill_lfn_entry(header_iter,long_name);
+  long_name      += KFAT_LFN_NAME;
+  long_name_size -= KFAT_LFN_NAME;
+  ++header_iter;
+ }
+ if (long_name_size) {
+  char rest[KFAT_LFN_NAME];
+  /* Remaining text is padded with spaces. */
+  memset(rest,' ',KFAT_LFN_NAME*sizeof(char));
+  memcpy(rest,long_name,long_name_size);
+  header_iter->lfn_seqnum = KFAT_LFN_SEQNUM_MIN+(header_iter-all_headers);
+  header_iter->lfn_csum   = checksum;
+  fill_lfn_entry(header_iter,rest);
+  ++header_iter;
+ }
+ assert(header_iter == all_headers+(req_headers-1));
+ /* Append the actual header at the very end. */
+ memcpy(header_iter,header,sizeof(struct kfatfileheader));
+ return kfatfs_allocheaders(self,dir,dir_is_sector,
+                            all_headers,req_headers,filepos);
+}
+
+
+
+kerrno_t
+kfatfs_mkshortname(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
+                   struct kfatfileheader *header, char const *long_name,
+                   size_t long_name_size, int *need_long_header) {
+ int name_error,retry = 0;
+ kerrno_t error;
+again:
+ name_error = kdos83_makeshort(long_name,long_name_size,retry,
+                               &header->f_ntflags,header->f_nameext);
+ *need_long_header = name_error != KDOS83_KIND_SHORT;
+ error = kfatfs_checkshort(self,dir,dir_is_sector,long_name,long_name_size,header->f_nameext);
+ if (KE_ISERR(error)) {
+  if (error == KE_NOENT) return KE_EXISTS; /*< Long filename already exists. */
+  if (error != KE_EXISTS) return error; /*< Device-specific error. */
+  if (name_error != KDOS83_KIND_LONG) return KE_EXISTS; /*< File already exists. */
+  /* Try again with another short name. */
+  ++retry;
+  goto again;
+ }
+ return error;
+}
+
 
 
 __DECL_END

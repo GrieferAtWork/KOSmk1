@@ -130,12 +130,23 @@ void stress_malloc(void) {
 
 void test_write_file(void) {
  struct kfile *fp; kerrno_t error;
- error = krootfs_remove("/bigfile.h",(size_t)-1);
+ error = krootfs_remove("/directory_with_a_really_long_name",(size_t)-1);
+ assertf(KE_ISOK(error) || error == KE_NOENT,"%d",error);
+ error = krootfs_mkdir("/directory_with_a_really_long_name",(size_t)-1,0,NULL,NULL,NULL);
  assertf(KE_ISOK(error),"%d",error);
- //error = krootfs_open("/test.txt",(size_t)-1,O_CREAT|O_WRONLY,0,NULL,&fp);
- //assertf(KE_ISOK(error),"%d",error);
- //kfile_decref(fp);
 
+#if 0
+ error = krootfs_remove("/test.txt",(size_t)-1);
+ assertf(KE_ISOK(error) || error == KE_NOENT,"%d",error);
+
+ error = krootfs_open("/test.txt",(size_t)-1,O_CREAT|O_EXCL|O_WRONLY,0,NULL,&fp);
+ assertf(KE_ISOK(error),"%d",error);
+ error = fprintf(fp,"This text should appear in the file!\n");
+ assertf(KE_ISOK(error),"%d",error);
+ error = fprintf(fp,"fp = %p\n",fp);
+ assertf(KE_ISOK(error),"%d",error);
+ kfile_decref(fp);
+#endif
 }
 
 
@@ -191,7 +202,7 @@ void kernel_main(void) {
 #undef RUN
  //test_taskstat();
 
- test_write_file();
+ //test_write_file();
  run_init();
 
  karch_irq_disable();

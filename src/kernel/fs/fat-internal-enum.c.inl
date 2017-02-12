@@ -33,6 +33,43 @@
 #include <string.h>
 #include <sys/types.h>
 
+__DECL_BEGIN
+
+struct check_short_data {
+ char const *short_name;
+ char const *long_name;
+ size_t long_name_size;
+};
+
+static kerrno_t
+check_short_callback(struct kfatfs *fs, struct kfatfilepos const *fpos,
+                     struct kfatfileheader const *file,
+                     char const *filename, size_t filename_size,
+                     struct check_short_data *data) {
+ if (!memcmp(data->short_name,file->f_nameext,KFATFILE_NAMEMAX+KFATFILE_EXTMAX))
+  return KE_EXISTS; /* Short name already exists. */
+ if (filename_size == data->long_name_size &&
+     !memcmp(data->long_name,filename,filename_size)
+     ) return KE_NOENT; /* Long name already exists. */
+ return KE_OK;
+}
+
+
+kerrno_t
+kfatfs_checkshort(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
+                  char const *long_name, size_t long_name_size,
+                  char const name[KFATFILE_NAMEMAX+KFATFILE_EXTMAX]) {
+ struct check_short_data data;
+ data.long_name = long_name;
+ data.long_name_size = long_name_size;
+ data.short_name = (char const *)name;
+ return  dir_is_sector
+  ? kfatfs_enumdirsec(self,dir,self->f_rootmax,(pkfatfs_enumdir_callback)&check_short_callback,&data)
+  : kfatfs_enumdir   (self,dir,(pkfatfs_enumdir_callback)&check_short_callback,&data);
+}
+
+__DECL_END
+
 #ifndef __INTELLISENSE__
 #define DIRISSEC
 #include "fat-internal-enum-impl.c.inl"

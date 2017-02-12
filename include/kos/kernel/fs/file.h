@@ -107,12 +107,6 @@ extern __crit __wunused __nonnull((1,2,3)) kerrno_t
 kfile_opennode(struct kdirent *__restrict dent, struct kinode *__restrict node,
                __ref struct kfile **__restrict result, __openmode_t mode);
 
-//////////////////////////////////////////////////////////////////////////
-// Closes a given file
-// @return: * : File-specific error
-// @return: KE_DESTROYED: File was already closed
-extern __nonnull((1)) kerrno_t kfile_close(struct kfile *__restrict self);
-
 #define KFILE_READDIR_FLAG_NONE  KFD_READDIR_FLAG_NONE
 #define KFILE_READDIR_FLAG_PEEK  KFD_READDIR_FLAG_PEEK /*< Only retrieve the current entry. - don't advance the directory file. */
 

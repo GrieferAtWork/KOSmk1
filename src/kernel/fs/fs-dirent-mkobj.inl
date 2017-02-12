@@ -31,12 +31,14 @@
 
 #ifdef MKLNK
 kerrno_t kdirent_mklnk(struct kdirent *self, struct kdirentname const *name,
+                       size_t ac, union kinodeattr const *av,
                        struct kdirentname const *target,
                        __ref /*opt*/struct kdirent **resent,
                        __ref /*opt*/struct kinode **resnode)
 #elif defined(MKDIR)
 kerrno_t kdirent_mkdir(struct kdirent *self,
-                       struct kdirentname const *name, __mode_t mode,
+                       struct kdirentname const *name,
+                       size_t ac, union kinodeattr const *av, 
                        __ref /*opt*/struct kdirent **resent,
                        __ref /*opt*/struct kinode **resnode)
 #elif defined(MKREG)
@@ -58,9 +60,9 @@ kerrno_t kdirent_mkreg(struct kdirent *self, struct kdirentname const *name,
 #endif
  if __unlikely((node = kdirent_getnode(self)) == NULL) return KE_DESTROYED;
 #ifdef MKLNK
- error = kinode_mklnk(node,name,target,&used_resnode);
+ error = kinode_mklnk(node,name,ac,av,target,&used_resnode);
 #elif defined(MKDIR)
- error = kinode_mkdir(node,name,mode,&used_resnode);
+ error = kinode_mkdir(node,name,ac,av,&used_resnode);
 #elif defined(MKREG)
  error = kinode_mkreg(node,name,ac,av,&used_resnode);
 #endif

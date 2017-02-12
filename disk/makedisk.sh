@@ -20,6 +20,7 @@ fi
 
 md                 /etc
 md                 /usr
+md                 /empty_folder
 pf hdd/etc/passwd  /etc/passwd
 pf bigfile.h       /bigfile.h
 

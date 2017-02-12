@@ -53,10 +53,11 @@ __DECL_BEGIN
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 // --- KINODE
-__ref struct kinode *__kinode_alloc(struct ksuperblock *superblock,
-                                    struct kinodetype *nodetype,
-                                    struct kfiletype *filetype,
-                                    mode_t filekind) {
+__crit __ref struct kinode *
+__kinode_alloc(struct ksuperblock *superblock,
+               struct kinodetype *nodetype,
+               struct kfiletype *filetype,
+               mode_t filekind) {
  struct kinode *result;
  kassert_ksuperblock(superblock);
  kassertobj(nodetype);
@@ -64,7 +65,7 @@ __ref struct kinode *__kinode_alloc(struct ksuperblock *superblock,
  assertf(nodetype->it_size >= sizeof(struct kinode),
          "Size described by the given node type is too small (%Iu < %Iu)",
          nodetype->it_size,sizeof(struct kinode));
- if (KE_ISERR(ksuperblock_incref(superblock))) return NULL;
+ if __unlikely(KE_ISERR(ksuperblock_incref(superblock))) return NULL;
  result = (struct kinode *)malloc(nodetype->it_size);
  if __likely(result) {
   kobject_init(result,KOBJECT_MAGIC_INODE);
@@ -78,6 +79,13 @@ __ref struct kinode *__kinode_alloc(struct ksuperblock *superblock,
   ksuperblock_decref(superblock);
  }
  return result;
+}
+__crit void __kinode_free(struct kinode *self) {
+ kassert_kinode(self);
+ assert(self->i_refcnt == 1);
+ kassert_ksuperblock(self->i_sblock);
+ ksuperblock_decref(self->i_sblock);
+ free(self);
 }
 
 void ksuperblock_syslogprefix(int level, struct ksuperblock *self) {
@@ -354,8 +362,8 @@ kerrno_t kinode_remove(struct kinode *self, struct kdirentname const *name, stru
  return error;
 }
 kerrno_t kinode_mkdir(struct kinode *self, struct kdirentname const *name,
-                      mode_t mode, __ref struct kinode **resnode) {
- kerrno_t(*callback)(struct kinode *,struct kdirentname const *,mode_t,struct kinode **);
+                      size_t ac, union kinodeattr const *av, __ref struct kinode **resnode) {
+ kerrno_t(*callback)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,struct kinode **);
  kerrno_t error;
  kassert_kinode(self);
  kassertobj(name);
@@ -363,7 +371,7 @@ kerrno_t kinode_mkdir(struct kinode *self, struct kdirentname const *name,
  if __unlikely((callback = self->i_type->it_mkdir) == NULL)
   return S_ISDIR(self->i_kind) ? KE_NOSYS : KE_NODIR;
  if __unlikely(KE_ISERR(error = kcloselock_beginop(&self->i_closelock))) return error;
- error = (*callback)(self,name,mode,resnode);
+ error = (*callback)(self,name,ac,av,resnode);
  kcloselock_endop(&self->i_closelock);
  if __unlikely(error == KE_NOSYS && !S_ISDIR(self->i_kind)) error = KE_NODIR;
  return error;
@@ -385,8 +393,11 @@ kerrno_t kinode_mkreg(struct kinode *self, struct kdirentname const *name,
  return error;
 }
 kerrno_t kinode_mklnk(struct kinode *self, struct kdirentname const *name,
+                      size_t ac, union kinodeattr const *av, 
                       struct kdirentname const *target, __ref struct kinode **resnode) {
- kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kdirentname const *,__ref struct kinode **);
+ kerrno_t(*callback)(struct kinode *,struct kdirentname const *,size_t,
+                     union kinodeattr const *,struct kdirentname const *,
+                     __ref struct kinode **);
  kerrno_t error;
  kassert_kinode(self);
  kassertobj(name);
@@ -395,7 +406,7 @@ kerrno_t kinode_mklnk(struct kinode *self, struct kdirentname const *name,
  if __unlikely((callback = self->i_type->it_mklnk) == NULL)
   return S_ISDIR(self->i_kind) ? KE_NOSYS : KE_NODIR;
  if __unlikely(KE_ISERR(error = kcloselock_beginop(&self->i_closelock))) return error;
- error = (*callback)(self,name,target,resnode);
+ error = (*callback)(self,name,ac,av,target,resnode);
  kcloselock_endop(&self->i_closelock);
  if __unlikely(error == KE_NOSYS && !S_ISDIR(self->i_kind)) error = KE_NODIR;
  return error;
@@ -890,7 +901,7 @@ kerrno_t kdirent_walkall(struct kfspathenv const *env, __ref struct kdirent **fi
 
 
 kerrno_t kdirent_mkdirat(struct kfspathenv const *env, char const *path,
-                         size_t pathmax, mode_t mode,
+                         size_t pathmax, size_t ac, union kinodeattr const *av,
                          __ref /*opt*/struct kdirent **resent,
                          __ref /*opt*/struct kinode **resnode) {
  struct kdirentname last; kerrno_t error;
@@ -902,7 +913,7 @@ kerrno_t kdirent_mkdirat(struct kfspathenv const *env, char const *path,
  error = kdirent_walklast(env,&objparent,&last,path,pathmax);
  if __unlikely(KE_ISERR(error)) return error;
  if __unlikely(!last.dn_size) error = KE_EXISTS;
- else error = kdirent_mkdir(objparent,&last,mode,resent,resnode);
+ else error = kdirent_mkdir(objparent,&last,ac,av,resent,resnode);
  kdirent_decref(objparent);
  return error;
 }
@@ -924,10 +935,9 @@ kerrno_t kdirent_mkregat(struct kfspathenv const *env, char const *path,
  kdirent_decref(objparent);
  return error;
 }
-kerrno_t kdirent_mklnkat(struct kfspathenv const *env, char const *path,
-                         size_t pathmax, struct kdirentname const *target,
-                         __ref /*opt*/struct kdirent **resent,
-                         __ref /*opt*/struct kinode **resnode) {
+kerrno_t kdirent_mklnkat(struct kfspathenv const *env, char const *path, size_t pathmax,
+                         size_t ac, union kinodeattr const *av, struct kdirentname const *target,
+                         __ref /*opt*/struct kdirent **resent, __ref /*opt*/struct kinode **resnode) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *objparent;
  kassertobj(env);
@@ -938,7 +948,7 @@ kerrno_t kdirent_mklnkat(struct kfspathenv const *env, char const *path,
  error = kdirent_walklast(env,&objparent,&last,path,pathmax);
  if __unlikely(KE_ISERR(error)) return error;
  if __unlikely(!last.dn_size) error = KE_EXISTS;
- else error = kdirent_mklnk(objparent,&last,target,resent,resnode);
+ else error = kdirent_mklnk(objparent,&last,ac,av,target,resent,resnode);
  kdirent_decref(objparent);
  return error;
 }
@@ -994,7 +1004,7 @@ kerrno_t kdirent_insnodat(struct kfspathenv const *env, char const *path, size_t
  kdirent_decref(objparent);
  return error;
 }
-kerrno_t kdirent_mountat(struct kfspathenv const *env, char const *path, __size_t pathmax,
+kerrno_t kdirent_mountat(struct kfspathenv const *env, char const *path, size_t pathmax,
                          struct ksuperblock *sblock, __ref /*opt*/struct kdirent **resent) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *objparent;

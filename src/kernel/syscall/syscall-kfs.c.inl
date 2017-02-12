@@ -47,6 +47,7 @@ SYSCALL(sys_kfs_mkdir) {
        mode_t      ,K(mode));
  struct kproc *ctx = kproc_self();
  kerrno_t error; struct kfspathenv env;
+ union kinodeattr attr[1];
  KTASK_CRIT_BEGIN_FIRST
  env.env_cwd = kproc_getfddirent(ctx,dirfd);
  if __unlikely(!env.env_cwd) { error = KE_NOCWD; goto end; }
@@ -56,7 +57,9 @@ SYSCALL(sys_kfs_mkdir) {
  env.env_uid   = kproc_uid(ctx);
  env.env_gid   = kproc_gid(ctx);
  kfspathenv_initcommon(&env);
- error = kdirent_mkdirat(&env,path,pathmax,mode,NULL,NULL);
+ attr[0].ia_perm.a_id   = KATTR_FS_PERM;
+ attr[0].ia_perm.p_perm = mode;
+ error = kdirent_mkdirat(&env,path,pathmax,1,attr,NULL,NULL);
  kdirent_decref(env.env_root);
 err_cwd:
  kdirent_decref(env.env_cwd);
@@ -162,7 +165,7 @@ SYSCALL(sys_kfs_symlink) {
  targetname.dn_name = (char *)target;
  targetname.dn_size = strnlen(target,targetmax);
  kdirentname_refreshhash(&targetname);
- error = kdirent_mklnkat(&env,lnk,lnkmax,&targetname,NULL,NULL);
+ error = kdirent_mklnkat(&env,lnk,lnkmax,0,NULL,&targetname,NULL,NULL);
  kdirent_decref(env.env_root);
 err_cwd:
  kdirent_decref(env.env_cwd);

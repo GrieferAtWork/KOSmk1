@@ -96,9 +96,9 @@ struct kinodetype {
  //       returned without any given attributes being re-applied.
  // NOTE: If the given file already exists, but isn't of the requested type,
  //       KE_ISDIR/KE_NODIR must be returned without '*resnode' being filled.
- kerrno_t (*it_mkdir)(struct kinode *self, struct kdirentname const *name, __mode_t mode, __ref struct kinode **resnode); /*< Create a directory in 'self'. */
+ kerrno_t (*it_mkdir)(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, __ref struct kinode **resnode); /*< Create a directory in 'self'. */
  kerrno_t (*it_mkreg)(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, __ref struct kinode **resnode); /*< Create a regular file in 'self'. */
- kerrno_t (*it_mklnk)(struct kinode *self, struct kdirentname const *name, struct kdirentname const *target, __ref struct kinode **resnode); /*< Create a symbolic link in 'self'. */
+ kerrno_t (*it_mklnk)(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, struct kdirentname const *target, __ref struct kinode **resnode); /*< Create a symbolic link in 'self'. */
  kerrno_t (*it_walk)(struct kinode *self, struct kdirentname const *name, __ref struct kinode **resnode); /*< Walks to the given name. */
  kerrno_t (*it_enumdir)(struct kinode *self, pkenumdir callback, void *closure); /*< Enumerate all files/folders. NOTE: If 'callback' returns non-KE_OK, return with that error/signal. */
  kerrno_t (*it_readlink)(struct kinode *self, struct kdirentname *target); /*< Upon successful return, the caller must destroy the 'target' name. */
@@ -135,11 +135,13 @@ struct kinode {
 
 //////////////////////////////////////////////////////////////////////////
 // Creates a new inode with the given parameters
-extern __wunused __nonnull((1,2,3)) __ref struct kinode *
+extern __crit __wunused __nonnull((1,2,3)) __ref struct kinode *
 __kinode_alloc(struct ksuperblock *superblock,
                struct kinodetype *nodetype,
                struct kfiletype *filetype,
                __mode_t filekind);
+extern __crit void __kinode_free(struct kinode *self);
+
 
 __local KOBJECT_DEFINE_INCREF(kinode_incref,struct kinode,i_refcnt,kassert_kinode);
 __local KOBJECT_DEFINE_DECREF(kinode_decref,struct kinode,i_refcnt,kassert_kinode,kinode_destroy);
@@ -187,12 +189,9 @@ extern __wunused __nonnull((1,2)) kerrno_t kinode_walk(struct kinode *self, stru
 extern __wunused __nonnull((1,2)) kerrno_t kinode_unlink(struct kinode *self, struct kdirentname const *name, struct kinode *__restrict node);
 extern __wunused __nonnull((1,2)) kerrno_t kinode_rmdir(struct kinode *self, struct kdirentname const *name, struct kinode *__restrict node);
 extern __wunused __nonnull((1,2)) kerrno_t kinode_remove(struct kinode *self, struct kdirentname const *name, struct kinode *__restrict node);
-extern __wunused __nonnull((1,2,4)) kerrno_t kinode_mkdir(struct kinode *self, struct kdirentname const *name,
-                                                          __mode_t mode, __ref struct kinode **resnode);
-extern __wunused __nonnull((1,2,5)) kerrno_t kinode_mkreg(struct kinode *self, struct kdirentname const *name,
-                                                          __size_t ac, union kinodeattr const *av, __ref struct kinode **resnode);
-extern __wunused __nonnull((1,2,3,4)) kerrno_t kinode_mklnk(struct kinode *self, struct kdirentname const *name,
-                                                            struct kdirentname const *target, __ref struct kinode **resnode);
+extern __wunused __nonnull((1,2,5)) kerrno_t kinode_mkdir(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, __ref struct kinode **resnode);
+extern __wunused __nonnull((1,2,5)) kerrno_t kinode_mkreg(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, __ref struct kinode **resnode);
+extern __wunused __nonnull((1,2,5,6)) kerrno_t kinode_mklnk(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, struct kdirentname const *target, __ref struct kinode **resnode);
 extern __wunused __nonnull((1,2)) kerrno_t kinode_readlink(struct kinode *self, struct kdirentname *target);
 
 //////////////////////////////////////////////////////////////////////////
@@ -374,7 +373,8 @@ extern __wunused __nonnull((1)) kerrno_t kdirent_unlink(struct kdirent *self);
 extern __wunused __nonnull((1)) kerrno_t kdirent_rmdir(struct kdirent *self);
 extern __wunused __nonnull((1)) kerrno_t kdirent_remove(struct kdirent *self);
 extern __wunused __nonnull((1,2)) kerrno_t
-kdirent_mkdir(struct kdirent *self, struct kdirentname const *name, __mode_t mode, 
+kdirent_mkdir(struct kdirent *self, struct kdirentname const *name,
+              __size_t ac, union kinodeattr const *av, 
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode);
 extern __wunused __nonnull((1,2)) kerrno_t
@@ -382,8 +382,9 @@ kdirent_mkreg(struct kdirent *self, struct kdirentname const *name,
               __size_t ac, union kinodeattr const *av,
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode);
-extern __wunused __nonnull((1,2)) kerrno_t
+extern __wunused __nonnull((1,2,5)) kerrno_t
 kdirent_mklnk(struct kdirent *self, struct kdirentname const *name,
+              __size_t ac, union kinodeattr const *av, 
               struct kdirentname const *target,
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode);
@@ -443,8 +444,8 @@ kdirent_walkall(struct kfspathenv const *env, __ref struct kdirent **finish,
 //////////////////////////////////////////////////////////////////////////
 // High-level, pathname-based dirent file operations (NOTE: The given path is a strn-style string)
 extern __wunused __nonnull((1,2)) kerrno_t
-kdirent_mkdirat(struct kfspathenv const *env, char const *path,
-                __size_t pathmax, __mode_t mode,
+kdirent_mkdirat(struct kfspathenv const *env, char const *path, __size_t pathmax,
+                __size_t ac, union kinodeattr const *av, 
                 __ref /*opt*/struct kdirent **resent,
                 __ref /*opt*/struct kinode **resnode);
 extern __wunused __nonnull((1,2)) kerrno_t
@@ -452,9 +453,10 @@ kdirent_mkregat(struct kfspathenv const *env, char const *path,
                 __size_t pathmax, __size_t ac, union kinodeattr const *av,
                 __ref /*opt*/struct kdirent **resent,
                 __ref /*opt*/struct kinode **resnode);
-extern __wunused __nonnull((1,2)) kerrno_t
-kdirent_mklnkat(struct kfspathenv const *env, char const *path,
-                __size_t pathmax, struct kdirentname const *target,
+extern __wunused __nonnull((1,2,6)) kerrno_t
+kdirent_mklnkat(struct kfspathenv const *env, char const *path, __size_t pathmax,
+                __size_t ac, union kinodeattr const *av, 
+                struct kdirentname const *target,
                 __ref /*opt*/struct kdirent **resent,
                 __ref /*opt*/struct kinode **resnode);
 extern __wunused __nonnull((1,2)) kerrno_t kdirent_rmdirat(struct kfspathenv const *env, char const *path, __size_t pathmax);
@@ -699,7 +701,8 @@ extern struct kdirent __kfs_root; /*< ~Real~ filesystem root directory. */
 //        you can pass (size_t)-1 for a c-style string,
 //        or its actual length for a size-style one)
 __local __wunused __nonnull((1)) kerrno_t
-krootfs_mkdir(char const *__restrict path, __size_t pathmax, __mode_t mode,
+krootfs_mkdir(char const *__restrict path, __size_t pathmax,
+              __size_t ac, union kinodeattr const *av, 
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode);
 __local __wunused __nonnull((1)) kerrno_t
@@ -707,8 +710,9 @@ krootfs_mkreg(char const *__restrict path, __size_t pathmax,
               __size_t ac, union kinodeattr const *av,
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode);
-__local __wunused __nonnull((1,3)) kerrno_t
+__local __wunused __nonnull((1,5)) kerrno_t
 krootfs_mklnk(char const *__restrict path, __size_t pathmax,
+              __size_t ac, union kinodeattr const *av, 
               struct kdirentname const *__restrict target,
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode);
@@ -733,7 +737,8 @@ krootfs_open(char const *__restrict path, __size_t pathmax, __openmode_t mode,
              __ref struct kfile **__restrict result);
 
 __local __wunused __nonnull((1)) kerrno_t
-kuserfs_mkdir(char const *__restrict path, __size_t pathmax, __mode_t mode,
+kuserfs_mkdir(char const *__restrict path, __size_t pathmax,
+              __size_t ac, union kinodeattr const *av, 
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode);
 __local __wunused __nonnull((1)) kerrno_t
@@ -741,8 +746,9 @@ kuserfs_mkreg(char const *__restrict path, __size_t pathmax,
               __size_t ac, union kinodeattr const *av,
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode);
-__local __wunused __nonnull((1,3)) kerrno_t
+__local __wunused __nonnull((1,5)) kerrno_t
 kuserfs_mklnk(char const *__restrict path, __size_t pathmax,
+              __size_t ac, union kinodeattr const *av, 
               struct kdirentname const *__restrict target,
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode);
@@ -769,11 +775,12 @@ kuserfs_open(char const *__restrict path, __size_t pathmax, __openmode_t mode,
 
 #ifndef __INTELLISENSE__
 __local kerrno_t
-krootfs_mkdir(char const *__restrict path, __size_t pathmax, __mode_t mode,
+krootfs_mkdir(char const *__restrict path, __size_t pathmax,
+              __size_t ac, union kinodeattr const *av, 
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode) {
  struct kfspathenv env = KFSPATHENV_INITROOT;
- return kdirent_mkdirat(&env,path,pathmax,mode,resent,resnode);
+ return kdirent_mkdirat(&env,path,pathmax,ac,av,resent,resnode);
 }
 __local kerrno_t
 krootfs_mkreg(char const *__restrict path, __size_t pathmax,
@@ -785,11 +792,12 @@ krootfs_mkreg(char const *__restrict path, __size_t pathmax,
 }
 __local kerrno_t
 krootfs_mklnk(char const *__restrict path, __size_t pathmax,
+              __size_t ac, union kinodeattr const *av, 
               struct kdirentname const *__restrict target,
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode) {
  struct kfspathenv env = KFSPATHENV_INITROOT;
- return kdirent_mklnkat(&env,path,pathmax,target,resent,resnode);
+ return kdirent_mklnkat(&env,path,pathmax,ac,av,target,resent,resnode);
 }
 __local __wunused __nonnull((1)) kerrno_t
 krootfs_rmdir(char const *__restrict path, __size_t pathmax) {
@@ -832,14 +840,15 @@ krootfs_open(char const *__restrict path, __size_t pathmax, __openmode_t mode,
 }
 
 __local kerrno_t
-kuserfs_mkdir(char const *__restrict path, __size_t pathmax, __mode_t mode,
+kuserfs_mkdir(char const *__restrict path, __size_t pathmax,
+              __size_t ac, union kinodeattr const *av, 
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode) {
  kerrno_t error;
  struct kfspathenv env;
  KTASK_CRIT_BEGIN
  if __likely(KE_ISOK(error = kfspathenv_inituser(&env))) {
-  error = kdirent_mkdirat(&env,path,pathmax,mode,resent,resnode);
+  error = kdirent_mkdirat(&env,path,pathmax,ac,av,resent,resnode);
   kfspathenv_quituser(&env);
  }
  KTASK_CRIT_END
@@ -862,6 +871,7 @@ kuserfs_mkreg(char const *__restrict path, __size_t pathmax,
 }
 __local kerrno_t
 kuserfs_mklnk(char const *__restrict path, __size_t pathmax,
+              __size_t ac, union kinodeattr const *av, 
               struct kdirentname const *__restrict target,
               __ref /*opt*/struct kdirent **resent,
               __ref /*opt*/struct kinode **resnode) {
@@ -869,7 +879,7 @@ kuserfs_mklnk(char const *__restrict path, __size_t pathmax,
  struct kfspathenv env;
  KTASK_CRIT_BEGIN
  if __likely(KE_ISOK(error = kfspathenv_inituser(&env))) {
-  error = kdirent_mklnkat(&env,path,pathmax,target,resent,resnode);
+  error = kdirent_mklnkat(&env,path,pathmax,ac,av,target,resent,resnode);
   kfspathenv_quituser(&env);
  }
  KTASK_CRIT_END

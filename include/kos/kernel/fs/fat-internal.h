@@ -157,16 +157,19 @@ struct __packed kfatfile_mtime {
 #define KFATFILE_NAMEMAX 8
 #define KFATFILE_EXTMAX  3
 
+typedef __u16 kfat_usc2char;
+
 struct kfatfileheader;
 struct __packed kfatfileheader {
-union{
+union __packed {struct __packed {
+union __packed {struct __packed {union __packed {
 #define KFATFILE_MARKER_DIREND 0x00 /*< End of directory. */
 #define KFATFILE_MARKER_IS0XE5 0x05 /*< Character: First character is actually 0xE5. */
 #define KFATFILE_MARKER_UNUSED 0xE5 /*< Unused entry (ignore). */
  __u8                  f_marker;    /*< Special directory entry marker. */
- char                  f_name[KFATFILE_NAMEMAX]; /*< Short (8-character) filename. */
-};
- char                  f_ext[KFATFILE_EXTMAX]; /*< File extension. */
+ char                  f_name[KFATFILE_NAMEMAX]; /*< Short (8-character) filename. */};
+ char                  f_ext[KFATFILE_EXTMAX]; /*< File extension. */};
+ char                  f_nameext[KFATFILE_NAMEMAX+KFATFILE_EXTMAX];/*< Name+extension. */};
  __u8                  f_attr;      /*< File attr. */
  // https://en.wikipedia.org/wiki/8.3_filename
  // NOTE: After testing, the flags specified by that link are wrong.
@@ -181,7 +184,24 @@ union{
  struct kfatfile_mtime f_mtime;     /*< Last modification time. */
  __le16                f_clusterlo; /*< Lower 2 bytes of the file's cluster. */
  __le32                f_size;      /*< File size. */
-};
+};struct __packed { /* Long directory entry. */
+#define KFAT_LFN_SEQNUM_MIN        0x01
+#define KFAT_LFN_SEQNUM_MAX        0x14
+#define KFAT_LFN_SEQNUM_MAXCOUNT ((KFAT_LFN_SEQNUM_MAX-KFAT_LFN_SEQNUM_MIN)+1)
+ __u8                  lfn_seqnum; /*< Sequence number (KOS uses it as hint for where a name part should go). */
+ /* Sizes of the three name portions. */
+#define KFAT_LFN_NAME1      5
+#define KFAT_LFN_NAME2      6
+#define KFAT_LFN_NAME3      2
+#define KFAT_LFN_NAME      (KFAT_LFN_NAME1+KFAT_LFN_NAME2+KFAT_LFN_NAME3)
+ kfat_usc2char         lfn_name_1[KFAT_LFN_NAME1];
+ __u8                  lfn_attr;   /*< Attributes (always 'KFATFILE_ATTR_LONGFILENAME') */
+ __u8                  lfn_type;   /*< Long directory entry type (set to ZERO(0)) */
+ __u8                  lfn_csum;   /*< Checksum of DOS filename (s.a.: 'kfat_genlfnchecksum'). */
+ kfat_usc2char         lfn_name_2[KFAT_LFN_NAME2];
+ __le16                lfn_clus;   /*< First cluster (Always 0x0000). */
+ kfat_usc2char         lfn_name_3[KFAT_LFN_NAME3];
+};};};
 struct timespec;
 // NOTE: The setters return non-zero if the given header was modified
 extern void kfatfileheader_getatime(struct kfatfileheader const *self, struct timespec *result);
@@ -191,9 +211,16 @@ extern int kfatfileheader_setatime(struct kfatfileheader *self, struct timespec 
 extern int kfatfileheader_setctime(struct kfatfileheader *self, struct timespec const *value);
 extern int kfatfileheader_setmtime(struct kfatfileheader *self, struct timespec const *value);
 
+//////////////////////////////////////////////////////////////////////////
+// Generate a checksum for a given short filename, for use in long filename entries.
+extern __u8 kfat_genlfnchecksum(char const short_name[KFATFILE_NAMEMAX+KFATFILE_EXTMAX]);
+
 #define kfatfileheader_getcluster(self) \
  ((kfatcls_t)leswap_16((self)->f_clusterlo) |\
  ((kfatcls_t)leswap_16((self)->f_clusterhi) << 16))
+#define kfatfileheader_setcluster(self,v) \
+ ((self)->f_clusterlo = leswap_16((v) & 0xffff),\
+ ((self)->f_clusterhi = leswap_16(((v) >> 16) & 0xffff)))
 #define kfatfileheader_getsize(self) leswap_32((self)->f_size)
 
 __COMPILER_PACK_POP
@@ -321,9 +348,51 @@ kfatfs_enumdirsec(struct kfatfs *self, kfatsec_t dir, __u32 maxsize,
                   pkfatfs_enumdir_callback callback, void *closure);
 
 //////////////////////////////////////////////////////////////////////////
+// Check for the existance of a given short name within a directory 'dir'
+// @return: KE_OK:     The given name does not exist.
+// @return: KE_EXISTS: The given short name already exists.
+// @return: KE_NOENT:  The given long name already exists (file already exists!).
+// @return: *: Some device-specific error occurred.
+extern __wunused __nonnull((1,4,6)) kerrno_t
+kfatfs_checkshort(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
+                  char const *long_name, size_t long_name_size,
+                  char const name[KFATFILE_NAMEMAX+KFATFILE_EXTMAX]);
+
+//////////////////////////////////////////////////////////////////////////
 // Mark a file header at a given location as deleted (aka. unused)
 extern __wunused __nonnull((1)) kerrno_t
-kfatfs_delheader(struct kfatfs *self, __u64 headpos);
+kfatfs_rmheaders(struct kfatfs *self, __u64 headpos, unsigned int count);
+
+//////////////////////////////////////////////////////////////////////////
+// Allocate and save a set of consecutive headers.
+// @param: filepos->fm_namepos: Address of the first header upon success.
+// @param: filepos->fm_headpos: Address of the last header upon success.
+// @return: KE_OK: Successfully allocated space for the new headers.
+extern __wunused __nonnull((1,4,6)) kerrno_t
+kfatfs_allocheaders(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
+                    struct kfatfileheader const *first_header,
+                    __size_t header_count, struct kfatfilepos *filepos);
+
+#define kfatfs_mkheader(self,dir,dir_is_sector,header,filepos) \
+ kfatfs_allocheaders(self,dir,dir_is_sector,header,1,filepos)
+
+//////////////////////////////////////////////////////////////////////////
+// Generates a long filename entry.
+// @return: KE_NAMETOOLONG: The given long_name is too long, even for a long-filename-entry.
+extern __wunused __nonnull((1,4,5,7)) kerrno_t
+kfatfs_mklongheader(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
+                    struct kfatfileheader const *header,
+                    char const *long_name, __size_t long_name_size,
+                    struct kfatfilepos *filepos);
+
+//////////////////////////////////////////////////////////////////////////
+// Generate a short filename for storage within the given directory.
+// @return: KE_OVERFLOW: Too many variations of the same DOS 8.3 filename already exist.
+// @return: *: Some other, device-specific error occurred.
+extern __wunused __nonnull((1,4,5,7)) kerrno_t
+kfatfs_mkshortname(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
+                   struct kfatfileheader *header, char const *long_name,
+                   __size_t long_name_size, int *need_long_header);
 
 //////////////////////////////////////////////////////////////////////////
 // Create a Dos 8.3 short filename.
@@ -338,7 +407,7 @@ kfatfs_delheader(struct kfatfs *self, __u64 headpos);
 // NOTE: Invalid characters are substituted with '~'
 // @return: KDOS83_KIND_SHORT: The given name was short enough to fit a 8.3 name
 //                          >> '*ntflags' may have been set to use the lowercase extension flags
-// @return: KDOS83_KIND_LONG:  The given name was too long to fix a dos 8.3 filename.
+// @return: KDOS83_KIND_LONG:  The given name was too long to fit a dos 8.3 filename.
 //                          >> Only in this situation, the 'retry' can be used to generate
 //                             additional filenames in the case of name collisions.
 // @return: KDOS83_KIND_CASE:  The given name was short enough, but its mixed casing
@@ -349,7 +418,7 @@ extern int kdos83_makeshort(char const *__restrict name, __size_t namesize,
 #define KDOS83_KIND_SHORT   0
 #define KDOS83_KIND_LONG    1
 #define KDOS83_KIND_CASE    2
-#define KDOS83_RETRY_COUNT (0xffff*9) /*< Max amount of possible retries when a short filename already exists. */
+#define KDOS83_RETRY_COUNT (0xffff*9) /*< Amount of possible retries when a short filename already exists. */
 
 
 
