@@ -294,12 +294,11 @@ static void TERM_CALL term_putc(struct term *__unused(term), char ch) {
  //k_syslogf(KLOG_MSG,"%c",ch);
  BEGIN_MOVE_CUR()
  switch (ch) {
-  case TERM_CR:   CR(); goto end_moved;
+  case TERM_CR: CR(); goto end_moved;
   case TERM_LF:
-   LF();
    //printf(":AFTER LS: %d\n",vga_bufpos == vga_bufend);
    if (vga_bufpos == vga_bufend) goto scroll_one;
-   else goto end_moved;
+   else { LF(); goto end_moved; }
    break;
   case TERM_BACK: BACK(); goto end_moved; break;
   case TERM_TAB:  SET_CUR_X(align(GET_CUR_X(),TERM_TABSIZE)); break;
@@ -346,10 +345,13 @@ scroll_one:
   BLIT_CUR();
   ++vga_bufpos;
 end_moved:
+  assert(vga_bufpos <= vga_bufend);
 #if INVERT_CURSOR_AFTER_MOVE
   if (cursor_blink_enabled) {
    cursor_inverted = 1;
-   BLIT_CUR_INV();
+   if (vga_bufpos != vga_bufend) {
+    BLIT_CUR_INV();
+   }
   }
 #endif
  }
