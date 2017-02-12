@@ -55,8 +55,8 @@ union __packed {
  __u8 pf_ubytes[PAGESIZE];
  struct __packed {
   /* Data used to track free pages. */
-  struct kpageframe *pff_prev; /*< [0..1] Previous free page. */
-  struct kpageframe *pff_next; /*< [0..1] Next free page. */
+  struct kpageframe *pff_prev; /*< [0..1] Previous free page (with a lower memory address). */
+  struct kpageframe *pff_next; /*< [0..1] Next free page (with a greater memory address). */
   __size_t           pff_size; /*< Amount of consecutively available pages (including this one). */
   // HINT: The total amount of free memory is 'pff_size*PAGESIZE'
  };
@@ -66,6 +66,12 @@ union __packed {
 // Define as something to return for ZERO-allocation, or leave
 // undefined to have zero-allocations cause undefined behavior.
 //#define KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE NULL
+
+#if 1
+#define KPAGEFRAME_INVPTR NULL
+#else /* TODO: Rewrite existing code to accept the following! */
+#define KPAGEFRAME_INVPTR ((void *)(__uintptr_t)-1) /*< Impossible memory address. */
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 // Allocate/Free 'n' consecutive page frames
@@ -108,6 +114,10 @@ extern __nonnull((1)) void kpageframe_getinfo(struct kpageframeinfo *__restrict 
 // WARNING: This function only does that. - no further checks are performed!
 //          e.g.: True is returned for NULL
 extern __wunused __nonnull((1)) int kpageframe_isfreepage(void const *__restrict p, __size_t s);
+
+//////////////////////////////////////////////////////////////////////////
+// Print the layout of the physical memory allocator.
+extern void kpageframe_printphysmem(void);
 
 
 #ifdef __MAIN_C__

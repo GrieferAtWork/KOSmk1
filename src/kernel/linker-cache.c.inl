@@ -33,6 +33,7 @@
 #include <malloc.h>
 #include <unistd.h>
 #include <stddef.h>
+#include <kos/syslog.h>
 
 __DECL_BEGIN
 
@@ -67,15 +68,27 @@ __local kerrno_t kshlibcache_rehash(size_t new_bucket_count) {
  struct kshlibcachebucket *newvec,*biter,*bend,*dest;
  struct kshlibcachetab *titer,*tnext;
  assert(new_bucket_count);
+ assert(new_bucket_count >= kslcache.c_bucketc);
  newvec = (struct kshlibcachebucket *)calloc(new_bucket_count,
                                              sizeof(struct kshlibcachebucket));
  if __unlikely(!newvec) return KE_NOMEM;
  bend = (biter = kslcache.c_bucketv)+kslcache.c_bucketa;
+ dest = newvec;
+ /* Update cache ids of all loaded libraries. */
+ for (; biter != bend; ++biter) if (biter->cb_lib) {
+  dest->cb_lib = biter->cb_lib;
+  kassert_kshlib(dest->cb_lib->ct_lib);
+  dest->cb_lib->ct_lib->sh_cidx = (size_t)(dest-newvec);
+  ++dest;
+ }
+ assert(dest <= newvec+new_bucket_count);
+ kslcache.c_freelib = (size_t)(dest-newvec);
+ k_syslogf(KLOG_INFO,"[SHLIB] Rehasing cache to %Iu entires\n",new_bucket_count);
+
+ biter = kslcache.c_bucketv;
  for (; biter != bend; ++biter) {
-  // Copy the lib associated with this bucket
-  newvec[biter-kslcache.c_bucketv].cb_lib = biter->cb_lib;
   titer = biter->cb_tabs;
-  // Transfer (and rehash) all paths within this bucket
+  /* Transfer (and rehash) all paths within this bucket */
   while (titer) {
    tnext = titer->ct_next;
    dest = &newvec[titer->ct_hash % new_bucket_count];

@@ -32,6 +32,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <kos/keyboard.h>
+#include <kos/syslog.h>
 
 extern char **environ;
 
@@ -46,6 +47,7 @@ int main(int argc, char *argv[]) {
  // Launch a proper terminal
  if (open2(STDIN_FILENO,"/dev/kbevent",O_RDONLY) == -1) perror("open2('/dev/kbevent')");
  execl("/bin/terminal-vga","terminal-vga","/bin/sh",(char *)NULL);
+ k_syslogf(KLOG_ERROR,"Failed to exec terminal: %d: %s\n",errno,strerror(errno));
 
  // Fallback: Try to start a shell directly (this is bad...)
  if (open2(STDIN_FILENO,"/dev/kbtext",O_RDONLY) == -1) perror("open2('/dev/kbtext')");

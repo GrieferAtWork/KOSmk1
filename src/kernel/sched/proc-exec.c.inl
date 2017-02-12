@@ -187,6 +187,7 @@ kproc_exec(struct kshlib *__restrict exec_main,
  // NOTE: Though we can't just load the module before unloading
  //       the existing modules in order to prevent the addresses
  //       from clashing.
+ k_syslogf_prefixfile(KLOG_DEBUG,exec_main->sh_file,"Inserting module on exec()\n");
  error = kproc_insmod_unlocked(self,exec_main,&modid);
  assertf(KE_ISOK(error)
         ,"TODO: We must try (and fail to do) this before destroying the existing process... %d"

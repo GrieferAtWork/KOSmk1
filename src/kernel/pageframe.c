@@ -60,6 +60,7 @@ void raminfo_addregion(__u64 start, __u64 size) {
  native_size = (size_t)size;
  if __unlikely(!native_size) return;
  if __unlikely(!native_start) {
+  /* Don't map valid physical memory to NULL. - KOS uses NULL as... well: the NULL-pointer (ZERO-0). */
   //k_syslogf(KLOG_WARN,"KOS cannot use RAM chips mapped to NULL (Skipping first page)\n");
   ++native_start,--native_size;
   if __unlikely(!native_size) return;
@@ -182,7 +183,7 @@ nocmdline:
 
 
 static struct kspinlock kpagealloc_lockno = KSPINLOCK_INIT;
-static struct kpageframe *first_free_page = NULL;
+static struct kpageframe *first_free_page = KPAGEFRAME_INVPTR;
 #define kpagealloc_lock()   kspinlock_lock(&kpagealloc_lockno)
 #define kpagealloc_unlock() kspinlock_unlock(&kpagealloc_lockno)
 
@@ -192,34 +193,35 @@ kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, __size_t n
 #ifdef KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE
  if (!n_pages) return KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE;
 #else
- assertf(n_pages,"Cannot allocate ZERO pages!");
+ assertf(n_pages != 0,"Cannot allocate ZERO pages!");
 #endif
- assert(isaligned((uintptr_t)start,PAGEALIGN));
+ assertf(isaligned((uintptr_t)start,PAGEALIGN),
+         "The given address %p isn't aligned",start);
  kpagealloc_lock();
  iter = first_free_page;
- while (iter) {
-  if ((uintptr_t)start < (uintptr_t)iter) break;
+ while (iter != KPAGEFRAME_INVPTR) {
+  if ((uintptr_t)start < (uintptr_t)iter) break; /* We won't find this region... */
   if ((uintptr_t)start+n_pages < (uintptr_t)iter+iter->pff_size) {
    assert(n_pages <= iter->pff_size);
    if (start == iter) {
-    // Split 1 --> 0/1
+    /* Split 1 --> 0/1 */
     if (n_pages == iter->pff_size) {
-     assert((iter->pff_prev != NULL) == (iter != first_free_page));
-     if (!iter->pff_prev) first_free_page = iter->pff_next;
+     assert((iter->pff_prev != KPAGEFRAME_INVPTR) == (iter != first_free_page));
+     if (iter->pff_prev ==KPAGEFRAME_INVPTR) first_free_page = iter->pff_next;
      else iter->pff_prev->pff_next = iter->pff_next;
     } else {
      split = iter+n_pages;
      split->pff_prev = iter->pff_prev;
      split->pff_next = iter->pff_next;
      split->pff_size = iter->pff_size-n_pages;
-     if (!split->pff_prev) first_free_page = split;
+     if (split->pff_prev == KPAGEFRAME_INVPTR) first_free_page = split;
      else split->pff_prev->pff_next = split;
     }
    } else {
     size_t new_iter_size = (size_t)(start-iter);
     split = start+n_pages;
     assert(n_pages < iter->pff_size);
-    // Split 1 --> 2
+    /* Split 1 --> 2 */
     split->pff_prev = iter;
     split->pff_next = iter->pff_next;
     split->pff_size = iter->pff_size-(new_iter_size+n_pages);
@@ -232,7 +234,7 @@ kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, __size_t n
   iter = iter->pff_next;
  }
  kpagealloc_unlock();
- return NULL;
+ return KPAGEFRAME_INVPTR;
 }
 
 
@@ -245,56 +247,91 @@ void kpageframe_free(__pagealigned struct kpageframe *__restrict start, __size_t
 #endif
  assertf(_isaligned((uintptr_t)start,PAGEALIGN),
          "Unaligned page frame address %p",start);
+ assertf(start != NULL,"NULL is special and cannot be mapped as free memory");
  region_end = start+n;
  k_syslogf(KLOG_TRACE,"Marking pages as free: %p (%Iu pages)\n",start,n);
  assertf(start+n > start,
          "Overflow in the given free region: start @%p; end @%p",
          start,start+n);
  kpagealloc_lock();
+ if __unlikely(first_free_page == KPAGEFRAME_INVPTR) {
+  /* Special case: First free region. */
+  first_free_page = start;
+  start->pff_size = n;
+  start->pff_prev = KPAGEFRAME_INVPTR;
+  start->pff_next = KPAGEFRAME_INVPTR;
+  goto end;
+ }
  iter = first_free_page;
- // Search for already free regions adjacent to the given frame region
- // >> That way, we automatically re-combine broken regions into big ones
- // WARNING: This function can not assure the validity of its arguments.
- //          This function can even be used to add new free regions on-the-fly.
- //          Be sure not to pass pointers outside the existing ram.
- while (iter) {
-  assertf((iter->pff_prev == NULL) == (iter == first_free_page),
+ /* Search for already free regions adjacent to the given frame region
+  * >> That way, we automatically re-combine broken regions into big ones
+  * WARNING: This function can not assure the validity of its arguments.
+  *          This function can even be used to add new free regions on-the-fly.
+  *          Be sure not to pass pointers outside the actual ram. */
+ for (;;) {
+  assert(iter != KPAGEFRAME_INVPTR);
+  assertf((iter->pff_prev == KPAGEFRAME_INVPTR) == (iter == first_free_page),
           "Only the first page may have no predecessor");
   assertf(iter != start,"pageframe %p was already freed",start);
   assertf(!(start < iter+iter->pff_size && region_end > iter),
           "pageframe region %p...%p lies within free region %p...%p",
           start,region_end,iter,iter+iter->pff_size);
+  assert((iter->pff_prev == KPAGEFRAME_INVPTR) || iter->pff_prev < iter);
+  assert((iter->pff_next == KPAGEFRAME_INVPTR) || iter->pff_next > iter);
   if (region_end == iter) {
-   // Given region ends where 'iter' starts
-   if ((start->pff_next = iter->pff_next) != NULL) start->pff_next->pff_prev = start;
-   if ((start->pff_prev = iter->pff_prev) != NULL) start->pff_prev->pff_next = start;
-   else first_free_page = start; // First free region
-   // Update the size of the merged region
+   /* Given region ends where 'iter' starts
+    * >> Extend the given region to encompass 'iter', replacing
+    *    the link of 'iter' with that of the given region. */
+   if ((start->pff_next = iter->pff_next) != KPAGEFRAME_INVPTR) start->pff_next->pff_prev = start;
+   if ((start->pff_prev = iter->pff_prev) != KPAGEFRAME_INVPTR) start->pff_prev->pff_next = start;
+   else first_free_page = start; /* First free region */
+   /* Update the size of the now merged region.
+    * 'start' is the new list entry and 'iter' lies directly behind. */
    start->pff_size = n+iter->pff_size;
-   goto end;
-  } else if (iter+iter->pff_size == iter) {
-   // Given region starts where 'iter' ends
-   // >> Very simple case: Only need to update the region size
+   break;
+  }
+  if (iter+iter->pff_size == start) {
+   /* The given region starts where 'iter' ends
+    * >> Very simple case: Only need to update the size of 'iter'. */
    iter->pff_size += n;
-   if (iter->pff_next &&
-       iter->pff_next == iter+iter->pff_size) {
-    // Special case: Insert a frame to merge 3 frames into one
+   /* Check for special case: through expanding 'iter', it now
+    * borders against the next memory region, essentially allowing
+    * us to merge 'iter' with 'iter->pff_next'. - Do so! */
+   if (iter->pff_next == iter+iter->pff_size &&
+       iter->pff_next != KPAGEFRAME_INVPTR) {
+    /* Merge 3 frames (iter, start & iter->pff_next) into one.
+     * NOTE: 'iter' and 'start' have already been merged. */
+    /* Update the size of 'iter' to encompass its successor. */
     iter->pff_size += iter->pff_next->pff_size;
-    if ((iter->pff_next = iter->pff_next->pff_next) != NULL)
+    /* Unlink the next free page to have 'iter' jump over it. */
+    if ((iter->pff_next = iter->pff_next->pff_next) != KPAGEFRAME_INVPTR)
      iter->pff_next->pff_prev = iter;
    }
-   goto end;
+   break;
   }
+  /* Check for case: Must insert new region chunk before 'iter'. */
+  if (region_end < iter) {
+   /* Insert 'start' before 'iter'. */
+   start->pff_size = n;
+   if ((start->pff_prev = iter->pff_prev) != KPAGEFRAME_INVPTR) start->pff_prev->pff_next = start;
+   else first_free_page = start; /* Prepend before all known regions. */
+   (start->pff_next = iter)->pff_prev = start;
+   break;
+  }
+  /* Check for case: Must append new region chunk at the end of free memory. */
+  if (iter->pff_next == KPAGEFRAME_INVPTR) {
+   /* Append at the end of all free regions. */
+   assertf(start > iter+iter->pff_size,
+           "Expected a memory region above all known page frames, "
+           "but %p lies below known end %p",start,iter+iter->pff_size);
+   (iter->pff_next = start)->pff_prev = iter;
+   start->pff_next = KPAGEFRAME_INVPTR;
+   start->pff_size = n;
+   break;
+  }
+  /* Continue searching. */
   iter = iter->pff_next;
  }
- // The given frame isn't located adjacent to an already free frame
- // --> Integrate it as a new free root frame
- // TODO: Don't just insert the frame at the start. - Sort them!
- if ((start->pff_next = first_free_page) != NULL)
-  first_free_page->pff_prev = start;
- start->pff_prev = NULL;
- start->pff_size = n;
- first_free_page = start;
 end:
  kpagealloc_unlock();
 }
@@ -304,13 +341,16 @@ void kpageframe_getinfo(struct kpageframeinfo *__restrict info) {
  struct kpageframe *iter;
  kassertobj(info);
  kpagealloc_lock();
- if ((iter = first_free_page) != NULL) {
-  assert(!iter->pff_prev);
+ if ((iter = first_free_page) != KPAGEFRAME_INVPTR) {
+  assert(iter->pff_prev == KPAGEFRAME_INVPTR);
+  assert((iter->pff_next == KPAGEFRAME_INVPTR) || iter->pff_next > iter);
   info->pfi_minregion = iter->pff_size;
   info->pfi_maxregion = iter->pff_size;
   info->pfi_freepages = iter->pff_size;
   info->pfi_freeregions = 1;
-  while ((iter = iter->pff_next) != NULL) {
+  while ((iter = iter->pff_next) != KPAGEFRAME_INVPTR) {
+   assert((iter->pff_prev == KPAGEFRAME_INVPTR) || iter->pff_prev < iter);
+   assert((iter->pff_next == KPAGEFRAME_INVPTR) || iter->pff_next > iter);
         if (iter->pff_size < info->pfi_minregion) info->pfi_minregion = iter->pff_size;
    else if (iter->pff_size > info->pfi_maxregion) info->pfi_maxregion = iter->pff_size;
    ++info->pfi_freeregions;
@@ -324,17 +364,35 @@ void kpageframe_getinfo(struct kpageframeinfo *__restrict info) {
  info->pfi_freebytes = info->pfi_freepages*PAGESIZE;
 }
 
+void kpageframe_printphysmem(void) {
+ struct kpageframe *iter;
+ kpagealloc_lock();
+ k_syslogf(KLOG_DEBUG,"+++ Physical memory layout\n");
+ iter = first_free_page;
+ while (iter != KPAGEFRAME_INVPTR) {
+  assert(iter != iter->pff_next);
+  assert((iter->pff_prev == KPAGEFRAME_INVPTR) || iter->pff_prev < iter);
+  assert((iter->pff_next == KPAGEFRAME_INVPTR) || iter->pff_next > iter);
+  k_syslogf(KLOG_DEBUG,"Free pages %p + %Iu pages ends %p (next: %p)\n",
+            iter,iter->pff_size,iter+iter->pff_size,iter->pff_next);
+  iter = iter->pff_next;
+  assert(iter != first_free_page);
+ }
+ k_syslogf(KLOG_DEBUG,"--- done\n");
+ kpagealloc_unlock();
+}
+
 
 int kpageframe_isfreepage(void const *p, __size_t s) {
  struct kpageframe *iter;
  uintptr_t begin,end;
- assert(kpagedir_current() == kpagedir_kernel());
  end = (begin = (uintptr_t)p)+s;
  kpagealloc_lock();
  iter = first_free_page;
- while (iter) {
-  if (end > (uintptr_t)iter &&
-      begin < (uintptr_t)(iter+iter->pff_size)) {
+ while (iter != KPAGEFRAME_INVPTR) {
+  assert((iter->pff_prev == KPAGEFRAME_INVPTR) || iter->pff_prev < iter);
+  assert((iter->pff_next == KPAGEFRAME_INVPTR) || iter->pff_next > iter);
+  if (end > (uintptr_t)iter && begin < (uintptr_t)(iter+iter->pff_size)) {
    kpagealloc_unlock();
    return 1;
   }

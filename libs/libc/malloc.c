@@ -319,17 +319,18 @@ struct mallhead;
 
 #if MALL_VALIDFREQ > 1
 static __atomic int mall_currfreq = MALL_VALIDFREQ;
+static void mall_validate(void) {
 #if MALL_VALIDFREQ_SYSLOG
-#define MALL_FREQ_LOG() k_syslogf(KLOG_INFO,"[MALL] Performing periodic memory validation\n")
-#else
-#define MALL_FREQ_LOG() (void)0
+ k_syslogf(KLOG_INFO,"[MALL] Performing periodic memory validation\n");
 #endif
+ _malloc_validate_d();
+}
 #define MALL_FREQ() \
 do{ int old_freq,new_freq;\
     do old_freq = mall_currfreq,\
        new_freq = old_freq > 0 ? old_freq-1 : MALL_VALIDFREQ;\
     while (!katomic_cmpxch(mall_currfreq,old_freq,new_freq));\
-    if (old_freq <= 0) { MALL_FREQ_LOG(); _malloc_validate_d(); }\
+    if (old_freq <= 0) mall_validate();\
 }while(0)
 #elif MALL_VALIDFREQ == 1
 #   define MALL_FREQ() _malloc_validate_d()

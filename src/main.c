@@ -87,7 +87,7 @@ void run_init(void) {
  while (ktask_zero()->t_children.t_taska) ktask_yield();
 }
 
-int k_sysloglevel = KLOG_INFO;
+int k_sysloglevel = KLOG_DEBUG;
 
 
 static void *task_main(void *c) {
@@ -106,6 +106,27 @@ void test_taskstat(void) {
  printf("Sleep:   %I32u:%lu\n",stat.ts_reltime_sleep.tv_sec,stat.ts_reltime_sleep.tv_nsec);
  ktask_decref(task);
 }
+
+#if 0
+void stress_malloc(void) {
+ struct timespec start,before_free,stop;
+ void **allocs;
+ size_t i;
+ size_t n_allocs = 1024*4;
+ size_t alloc_each = 4097;
+ ktime_getnoworcpu(&start);
+ allocs = (void **)malloc(n_allocs*sizeof(void *));
+ for (i = 0; i < n_allocs; ++i) allocs[i] = malloc(alloc_each);
+ ktime_getnoworcpu(&before_free);
+ for (i = 0; i < n_allocs; ++i) free(allocs[i]);
+ free(allocs);
+ ktime_getnoworcpu(&stop);
+ __timespec_sub(&stop,&before_free);
+ __timespec_sub(&before_free,&start);
+ printf("MALLOC TIME: %I32u.%ld\n",stop.tv_sec,stop.tv_nsec);
+ printf("FREE TIME: %I32u.%ld\n",before_free.tv_sec,before_free.tv_nsec);
+}
+#endif
 
 
 void kernel_main(void) {

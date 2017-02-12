@@ -79,7 +79,17 @@ static struct ksysgroup {
 #undef GROUP
 };
 
+#define HAVE_SYSCALL_TRACE 0
+
+#ifndef HAVE_SYSCALL_TRACE
 #ifdef __DEBUG__
+#define HAVE_SYSCALL_TRACE 1
+#else
+#define HAVE_SYSCALL_TRACE 0
+#endif
+#endif /* !HAVE_SYSCALL_TRACE */
+
+#if HAVE_SYSCALL_TRACE
 void ksyscall_trace(struct kirq_registers const *regs) {
  uintptr_t *uargvec = NULL; int argi = -1;
  uargvec = (uintptr_t *)kpagedir_translate(kpagedir_user(),
@@ -238,7 +248,7 @@ void ksyscall_trace(struct kirq_registers const *regs) {
 #undef _I8
 #undef _A
 }
-#endif
+#endif /* HAVE_SYSCALL_TRACE */
 
 
 void ksyscall_handler(struct kirq_registers *regs) {
@@ -246,12 +256,14 @@ void ksyscall_handler(struct kirq_registers *regs) {
  struct ksysgroup const *group;
 #ifdef __DEBUG__
  __u32 original_id = id;
- if (k_sysloglevel >= KLOG_INSANE) ksyscall_trace(regs);
  assertf((ktask_self()->t_flags&(KTASK_FLAG_USERTASK|KTASK_FLAG_CRITICAL)) !=
                                 (KTASK_FLAG_USERTASK|KTASK_FLAG_CRITICAL)
         ,"User-task still critical after syscall return (syscall = %I32x)"
         ,original_id);
 #endif
+#if HAVE_SYSCALL_TRACE
+ if (k_sysloglevel >= KLOG_INSANE) ksyscall_trace(regs);
+#endif /* HAVE_SYSCALL_TRACE */
  if __unlikely(__SYSCALL_GROUP(id) >= __compiler_ARRAYSIZE(sysgroups)) goto noavail;
  group = &sysgroups[__SYSCALL_GROUP(id)];
  if __unlikely((id = __SYSCALL_ID(id)) >= group->callc) goto noavail;
