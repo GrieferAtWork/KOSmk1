@@ -27,10 +27,11 @@
 
 __DECL_BEGIN
 
+__crit struct kpageframe *
 #ifdef TRYALLOC
-struct kpageframe *kpageframe_tryalloc(__size_t n_pages, __size_t *did_alloc_pages)
+kpageframe_tryalloc(__size_t n_pages, __size_t *did_alloc_pages)
 #else
-struct kpageframe *kpageframe_alloc(__size_t n_pages)
+kpageframe_alloc(__size_t n_pages)
 #endif
 {
  struct kpageframe *iter,*split;

@@ -187,7 +187,7 @@ static struct kpageframe *first_free_page = KPAGEFRAME_INVPTR;
 #define kpagealloc_lock()   kspinlock_lock(&kpagealloc_lockno)
 #define kpagealloc_unlock() kspinlock_unlock(&kpagealloc_lockno)
 
-__wunused __malloccall __pagealigned struct kpageframe *
+__crit __wunused __malloccall __pagealigned struct kpageframe *
 kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, __size_t n_pages) {
  struct kpageframe *iter,*split;
 #ifdef KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE
@@ -238,7 +238,7 @@ kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, __size_t n
 }
 
 
-void kpageframe_free(__pagealigned struct kpageframe *__restrict start, __size_t n) {
+__crit void kpageframe_free(__pagealigned struct kpageframe *__restrict start, __size_t n) {
  struct kpageframe *iter,*region_end;
 #ifdef KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE
  if (!n) return;

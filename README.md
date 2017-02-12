@@ -10,7 +10,7 @@ KOS:   <b>fork()</b>+[<b>restrict_permissions()</b>...]+<b>exec()</b>
 
 Besides being Posix-oriented, KOS also brings some interesting new things to the table, such as (what I call) signal-based synchronization, and the expansion of file descriptor functionality.
 
-KOS is written with multitasking and the ability of spuriously terminating any process in mind, as well as constant consideration of security weighed against cross-task control meant to allow user application to regulate their own permissions with the end goal of running DOS programs side-by-side with POSIX applications.
+KOS is written with multitasking and the ability of spuriously terminating any process in mind, as well as constant consideration of security weighed against cross-task control meant to allow user application to regulate their own permissions with the end goal of natively running early windows programs side-by-side with POSIX applications without.
 
 Written from the ground up, KOS has its own version of libc, libdl and others, bringing a lot of new functionality to the table in terms of <i>missing</i> stdc-functions such as 'strdupf' or 'strend', as well as an integrated memory leak detector and its own implementation of curses (NOTE: It's no longer debug_new. - I've learned a lot since then...).
 

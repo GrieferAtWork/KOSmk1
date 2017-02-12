@@ -18,10 +18,10 @@
 /* Define low-level page-based allocators in kernel-mode.
  * These functions are what is being used to manage physical
  * pages of ~real~ memory at the lowest possible level. */
-#define MMAP(s)          kpageframe_alloc((s)/PAGESIZE)
-#define DIRECT_MMAP(s)   kpageframe_alloc((s)/PAGESIZE)
-#define MUNMAP(a,s)     (kpageframe_free((struct kpageframe *)(a),(s)/PAGESIZE),0)
-#define MFAIL          ((void *)0)
+#define MMAP(s)          kpageframe_alloc(ceildiv(s,PAGESIZE))
+#define DIRECT_MMAP(s)   kpageframe_alloc(ceildiv(s,PAGESIZE))
+#define MUNMAP(a,s)     (kpageframe_free((struct kpageframe *)(a),ceildiv(s,PAGESIZE)),0)
+#define MFAIL            KPAGEFRAME_INVPTR
 /* Lie about the fact, and tell dlmalloc that we don't have
  * this header, thereby preventing it from attempting to
  * overwrite our malloc-hooks as defined above, or to make wrong
@@ -34,7 +34,7 @@
  * require at least some dynamic memory during initialization, making
  * the idea to using lazy initialization pointless and actually slower.
  * Instead, dlmalloc is initialized explicitly at the same time that
- * libc/raw, low-level RAM is. */
+ * libc and raw, low-level RAM are. */
 #ifdef __KERNEL__
 #define DLMALLOC_USE_ONETIME_INIT kernel_initialize_dlmalloc
 #elif 1 /* Use one-time initialization in userland as well. */

@@ -34,7 +34,7 @@
 __DECL_BEGIN
 
 #ifndef __STDC_PURE__
-// non-conforming names aliases for extension KOS functions/macros.
+/* non-conforming names aliases for KOS extension functions/macros. */
 #ifdef __INTELLISENSE__
 #define _align     align
 #define _alignd    alignd
@@ -59,6 +59,7 @@ extern "C++" {
 // Returns the integral 'x' aligned to the closest, greater value
 // conforming to the alignment requirements described by 'alignment'.
 // NOTE: Causes weak undefined behavior if 'alignment' isn't power_of(2).
+// '_alignd' works similar, but aligns to the closest, lower value.
 template<class Tx, class Talignment> Tx _align(Tx x, Talignment alignment);
 template<class Tx, class Talignment> Tx _alignd(Tx x, Talignment alignment);
 

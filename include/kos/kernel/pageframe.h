@@ -68,31 +68,37 @@ union __packed {
 //#define KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE NULL
 
 #if 1
-#define KPAGEFRAME_INVPTR NULL
+#   define KPAGEFRAME_INVPTR NULL
 #else /* TODO: Rewrite existing code to accept the following! */
-#define KPAGEFRAME_INVPTR ((void *)(__uintptr_t)-1) /*< Impossible memory address. */
+#   define KPAGEFRAME_INVPTR ((void *)(__uintptr_t)-1) /*< Impossible memory address. */
 #endif
 
 //////////////////////////////////////////////////////////////////////////
 // Allocate/Free 'n' consecutive page frames
-// >> The returned pointers are physical and NULL is
+// >> The returned pointers are physical and 'KPAGEFRAME_INVPTR' is
 //    returned if no more memory was available.
-extern __wunused __malloccall __pagealigned struct kpageframe *kpageframe_alloc(__size_t n_pages);
-extern __wunused __malloccall __pagealigned struct kpageframe *
+extern __crit __wunused __malloccall __pagealigned struct kpageframe *
+kpageframe_alloc(__size_t n_pages);
+extern __crit __wunused __malloccall __pagealigned struct kpageframe *
 kpageframe_tryalloc(__size_t n_pages, __size_t *__restrict did_alloc_pages);
-extern __nonnull((1)) void kpageframe_free(__pagealigned struct kpageframe *__restrict start, __size_t n_pages);
+extern __crit __nonnull((1)) void
+kpageframe_free(__pagealigned struct kpageframe *__restrict start, __size_t n_pages);
+
+/* TODO: kpageframe_realloc */
+
 
 //////////////////////////////////////////////////////////////////////////
 // Allocate consecutive page frames at a pre-defined address
-// @return: NULL: The given start+n area is already allocated, or not mapped
-extern __wunused __malloccall __pagealigned struct kpageframe *
+// @return: KPAGEFRAME_INVPTR: The given start+n area is already allocated, or not mapped
+// @return: start: Successfully allocated 'n_pages' of memory starting at 'start'
+extern __crit __wunused __malloccall __pagealigned struct kpageframe *
 kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, __size_t n_pages);
 
 struct kpageframeinfo {
  __size_t pfi_minregion;   /*< The smallest free frame-region. */
- __size_t pfi_maxregion;   /*< The biggest free frame-region. (Maximum valid for which 'kpageframe_alloc' will succeed) */
- __size_t pfi_freeregions; /*< The amount of existing free frame-regions. */
- __size_t pfi_freepages;   /*< The amount of free pages. */
+ __size_t pfi_maxregion;   /*< The biggest free frame-region. (Maximum value for which 'kpageframe_alloc' can succeed) */
+ __size_t pfi_freeregions; /*< The amount of existing free frame-regions (scatter). */
+ __size_t pfi_freepages;   /*< The total amount of free pages. */
  __size_t pfi_freebytes;   /*< The total amount of free bytes. */
 };
 
@@ -117,14 +123,16 @@ extern __wunused __nonnull((1)) int kpageframe_isfreepage(void const *__restrict
 
 //////////////////////////////////////////////////////////////////////////
 // Print the layout of the physical memory allocator.
+// >> Usefuly to debug scattering in physical memory.
 extern void kpageframe_printphysmem(void);
 
 
 #ifdef __MAIN_C__
 //////////////////////////////////////////////////////////////////////////
-// Initialize the list of available memory regions from info given by grub
+// Initialize the list of available memory regions from info given by GRUB
 // NOTE: 'size' is the total size of 'mbt' in bytes
 // WARNING: These functions must not be called post initialization
+// NOTE: Also initialized dynamic memory and dlmalloc, as well as the GRUB command line.
 extern void kernel_initialize_raminfo(void);
 #endif
 
