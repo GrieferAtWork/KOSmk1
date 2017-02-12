@@ -80,6 +80,7 @@ __DECL_BEGIN
 
 /* Configure dlmalloc's exports/bindings */
 #ifdef __LIBC_HAVE_DEBUG_MALLOC
+#define DLMALLOC_USE_ONETIME_INIT debug_initialize_dlmalloc
 #define USE_DL_PREFIX
 /* These functions don't have a debug-hook
  * >> always link it directly into dlmalloc. */
@@ -163,6 +164,19 @@ __DECL_BEGIN
 
 /* Write a syslog entry whenever a periodic memory validation is performed. */
 #define MALL_VALIDFREQ_SYSLOG  defined(__KERNEL__)
+#if MALL_FOOTERSIZE
+/* Add a random number between 0 and 'MALL_RANDOMIZE_FOOTER-1' to all
+ * memory allocations to give code working with 'malloc_usable_size'
+ * something more interesting than what was originally passed to malloc().
+ * WARNING: Unless code actually makes use of 'malloc_usable_size',
+ *          this config should be defined to ZERO (which disables it)
+ *          as having this enabled prevents perfect detection of mall
+ *          footer violations.
+ */
+#define MALL_RANDOMIZE_FOOTER 0
+#else
+#define MALL_RANDOMIZE_FOOTER 0
+#endif
 
 /* === END MALL CONFIG === */
 
@@ -174,11 +188,23 @@ __DECL_BEGIN
 #define MALL_HEADERBYTE(i)   0x65
 #define MALL_FOOTERBYTE(i)   0xB6
 #else
-static byte_t const mall_header_seed[4] = {0x65,0xB6,0xBD,0x5A};
-static byte_t const mall_footer_seed[4] = {0xCF,0x6A,0xB7,0x97};
+static byte_t mall_header_seed[4] = {0x65,0xB6,0xBD,0x5A};
+static byte_t mall_footer_seed[4] = {0xCF,0x6A,0xB7,0x97};
 #define MALL_HEADERBYTE(i)   (mall_header_seed[(i) % 4]^((0xff >> (i) % 8)*(i))) /* Returns the i-th control byte for mall-headers. */
 #define MALL_FOOTERBYTE(i)   (mall_footer_seed[(i) % 4]^((0xff >> (i) % 7)*((i)+1))) /* Returns the i-th control byte for mall-footers. */
+/* Put a twist on random number generation, making it impossible for
+ * code to intentionally guess the correct sequence twice in a row. */
+#ifdef __KERNEL__
+#define MALL_INITIALIZE() \
+ (*(uint32_t *)mall_header_seed ^=  (uint32_t)KERNEL_BOOT_TIME.tv_sec,\
+  *(uint32_t *)mall_footer_seed ^= ~(uint32_t)KERNEL_BOOT_TIME.tv_sec)
+#else
+#define MALL_INITIALIZE() \
+ (*(uint32_t *)mall_header_seed ^=  (uint32_t)time(NULL),\
+  *(uint32_t *)mall_footer_seed ^= ~(uint32_t)time(NULL))
 #endif
+#endif
+
 /* === END MALL RANDOM === */
 
 
@@ -241,6 +267,19 @@ static __noinline void capturetb(void const **__restrict addrvec, size_t skip) {
  _walktraceback_d((_ptraceback_stackwalker_d)&capturetb_walker,
                   NULL,addrvec,skip+1);
 }
+
+#ifdef __KERNEL__
+void kernel_initialize_dlmalloc(void)
+#elif 1 /* Use one-time initialization in userland as well. */
+void user_initialize_dlmalloc(void)
+#endif
+{
+ debug_initialize_dlmalloc();
+#ifdef MALL_INITIALIZE
+ MALL_INITIALIZE();
+#endif
+}
+
 
 /* NOTE: mall blocks with a NULL file are not tracked.
  *    >> Using this (quite simple) rule, the user can intentionally
@@ -573,6 +612,12 @@ static __crit __noinline void *mall_malloc(size_t s, size_t alignment __LIBC_DEB
 #endif
  traceback_size = capturetbsize(MALL_TBOFF);
  headtailsize = mall_headtail_size+traceback_size*sizeof(void *);
+#if MALL_RANDOMIZE_FOOTER
+ {
+  time_t t = time(NULL);
+  s += (MALL_HEADERBYTE(t) % MALL_RANDOMIZE_FOOTER);
+ }
+#endif
  /* Overallocate to correctly handle any kind of native
   * alignment (including 1-byte; aka. not-aligned-at-all) */
  MALL_SYSACQUIRE

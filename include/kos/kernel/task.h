@@ -463,7 +463,19 @@ __local void ktaskstat_get(struct ktaskstat const *self, struct ktaskstat *resul
  do memcpy(result,self,sizeof(struct ktaskstat));
  while (self->ts_version != result->ts_version);
 }
+
 #endif /* KTASK_HAVE_STATS */
+
+//////////////////////////////////////////////////////////////////////////
+// The point in time when the kernel was booted (boot time)
+// >> This can be used as a reference pointer to figure out stuff like uptime.
+#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_START)
+#define KERNEL_BOOT_TIME  (*(struct timespec const *)&ktask_zero()->t_stats.ts_abstime_start)
+#else /* KTASK_HAVE_STATS_START */
+extern struct timespec __kernel_boot_time;
+#define KERNEL_BOOT_TIME  (*(struct timespec const *)&__kernel_boot_time)
+#endif /* !KTASK_HAVE_STATS_START */
+
 #endif /* !__ASSEMBLY__ */
 
 

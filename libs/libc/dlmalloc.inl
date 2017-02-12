@@ -38,11 +38,13 @@
  * the idea to using lazy initialization pointless and actually slower.
  * Instead, dlmalloc is initialized explicitly at the same time that
  * libc and raw, low-level RAM are. */
+#ifndef DLMALLOC_USE_ONETIME_INIT
 #ifdef __KERNEL__
 #define DLMALLOC_USE_ONETIME_INIT kernel_initialize_dlmalloc
 #elif 1 /* Use one-time initialization in userland as well. */
 #define DLMALLOC_USE_ONETIME_INIT user_initialize_dlmalloc
 #endif
+#endif /* !DLMALLOC_USE_ONETIME_INIT */
 
 #ifdef __LIBC_HAVE_DEBUG_MALLOC
 /* While mall will already put in some great work to assure proper

@@ -546,7 +546,7 @@ public:
  template<class __S> explicit bool operator != (____INTELLISENE_integer<endian,__S>) const throw();
  template<class __S> explicit bool operator >  (____INTELLISENE_integer<endian,__S>) const throw();
  template<class __S> explicit bool operator >= (____INTELLISENE_integer<endian,__S>) const throw();
- explicit ____INTELLISENE_integer(__T) throw();
+ //explicit ____INTELLISENE_integer(__T) throw();
 };
 #pragma pack(pop)
 

@@ -129,13 +129,14 @@ void stress_malloc(void) {
 #endif
 
 void test_write_file(void) {
- struct kfile *fp; kerrno_t error;
+ kerrno_t error;
  error = krootfs_remove("/directory_with_a_really_long_name",(size_t)-1);
  assertf(KE_ISOK(error) || error == KE_NOENT,"%d",error);
  error = krootfs_mkdir("/directory_with_a_really_long_name",(size_t)-1,0,NULL,NULL,NULL);
  assertf(KE_ISOK(error),"%d",error);
 
 #if 0
+ struct kfile *fp;
  error = krootfs_remove("/test.txt",(size_t)-1);
  assertf(KE_ISOK(error) || error == KE_NOENT,"%d",error);
 

@@ -50,6 +50,16 @@ kerrno_t kdirent_remove(struct kdirent *self)
 #endif
   self->d_inode = NULL;
   kdirent_unlock(self,KDIRENT_LOCK_NODE);
+  if __unlikely(!mynode) return KE_DESTROYED;
+  if (self->d_flags&KDIRENT_FLAG_INSD) {
+   struct kinode *parent_node;
+   /* Try to notify the INode of the parent
+    * directory that this entry is being removed. */
+   if ((parent_node = kdirent_getnode(self->d_parent)) != NULL) {
+    kinode_delnod(parent_node,&self->d_name,mynode);
+    kinode_decref(parent_node);
+   }
+  }
   if (kinode_issuperblock(mynode)) {
    // Unmount a given mount point
    error = _ksuperblock_delmnt(__kinode_superblock(mynode),self);

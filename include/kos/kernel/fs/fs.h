@@ -85,24 +85,52 @@ typedef kerrno_t (*__wunused __nonnull((1,2)) pkenumdir)(struct kinode *__restri
 struct kinodetype {
  __size_t   it_size; /*< Size of the implemented dirent-structure (must be at least 'sizeof(struct kdirent)') */
  void     (*it_quit)(struct kinode *self);
+ /* NOTE: Any operator may either not be implemented, or simply return KE_NOSYS
+  *       in order to act as though the associated filesystem did not implement
+  *       the required functionality.
+  * NOTE: Some operators, such as (g|s)etattr are implemented with generic
+  *       versions capable of emulating most common protocols when defined as NULL,
+  *       though they will not be called if a custom operator returns KE_NOSYS. */
  kerrno_t (*it_getattr)(struct kinode const *self, __size_t ac, union kinodeattr *av);
  kerrno_t (*it_setattr)(struct kinode *self, __size_t ac, union kinodeattr const *av);
  kerrno_t (*it_delnode)(struct kinode *self); /*< Called to delete a node once its 'i_lnkcnt' drops to 0. */
  kerrno_t (*it_hrdlnk)(struct kinode *self, struct kdirentname const *name, struct kinode *__restrict inode); /*< Add a new hard link in directory 'self', maned 'named' and pointing to 'inode'. */
  kerrno_t (*it_unlink)(struct kinode *self, struct kdirentname const *name, struct kinode *__restrict inode); /*< Remove 'name' from 'self'. (Also called to decref hard links). */
  kerrno_t (*it_rmdir)(struct kinode *self, struct kdirentname const *name, struct kinode *__restrict inode); /*< Remove 'name' from 'self'. */
- // NOTE: 'it_mkdir' & 'it_mkreg': If the specified file already exists,
- //       it's inode must be stored in '*resnode' and 'KS_FOUND' must be
- //       returned without any given attributes being re-applied.
- // NOTE: If the given file already exists, but isn't of the requested type,
- //       KE_ISDIR/KE_NODIR must be returned without '*resnode' being filled.
+ /* NOTE: 'it_mkdir' & 'it_mkreg': If the specified file already exists,
+  *       it's inode must be stored in '*resnode' and 'KE_EXISTS' must be
+  *       returned without any given attributes being re-applied.
+  * NOTE: If the given file already exists, but isn't of the requested type,
+  *       KE_ISDIR/KE_NODIR must be returned without '*resnode' being filled. */
  kerrno_t (*it_mkdir)(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, __ref struct kinode **resnode); /*< Create a directory in 'self'. */
  kerrno_t (*it_mkreg)(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, __ref struct kinode **resnode); /*< Create a regular file in 'self'. */
  kerrno_t (*it_mklnk)(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, struct kdirentname const *target, __ref struct kinode **resnode); /*< Create a symbolic link in 'self'. */
  kerrno_t (*it_walk)(struct kinode *self, struct kdirentname const *name, __ref struct kinode **resnode); /*< Walks to the given name. */
  kerrno_t (*it_enumdir)(struct kinode *self, pkenumdir callback, void *closure); /*< Enumerate all files/folders. NOTE: If 'callback' returns non-KE_OK, return with that error/signal. */
  kerrno_t (*it_readlink)(struct kinode *self, struct kdirentname *target); /*< Upon successful return, the caller must destroy the 'target' name. */
+ /* The following two must not be implemented, but can be used for advanced integration of virtual filesystem nodes. */
+ kerrno_t (*it_insnod)(struct kinode *self, struct kdirentname const *name, struct kinode *node); /*< Insert a given virtual node into the filesystem. */
+ void     (*it_delnod)(struct kinode *self, struct kdirentname const *name, struct kinode *node); /*< Delete a given virtual node from the filesystem. */
 };
+
+struct kinodeattribs {
+ /* Default/Cached INode attributes. */
+#define KINODEATTRIB_LOCK_DATA 0x01 /*< Generic data lock. */
+ __atomic __u8   ia_locks;
+ __u8            ia_padding;
+#define KINODEATTRIB_FLAG_NONE  0x0000
+#define KINODEATTRIB_FLAG_PERMS 0x0001 /*< Permission bits in 'ia_kind' (mask: 07777) are cached. */
+#define KINODEATTRIB_FLAG_ATIME 0x0002 /*< 'ia_atime' is cached. */
+#define KINODEATTRIB_FLAG_CTIME 0x0004 /*< 'ia_ctime' is cached. */
+#define KINODEATTRIB_FLAG_MTIME 0x0008 /*< 'ia_mtime' is cached. */
+ __u16           ia_flags; /*< [lock(KINODEATTRIB_LOCK_DATA)] Flags describing cached node attributes. */
+ __mode_t        ia_kind;  /*< [const(~07777)] File kind+cached permissions.
+                                Note, that the file-kind part must be considered constant. */
+ struct timespec ia_atime; /*< [lock(KINODEATTRIB_LOCK_DATA)] Cached last access time. */
+ struct timespec ia_ctime; /*< [lock(KINODEATTRIB_LOCK_DATA)] Cached creation time. */
+ struct timespec ia_mtime; /*< [lock(KINODEATTRIB_LOCK_DATA)] Cached last modification time. */
+};
+#define KINODEATTRIBS_INIT(kind) {0,0,KINODEATTRIB_FLAG_NONE,kind,{0,0},{0,0},{0,0}}
 
 struct kinode {
  KOBJECT_HEAD
@@ -117,12 +145,13 @@ struct kinode {
  //          that loop, thus allowing any remaining references to die on their own.
  __ref struct ksuperblock *i_sblock;    /*< [0..1][const] Associated superblock.
                                              NOTE: Only NULL if this node itself is a superblock. */
- __mode_t __const          i_kind;      /*< [const] File kind. */
  struct kcloselock         i_closelock; /*< Lock held while executing any node operation. */
+ struct kinodeattribs      i_attrib;    /*< Cached INode attributes. */
+#define i_kind             i_attrib.ia_kind /*< Backwards compatibility. */
 };
 #define KINODE_INIT(node_type,file_type,superblock,kind) \
  {KOBJECT_INIT(KOBJECT_MAGIC_INODE) 0xffff,node_type,\
-  file_type,superblock,kind,KCLOSELOCK_INIT}
+  file_type,superblock,KCLOSELOCK_INIT,KINODEATTRIBS_INIT(kind)}
 
 #define kinode_issuperblock(self) (!(self)->i_sblock)
 #define __kinode_superblock(self) \
@@ -141,16 +170,15 @@ __kinode_alloc(struct ksuperblock *superblock,
                struct kfiletype *filetype,
                __mode_t filekind);
 extern __crit void __kinode_free(struct kinode *self);
+#define __kinode_initcommon(self) \
+ ((self)->i_refcnt = 1\
+ ,(self)->i_attrib.ia_locks = 0\
+ ,(self)->i_attrib.ia_flags = KINODEATTRIB_FLAG_NONE)
 
 
 __local KOBJECT_DEFINE_INCREF(kinode_incref,struct kinode,i_refcnt,kassert_kinode);
 __local KOBJECT_DEFINE_DECREF(kinode_decref,struct kinode,i_refcnt,kassert_kinode,kinode_destroy);
 
-
-struct stat64;
-//////////////////////////////////////////////////////////////////////////
-// Collect stat information about a given INode
-extern __wunused __nonnull((1,2)) kerrno_t kinode_stat(struct kinode *self, struct stat64 *result);
 
 //////////////////////////////////////////////////////////////////////////
 // Closes the given Information node
@@ -177,12 +205,12 @@ extern __wunused __nonnull((1,2)) kerrno_t kinode_walk(struct kinode *self, stru
 
 //////////////////////////////////////////////////////////////////////////
 // Perform various operations on a given INode
-// @return: KE_NOSYS:     The operation is not supported by the node
+// @return: KE_NOSYS:     The operation is not supported by the node/filesystem
 // @return: KE_DESTROYED: 'self' was deleted
 // @return: KE_ISDIR:     [kinode_unlink] 'dent' is a directory
 // @return: KE_NODIR:     'self' is not a directory
 //                        [kinode_rmdir] 'dent' is not a directory
-// @return: KS_FOUND:     [kinode_mkdir|kinode_mkreg] The specified name already existed.
+// @return: KE_EXISTS:    [kinode_mkdir|kinode_mkreg] The specified name already existed.
 //                                                 >> In this case, attributes are not applied,
 //                                                    but '*resent' and '*resnode' are filled in.
 // @return: KE_NOLNK:     [kinode_readlink] 'self' is not a symbolic link
@@ -193,6 +221,15 @@ extern __wunused __nonnull((1,2,5)) kerrno_t kinode_mkdir(struct kinode *self, s
 extern __wunused __nonnull((1,2,5)) kerrno_t kinode_mkreg(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, __ref struct kinode **resnode);
 extern __wunused __nonnull((1,2,5,6)) kerrno_t kinode_mklnk(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, struct kdirentname const *target, __ref struct kinode **resnode);
 extern __wunused __nonnull((1,2)) kerrno_t kinode_readlink(struct kinode *self, struct kdirentname *target);
+
+//////////////////////////////////////////////////////////////////////////
+// Notify the underlying filesystem of an addition/removal of a virtual INode.
+// WARNING: These are not really meant for physical file system, but for virtual ones instead.
+// @return: KE_NOSYS: The underlying filesystem does not implement special handling of virtual INode,
+//                    meaning that virtual INodes may be handled silently, but 'kinode_delnod' must
+//                    not be called during cleanup of an associated directory entry.
+extern __wunused __nonnull((1,2,3)) kerrno_t kinode_insnod(struct kinode *self, struct kdirentname const *name, struct kinode *node);
+extern __nonnull((1,2,3)) void kinode_delnod(struct kinode *self, struct kdirentname const *name, struct kinode *node);
 
 //////////////////////////////////////////////////////////////////////////
 // Creates a new hardlink in 'self', named 'name' and pointing to 'target'
@@ -282,15 +319,18 @@ kdirentcache_lookup(struct kdirentcache *self, struct kdirentname const *name);
 
 
 typedef __u8 kdirent_flag_t;
+
 struct kdirent {
  KOBJECT_HEAD
  __atomic __u32        d_refcnt;
 #define KDIRENT_LOCK_NODE  0x01
 #define KDIRENT_LOCK_CACHE 0x02
  __atomic __u8         d_locks;
-#define KDIRENT_FLAG_NONE  0x00
-#define KDIRENT_FLAG_VIRT  0x01   /*< [const] This dirent is virtual, meaning that removing it should not be mirrored on disk. */
  kdirent_flag_t        d_flags;
+#define KDIRENT_FLAG_NONE  0x00
+#define KDIRENT_FLAG_VIRT  0x01 /*< This dirent is virtual, meaning that removing it should not be mirrored on disk.
+                                   (Essentially this means that the associated INode will not be informed when the dirent is deleted). */
+#define KDIRENT_FLAG_INSD  0x10 /*< A special node was successfully inserted using 'kinode_insnod'. */
  __u16                 d_padding;
  struct kdirentname    d_name;    /*< [const] Dirent name. */
  __ref struct kdirent *d_parent;  /*< [0..1][const] Parent directory (NULL if fs_root/root_of_unmounted). */
@@ -363,7 +403,7 @@ kdirent_walknode(struct kdirent *self, struct kdirentname const *name,
 //                        [kdirent_unlink] 'self' is the root of a superblock
 // @return: KE_NODIR:     [kdirent_rmdir] 'self' is not a directory
 //                        [kdirent_rmdir|kdirent_remove] 'self' is the root of a superblock
-// @return: KS_FOUND:     [kdirent_mkdir|kdirent_mkreg] The specified name already existed.
+// @return: KE_EXISTS:    [kdirent_mkdir|kdirent_mkreg] The specified name already existed.
 //                        >> In this case, attributes are not applied,
 //                           but '*resent' and '*resnode' are filled in.
 // @return: KE_ACCES:     [kdirent_unlink|kdirent_rmdir|kdirent_remove] The given dirent must be kept.
@@ -400,8 +440,7 @@ kdirent_mklnk(struct kdirent *self, struct kdirentname const *name,
 // @return: KE_EXISTS:    A node with the given name already exists.
 extern __wunused __nonnull((1,2,3,4)) kerrno_t
 kdirent_insnod(struct kdirent *self, struct kdirentname const *name,
-               struct kinode *__restrict node, __ref struct kdirent **resent,
-               kdirent_flag_t flags);
+               struct kinode *__restrict node, __ref struct kdirent **resent);
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -473,7 +512,7 @@ extern __wunused __nonnull((1,2)) kerrno_t kdirent_removeat(struct kfspathenv co
 // @return: KE_EXISTS: A node with the given name already exists.
 extern __wunused __nonnull((1,2,4,5)) kerrno_t
 kdirent_insnodat(struct kfspathenv const *env, char const *path, __size_t pathmax,
-                 struct kinode *__restrict node, __ref struct kdirent **resent, kdirent_flag_t flags);
+                 struct kinode *__restrict node, __ref struct kdirent **resent);
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -490,8 +529,8 @@ kdirent_mountat(struct kfspathenv const *env, char const *path, __size_t pathmax
 
 //////////////////////////////////////////////////////////////////////////
 // Open a given file with the given attributes.
-// @return: KS_FOUND: 'O_CREAT' was included in 'mode', but the file already existed.
-//                    >> It was opened successfully, but the given attributes were not applied.
+// @return: KE_EXISTS: 'O_CREAT|O_EXCL' was included in 'mode', but the file already existed.
+//                     >> It was opened successfully, but the given attributes were not applied.
 // @return: KE_DESTROYED: The specified 'path' describes a directory that was removed
 //                        at one point, leaving the associated descriptor to weakly
 //                        reference a dead filesystem branch.
@@ -700,33 +739,66 @@ extern struct kdirent __kfs_root; /*< ~Real~ filesystem root directory. */
 // (HINT: The given path is a strn-style string, meaning
 //        you can pass (size_t)-1 for a c-style string,
 //        or its actual length for a size-style one)
-__local __wunused __nonnull((1)) kerrno_t
-krootfs_mkdir(char const *__restrict path, __size_t pathmax,
-              __size_t ac, union kinodeattr const *av, 
-              __ref /*opt*/struct kdirent **resent,
-              __ref /*opt*/struct kinode **resnode);
-__local __wunused __nonnull((1)) kerrno_t
-krootfs_mkreg(char const *__restrict path, __size_t pathmax,
-              __size_t ac, union kinodeattr const *av,
-              __ref /*opt*/struct kdirent **resent,
-              __ref /*opt*/struct kinode **resnode);
-__local __wunused __nonnull((1,5)) kerrno_t
-krootfs_mklnk(char const *__restrict path, __size_t pathmax,
-              __size_t ac, union kinodeattr const *av, 
-              struct kdirentname const *__restrict target,
-              __ref /*opt*/struct kdirent **resent,
-              __ref /*opt*/struct kinode **resnode);
-__local __wunused __nonnull((1)) kerrno_t
-krootfs_rmdir(char const *__restrict path, __size_t pathmax);
-__local __wunused __nonnull((1)) kerrno_t
-krootfs_unlink(char const *__restrict path, __size_t pathmax);
-__local __wunused __nonnull((1)) kerrno_t
-krootfs_remove(char const *__restrict path, __size_t pathmax);
-__local __crit __wunused __nonnull((1,3,4)) kerrno_t
-krootfs_insnod(char const *__restrict path, __size_t pathmax,
-               struct kinode *__restrict node,
-               __ref struct kdirent **__restrict resent,
-               kdirent_flag_t flags);
+
+
+
+//////////////////////////////////////////////////////////////////////////
+// Create a new on-disk directory/file/link as specified by the given 'path'.
+// @param: path:    The given path.
+// @param: pathmax: The strnlen-style maximum string length of 'path'.
+// @param: ac|av:   An optional vector of attributes to apply to the newly created directory/file/link.
+// @param: resent:  An optional output parameter to store the dirent of the newly created directory/file/link.
+// @param: resnode: An optional output parameter to store the inode of the newly created directory/file/link.
+// @param: target:  The target text of the link to-be created.
+// @return: KE_OK:        The directory/file/link was created successfully.
+// @return: KE_ACCES:    [kuserfs_*] The calling process does not have write permissions to some part of the directory chain.
+// @return: KE_NOCWD:    [kuserfs_*] The KFD_CWD descriptor of the calling process does not referr to a valid directory.
+// @return: KE_NOROOT:   [kuserfs_*] The KFD_ROOT descriptor of the calling process does not referr to a valid directory.
+// @return: KE_NOSYS:     An requested operation is not supported by the underlying filesystem.
+// @return: KE_DESTROYED: A part of the given path was recently deleted and has become inaccessible.
+// @return: KE_NOENT:     A part of the given path does not exist.
+// @return: KE_NODIR:     The given path tried to dereference a node that isn't a directory.
+// @return: KE_DEVICE:    An error in the underlying disk-system prevent the operation from succeeding.
+// @return: KE_EXISTS:    An entity with the given name already exists.
+//                       [*mkreg] WARNING: If supplied, '*resent' and '*resnode' will still
+//                                         be filled in, but attributes are not applied.
+//                                      >> This behavior is required to support 'O_CREAT|O_EXCL' functionality.
+// @return: KE_ISERR(*):  Some other filesystem/hardware-specific error has occurred.
+__local __wunused __nonnull((1)) kerrno_t krootfs_mkdir(char const *__restrict path, __size_t pathmax, __size_t ac, union kinodeattr const *av, __ref /*opt*/struct kdirent **resent, __ref /*opt*/struct kinode **resnode);
+__local __wunused __nonnull((1)) kerrno_t kuserfs_mkdir(char const *__restrict path, __size_t pathmax, __size_t ac, union kinodeattr const *av, __ref /*opt*/struct kdirent **resent, __ref /*opt*/struct kinode **resnode);
+__local __wunused __nonnull((1)) kerrno_t krootfs_mkreg(char const *__restrict path, __size_t pathmax, __size_t ac, union kinodeattr const *av, __ref /*opt*/struct kdirent **resent, __ref /*opt*/struct kinode **resnode);
+__local __wunused __nonnull((1)) kerrno_t kuserfs_mkreg(char const *__restrict path, __size_t pathmax, __size_t ac, union kinodeattr const *av, __ref /*opt*/struct kdirent **resent, __ref /*opt*/struct kinode **resnode);
+__local __wunused __nonnull((1,5)) kerrno_t krootfs_mklnk(char const *__restrict path, __size_t pathmax, __size_t ac, union kinodeattr const *av, struct kdirentname const *__restrict target, __ref /*opt*/struct kdirent **resent, __ref /*opt*/struct kinode **resnode);
+__local __wunused __nonnull((1,5)) kerrno_t kuserfs_mklnk(char const *__restrict path, __size_t pathmax, __size_t ac, union kinodeattr const *av, struct kdirentname const *__restrict target, __ref /*opt*/struct kdirent **resent, __ref /*opt*/struct kinode **resnode);
+
+//////////////////////////////////////////////////////////////////////////
+// Remove a file/directory/either at a given path.
+// @param: path:    The given path.
+// @param: pathmax: The strnlen-style maximum string length of 'path'.
+// @return: KE_OK:        A filesystem entity was successfully removed.
+// @return: KE_ACCES:    [kuserfs_*] The calling process does not have write permissions to some part of the directory chain.
+// @return: KE_NOCWD:    [kuserfs_*] The KFD_CWD descriptor of the calling process does not referr to a valid directory.
+// @return: KE_NOROOT:   [kuserfs_*] The KFD_ROOT descriptor of the calling process does not referr to a valid directory.
+// @return: KE_NOSYS:     An requested operation is not supported by the underlying filesystem.
+// @return: KE_DESTROYED: A part of the given path was recently deleted and has become inaccessible.
+// @return: KE_NOENT:     A part of the given path does not exist.
+// @return: KE_NODIR:     The given path tried to dereference a node that isn't a directory.
+// @return: KE_DEVICE:    An error in the underlying disk-system prevent the operation from succeeding.
+// @return: KE_ISDIR:     [*unlink] 'self' is a directory or the root of a superblock.
+// @return: KE_NODIR:     [*rmdir] 'self' is not a directory or the root of a superblock
+// @return: KE_ISERR(*):  Some other filesystem/hardware-specific error has occurred.
+__local __wunused __nonnull((1)) kerrno_t krootfs_rmdir(char const *__restrict path, __size_t pathmax);
+__local __wunused __nonnull((1)) kerrno_t kuserfs_rmdir(char const *__restrict path, __size_t pathmax);
+__local __wunused __nonnull((1)) kerrno_t krootfs_unlink(char const *__restrict path, __size_t pathmax);
+__local __wunused __nonnull((1)) kerrno_t kuserfs_unlink(char const *__restrict path, __size_t pathmax);
+__local __wunused __nonnull((1)) kerrno_t krootfs_remove(char const *__restrict path, __size_t pathmax);
+__local __wunused __nonnull((1)) kerrno_t kuserfs_remove(char const *__restrict path, __size_t pathmax);
+
+
+__local __crit __wunused __nonnull((1,3,4)) kerrno_t krootfs_insnod(char const *__restrict path, __size_t pathmax, struct kinode *__restrict node, __ref struct kdirent **__restrict resent);
+__local __crit __wunused __nonnull((1,3,4)) kerrno_t kuserfs_insnod(char const *__restrict path, __size_t pathmax, struct kinode *__restrict node, __ref struct kdirent **__restrict resent);
+
+
 __local __wunused __nonnull((1,3)) kerrno_t
 krootfs_mount(char const *path, __size_t pathmax,
               struct ksuperblock *__restrict sblock,
@@ -736,33 +808,6 @@ krootfs_open(char const *__restrict path, __size_t pathmax, __openmode_t mode,
              __size_t create_ac, union kinodeattr const *create_av,
              __ref struct kfile **__restrict result);
 
-__local __wunused __nonnull((1)) kerrno_t
-kuserfs_mkdir(char const *__restrict path, __size_t pathmax,
-              __size_t ac, union kinodeattr const *av, 
-              __ref /*opt*/struct kdirent **resent,
-              __ref /*opt*/struct kinode **resnode);
-__local __wunused __nonnull((1)) kerrno_t
-kuserfs_mkreg(char const *__restrict path, __size_t pathmax,
-              __size_t ac, union kinodeattr const *av,
-              __ref /*opt*/struct kdirent **resent,
-              __ref /*opt*/struct kinode **resnode);
-__local __wunused __nonnull((1,5)) kerrno_t
-kuserfs_mklnk(char const *__restrict path, __size_t pathmax,
-              __size_t ac, union kinodeattr const *av, 
-              struct kdirentname const *__restrict target,
-              __ref /*opt*/struct kdirent **resent,
-              __ref /*opt*/struct kinode **resnode);
-__local __wunused __nonnull((1)) kerrno_t
-kuserfs_rmdir(char const *__restrict path, __size_t pathmax);
-__local __wunused __nonnull((1)) kerrno_t
-kuserfs_unlink(char const *__restrict path, __size_t pathmax);
-__local __wunused __nonnull((1)) kerrno_t
-kuserfs_remove(char const *__restrict path, __size_t pathmax);
-__local __crit __wunused __nonnull((1,3,4)) kerrno_t
-kuserfs_insnod(char const *__restrict path, __size_t pathmax,
-               struct kinode *__restrict node,
-               __ref struct kdirent **__restrict resent,
-               kdirent_flag_t flags);
 __local __wunused __nonnull((1,3)) kerrno_t
 kuserfs_mount(char const *path, __size_t pathmax,
               struct ksuperblock *__restrict sblock,
@@ -817,11 +862,10 @@ krootfs_remove(char const *__restrict path, __size_t pathmax) {
 __local __crit kerrno_t
 krootfs_insnod(char const *__restrict path, __size_t pathmax,
                struct kinode *__restrict node,
-               __ref struct kdirent **__restrict resent,
-               kdirent_flag_t flags) {
+               __ref struct kdirent **__restrict resent) {
  KTASK_CRIT_MARK
  struct kfspathenv env = KFSPATHENV_INITROOT;
- return kdirent_insnodat(&env,path,pathmax,node,resent,flags);
+ return kdirent_insnodat(&env,path,pathmax,node,resent);
 }
 __local kerrno_t
 krootfs_mount(char const *__restrict path, __size_t pathmax,
@@ -924,13 +968,12 @@ kuserfs_remove(char const *__restrict path, __size_t pathmax) {
 __local __crit kerrno_t
 kuserfs_insnod(char const *__restrict path, __size_t pathmax,
                struct kinode *__restrict node,
-               __ref struct kdirent **__restrict resent,
-               kdirent_flag_t flags) {
+               __ref struct kdirent **__restrict resent) {
  kerrno_t error;
  struct kfspathenv env;
  KTASK_CRIT_MARK
  if __likely(KE_ISOK(error = kfspathenv_inituser(&env))) {
-  error = kdirent_insnodat(&env,path,pathmax,node,resent,flags);
+  error = kdirent_insnodat(&env,path,pathmax,node,resent);
   kfspathenv_quituser(&env);
  }
  return error;

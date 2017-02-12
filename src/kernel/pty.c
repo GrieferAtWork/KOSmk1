@@ -630,10 +630,10 @@ kfspty_insnod(struct kfspty *self,
      ) { error = KE_FAULT; goto err_root; }
  /* Actually Insert the nodes! */
  error = kdirent_insnodat(&env,master_name,master_name_size,
-                         (struct kinode *)self,master_ent,KDIRENT_FLAG_VIRT);
+                         (struct kinode *)self,master_ent);
  if __unlikely(KE_ISERR(error)) goto err_root;
  error = kdirent_insnodat(&env,slave_name,slave_name_size,
-                         (struct kinode *)slave_inode,slave_ent,KDIRENT_FLAG_VIRT);
+                         (struct kinode *)slave_inode,slave_ent);
  if __unlikely(KE_ISERR(error)) goto err_ment;
  k_syslogf(KLOG_INFO,"[PTY] Registered PTY device (num: %I32u; master: %.*q; slave: %.*q)\n",
            resnum,(unsigned)master_name_size,master_name,(unsigned)slave_name_size,slave_name);

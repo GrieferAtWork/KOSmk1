@@ -69,11 +69,11 @@ __kinode_alloc(struct ksuperblock *superblock,
  result = (struct kinode *)malloc(nodetype->it_size);
  if __likely(result) {
   kobject_init(result,KOBJECT_MAGIC_INODE);
-  result->i_refcnt   = 1;
+  __kinode_initcommon(result);
   result->i_type     = nodetype;
   result->i_filetype = filetype;
   result->i_sblock   = superblock;
-  *(mode_t *)&result->i_kind = filekind;
+  result->i_kind = filekind;
   kcloselock_init(&result->i_closelock);
  } else {
   ksuperblock_decref(superblock);
@@ -142,53 +142,12 @@ void kinode_destroy(struct kinode *self) {
  free(obbase);
 }
 
-kerrno_t kinode_stat(struct kinode *self, struct stat64 *result) {
- kerrno_t error; struct ksdev *sdev;
- struct ksuperblock const *sblock;
- struct ksdev *(*getsdev)(struct ksuperblock const *);
- union kinodeattr attrib[9];
- kassert_kinode(self);
- kassertobj(result);
- attrib[0].ia_common.a_id = KATTR_FS_ATIME;
- attrib[1].ia_common.a_id = KATTR_FS_CTIME;
- attrib[2].ia_common.a_id = KATTR_FS_MTIME;
- attrib[3].ia_common.a_id = KATTR_FS_PERM;
- attrib[4].ia_common.a_id = KATTR_FS_OWNER;
- attrib[5].ia_common.a_id = KATTR_FS_GROUP;
- attrib[6].ia_common.a_id = KATTR_FS_SIZE;
- attrib[7].ia_common.a_id = KATTR_FS_INO;
- attrib[8].ia_common.a_id = KATTR_FS_NLINK;
- error = kcloselock_beginop(&self->i_closelock);
- if __unlikely(KE_ISERR(error)) return error;
- error = self->i_type->it_getattr ? (*self->i_type->it_getattr)(self,__compiler_ARRAYSIZE(attrib),attrib)
-                                  : kinode_generic_getattr(self,__compiler_ARRAYSIZE(attrib),attrib);
- if __unlikely(KE_ISERR(error)) { kcloselock_endop(&self->i_closelock); return error; }
- sblock = kinode_superblock(self);
- getsdev = ksuperblock_type(sblock)->st_getdev;
- sdev = getsdev ? (*getsdev)(sblock) : NULL;
- kcloselock_endop(&self->i_closelock);
- result->st_dev = (__dev_t)sdev; /* TODO? */
- result->st_ino = attrib[7].ia_ino.i_ino;
- result->st_mode = self->i_kind|attrib[3].ia_perm.p_perm;
- result->st_nlink = attrib[8].ia_nlink.n_lnk;
- result->st_uid = attrib[4].ia_owner.o_owner;
- result->st_gid = attrib[5].ia_group.g_group;
- result->st_rdev = 0; /* TODO? */
- result->st_size = (__off64_t)attrib[6].ia_size.sz_size;
- result->st_blksize = sdev ? sdev->sd_blocksize : 1;
- result->st_blocks = (__blkcnt64_t)(result->st_size/result->st_blksize);
- result->st_atim = attrib[0].ia_time.tm_time;
- result->st_mtim = attrib[1].ia_time.tm_time;
- result->st_ctim = attrib[2].ia_time.tm_time;
- if (sdev) ksdev_decref(sdev);
- return KE_OK;
-}
-
 kerrno_t kinode_getattr(struct kinode const *self, size_t ac, union kinodeattr *av) {
  kerrno_t error; kassert_kinode(self);
  kassertmem(av,ac*sizeof(union kinodeattr));
  error = kcloselock_beginop((struct kcloselock *)&self->i_closelock);
  if __unlikely(KE_ISERR(error)) return error;
+ /* TODO: Make use of the INode cache. */
  error = self->i_type->it_getattr ? (*self->i_type->it_getattr)(self,ac,av)
                                   : kinode_generic_getattr(self,ac,av);
  kcloselock_endop((struct kcloselock *)&self->i_closelock);
@@ -199,6 +158,7 @@ kerrno_t kinode_setattr(struct kinode *self, size_t ac, union kinodeattr const *
  kassertmem(av,ac*sizeof(union kinodeattr));
  error = kcloselock_beginop((struct kcloselock *)&self->i_closelock);
  if __unlikely(KE_ISERR(error)) return error;
+ /* TODO: Make use of the INode cache. */
  error = self->i_type->it_setattr ? (*self->i_type->it_setattr)(self,ac,av)
                                   : kinode_generic_setattr(self,ac,av);
  kcloselock_endop((struct kcloselock *)&self->i_closelock);
@@ -217,6 +177,8 @@ __local size_t kinode_getlegacyattributesize(kattr_t attr) {
   case KATTR_FS_GROUP:
    return sizeof(struct kinodeattr_group)-sizeof(struct kinodeattr_common);
   case KATTR_FS_SIZE:
+  case KATTR_FS_BUFSIZE:
+  case KATTR_FS_MAXSIZE:
    return sizeof(struct kinodeattr_size)-sizeof(struct kinodeattr_common);
   case KATTR_FS_KIND:
    return sizeof(struct kinodeattr_kind)-sizeof(struct kinodeattr_common);
@@ -262,13 +224,15 @@ kerrno_t __kinode_setattr_legacy(struct kinode *self, kattr_t attr,
  return kinode_setattr(self,1,&attrib);
 }
 kerrno_t kinode_getattr_legacy(struct kinode const *self, kattr_t attr,
-                               void *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
+                               void *__restrict buf, size_t bufsize,
+                               size_t *__restrict reqsize) {
+ kerrno_t error;
  kassert_kinode(self);
  kassertmem(buf,bufsize);
  kassertobjnull(reqsize);
  if (kinode_issuperblock(self)) {
   struct ksuperblocktype *tp = (struct ksuperblocktype *)self->i_type;
-  kerrno_t error = tp->st_getattr
+  error = tp->st_getattr
    ? (*tp->st_getattr)(__kinode_superblock(self),attr,buf,bufsize,reqsize)
    : ksuperblock_generic_getattr(__kinode_superblock(self),attr,buf,bufsize,reqsize);
   if (error != KE_NOSYS) return error;
@@ -277,11 +241,12 @@ kerrno_t kinode_getattr_legacy(struct kinode const *self, kattr_t attr,
 }
 kerrno_t kinode_setattr_legacy(struct kinode *self, kattr_t attr,
                                void const *__restrict buf, size_t bufsize) {
+ kerrno_t error;
  kassert_kinode(self);
  kassertmem(buf,bufsize);
  if (kinode_issuperblock(self)) {
   struct ksuperblocktype *tp = (struct ksuperblocktype *)self->i_type;
-  kerrno_t error = tp->st_setattr
+  error = tp->st_setattr
    ? (*tp->st_setattr)(__kinode_superblock(self),attr,buf,bufsize)
    : ksuperblock_generic_setattr(__kinode_superblock(self),attr,buf,bufsize);
    if (error != KE_NOSYS) return error;
@@ -411,6 +376,28 @@ kerrno_t kinode_mklnk(struct kinode *self, struct kdirentname const *name,
  if __unlikely(error == KE_NOSYS && !S_ISDIR(self->i_kind)) error = KE_NODIR;
  return error;
 }
+kerrno_t kinode_insnod(struct kinode *self, struct kdirentname const *name, struct kinode *node) {
+ kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
+ kerrno_t error;
+ kassert_kinode(self);
+ kassertobj(name);
+ if __unlikely((callback = self->i_type->it_insnod) == NULL)
+  return S_ISDIR(self->i_kind) ? KE_NOSYS : KE_NODIR;
+ if __unlikely(KE_ISERR(error = kcloselock_beginop(&self->i_closelock))) return error;
+ error = (*callback)(self,name,node);
+ kcloselock_endop(&self->i_closelock);
+ if __unlikely(error == KE_NOSYS && !S_ISDIR(self->i_kind)) error = KE_NODIR;
+ return error;
+}
+void kinode_delnod(struct kinode *self, struct kdirentname const *name, struct kinode *node) {
+ void(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
+ kassert_kinode(self);
+ kassertobj(name);
+ if __unlikely((callback = self->i_type->it_delnod) == NULL) return;
+ if __unlikely(KE_ISERR(kcloselock_beginop(&self->i_closelock))) return;
+ (*callback)(self,name,node);
+ kcloselock_endop(&self->i_closelock);
+}
 kerrno_t kinode_readlink(struct kinode *self, struct kdirentname *target) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname *);
  kerrno_t error; kassert_kinode(self); kassertobj(target);
@@ -444,9 +431,8 @@ kerrno_t kinode_mkhardlink(struct kinode *self,
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 // --- KDIRENT
-kerrno_t kdirentname_initcopy(
- struct kdirentname *self,
- struct kdirentname const *right) {
+kerrno_t kdirentname_initcopy(struct kdirentname *self,
+                              struct kdirentname const *right) {
  kassertobj(self);
  kassertobj(right);
  self->dn_hash = right->dn_hash;
@@ -572,17 +558,25 @@ struct kdirent *kdirentcache_lookup(
 
 extern void kdirent_destroy(struct kdirent *self);
 void kdirent_destroy(struct kdirent *self) {
+ struct kdirent *parent;
  kassert_object(self,KOBJECT_MAGIC_DIRENT);
- free(self->d_name.dn_name);
- if __likely(self->d_parent) {
-  struct kdirent *parent = self->d_parent;
+ if __likely((parent = self->d_parent) != NULL) {
   kdirent_lock(parent,KDIRENT_LOCK_CACHE);
   // Remove ourselves from the cache of our parent
   __evalexpr(kdirentcache_remove(&parent->d_cache,self));
   kdirent_unlock(parent,KDIRENT_LOCK_CACHE);
+  if (self->d_inode && (self->d_flags&(KDIRENT_FLAG_VIRT|KDIRENT_FLAG_INSD)) ==
+                                      (KDIRENT_FLAG_VIRT|KDIRENT_FLAG_INSD)) {
+   __ref struct kinode *parent_inode;
+   if ((parent_inode = kdirent_getnode(parent)) != NULL) {
+    kinode_delnod(parent_inode,&self->d_name,self->d_inode);
+    kinode_decref(parent_inode);
+   }
+  }
   kdirent_decref(parent);
  }
  if __likely(self->d_inode) kinode_decref(self->d_inode);
+ free(self->d_name.dn_name);
 #ifdef __DEBUG__
  struct kdirentcachevec *iter,*end;
  end = (iter = self->d_cache.dc_cache)+KDIRENTCACHE_SIZE;
@@ -617,32 +611,38 @@ err_freer: free(result); return NULL;
 }
 
 kerrno_t kdirent_insnod(struct kdirent *self, struct kdirentname const *name,
-                        struct kinode *__restrict node, __ref struct kdirent **resent,
-                        kdirent_flag_t flags) {
- struct kdirent *used_resent; kerrno_t error;
+                        struct kinode *__restrict node, __ref struct kdirent **resent) {
+ struct kdirent *used_resent;
+ struct kinode *selfnode;
+ kerrno_t error;
  kassert_kdirent(self);
  kassertobj(name);
  kassert_kinode(node);
  kassertobj(resent);
- // Do some checking to make sure that the given
- // 'self' dirent is a directory and not destroyed.
- {
-  struct kinode *selfnode = kdirent_getnode(self);
-  if __unlikely(!selfnode) return KE_DESTROYED;
-  if __unlikely(!S_ISDIR(selfnode->i_kind)) { kinode_decref(selfnode); return KE_NODIR; }
-  kinode_decref(selfnode);
- }
- if __unlikely(KE_ISERR(error = kinode_incref(node))) return error;
- used_resent = __kdirent_alloc(self,name);
- if __unlikely(!used_resent) { kinode_decref(node); return KE_NOMEM; }
- used_resent->d_flags = flags;
- used_resent->d_inode = node;
+ /* Do some checking to make sure that the given
+  * 'self' dirent is a directory and not destroyed. */
+ if __unlikely((selfnode = kdirent_getnode(self)) == NULL) return KE_DESTROYED;
+ if __unlikely(!S_ISDIR(selfnode->i_kind)) { error = KE_NODIR; goto end_selfnode; }
+ if __unlikely(KE_ISERR(error = kinode_incref(node))) goto end_selfnode;
+ if __unlikely((used_resent = __kdirent_alloc(self,name)) == NULL) { error = KE_NOMEM; goto err_node; }
+ used_resent->d_flags = KDIRENT_FLAG_VIRT;
+ /* Inform the underlying filesystem about the addition of a virtual INode. */
+ error = kinode_insnod(selfnode,&used_resent->d_name,node);
+ if __unlikely(KE_ISERR(error)) {
+  if __unlikely(error != KE_NOSYS) goto err_node;
+ } else used_resent->d_flags |= KDIRENT_FLAG_INSD;
+ used_resent->d_inode = node; /*< Inherit reference */
  kdirent_lock(self,KDIRENT_LOCK_CACHE);
  error = kdirentcache_insert(&self->d_cache,used_resent,NULL);
  kdirent_unlock(self,KDIRENT_LOCK_CACHE);
  if __likely(KE_ISOK(error)) *resent = used_resent;
  else kdirent_decref(used_resent);
+end_selfnode:
+ kinode_decref(selfnode);
  return error;
+err_node:
+ kinode_decref(node);
+ goto end_selfnode;
 }
 
 kerrno_t kdirent_mount(struct kdirent *self, struct kdirentname const *name,
@@ -659,8 +659,7 @@ kerrno_t kdirent_mount(struct kdirent *self, struct kdirentname const *name,
  //    as well as to ensure that superblocks remain mounted, even
  //    when all (obvious) references to them are lock (such as would
  //    be the case if 'resent' is NULL, which is even something that's allowed).
- error = kdirent_insnod(self,name,ksuperblock_root(sblock),
-                        &used_resent,KDIRENT_FLAG_VIRT);
+ error = kdirent_insnod(self,name,ksuperblock_root(sblock),&used_resent);
  if __unlikely(KE_ISERR(error)) return error;
  if (resent) {
   *resent = used_resent;
@@ -669,8 +668,8 @@ kerrno_t kdirent_mount(struct kdirent *self, struct kdirentname const *name,
   error = _ksuperblock_addmnt_inherited(sblock,used_resent);
  }
  if __unlikely(KE_ISERR(error)) {
-  // Something went wrong.
-  // >> Now we must unlink the newly created dirent, before closing its node.
+  /* Something went wrong.
+   * >> Now we must unlink the newly created dirent, before closing its node. */
   kdirent_unlinknode(used_resent);
  }
  return error;
@@ -989,7 +988,7 @@ kerrno_t kdirent_removeat(struct kfspathenv const *env, char const *path, size_t
  return error;
 }
 kerrno_t kdirent_insnodat(struct kfspathenv const *env, char const *path, size_t pathmax,
-                          struct kinode *__restrict node, __ref struct kdirent **resent, kdirent_flag_t flags) {
+                          struct kinode *__restrict node, __ref struct kdirent **resent) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *objparent;
  kassertobj(env);
@@ -1000,7 +999,7 @@ kerrno_t kdirent_insnodat(struct kfspathenv const *env, char const *path, size_t
  error = kdirent_walklast(env,&objparent,&last,path,pathmax);
  if __unlikely(KE_ISERR(error)) return error;
  if __unlikely(!last.dn_size) error = KE_EXISTS;
- else error = kdirent_insnod(objparent,&last,node,resent,flags);
+ else error = kdirent_insnod(objparent,&last,node,resent);
  kdirent_decref(objparent);
  return error;
 }
@@ -1063,7 +1062,7 @@ kdirent_openlast(struct kfspathenv const *env, struct kdirent *dir, struct kdire
  if (mode&O_CREAT) {
   // Attempt to create missing files
   error = kdirent_mkreg(dir,name,create_ac,create_av,&fileent,&filenode);
-  if (mode&O_EXCL && error == KS_FOUND) {
+  if (mode&O_EXCL && error == KE_EXISTS) {
    // O_CREAT|O_EXCL --> Force creation of new files; fail if already exists
    // NOTE: But since we've already retrieved both the node
    //       and its dirent, we need to clean those up.
@@ -1158,11 +1157,11 @@ void ksuperblock_generic_init(struct ksuperblock *self,
  kobject_init(self,KOBJECT_MAGIC_SUPERBLOCK);
  kobject_init(&self->s_root,KOBJECT_MAGIC_INODE);
  ksupermount_init(&self->s_mount);
- self->s_root.i_refcnt = 1;
+ __kinode_initcommon(&self->s_root);
  self->s_root.i_type = &stype->st_node;
  self->s_root.i_filetype = &kdirfile_type;
  self->s_root.i_sblock = NULL;
- *(mode_t *)&self->s_root.i_kind = S_IFDIR;
+ self->s_root.i_kind = S_IFDIR;
  kcloselock_init(&self->s_root.i_closelock);
 }
 
@@ -1398,8 +1397,8 @@ void kernel_finalize_filesystem(void) {
  __evalexpr(kinode_close(root_node));
  if (root_node->i_refcnt != 1) {
   k_syslogf(KLOG_ERROR
-        ,"[LEAK] Invalid reference count in filesystem root_node: %I32u\n"
-        ,root_node->i_refcnt);
+           ,"[LEAK] Invalid reference count in filesystem root_node: %I32u\n"
+           ,root_node->i_refcnt);
  }
  kinode_decref(root_node);
 }

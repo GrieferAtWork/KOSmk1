@@ -49,11 +49,10 @@ kerrno_t kinode_generic_setattr(struct kinode *self, __size_t ac, union kinodeat
    case KATTR_FS_ATIME:
    case KATTR_FS_CTIME:
    case KATTR_FS_MTIME:
-    // TODO: Maybe put the boot time here?
-    if __unlikely(KE_ISERR(ktime_getnow(&iter->ia_time.tm_time))) {
-     iter->ia_time.tm_time.tv_sec = 0;
-     iter->ia_time.tm_time.tv_nsec = 0;
-    }
+    /* boot time? */
+    memcpy(&iter->ia_time.tm_time,
+           &KERNEL_BOOT_TIME,
+           sizeof(struct timespec));
     break;
    case KATTR_FS_PERM:  iter->ia_perm.p_perm = 0777; break;
    case KATTR_FS_OWNER: iter->ia_owner.o_owner = 0; break;

@@ -42,6 +42,11 @@ struct kdirfile __kproc_kernel_root = KDIRFILE_INIT(&__kfs_root,NULL);
 struct kproc __kproc_kernel = KPROC_INITROOT((struct kfile *)&__kproc_kernel_root,
                                              (struct kpagedir *)kpagedir_kernel());
 
+#if !KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_START)
+extern struct timespec __kernel_boot_time;
+struct timespec __kernel_boot_time = {0,0};
+#endif
+
 struct kproclist __kproclist_global = KPROCLIST_INIT;
 
 void kernel_initialize_process(void) {
@@ -54,6 +59,8 @@ void kernel_initialize_process(void) {
  __kproc_kernel.p_threads.t_taskv[0] = ktask_zero();
 #if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_START)
  ktime_getnoworcpu(&ktask_zero()->t_stats.ts_abstime_start);
+#else
+ ktime_getnoworcpu(&__kernel_boot_time);
 #endif
  __kproc_kernel.p_threads.t_freep = 1;
  assert(__kproc_kernel.p_pid == 0);

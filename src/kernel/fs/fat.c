@@ -82,8 +82,8 @@ static kerrno_t kfat_walkcallback(struct kfatfs *fs, struct kfatfilepos const *f
         (unsigned)data->name_len,data->name_str);
 #endif
  if (data->name_len == filename_size &&
-     memcmp(data->name_str,filename,filename_size*sizeof(char)) == 0) {
-  // Found it
+    !memcmp(data->name_str,filename,filename_size*sizeof(char))) {
+  /* Found it */
   data->resnode->fi_file = *file;
   data->resnode->fi_pos = *fpos;
   return KS_FOUND;
@@ -98,7 +98,7 @@ kfatinode_dir_walk_finalize(struct ksuperblock *sblock,
  if __unlikely(KE_ISERR(error = ksuperblock_incref(sblock))) return error;
  // Initialize the found node
  kobject_init(&resnode->fi_inode,KOBJECT_MAGIC_INODE);
- resnode->fi_inode.i_refcnt = 1;
+ __kinode_initcommon(&resnode->fi_inode);
  kcloselock_init(&resnode->fi_inode.i_closelock);
  resnode->fi_inode.i_sblock = sblock;
  if (resnode->fi_file.f_attr&KFATFILE_ATTR_DIRECTORY) {
@@ -299,10 +299,12 @@ static kerrno_t kfatinode_rmdir(struct kfatinode *self,
  }
  return error;
 }
-static kerrno_t kfatinode_mkdir(struct kfatinode *self,
-                                struct kdirentname const *name,
-                                size_t ac, union kinodeattr const *av, 
-                                __ref struct kfatinode **resnode) {
+static kerrno_t
+kfatinode_mkdat(struct kfatinode *self,
+                struct kdirentname const *name,
+                size_t ac, union kinodeattr const *av, 
+                __ref struct kfatinode **resnode,
+                __u8 fat_file_attributes) {
  kerrno_t error; int need_long_header;
  kfatcls_t dir; int dir_is_sector;
  struct kfatsuperblock *sb = (struct kfatsuperblock *)kinode_superblock((struct kinode *)self);
@@ -325,7 +327,7 @@ static kerrno_t kfatinode_mkdir(struct kfatinode *self,
  if __unlikely(KE_ISERR(error)) goto err_newnode;
  /* Set the EOF marker as cluster, thus marking the directory as empty. */
  kfatfileheader_setcluster(&newnode->fi_file,fs->f_clseof_marker);
- newnode->fi_file.f_attr = KFATFILE_ATTR_DIRECTORY;
+ newnode->fi_file.f_attr = fat_file_attributes;
  newnode->fi_file.f_size = leswap_32(0u);
  /* TODO: Initialize timestamps. */
 
@@ -339,6 +341,18 @@ static kerrno_t kfatinode_mkdir(struct kfatinode *self,
 err_newnode:
  __kinode_free((struct kinode *)newnode);
  return error;
+}
+static kerrno_t kfatinode_mkdir(struct kfatinode *self,
+                                struct kdirentname const *name,
+                                size_t ac, union kinodeattr const *av, 
+                                __ref struct kfatinode **resnode) {
+ return kfatinode_mkdat(self,name,ac,av,resnode,KFATFILE_ATTR_DIRECTORY);
+}
+static kerrno_t kfatinode_mkreg(struct kfatinode *self,
+                                struct kdirentname const *name,
+                                size_t ac, union kinodeattr const *av, 
+                                __ref struct kfatinode **resnode) {
+ return kfatinode_mkdat(self,name,ac,av,resnode,KFATFILE_ATTR_DIRECTORY);
 }
 
 struct kinodetype kfatinode_file_type = {
@@ -355,6 +369,7 @@ struct kinodetype kfatinode_dir_type = {
  .it_unlink  = (kerrno_t(*)(struct kinode *,struct kdirentname const *,struct kinode *))&kfatinode_unlink,
  .it_rmdir   = (kerrno_t(*)(struct kinode *,struct kdirentname const *,struct kinode *))&kfatinode_rmdir,
  .it_mkdir   = (kerrno_t(*)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,__ref struct kinode **))&kfatinode_mkdir,
+ .it_mkreg   = (kerrno_t(*)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,__ref struct kinode **))&kfatinode_mkreg,
 };
 
 
@@ -503,6 +518,7 @@ struct ksuperblocktype kfatsuperblock_type = {
   .it_unlink  = (kerrno_t(*)(struct kinode *,struct kdirentname const *,struct kinode *))&kfatinode_unlink,
   .it_rmdir   = (kerrno_t(*)(struct kinode *,struct kdirentname const *,struct kinode *))&kfatinode_rmdir,
   .it_mkdir   = (kerrno_t(*)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,__ref struct kinode **))&kfatinode_mkdir,
+  .it_mkreg   = (kerrno_t(*)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,__ref struct kinode **))&kfatinode_mkreg,
  },
  .st_close    = (kerrno_t(*)(struct ksuperblock *))&kfatsuperblock_close,
  .st_flush    = (kerrno_t(*)(struct ksuperblock *))&kfatsuperblock_flush,
