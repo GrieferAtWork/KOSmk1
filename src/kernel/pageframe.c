@@ -188,7 +188,7 @@ static struct kpageframe *first_free_page = KPAGEFRAME_INVPTR;
 #define kpagealloc_unlock() kspinlock_unlock(&kpagealloc_lockno)
 
 __crit __wunused __malloccall __pagealigned struct kpageframe *
-kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, __size_t n_pages) {
+kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, size_t n_pages) {
  struct kpageframe *iter,*split;
 #ifdef KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE
  if (!n_pages) return KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE;
@@ -238,7 +238,7 @@ kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, __size_t n
 }
 
 
-__crit void kpageframe_free(__pagealigned struct kpageframe *__restrict start, __size_t n) {
+__crit void kpageframe_free(__pagealigned struct kpageframe *__restrict start, size_t n) {
  struct kpageframe *iter,*region_end;
 #ifdef KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE
  if (!n) return;
@@ -336,6 +336,56 @@ end:
  kpagealloc_unlock();
 }
 
+__crit __pagealigned struct kpageframe *
+kpageframe_realloc_inplace(__pagealigned struct kpageframe *old_start,
+                           size_t old_pages, size_t new_pages) {
+ assert(kpageframe_isfreepage(old_start,old_pages));
+ if (new_pages <= old_pages) {
+  if (new_pages != old_pages) {
+   /* Free upper parts of old_start. */
+   kpageframe_free(old_start+new_pages,old_pages-new_pages);
+  }
+  return old_start;
+ }
+ /* Must allocate more memory above. */
+ if (kpageframe_allocat(old_start+old_pages,new_pages-old_pages) ==
+     KPAGEFRAME_INVPTR) return KPAGEFRAME_INVPTR;
+ /* We successfully managed to allocate more pages directly above! */
+ return old_start;
+}
+
+
+__crit __pagealigned struct kpageframe *
+kpageframe_realloc(__pagealigned struct kpageframe *old_start,
+                   size_t old_pages, size_t new_pages) {
+ size_t more_pages;
+ struct kpageframe *result;
+ /* Try inplace-relocation to expand memory upwards. */
+ if (kpageframe_realloc_inplace(old_start,old_pages,new_pages) !=
+    (struct kpageframe *)KPAGEFRAME_INVPTR) return old_start;
+ assert(new_pages > old_pages);
+ more_pages = new_pages-old_pages;
+ /* Check to expand memory downwards. */
+ result = kpageframe_allocat(old_start-more_pages,more_pages);
+ if (result != (struct kpageframe *)KPAGEFRAME_INVPTR) {
+  /* Move memmove all old memory downwards.
+   * TODO: While we can't use memcpy here directly, memmove is so slow in
+   *       this situation that maybe we should look into scattered memcpy. */
+  memmove(result,old_start,old_pages*PAGESIZE);
+  return result;
+ }
+ /* Last change: Try to allocate an entirely new region of memory, then
+  *              attempt memcpy everything from the old before freeing it. */
+ result = kpageframe_alloc(new_pages);
+ if __unlikely(result != (struct kpageframe *)KPAGEFRAME_INVPTR) {
+  /* Pfew... */
+  memcpy(result,old_start,old_pages);
+  kpageframe_free(old_start,old_pages);
+ }
+ return result;
+}
+
+
 
 void kpageframe_getinfo(struct kpageframeinfo *__restrict info) {
  struct kpageframe *iter;
@@ -383,7 +433,7 @@ void kpageframe_printphysmem(void) {
 }
 
 
-int kpageframe_isfreepage(void const *p, __size_t s) {
+int kpageframe_isfreepage(void const *p, size_t s) {
  struct kpageframe *iter;
  uintptr_t begin,end;
  end = (begin = (uintptr_t)p)+s;

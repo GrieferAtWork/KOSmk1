@@ -84,7 +84,30 @@ kpageframe_tryalloc(__size_t n_pages, __size_t *__restrict did_alloc_pages);
 extern __crit __nonnull((1)) void
 kpageframe_free(__pagealigned struct kpageframe *__restrict start, __size_t n_pages);
 
-/* TODO: kpageframe_realloc */
+//////////////////////////////////////////////////////////////////////////
+// Try to reallocate memory in-place, that is allocate additional
+// pages of memory directly after 'old_start' using 'kpageframe_allocat'.
+// If memory in question is already in use, or not mapped, return 'KPAGEFRAME_INVPTR'.
+// NOTE: If 'new_pages <= old_pages' free pages near the end of the given old_start.
+// NOTE: Unlike 'kpageframe_alloc'
+// @return: KPAGEFRAME_INVPTR: Failed to reallocate memory in-place.
+extern __crit __wunused __malloccall __pagealigned struct kpageframe *
+kpageframe_realloc_inplace(__pagealigned struct kpageframe *old_start,
+                           __size_t old_pages, __size_t new_pages);
+
+//////////////////////////////////////////////////////////////////////////
+// Call 'kpageframe_realloc_inplace' to expand an
+// existing region of dynamically allocated memory.
+// If in-place relocation fails, manually allocate a new region of
+// memory big enough to hold all 'old_pages' from 'old_start' before
+// memcpy/memmove-ing all data contained within to its new location.
+// NOTE: To reduce impact on dynamic memory, this function also checks
+//       if it can potentially expand the given 'old_start' downwards.
+// @return: KPAGEFRAME_INVPTR: Failed to reallocate memory, but not portion
+//                             of the given old_start will have been freed.
+extern __crit __wunused __malloccall __pagealigned struct kpageframe *
+kpageframe_realloc(__pagealigned struct kpageframe *old_start,
+                   __size_t old_pages, __size_t new_pages);
 
 
 //////////////////////////////////////////////////////////////////////////

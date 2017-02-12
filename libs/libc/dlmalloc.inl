@@ -19,6 +19,9 @@
  * These functions are what is being used to manage physical
  * pages of ~real~ memory at the lowest possible level. */
 #define MMAP(s)          kpageframe_alloc(ceildiv(s,PAGESIZE))
+#define MREMAP(p,o,n,mv) \
+ ((mv) ? kpageframe_realloc        ((struct kpageframe *)(p),ceildiv(o,PAGESIZE),ceildiv(n,PAGESIZE))\
+       : kpageframe_realloc_inplace((struct kpageframe *)(p),ceildiv(o,PAGESIZE),ceildiv(n,PAGESIZE)))
 #define DIRECT_MMAP(s)   kpageframe_alloc(ceildiv(s,PAGESIZE))
 #define MUNMAP(a,s)     (kpageframe_free((struct kpageframe *)(a),ceildiv(s,PAGESIZE)),0)
 #define MFAIL            KPAGEFRAME_INVPTR
@@ -54,7 +57,11 @@
 
 /* Tell dlmalloc what KOS is offering it. */
 #define HAVE_MMAP               1
+#ifdef __KERNEL__
+#define HAVE_MREMAP             1
+#else
 #define HAVE_MREMAP             0
+#endif
 /* NON-STANDARD DLMALLOC SWITCH: Added to increase speed & reduce overhead of dlmalloc. */
 #define NO_FOOTPRINT_LIMIT      1
 #define USE_LOCKS               1
@@ -4433,7 +4440,10 @@ static int sys_trim(mstate m, size_t pad) {
             size_t newsize = sp->size - extra;
             (void)newsize; /* placate people compiling -Wunused-variable */
             /* Prefer mremap, fall back to munmap */
-            if ((CALL_MREMAP(sp->base, sp->size, newsize, 0) != MFAIL) ||
+            if (
+#ifndef __KERNEL__ /* Dont! (The kernel works better if you don't...) */
+                (CALL_MREMAP(sp->base, sp->size, newsize, 0) != MFAIL) ||
+#endif
                 (CALL_MUNMAP(sp->base + newsize, extra) == 0)) {
               released = extra;
             }
