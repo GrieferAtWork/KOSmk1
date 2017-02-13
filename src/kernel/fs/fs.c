@@ -852,14 +852,14 @@ kerrno_t kdirent_walklast(struct kfspathenv const *env, __ref struct kdirent **n
  }
 
  kdirentname_refreshhash(&part);
- if (!*iter || iter == end) {
+ if (iter == end || !*iter) {
   // Single-part pathname
   error = kdirent_incref(*newroot = env->env_cwd);
  } else {
-  struct kdirent *used_root,*newusedroot;
-  error = kdirent_walkenv(env,&part,&used_root);
+  struct kdirent *usedroot,*newusedroot;
+  error = kdirent_walkenv(env,&part,&usedroot);
   if __unlikely(KE_ISERR(error)) return error;
-  kassert_kdirent(used_root);
+  kassert_kdirent(usedroot);
   for (;;) {
    while (iter != end && KFS_ISSEP(*iter)) ++iter;
    while (iter != end && isspace(*iter)) ++iter;
@@ -869,14 +869,14 @@ kerrno_t kdirent_walklast(struct kfspathenv const *env, __ref struct kdirent **n
    while (part.dn_size && isspace(part.dn_name[part.dn_size-1])) --part.dn_size;
    kdirentname_refreshhash(&part);
    if (!*iter || iter == end) break;
-   kfspathenv_initfrom(&newenv,env,used_root,env->env_root);
+   kfspathenv_initfrom(&newenv,env,usedroot,env->env_root);
    error = kdirent_walkenv(&newenv,&part,&newusedroot);
+   kdirent_decref(usedroot);
    if __unlikely(KE_ISERR(error)) return error;
    kassert_kdirent(newusedroot);
-   kdirent_decref(used_root);
-   used_root = newusedroot;
+   usedroot = newusedroot; /* Inherit reference */
   }
-  *newroot = used_root; // Inherit reference
+  *newroot = usedroot; /* Inherit reference */
  }
  *lastpart = part;
  return error;

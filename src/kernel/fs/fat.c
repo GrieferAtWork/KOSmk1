@@ -125,7 +125,7 @@ static kerrno_t kfatinode_dir_walk(struct kfatinode *self,
  data.name_str = name->dn_name;
  error = kfatfs_enumdir(&((struct kfatsuperblock *)self->fi_inode.i_sblock)->f_fs,
                         kfatfileheader_getcluster(&self->fi_file),
-                        (pkfatfs_enumdir_callback)&kfat_walkcallback,&data);
+                       (pkfatfs_enumdir_callback)&kfat_walkcallback,&data);
  if __unlikely(error != KS_FOUND) {
   if (!KE_ISERR(error)) error = KE_NOENT;
 err_freenode:

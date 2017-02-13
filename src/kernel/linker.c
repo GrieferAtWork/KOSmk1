@@ -1197,7 +1197,12 @@ again_true_root:
  /* Must opening a new shared library. */
  //printf("filename = %.*q\n",(unsigned)filename_max,filename);
  //printf("trueroot = %.*q\n",(unsigned)trueroot_size,trueroot);
- if (KE_ISERR(error = krootfs_open(trueroot,trueroot_size,O_RDONLY,0,NULL,&fp))) goto err_trueroot;
+#if 1
+ error = kdirent_openat(pathenv,trueroot,trueroot_size,O_RDONLY,0,NULL,&fp);
+#else
+ error = krootfs_open(trueroot,trueroot_size,O_RDONLY,0,NULL,&fp);
+#endif
+ if (KE_ISERR(error)) goto err_trueroot;
  /* Since get_true_path isn't perfect, generate another path based
   * on the file we just opened, then use that to lookup the cache again!
   * NOTE: It wasn't perfect because it can't handle '.' and '..' references. */
