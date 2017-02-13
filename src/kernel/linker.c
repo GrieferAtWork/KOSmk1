@@ -250,6 +250,21 @@ __local kerrno_t kshmtab_loaddata(struct kshmtab *self, size_t filesz,
  return KE_OK;
 }
 
+static void
+ksecdata_cacheminmax(struct ksecdata *__restrict self) {
+ struct kshlibsection *iter,*end;
+ ksymaddr_t sec_min,sec_max,temp;
+ kassertobj(self);
+ end = (iter = self->ed_secv)+self->ed_secc;
+ sec_min = (ksymaddr_t)-1,sec_max = 0;
+ for (; iter != end; ++iter) {
+  temp = iter->sls_base+iter->sls_size;
+  if (iter->sls_albase < sec_min) sec_min = iter->sls_albase;
+  if (temp > sec_max) sec_max = temp;
+ }
+ self->ed_begin = sec_min;
+ self->ed_end = sec_max;
+}
 
 kerrno_t ksecdata_init(struct ksecdata *__restrict self,
                        Elf32_Phdr const *__restrict pheaderv,
@@ -745,6 +760,8 @@ done_dynamic_1:
   self->sh_data.ed_secc = 0;
   self->sh_data.ed_secv = NULL;
  }
+ /* Calculate the min/max section address pair. */
+ ksecdata_cacheminmax(&self->sh_data);
  return KE_OK;
 err_data: ksecdata_quit(&self->sh_data);
 err_deps: kshliblist_quit(&self->sh_deps);

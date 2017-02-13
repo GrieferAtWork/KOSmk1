@@ -638,22 +638,28 @@ kproc_insmod_c(struct kproc *__restrict self,
 //  - kproc_delmod_single_unlocked: '*dep_idv' and '*dep_idc' is filled with a 
 //    vector of dependency module ids that must be unloaded by the caller.
 //    NOTE: The caller must also 'free(*dep_idv)' when they are done.
+//  - [kproc_delmod2*] Similar to 'kproc_delmod*', but also supports special module ids.
 // @return: KE_OK:        The module was unloaded successfully.
 // @return: KE_NOENT:     The given module wasn't loaded in this process.
 // @return: KS_UNCHANGED: The module was loaded more than once (its load
 //                        counter was decremented, but didn't reach ZERO)
 // @return: DE_DESTROYED: [!*_unlocked] The given process is a zombie.
-extern __crit __nonnull((1,3,4)) kerrno_t
-kproc_delmod_single_unlocked(struct kproc *__restrict self, kmodid_t module_id,
-                             kmodid_t **dep_idv, __size_t *dep_idc);
-extern __crit __nonnull((1)) kerrno_t
-kproc_delmod_unlocked(struct kproc *__restrict self,
-                      kmodid_t module_id);
-extern __crit __nonnull((1)) kerrno_t
-kproc_delmod_c(struct kproc *__restrict self,
-               kmodid_t module_id);
+extern __crit __nonnull((1,3,4)) kerrno_t kproc_delmod_single_unlocked(struct kproc *__restrict self, kmodid_t module_id, kmodid_t **dep_idv, __size_t *dep_idc);
+extern __crit __nonnull((1)) kerrno_t kproc_delmod_unlocked(struct kproc *__restrict self, kmodid_t module_id);
+extern __crit __nonnull((1)) kerrno_t kproc_delmod_c(struct kproc *__restrict self, kmodid_t module_id);
+extern __crit __nonnull((1)) kerrno_t kproc_delmod2_c(struct kproc *__restrict self, kmodid_t module_id, __user void *caller_eip);
 
-#define kproc_delmod(self,module_id) KTASK_CRIT(kproc_delmod_c(self,module_id))
+#define kproc_delmod(self,module_id)             KTASK_CRIT(kproc_delmod_c(self,module_id))
+#define kproc_delmod2(self,module_id,caller_eip) KTASK_CRIT(kproc_delmod2_c(self,module_id,caller_eip))
+
+//////////////////////////////////////////////////////////////////////////
+// Retrieves the module ID of a given user-land EIP address.
+// @return: KE_OK:    *module_id was filled with the correct module id.
+// @return: KE_FAULT: The given EIP does not map to any module.
+extern __crit __nonnull((1,2)) kerrno_t
+kproc_getmodat_unlocked(struct kproc *__restrict self,
+                        kmodid_t *__restrict module_id,
+                        __user void *addr);
 
 #ifndef __ksymhash_t_defined
 #define __ksymhash_t_defined 1
@@ -673,6 +679,11 @@ extern __crit __wunused __nonnull((1)) __user void *
 kproc_dlsymex_c(struct kproc *__restrict self,
                 kmodid_t module_id, char const *__restrict name,
                 __size_t name_size, ksymhash_t name_hash);
+extern __crit __wunused __nonnull((1)) __user void *
+kproc_dlsymex2_c(struct kproc *__restrict self,
+                 kmodid_t module_id, char const *__restrict name,
+                 __size_t name_size, ksymhash_t name_hash,
+                 __user void *caller_eip);
 __local __crit __wunused __nonnull((1)) __user void *
 kproc_dlsym_unlocked(struct kproc *__restrict self,
                      kmodid_t module_id, char const *__restrict name);
@@ -685,11 +696,20 @@ kproc_dlsymex(struct kproc *__restrict self,
               kmodid_t module_id, char const *__restrict name,
               __size_t name_size, ksymhash_t name_hash);
 extern __wunused __nonnull((1)) __user void *
+kproc_dlsymex2(struct kproc *__restrict self,
+               kmodid_t module_id, char const *__restrict name,
+               __size_t name_size, ksymhash_t name_hash,
+               __user void *caller_eip);
+extern __wunused __nonnull((1)) __user void *
 kproc_dlsym(struct kproc *__restrict self,
             kmodid_t module_id, char const *__restrict name);
 #else
-#define kproc_dlsymex(self,module_id,name,name_size,name_hash) KTASK_CRIT(kproc_dlsymex_c(self,module_id,name,name_size,name_hash))
-#define kproc_dlsym(self,module_id,name)                       KTASK_CRIT(kproc_dlsym_c(self,module_id,name))
+#define kproc_dlsymex(self,module_id,name,name_size,name_hash) \
+ KTASK_CRIT(kproc_dlsymex_c(self,module_id,name,name_size,name_hash))
+#define kproc_dlsymex2(self,module_id,name,name_size,name_hash,caller_eip) \
+ KTASK_CRIT(kproc_dlsymex2_c(self,module_id,name,name_size,name_hash,caller_eip))
+#define kproc_dlsym(self,module_id,name) \
+ KTASK_CRIT(kproc_dlsym_c(self,module_id,name))
 #endif
 
 

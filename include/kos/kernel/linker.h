@@ -214,8 +214,10 @@ struct kshlibsection {
 
 struct ksecdata {
  // Loaded data of a shared library
- __size_t              ed_secc; /*< Amount of sections. */
- struct kshlibsection *ed_secv; /*< [0..ed_secc][owned] Vector of sections. */
+ __size_t              ed_secc;  /*< Amount of sections. */
+ struct kshlibsection *ed_secv;  /*< [0..ed_secc][owned] Vector of sections. */
+ ksymaddr_t            ed_begin; /*< Lowest address of any valid section (page-aligned), or 'KSYM_INVALID' if 'ed_secc == 0'. */
+ ksymaddr_t            ed_end;   /*< Address after the greatest of any valid section, or '0' if 'ed_secc == 0'. */
 };
 
 //////////////////////////////////////////////////////////////////////////

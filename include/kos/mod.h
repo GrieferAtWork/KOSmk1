@@ -41,6 +41,13 @@ __DECL_BEGIN
 typedef __kmodid_t kmodid_t;
 #endif
 
+#define KMODID_ISNORMAL(id)  ((id) < KMODID_KERN)
+#define KMODID_ISSPECIAL(id) ((id) >= KMODID_KERN)
+#define KMODID_ALL   ((kmodid_t)-1) /*< Search for symbols in all loaded modules. */
+#define KMODID_NEXT  ((kmodid_t)-2) /*< Search for symbols in all loaded modules, checking the calling module last. */
+#define KMODID_SELF  ((kmodid_t)-3) /*< Search for symbols in the calling module. */
+#define KMODID_KERN  ((kmodid_t)-4) /*< Reserved for future use: Special kernel-based module filled with statically loaded helper functions. */
+
 #ifndef __NO_PROTOTYPES
 
 //////////////////////////////////////////////////////////////////////////
@@ -73,14 +80,15 @@ typedef __kmodid_t kmodid_t;
 //       KOS telling them apart based on their absolute
 //       and sanitized filename), it is possible to load
 //       two completely different applications into the same
-//       process (as long none of the new process's addresses
-//       clash with those of the existing process)
+//       process (as long as none of the new binaries addresses
+//       clash with those of already the already existing binary)
 // NOTE: Some executable formats are not supported for such
 //       loading at a later point (most notably shebang).
 // @param: modid: Filled with an identifier that can be used
 //                to unload the module, after successful return
 //                of this function, at a later point, as well
 //                as load symbols from that module.
+// @param: flags: A set of 'KMOD_OPEN_FLAG_*'
 // @return: KE_OK:        The module was successfully loaded.
 // @return: KE_NOENT:     [kmod_open] No module matching the given name was found.
 // @return: KE_ACCES:     [kmod_open] The caller doesn't have access to the only matching executable/dependency.
@@ -116,22 +124,30 @@ _syscall3(kerrno_t,kmod_fopen,int,fd,kmodid_t *,modid,__u32,flags);
 //          Doing so does ~theoretically~ work, though you
 //          should not that as soon as the kernel returns control
 //          to you, your application will SEGFAULT.
+// @param: modid: A valid module id obtained from 'kmod_open' or 'kmod_fopen'.
+//                Because there is ~some~ sense to it, you can specify 'KMODID_*',
+//                though I'd really recommend not doing so as a call like:
+//               'kmod_close(KMODID_ALL)', because that's just asking for trouble...
+//               (I guess it would be useful if you need to cover your tracks,
+//                but then again, why isn't whoever you're running from just
+//                suspending you?)
 // @return: KE_OK:    The module associated with the given id was successfully closed.
 // @return: KE_INVAL: Invalid/already closed module id.
 _syscall1(kerrno_t,kmod_close,kmodid_t,modid);
 
 //////////////////////////////////////////////////////////////////////////
 // Load a symbol from a given module, given its name.
+// @param: modid: A valid module id obtained from 'kmod_open' or 'kmod_fopen',
+//                or one of the special 'KMODID_*' module ids.
 // @return: NULL: Something went wrong (probably just doesn't export the given symbol)
 _syscall3(void *,kmod_sym,kmodid_t,modid,
           char const *,name,__size_t,namemax);
-
 #endif /* !__NO_PROTOTYPES */
 
 struct kmodinfo {
- void *mi_base;       /*< Base address to which the given module was loaded. */
- void *mi_padding[6]; /*< Padding (unused) data. */
- char  mi_name[1];    /*< ZERO-terminated module name. (Filename only; no associated path) */
+    void *mi_base;       /*< Base address to which the given module was loaded. */
+    void *mi_padding[7]; /*< Padding (unused) data. */
+    char  mi_name[1];    /*< ZERO-terminated module name. */
 };
 
 #ifndef __NO_PROTOTYPES
@@ -144,11 +160,12 @@ struct kmodinfo {
 // @return: KE_NOSYS: An unsupported bit was set in 'flags'
 _syscall5(kerrno_t,kmod_info,kmodid_t,modid,struct kmodinfo *,buf,
           __size_t,bufsize,__size_t *,reqsize,__u32,flags);
-#define KMOD_INFO_FLAG_NONE 0x00000000
-#define KMOD_INFO_FLAG_BASE 0x00000001 /*< Fill 'mi_base' with the module's base address. */
-#define KMOD_INFO_FLAG_NAME 0x00000002 /*< Fill 'mi_name' with the module's name. */
 #endif /* !__NO_PROTOTYPES */
 
+#define KMOD_INFO_FLAG_NONE 0x00000000
+#define KMOD_INFO_FLAG_BASE 0x00000001 /*< Fill 'mi_base' with the module's base address. */
+#define KMOD_INFO_FLAG_NAME 0x00000002 /*< Fill 'mi_name' with the module's name (filename w/o path). */
+#define KMOD_INFO_FLAG_PATH 0x00000006 /*< Fill 'mi_name' with the module's path (filename w/ path) (Implies 'KMOD_INFO_FLAG_NAME'). */
 
 __DECL_END
 

@@ -74,7 +74,8 @@ SYSCALL(sys_kmod_close) {
  LOAD1(kmodid_t,U(modid));
  kerrno_t error;
  KTASK_CRIT_BEGIN_FIRST
- error = kproc_delmod(kproc_self(),modid);
+ error = kproc_delmod2(kproc_self(),modid,
+                      (__user void *)regs->regs.eip);
  KTASK_CRIT_END
  RETURN(error);
 }
@@ -85,8 +86,9 @@ SYSCALL(sys_kmod_sym) {
        char const *,U(name),
        size_t      ,K(namemax));
  void *result; namemax = strnlen(name,namemax);
- result = kproc_dlsymex(kproc_self(),modid,name,namemax,
-                        ksymhash_of(name,namemax));
+ result = kproc_dlsymex2(kproc_self(),modid,name,namemax,
+                         ksymhash_of(name,namemax),
+                        (__user void *)regs->regs.eip);
  RETURN(result);
 }
 

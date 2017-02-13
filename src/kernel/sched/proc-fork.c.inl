@@ -334,7 +334,7 @@ __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *
   sec_end = (sec_iter = iter->pm_lib->sh_data.ed_secv)+iter->pm_lib->sh_data.ed_secc;
   for (; sec_iter != sec_end; ++sec_iter) {
    if (offset_eip >= sec_iter->sls_albase &&
-       offset_eip < sec_iter->sls_albase+sec_iter->sls_size) {
+       offset_eip < sec_iter->sls_base+sec_iter->sls_size) {
     /* Found the section the given EIP. */
     /* #1: Make sure that the memory tab was declared as executable and read-only. */
 #if 1 /* FIXME: Due to a bug, everything must currently be writable. */
@@ -350,8 +350,8 @@ __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *
                           "address %p in memory tab %p..%p (%Iu bytes)\n"
                          ,eip
                          ,(uintptr_t)iter->pm_base+sec_iter->sls_albase
-                         ,(uintptr_t)iter->pm_base+sec_iter->sls_albase+sec_iter->sls_size
-                         ,sec_iter->sls_size);
+                         ,(uintptr_t)iter->pm_base+sec_iter->sls_base+sec_iter->sls_size
+                         ,(sec_iter->sls_base-sec_iter->sls_albase)+sec_iter->sls_size);
      error = KE_NOEXEC;
      goto end;
     }

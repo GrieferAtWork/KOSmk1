@@ -30,6 +30,7 @@
 #include <kos/syslog.h>
 #include <math.h>
 #include <malloc.h>
+#include <kos/mod.h>
 
 __DECL_BEGIN
 
@@ -155,19 +156,10 @@ kproc_call_module_fini(struct kproc *__restrict self,
 __crit __user void *
 kproc_find_base_for_module(struct kproc *__restrict self,
                            struct kshlib *__restrict module) {
- struct kshlibsection *iter,*end;
- uintptr_t addr_lo,addr_hi,temp;
+ uintptr_t addr_lo,addr_hi;
  KTASK_CRIT_MARK
- assert(module->sh_data.ed_secc);
- end = (iter = module->sh_data.ed_secv)+module->sh_data.ed_secc;
- addr_lo = iter->sls_albase;
- addr_hi = (iter->sls_base-iter->sls_albase)+iter->sls_size;
- ++iter; for (; iter != end; ++iter) {
-  temp = iter->sls_albase;
-  if (temp < addr_lo) addr_lo = temp;
-  temp = (iter->sls_base-iter->sls_albase)+iter->sls_size;
-  if (temp > addr_hi) addr_hi = temp;
- }
+ addr_lo = module->sh_data.ed_begin;
+ addr_hi = module->sh_data.ed_end;
  // TODO: We don't need to ensure free memory between sections:
  //              vvv don't need to check for these
  //       ..LLLLL...LLLL...AAA
@@ -400,8 +392,8 @@ kproc_delmod_unlocked(struct kproc *__restrict self,
 
 __crit kerrno_t
 kproc_insmod_c(struct kproc *__restrict self,
-             struct kshlib *__restrict module,
-             kmodid_t *module_id) {
+               struct kshlib *__restrict module,
+               kmodid_t *module_id) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kproc(self);
@@ -413,7 +405,7 @@ kproc_insmod_c(struct kproc *__restrict self,
 }
 __crit kerrno_t
 kproc_delmod_c(struct kproc *__restrict self,
-             kmodid_t module_id) {
+               kmodid_t module_id) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kproc(self);
@@ -422,6 +414,96 @@ kproc_delmod_c(struct kproc *__restrict self,
  error = kproc_delmod_unlocked(self,module_id);
  kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
  return error;
+}
+
+static __crit kerrno_t
+kproc_delmodat_c(struct kproc *__restrict self, __user void *addr) {
+ kerrno_t error; kmodid_t id;
+ KTASK_CRIT_MARK
+ kassert_kproc(self);
+ error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ if __unlikely(KE_ISERR(error)) return error;
+ if __likely(KE_ISOK(error = kproc_getmodat_unlocked(self,&id,addr))) {
+  error = kproc_delmod_unlocked(self,id);
+ }
+ kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ return error;
+}
+
+__local kmodid_t
+kproc_getnextmodid_unlocked(struct kproc const *__restrict self,
+                            kmodid_t id) {
+ for (;;) {
+  if (++id >= self->p_modules.pms_moda) id = 0;
+  if (self->p_modules.pms_modv[id].pm_lib) break;
+ }
+ return id;
+}
+
+static __crit kerrno_t
+kproc_delmodafter_c(struct kproc *__restrict self, __user void *addr) {
+ kerrno_t error; kmodid_t id;
+ KTASK_CRIT_MARK
+ kassert_kproc(self);
+ error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ if __unlikely(KE_ISERR(error)) return error;
+ if __likely(KE_ISOK(error = kproc_getmodat_unlocked(self,&id,addr))) {
+  id = kproc_getnextmodid_unlocked(self,id);
+  error = kproc_delmod_unlocked(self,id);
+ }
+ kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ return error;
+}
+
+static __crit kerrno_t
+kproc_delmod_all(struct kproc *__restrict self) {
+ kerrno_t error; kmodid_t i;
+ int error_occurred;
+ error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ if __unlikely(KE_ISERR(error)) return error;
+ for (;;) {
+  error_occurred = 0;
+  if (!self->p_modules.pms_moda) break;
+  for (i = self->p_modules.pms_moda; i; ++i) {
+   error = kproc_delmod_unlocked(self,i);
+   if (KE_ISERR(error) && error != KE_NOENT) error_occurred = 1;
+  }
+  if (error_occurred) break;
+ }
+ kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ return error;
+}
+
+__crit kerrno_t
+kproc_delmod2_c(struct kproc *__restrict self,
+                 kmodid_t module_id, __user void *caller_eip) {
+ switch (module_id) {
+  case KMODID_ALL:  return kproc_delmod_all(self);
+  case KMODID_NEXT: return kproc_delmodafter_c(self,caller_eip);
+  case KMODID_SELF: return kproc_delmodat_c(self,caller_eip);
+  default:          return kproc_delmod_c(self,module_id);
+ }
+}
+
+
+__crit kerrno_t
+kproc_getmodat_unlocked(struct kproc *__restrict self,
+                        kmodid_t *__restrict module_id,
+                        __user void *addr) {
+ struct kprocmodule *iter,*end;
+ kassert_kproc(self);
+ assert(kproc_islockeds(self,KPROC_LOCK_MODS));
+ end = (iter = self->p_modules.pms_modv)+self->p_modules.pms_moda;
+ for (; iter != end; ++iter) if (iter->pm_lib && (uintptr_t)addr >= (uintptr_t)iter->pm_base) {
+  uintptr_t offset_addr = (uintptr_t)addr-(uintptr_t)iter->pm_base;
+  struct kshlib *lib = iter->pm_lib;
+  if (offset_addr >= lib->sh_data.ed_begin &&
+      offset_addr < lib->sh_data.ed_end) {
+   *module_id = (kmodid_t)(iter-self->p_modules.pms_modv);
+   return KE_OK;
+  }
+ }
+ return KE_FAULT;
 }
 
 
@@ -461,6 +543,72 @@ kproc_dlsymex_c(struct kproc *__restrict self,
  kassert_kproc(self);
  if __unlikely(KE_ISERR(kproc_lock(self,KPROC_LOCK_MODS))) return NULL;
  result = kproc_dlsymex_unlocked(self,module_id,name,name_size,name_hash);
+ kproc_unlock(self,KPROC_LOCK_MODS);
+ return result;
+}
+
+__crit __user void *
+kproc_dlsymall_c(struct kproc *__restrict self, char const *__restrict name,
+                 __size_t name_size, ksymhash_t name_hash) {
+ __user void *result;
+ kmodid_t check_id = self->p_modules.pms_moda;
+ while (check_id--) {
+  result = kproc_dlsymex_unlocked(self,check_id,name,name_size,name_hash);
+  if (result != NULL) return result;
+ }
+ return NULL;
+}
+
+__crit __user void *
+kproc_dlsymself_c(struct kproc *__restrict self, char const *__restrict name,
+                  __size_t name_size, ksymhash_t name_hash,
+                  __user void *caller_eip) {
+ kmodid_t modid;
+ if __unlikely(KE_ISERR(kproc_getmodat_unlocked(self,&modid,caller_eip))) return NULL;
+ return kproc_dlsymex_unlocked(self,modid,name,name_size,name_hash);
+}
+
+__crit __user void *
+kproc_dlsymnext_c(struct kproc *__restrict self, char const *__restrict name,
+                  __size_t name_size, ksymhash_t name_hash,
+                  __user void *caller_eip) {
+ kmodid_t first_id,modid,maxid; __user void *result;
+ if __unlikely(KE_ISERR(kproc_getmodat_unlocked(self,&first_id,caller_eip))) return NULL;
+ maxid = self->p_modules.pms_moda;
+ /* Search above. */
+ for (modid = first_id+1; modid < maxid; ++modid) {
+  result = kproc_dlsymex_unlocked(self,modid,name,name_size,name_hash);
+  if (result != NULL) return result;
+ }
+ /* Search below. */
+ if (first_id != 0) {
+  modid = first_id-1;
+  for (;;) {
+   result = kproc_dlsymex_unlocked(self,modid,name,name_size,name_hash);
+   if (result != NULL) return result;
+   if (!modid) break;
+   --modid;
+  }
+ }
+ /* Search self. */
+ return kproc_dlsymex_unlocked(self,first_id,name,name_size,name_hash);
+}
+
+__crit __user void *
+kproc_dlsymex2_c(struct kproc *__restrict self,
+                 kmodid_t module_id, char const *__restrict name,
+                 __size_t name_size, ksymhash_t name_hash,
+                 __user void *caller_eip) {
+ void *result;
+ KTASK_CRIT_MARK
+ kassert_kproc(self);
+ if __unlikely(KE_ISERR(kproc_lock(self,KPROC_LOCK_MODS))) return NULL;
+ switch (module_id) {
+  case KMODID_ALL:  result = kproc_dlsymall_c(self,name,name_size,name_hash); break;
+  case KMODID_NEXT: result = kproc_dlsymnext_c(self,name,name_size,name_hash,caller_eip); break;
+  case KMODID_SELF: result = kproc_dlsymself_c(self,name,name_size,name_hash,caller_eip); break;
+  default:          result = kproc_dlsymex_unlocked(self,module_id,name,name_size,name_hash); break;
+ }
  kproc_unlock(self,KPROC_LOCK_MODS);
  return result;
 }

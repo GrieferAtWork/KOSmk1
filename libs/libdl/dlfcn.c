@@ -30,84 +30,61 @@
 #include <kos/mod.h>
 #include <malloc.h>
 #include <string.h>
+#include <stdint.h>
 
 __DECL_BEGIN
 
-struct dl {
- kmodid_t modid;
-};
+// These offsets are defined to have a dl-pointer of...
+//  ... 'NULL'/'RTLD_DEFAULT' == 'KMODID_ALL'
+//  ... 'RTLD_NEXT'           == 'KMODID_NEXT'
+#define ID_2_PTR(id)  ((void *)((kmodid_t)(id)+1))
+#define PTR_2_ID(ptr) ((kmodid_t)((uintptr_t)(void *)(ptr))-1)
+                          
 
-#undef strdupf /* Ignore that one, potential leak. */
-static char *dl_lasterror; /*< [0..1] Last occurred error. */
-static char *dl_currerror; /*< [0..1] Last reported error. */
+static char *dl_lasterror = NULL; /*< [0..1] Last occurred error. */
+static char *dl_currerror = NULL; /*< [0..1] Last reported error. */
 
 #define dl_seterror(...) \
-do{ char *new_error = strdupf(__VA_ARGS__);\
+do{ char *new_error = (strdupf)(__VA_ARGS__);\
     free(katomic_xch(dl_lasterror,new_error));\
     katomic_store(dl_currerror,new_error);\
 }while(0)
 
 
 __public void *dlfopen(int fd, int mode) {
- struct dl *result;
- kerrno_t error;
- result = omalloc(struct dl);
- if __unlikely(!result) {
-  dl_seterror("Not memory");
+ kerrno_t error; kmodid_t result;
+ error = kmod_fopen(fd,&result,(__u32)mode);
+ if __unlikely(KE_ISERR(error)) {
+  dl_seterror("kmod_fopen(%d) : %s",fd,strerror(error));
   return NULL;
  }
- error = kmod_fopen(fd,&result->modid,mode);
- if __unlikely(KE_ISERR(error)) {
-  free(result);
-  result = NULL;
-  dl_seterror("dlfopen(%d) : %s",fd,strerror(error));
- }
- return result;
+ return ID_2_PTR(result);
 }
 
 __public void *dlopen(char const *__restrict file, int mode) {
- struct dl *result;
- kerrno_t error;
- result = omalloc(struct dl);
- if __unlikely(!result) {
-  dl_seterror("Not memory");
+ kmodid_t result; kerrno_t error;
+ error = kmod_open(file,(size_t)-1,&result,(__u32)mode);
+ if __unlikely(KE_ISERR(error)) {
+  dl_seterror("kmod_open(%q) : %s",file,strerror(error));
   return NULL;
  }
- error = kmod_open(file,(size_t)-1,&result->modid,mode);
- if __unlikely(KE_ISERR(error)) {
-  free(result);
-  result = NULL;
-  dl_seterror("dlopen(%s) : %s",file,strerror(error));
- }
- return result;
+ return ID_2_PTR(result);
 }
 __public int dlclose(void *handle) {
- kerrno_t error;
- kmodid_t modid;
- if (!handle) {
-  dl_seterror("dlclose(NULL) : Invalid handle");
-  return EINVAL;
- }
- modid = ((struct dl *)handle)->modid;
- error = kmod_close(modid);
- if (KE_ISOK(error)) { free(handle); return 0; }
- dl_seterror("dlclose(%p:%Iu) : %s",handle,modid,strerror(error));
+ kmodid_t modid = PTR_2_ID(handle);
+ kerrno_t error = kmod_close(modid);
+ if (KE_ISOK(error)) return 0;
+ dl_seterror("kmod_close(%Iu) : %s",
+             modid,strerror(error));
  return -error;
 }
 __public void *dlsym(void *__restrict handle,
                      char const *__restrict name) {
- void *result;
- kmodid_t modid;
- if (!handle) {
-  // TODO: Lookup global symbol
-  modid = (kmodid_t)-1; // TODO: global id?
- } else {
-  modid = ((struct dl *)handle)->modid;
- }
- result = kmod_sym(modid,name,(size_t)-1);
+ kmodid_t modid = PTR_2_ID(handle);
+ void *result = kmod_sym(modid,name,(size_t)-1);
  if (!result) {
   // TODO: Include the module's name in this error message
-  dl_seterror("dlsym(%p:%Iu) : Symbol %q not found",handle,modid,name);
+  dl_seterror("kmod_sym(%Iu,%q) : Symbol not found",modid,name);
  }
  return result;
 }
