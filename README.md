@@ -1,7 +1,7 @@
 
 ### <b>KOS (Hooby) Operating System & Kernel</b> ###
 
-Like others of its kind, KOS is a home-made operating system build around the idea of sandboxing.
+Like others of its kind, KOS (<i>pronounced chaos</i>) is a home-made operating system build around the idea of sandboxing.
 
 Following a strict permission tree while implementing as many Posix standards as possible, KOS is designed around the idea that a process inherits its parents permissions upon creation and is only capable of taking away its own permissions:
 
@@ -18,6 +18,7 @@ While KOS is not meant to re-invent the wheel, making use of proprietary librari
 
 As usual, this is a <b>one-person project</b>, with development having started on <b>30.11.2016</b>.
 
+Chaos|KOS - Total anarchy.
 
 ## Working ##
  - i386 (Correct types are always used; x86-64 support is planned)

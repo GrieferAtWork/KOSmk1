@@ -43,6 +43,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <kos/kernel/task.h>
 
 __DECL_BEGIN
 
@@ -937,12 +938,14 @@ kerrno_t kdirent_walkall(struct kfspathenv const *env, __ref struct kdirent **fi
 
 
 
-kerrno_t kdirent_mkdirat(struct kfspathenv const *env, char const *path,
-                         size_t pathmax, size_t ac, union kinodeattr const *av,
-                         __ref /*opt*/struct kdirent **resent,
-                         __ref /*opt*/struct kinode **resnode) {
+__crit kerrno_t
+kdirent_mkdirat(struct kfspathenv const *env, char const *path,
+                size_t pathmax, size_t ac, union kinodeattr const *av,
+                __ref /*opt*/struct kdirent **resent,
+                __ref /*opt*/struct kinode **resnode) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *objparent;
+ KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
@@ -954,12 +957,15 @@ kerrno_t kdirent_mkdirat(struct kfspathenv const *env, char const *path,
  kdirent_decref(objparent);
  return error;
 }
-kerrno_t kdirent_mkregat(struct kfspathenv const *env, char const *path,
-                         size_t pathmax, size_t ac, union kinodeattr const *av,
-                         __ref /*opt*/struct kdirent **resent,
-                         __ref /*opt*/struct kinode **resnode) {
+
+__crit kerrno_t
+kdirent_mkregat(struct kfspathenv const *env, char const *path,
+                size_t pathmax, size_t ac, union kinodeattr const *av,
+                __ref /*opt*/struct kdirent **resent,
+                __ref /*opt*/struct kinode **resnode) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *objparent;
+ KTASK_CRIT_MARK
  kassertobj(env);
  kassertmem(av,ac*sizeof(union kinodeattr));
  kassert_kdirent(env->env_cwd);
@@ -972,11 +978,14 @@ kerrno_t kdirent_mkregat(struct kfspathenv const *env, char const *path,
  kdirent_decref(objparent);
  return error;
 }
-kerrno_t kdirent_mklnkat(struct kfspathenv const *env, char const *path, size_t pathmax,
-                         size_t ac, union kinodeattr const *av, struct kdirentname const *target,
-                         __ref /*opt*/struct kdirent **resent, __ref /*opt*/struct kinode **resnode) {
+
+__crit kerrno_t
+kdirent_mklnkat(struct kfspathenv const *env, char const *path, size_t pathmax,
+                size_t ac, union kinodeattr const *av, struct kdirentname const *target,
+                __ref /*opt*/struct kdirent **resent, __ref /*opt*/struct kinode **resnode) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *objparent;
+ KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
@@ -989,8 +998,12 @@ kerrno_t kdirent_mklnkat(struct kfspathenv const *env, char const *path, size_t 
  kdirent_decref(objparent);
  return error;
 }
-kerrno_t kdirent_rmdirat(struct kfspathenv const *env, char const *path, size_t pathmax) {
+
+__crit kerrno_t
+kdirent_rmdirat(struct kfspathenv const *env,
+                char const *path, size_t pathmax) {
  kerrno_t error; struct kdirent *objent;
+ KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
@@ -1001,8 +1014,12 @@ kerrno_t kdirent_rmdirat(struct kfspathenv const *env, char const *path, size_t 
  kdirent_decref(objent);
  return error;
 }
-kerrno_t kdirent_unlinkat(struct kfspathenv const *env, char const *path, size_t pathmax) {
+
+__crit kerrno_t
+kdirent_unlinkat(struct kfspathenv const *env,
+                 char const *path, size_t pathmax) {
  kerrno_t error; struct kdirent *objent;
+ KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
@@ -1013,8 +1030,12 @@ kerrno_t kdirent_unlinkat(struct kfspathenv const *env, char const *path, size_t
  kdirent_decref(objent);
  return error;
 }
-kerrno_t kdirent_removeat(struct kfspathenv const *env, char const *path, size_t pathmax) {
+
+__crit kerrno_t
+kdirent_removeat(struct kfspathenv const *env,
+                 char const *path, size_t pathmax) {
  kerrno_t error; struct kdirent *objent;
+ KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
@@ -1025,10 +1046,13 @@ kerrno_t kdirent_removeat(struct kfspathenv const *env, char const *path, size_t
  kdirent_decref(objent);
  return error;
 }
-kerrno_t kdirent_insnodat(struct kfspathenv const *env, char const *path, size_t pathmax,
-                          struct kinode *__restrict node, __ref struct kdirent **resent) {
+
+__crit kerrno_t
+kdirent_insnodat(struct kfspathenv const *env, char const *path, size_t pathmax,
+                 struct kinode *__restrict node, __ref struct kdirent **resent) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *objparent;
+ KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
@@ -1041,10 +1065,13 @@ kerrno_t kdirent_insnodat(struct kfspathenv const *env, char const *path, size_t
  kdirent_decref(objparent);
  return error;
 }
-kerrno_t kdirent_mountat(struct kfspathenv const *env, char const *path, size_t pathmax,
-                         struct ksuperblock *sblock, __ref /*opt*/struct kdirent **resent) {
+
+__crit kerrno_t
+kdirent_mountat(struct kfspathenv const *env, char const *path, size_t pathmax,
+                struct ksuperblock *sblock, __ref /*opt*/struct kdirent **resent) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *objparent;
+ KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
@@ -1058,11 +1085,13 @@ kerrno_t kdirent_mountat(struct kfspathenv const *env, char const *path, size_t 
  return error;
 }
 
-kerrno_t kdirent_openat(struct kfspathenv const *env, char const *path, size_t pathmax,
-                        __openmode_t mode, size_t create_ac, union kinodeattr const *create_av,
-                        __ref struct kfile **__restrict result) {
+__crit kerrno_t
+kdirent_openat(struct kfspathenv const *env, char const *path, size_t pathmax,
+               __openmode_t mode, size_t create_ac, union kinodeattr const *create_av,
+               __ref struct kfile **__restrict result) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *pathroot;
+ KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
@@ -1086,13 +1115,15 @@ kerrno_t kdirent_openat(struct kfspathenv const *env, char const *path, size_t p
  kdirent_decref(pathroot);
  return error;
 }
-kerrno_t
+
+__crit kerrno_t
 kdirent_openlast(struct kfspathenv const *env, struct kdirent *dir, struct kdirentname const *name,
                  __openmode_t mode, size_t create_ac, union kinodeattr const *create_av,
                  __ref struct kfile **__restrict result) {
  struct kinode *filenode;
  struct kdirent *fileent;
  kerrno_t error;
+ KTASK_CRIT_MARK
  kassert_kdirent(dir);
  kassertobj(name);
  kassertobj(result);
