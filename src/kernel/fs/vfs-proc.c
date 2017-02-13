@@ -79,12 +79,10 @@ kvinodepid_new_inherited(struct kvprocdirent const *__restrict decl,
  __ref struct kvinodepidfile *result;
  kassertobj(decl);
  kassert_kproc(proc);
- if (S_ISDIR(decl->pd_mode)) {
+ if (decl->pd_type == &kvinodedirtype_proc_pid) {
   /* Create a new directory node. */
   return (__ref struct kvinodepidfile *)kvinodepiddir_new_inherited(decl->pd_subd,proc);
  }
- assertf(decl->pd_type != &kvinodedirtype_proc_pid,
-         "Non-directory-mode node declared with directory node type.");
  result = (__ref struct kvinodepidfile *)__kinode_alloc((struct ksuperblock *)&kvfs_proc,
                                                         decl->pd_type,decl->pd_file,
                                                         decl->pd_mode);
@@ -107,7 +105,7 @@ kvinodepid_new_inherited(struct kvprocdirent const *__restrict decl,
 void kvinodepid_generic_quit(struct kinode *self) { kproc_decref(PROC); }
 kerrno_t
 kvinodepid_generic_getattr(struct kinode const *self,
-                                 __size_t ac, union kinodeattr *av) {
+                                 size_t ac, union kinodeattr *av) {
  kerrno_t error;
  for (; ac; ++av,--ac) switch (av->ia_common.a_id) {
 #if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_START)
@@ -262,9 +260,9 @@ struct kinodetype kvinodetype_proc_pid_root = { KVINODEPIDFILETYPE_INIT .it_read
 //////////////////////////////////////////////////////////////////////////
 // "/proc/[PID]/" Virtual directory contents.
 struct kvprocdirent vfsent_proc_pid[] = {
- KVPROCDIRENT_INIT_FILE("cwd", &kvinodetype_proc_pid_cwd,&kvfile_empty_type,S_IFLNK),
- KVPROCDIRENT_INIT_FILE("exe", &kvinodetype_proc_pid_exe,&kvfile_empty_type,S_IFLNK),
- KVPROCDIRENT_INIT_FILE("root",&kvinodetype_proc_pid_root,&kvfile_empty_type,S_IFLNK),
+ KVPROCDIRENT_INIT("cwd", &kvinodetype_proc_pid_cwd, &kvfile_empty_type,S_IFLNK),
+ KVPROCDIRENT_INIT("exe", &kvinodetype_proc_pid_exe, &kvfile_empty_type,S_IFLNK),
+ KVPROCDIRENT_INIT("root",&kvinodetype_proc_pid_root,&kvfile_empty_type,S_IFLNK),
  KVPROCDIRENT_INIT_SENTINAL
 };
 
@@ -273,7 +271,7 @@ struct kvprocdirent vfsent_proc_pid[] = {
 
 
 //////////////////////////////////////////////////////////////////////////
-// "/proc/self" Symbolic link
+// "/proc/self" Symbolic link.
 extern struct kinodetype kvinodetype_proc_self;
 static kerrno_t
 proc_self_readlink(struct kinode *__unused(self),
@@ -294,6 +292,118 @@ struct kinodetype kvinodetype_proc_self = {
 };
 
 
+//////////////////////////////////////////////////////////////////////////
+// "/proc/kcore" Access to physical memory.
+#define SELF  ((struct kvkcorefile *)self)
+#define MAXRW (((uintptr_t)-1)-(uintptr_t)SELF->c_pos)
+static kerrno_t
+vfsfile_proc_kcore_open(struct kfile *__restrict self, struct kdirent *__restrict dirent,
+                        struct kinode *__restrict inode, openmode_t mode) {
+ SELF->c_pos = NULL;
+ return kvfile_open(self,dirent,inode,mode);
+}
+static kerrno_t
+vfsfile_proc_kcore_read(struct kfile *__restrict self,
+                        void *__restrict buf, size_t bufsize,
+                        size_t *__restrict rsize) {
+ size_t copysize = min(bufsize,MAXRW);
+ memcpy(buf,SELF->c_pos,copysize);
+ *rsize = copysize;
+ SELF->c_pos += copysize;
+ return KE_OK;
+}
+static kerrno_t
+vfsfile_proc_kcore_write(struct kfile *__restrict self,
+                         void const *__restrict buf, size_t bufsize,
+                         size_t *__restrict wsize) {
+ size_t copysize = min(bufsize,MAXRW);
+ /* We literally might not see the end of this... */
+ memcpy(SELF->c_pos,buf,copysize);
+ *wsize = copysize;
+ SELF->c_pos += copysize;
+ return KE_OK;
+}
+static kerrno_t
+vfsfile_proc_kcore_pread(struct kfile *__restrict self, pos_t pos,
+                         void *__restrict buf, size_t bufsize,
+                         size_t *__restrict rsize) {
+ size_t copysize = (pos >= (pos_t)(uintptr_t)-1)
+  ? 0 : min(bufsize,((uintptr_t)-1)-(uintptr_t)pos);
+ memcpy(buf,(void *)(uintptr_t)pos,copysize);
+ *rsize = copysize;
+ return KE_OK;
+}
+static kerrno_t
+vfsfile_proc_kcore_pwrite(struct kfile *__restrict self, pos_t pos,
+                          void const *__restrict buf, size_t bufsize,
+                          size_t *__restrict wsize) {
+ size_t copysize = (pos >= (pos_t)(uintptr_t)-1)
+  ? 0 : min(bufsize,((uintptr_t)-1)-(uintptr_t)pos);
+ /* We literally might not see the end of this... */
+ memcpy((void *)(uintptr_t)pos,buf,copysize);
+ *wsize = copysize;
+ return KE_OK;
+}
+static kerrno_t
+vfsfile_proc_kcore_seek(struct kfile *__restrict self, off_t off,
+                        int whence, pos_t *__restrict newpos) {
+ pos_t new_filepos;
+ switch (whence) {
+  case SEEK_SET: new_filepos = *(pos_t *)&off; break;
+  case SEEK_CUR: new_filepos = ((pos_t)(uintptr_t)SELF->c_pos)+off; break;
+  case SEEK_END: new_filepos = ((pos_t)(uintptr_t)-1)-off; break;
+  default: return KE_INVAL;
+ }
+ if __unlikely(new_filepos > (pos_t)(uintptr_t)-1) return KE_RANGE;
+ if (newpos) *newpos = new_filepos;
+ SELF->c_pos = (byte_t *)(uintptr_t)new_filepos;
+ return KE_OK;
+}
+
+struct kfiletype kvfiletype_proc_kcore = {
+ .ft_size      = sizeof(struct kvkcorefile),
+ .ft_open      = &vfsfile_proc_kcore_open,
+ .ft_quit      = &kvfile_quit,
+ .ft_read      = &vfsfile_proc_kcore_read,
+ .ft_write     = &vfsfile_proc_kcore_write,
+ .ft_pread     = &vfsfile_proc_kcore_pread,
+ .ft_pwrite    = &vfsfile_proc_kcore_pwrite,
+ .ft_seek      = &vfsfile_proc_kcore_seek,
+ .ft_getinode  = &kvfile_getinode,
+ .ft_getdirent = &kvfile_getdirent,
+};
+static kerrno_t
+vfsnode_proc_kcore_getattr(struct kinode const *self,
+                           size_t ac, union kinodeattr *av) {
+ kerrno_t error;
+ for (; ac; ++av,--ac) switch (av->ia_common.a_id) {
+  {
+   int has_write_access;
+   int has_read_access;
+  case KATTR_FS_PERM:
+   /* Check for read/write access to the kernel. */
+   has_read_access    = ktask_accessgm(ktask_zero());
+   has_write_access   = ktask_accesssm(ktask_zero());
+   av->ia_perm.p_perm = (S_IRUSR|S_IWUSR|S_IRGRP|
+                        (has_write_access ? S_IWOTH : 0)|
+                        (has_read_access  ? S_IROTH : 0));
+  } break;
+  case KATTR_FS_SIZE:
+   /* This should be obvious... (SIZE_MAX) */
+   av->ia_size.sz_size = (pos_t)(uintptr_t)-1;
+   break;
+  default:
+   error = kinode_generic_getattr(self,1,av);
+   if __unlikely(KE_ISERR(error)) return error;
+   break;
+ }
+ return KE_OK;
+}
+struct kinodetype kvinodetype_proc_kcore = {
+ .it_size    = sizeof(struct kinode),
+ .it_getattr = &vfsnode_proc_kcore_getattr,
+};
+
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -301,7 +411,8 @@ struct kinodetype kvinodetype_proc_self = {
 extern struct kvsdirsuperblock kvfs_proc;
 extern struct ksuperblocktype kvfsproc_type;
 static struct kvsdirent vfsent_proc[] = {
- KVSDIRENT_INIT("self",&kvinode_proc_self),
+ KVSDIRENT_INIT("kcore",&kvinode_proc_kcore),
+ KVSDIRENT_INIT("self", &kvinode_proc_self),
  KVSDIRENT_INIT_SENTINAL
 };
 
@@ -388,7 +499,8 @@ struct ksuperblocktype kvfsproc_type = {
 
 //////////////////////////////////////////////////////////////////////////
 // Declare all the inodes
-struct kinode kvinode_proc_self = KINODE_INIT(&kvinodetype_proc_self,&kvfile_empty_type,(struct ksuperblock *)&kvfs_proc,S_IFLNK);
+struct kinode kvinode_proc_self  = KINODE_INIT(&kvinodetype_proc_self,&kvfile_empty_type,(struct ksuperblock *)&kvfs_proc,S_IFLNK);
+struct kinode kvinode_proc_kcore = KINODE_INIT(&kvinodetype_proc_kcore,&kvfiletype_proc_kcore,(struct ksuperblock *)&kvfs_proc,S_IFREG);
 
 
 __DECL_END

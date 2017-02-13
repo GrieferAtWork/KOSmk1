@@ -27,6 +27,7 @@
 #ifdef __KERNEL__
 #include <kos/kernel/fs/fs.h>
 #include <kos/kernel/fs/vfs.h>
+#include <kos/kernel/fs/file.h>
 #include <sys/stat.h>
 
 __DECL_BEGIN
@@ -34,15 +35,15 @@ __DECL_BEGIN
 struct kvprocdirent {
  struct kdirentname   pd_name; /*< [eof(vd_name.dn_name == NULL)] Entry name, or NULL for directory end. */
  __mode_t             pd_mode; /*< INode kind. */
+ struct kinodetype   *pd_type; /*< [1..1] Inode type. */
 union{
- struct kinodetype   *pd_type; /*< [1..1] Inode type (only if !S_ISDIR(pd_mode)). */
- struct kvprocdirent *pd_subd; /*< [1..1] Sub-directory elements (only if S_ISDIR(pd_mode)). */
+ struct kfiletype    *pd_file; /*< [1..1] File type (only if 'pd_type != kvinodedirtype_proc_pid'). */
+ struct kvprocdirent *pd_subd; /*< [1..1] Sub-directory elements (only if 'pd_type == kvinodedirtype_proc_pid'). */
 };
- struct kfiletype    *pd_file; /*< [1..1] File type. */
 };
-#define KVPROCDIRENT_INIT_FILE(name,type,file,mode) {KDIRENTNAME_INIT(name),mode,{type},file}
-#define KVPROCDIRENT_INIT_DIR(name,elem)            {KDIRENTNAME_INIT(name),S_IFDIR,{(struct kinodetype *)(elem)},&kdirfile_type}
-#define KVPROCDIRENT_INIT_SENTINAL                  {KDIRENTNAME_INIT_EMPTY,0,{NULL},NULL}
+#define KVPROCDIRENT_INIT(name,type,file,mode) {KDIRENTNAME_INIT(name),mode,type,{file}}
+#define KVPROCDIRENT_INIT_DIR(name,elem)       {KDIRENTNAME_INIT(name),S_IFDIR,&kvinodedirtype_proc_pid,{(struct kfiletype *)(elem)}}
+#define KVPROCDIRENT_INIT_SENTINAL             {KDIRENTNAME_INIT_EMPTY,0,NULL,{NULL}}
 
 struct kvinodepidfile { /*< Structure for all non-directory nodes on '/proc/[PID]' */
  struct kinode       pf_node; /*< Underlying INode. */
@@ -102,8 +103,14 @@ extern kerrno_t kvinodepiddir_generic_enumdir(struct kinode *self, pkenumdir cal
 extern struct kinodetype kvinodedirtype_proc_pid;
 
 /* "/proc/self": A symbolic link expanding to the pid of the calling process. */
-extern struct kinode kvinode_proc_self;
 extern struct kinodetype kvinodetype_proc_self;
+extern struct kinode     kvinode_proc_self;
+
+/* "/proc/kcore": A file usable for R/W access to physical memory. */
+extern struct kinodetype kvinodetype_proc_kcore;
+extern struct kfiletype  kvfiletype_proc_kcore;
+extern struct kinode     kvinode_proc_kcore;
+struct kvkcorefile { struct kvfile c_file; __kernel __byte_t *c_pos; };
 
 /* Special files in "/proc/[PID]/..." */
 extern struct kinodetype kvinodetype_proc_pid_cwd;
