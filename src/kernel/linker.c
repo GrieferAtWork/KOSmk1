@@ -41,6 +41,7 @@
 #include <stdlib.h>
 #include <kos/kernel/fs/fs.h>
 #include <ctype.h>
+#include <sys/stat.h>
 
 __DECL_BEGIN
 
@@ -1168,11 +1169,21 @@ get_true_path(char *buf, size_t bufsize,
  return (size_t)(iter-buf);
 }
 
+static kerrno_t check_exec_permissions(struct kfile *fp) {
+ mode_t mode; kerrno_t error;
+ /* TODO: Check different bits based on filesystem UID/GID. */
+ error = kfile_getattr(fp,KATTR_FS_PERM,&mode,sizeof(mode),NULL);
+ if __unlikely(KE_ISERR(error)) return error;
+ if (!(mode&(S_IXUSR|S_IXGRP|S_IXOTH)))
+  return KE_NOEXEC; /* Don't allow execution without these bits. */
+ return KE_OK;
+}
 
 __crit kerrno_t
 kshlib_openfileenv(struct kfspathenv const *pathenv,
                    char const *__restrict filename, __size_t filename_max,
-                   __ref struct kshlib **__restrict result) {
+                   __ref struct kshlib **__restrict result,
+                   int require_exec_permissions) {
  struct kfile *fp; kerrno_t error;
  char trueroot_buf[PATH_MAX];
  char *trueroot,*newtrueroot;
@@ -1193,16 +1204,26 @@ again_true_root:
   goto again_true_root;
  }
  /* Check the SHLIB cache for the trueroot path. */
- if ((*result = kshlibcache_getlib(trueroot)) != NULL) { error = KE_OK; goto err_trueroot; }
+ if ((*result = kshlibcache_getlib(trueroot)) != NULL) {
+  if (require_exec_permissions) {
+   /* Make sure that the caller has execute permissions on the binary. */
+   error = check_exec_permissions((*result)->sh_file);
+   if __unlikely(KE_ISERR(error)) kshlib_decref(*result);
+  } else {
+   error = KE_OK;
+  }
+  goto err_trueroot;
+ }
  /* Must opening a new shared library. */
  //printf("filename = %.*q\n",(unsigned)filename_max,filename);
  //printf("trueroot = %.*q\n",(unsigned)trueroot_size,trueroot);
-#if 1
  error = kdirent_openat(pathenv,trueroot,trueroot_size,O_RDONLY,0,NULL,&fp);
-#else
- error = krootfs_open(trueroot,trueroot_size,O_RDONLY,0,NULL,&fp);
-#endif
  if (KE_ISERR(error)) goto err_trueroot;
+ if (require_exec_permissions) {
+  /* If needed, make sure that the caller has execute permissions on the binary. */
+  error = check_exec_permissions(fp);
+  if __unlikely(KE_ISERR(error)) goto err_fptrueroot;
+ }
  /* Since get_true_path isn't perfect, generate another path based
   * on the file we just opened, then use that to lookup the cache again!
   * NOTE: It wasn't perfect because it can't handle '.' and '..' references. */
@@ -1245,15 +1266,17 @@ __crit kerrno_t
 kshlib_opensearch(struct kfspathenv const *pathenv,
                   char const *__restrict name, __size_t namemax,
                   char const *__restrict search_paths, __size_t search_paths_max,
-                  __ref struct kshlib **__restrict result) {
+                  __ref struct kshlib **__restrict result,
+                  int require_exec_permissions) {
  char search_cat[PATH_MAX];
  char const *iter,*end,*next;
  kerrno_t error,last_error = KE_NOENT;
  KTASK_CRIT_MARK
  namemax = strnlen(name,namemax);
  end = (iter = search_paths)+search_paths_max;
- for (; iter != end; ++iter) {
+ while (iter != end) {
   size_t partsize;
+  assert(iter < end);
   next = strchr(iter,':');
   partsize = next ? next-iter : strlen(iter);
   if (partsize) {
@@ -1271,7 +1294,13 @@ kshlib_opensearch(struct kfspathenv const *pathenv,
    if (!hassep) path[partsize-1] = KFS_SEP;
    memcpy(path+partsize,name,namemax*sizeof(char));
    path[partsize+namemax] = '\0';
-   error = kshlib_openfileenv(pathenv,path,(reqsize/sizeof(char))-1,result);
+#if 0
+   printf("Searchcat: %.*q + %.*q -> %.*q\n",
+          (unsigned)(hassep ? partsize : partsize-1),iter,(unsigned)namemax,name,
+          (unsigned)(partsize+namemax),path);
+#endif
+   error = kshlib_openfileenv(pathenv,path,(reqsize/sizeof(char))-1,
+                              result,require_exec_permissions);
    if (path != search_cat) free(path);
    /* If we did manage to load the library, we've succeeded */
    if (KE_ISOK(error)) return error;
@@ -1321,7 +1350,7 @@ kshlib_openlib(char const *__restrict name, __size_t namemax,
  if __likely(KE_ISOK(error = kfspathenv_inituser(&env))) {
   if (namemax && KFS_ISSEP(name[0])) {
    /* Absolute library path (open directly in respect to chroot-prisons). */
-   error = kshlib_openfileenv(&env,name,namemax,result);
+   error = kshlib_openfileenv(&env,name,namemax,result,0);
   } else {
    char *envval; size_t env_size;
    /* Check for process-local environment variable 'LD_LIBRARY_PATH'. */
@@ -1329,11 +1358,11 @@ kshlib_openlib(char const *__restrict name, __size_t namemax,
    if (error == KE_NOENT) {
     error = kshlib_opensearch(&env,name,namemax,default_libsearch_paths,
                               __compiler_STRINGSIZE(default_libsearch_paths),
-                              result);
+                              result,0);
    } else if (KE_ISERR(error)) {
     goto end_err;
    } else {
-    error = kshlib_opensearch(&env,name,namemax,envval,env_size,result);
+    error = kshlib_opensearch(&env,name,namemax,envval,env_size,result,0);
     free(envval);
    }
   }
@@ -1360,7 +1389,7 @@ kshlib_openlib(char const *__restrict name, __size_t namemax,
    struct kfspathenv rootenv = KFSPATHENV_INITROOT;
    error = kshlib_opensearch(&rootenv,name,namemax,default_libsearch_paths,
                              __compiler_STRINGSIZE(default_libsearch_paths),
-                             result);
+                             result,0);
   }
  }
  return error;
@@ -1376,13 +1405,13 @@ kshlib_openexe(char const *__restrict name, __size_t namemax,
  if __unlikely(KE_ISERR(error = kfspathenv_inituser(&env))) return error;
  if (!allow_path_search || (namemax && KFS_ISSEP(name[0]))) {
   /* Absolute executable path (open directly in respect to chroot-prisons). */
-  error = kshlib_openfileenv(&env,name,namemax,result);
+  error = kshlib_openfileenv(&env,name,namemax,result,1);
  } else {
   char *envval; size_t env_size;
   /* Check for process-local environment variable 'PATH'. */
   error = copyenvstring("PATH",&envval,&env_size);
   if __unlikely(KE_ISERR(error)) goto end_err;
-  error = kshlib_opensearch(&env,name,namemax,envval,env_size,result);
+  error = kshlib_opensearch(&env,name,namemax,envval,env_size,result,1);
   free(envval);
  }
 end_err:

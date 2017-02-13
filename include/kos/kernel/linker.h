@@ -405,11 +405,13 @@ extern __crit __wunused __nonnull((1,2,4,6)) kerrno_t
 kshlib_opensearch(struct kfspathenv const *pathenv,
                   char const *__restrict name, __size_t namemax,
                   char const *__restrict search_paths, __size_t search_paths_max,
-                  __ref struct kshlib **__restrict result);
+                  __ref struct kshlib **__restrict result,
+                  int require_exec_permissions);
 extern __crit __wunused __nonnull((1,2,4)) kerrno_t
 kshlib_openfileenv(struct kfspathenv const *pathenv,
                    char const *__restrict filename, __size_t filename_max,
-                   __ref struct kshlib **__restrict result);
+                   __ref struct kshlib **__restrict result,
+                   int require_exec_permissions);
 extern __crit __wunused __nonnull((1,2)) kerrno_t
 kshlib_fopenfile(struct kfile *fp, __ref struct kshlib **__restrict result);
 
