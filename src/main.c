@@ -202,8 +202,8 @@ void kernel_main(void) {
 
  karch_irq_disable();
  kernel_finalize_process();
+ kshlibrecent_clear(); /*< Must clear before filesystem to close open library files. */
  kernel_finalize_filesystem();
- kshlibrecent_clear();
  ketherframe_clearcache();
  _malloc_printleaks_d();
 

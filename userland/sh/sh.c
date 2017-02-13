@@ -220,10 +220,6 @@ int main(int argc, char *argv[]) {
   }
  }
 
- k_syslogf(KLOG_INFO,"lnk: main() @ %p\n",&main);
- k_syslogf(KLOG_INFO,"mod: main() @ %p\n",kmod_sym(KMODID_ALL,"main",(size_t)-1));
-
-
  // TODO: Tab-auto-complete
  r = rline_new(NULL,NULL,NULL,STDIN_FILENO,STDOUT_FILENO);
  if (!r) {

@@ -27,29 +27,38 @@
 #include <kos/kernel/time.h>
 #include <kos/errno.h>
 #include <kos/syscallno.h>
+#include <kos/kernel/util/string.h>
 
 __DECL_BEGIN
 
 /* _syscall1(kerrno_t,ktime_getnow,struct timespec *,ptm); */
 SYSCALL(sys_ktime_getnow) {
- LOAD1(struct timespec *,U(ptm));
- RETURN(ktime_getnow(ptm));
+ LOAD1(struct timespec *,K(ptm));
+ struct timespec tmnow;
+ kerrno_t error = ktime_getnow(&tmnow);
+ if (__likely(KE_ISOK(error)) && 
+     __unlikely(u_setl(ptm,tmnow))
+     ) error = KE_FAULT;
+ RETURN(error);
 }
 
 /* _syscall1(kerrno_t,ktime_setnow,struct timespec *,ptm); */
 SYSCALL(sys_ktime_setnow) {
- LOAD1(struct timespec *,U(ptm));
+ LOAD1(struct timespec *,K(ptm));
  kerrno_t error;
+ struct timespec tmnow;
  KTASK_CRIT_BEGIN_FIRST
- error = ktime_setnow(ptm);
+ if __unlikely(u_get(ptm,tmnow)) error = KE_FAULT;
+ else error = ktime_setnow(&tmnow);
  KTASK_CRIT_END
  RETURN(error);
 }
 
 /* _syscall1(kerrno_t,ktime_getcpu,struct timespec *,ptm); */
 SYSCALL(sys_ktime_getcpu) {
- LOAD1(struct timespec *,U(ptm));
- ktime_getcpu(ptm);
+ LOAD1(struct timespec *,K(ptm));
+ struct timespec tmnow; ktime_getcpu(&tmnow);
+ if __unlikely(u_setl(ptm,tmnow)) RETURN(KE_FAULT);
  RETURN(KE_OK);
 }
 

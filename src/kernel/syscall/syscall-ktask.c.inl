@@ -64,14 +64,17 @@ end:
 /*< _syscall2(kerrno_t,ktask_getalarm,int,task,struct timespec *__restrict,abstime); */
 SYSCALL(sys_ktask_getalarm) {
  LOAD2(int              ,K(taskfd),
-       struct timespec *,U(abstime));
+       struct timespec *,K(abstime));
  struct ktask *task; kerrno_t error;
- if (taskfd == KFD_TASKSELF) RETURN(ktask_getalarm(ktask_self(),abstime));
+ struct timespec res_abstime;
  KTASK_CRIT_BEGIN_FIRST
  task = kproc_getfdtask(kproc_self(),taskfd);
  if __unlikely(!task) { error = KE_BADF; goto end; }
- error = ktask_getalarm(task,abstime);
+ error = ktask_getalarm(task,&res_abstime);
  ktask_decref(task);
+ if (__likely(KE_ISOK(error)) &&
+     __unlikely(u_setl(abstime,res_abstime))
+     ) error = KE_FAULT;
 end:
  KTASK_CRIT_END
  RETURN(error);
