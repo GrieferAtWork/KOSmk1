@@ -102,20 +102,20 @@ void kfile_destroy(struct kfile *__restrict self) {
 
 kerrno_t __kfile_getfilename_fromdirent(struct kfile const *__restrict self, char *__restrict buf,
                                         size_t bufsize, size_t *__restrict reqsize) {
- kerrno_t error; __ref struct kdirent *__restrict dent;
+ __ref struct kdirent *__restrict dent;
  if __unlikely((dent = kfile_getdirent((struct kfile *)self)) == NULL) return KE_NOSYS;
- error = kdirent_getfilename(dent,buf,bufsize,reqsize);
+ kdirent_getfilename(dent,buf,bufsize,reqsize);
  kdirent_decref(dent);
- return error;
+ return KE_OK;
 }
 kerrno_t __kfile_getpathname_fromdirent(struct kfile const *__restrict self, struct kdirent *__restrict root,
                                         char *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
- kerrno_t error; __ref struct kdirent *__restrict dent;
+ __ref struct kdirent *__restrict dent;
  if (root) kassert_kdirent(root);
  if __unlikely((dent = kfile_getdirent((struct kfile *)self)) == NULL) return KE_NOSYS;
- error = kdirent_getpathname(dent,root,buf,bufsize,reqsize);
+ kdirent_getpathname(dent,root,buf,bufsize,reqsize);
  kdirent_decref(dent);
- return error;
+ return KE_OK;
 }
 
 kerrno_t kfile_pread(struct kfile *__restrict self, pos_t pos, void *__restrict buf,

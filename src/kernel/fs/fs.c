@@ -533,8 +533,9 @@ kerrno_t kdirentcache_remove(struct kdirentcache *self, struct kdirent *child) {
  }
  return KE_NOENT;
 }
-struct kdirent *kdirentcache_lookup(
- struct kdirentcache *self, struct kdirentname const *name) {
+struct kdirent *
+kdirentcache_lookup(struct kdirentcache *self,
+                    struct kdirentname const *name) {
  size_t hashindex; struct kdirent **iter,**end,*elem;
  struct kdirentcachevec *childvec;
  kassertobj(self);
@@ -587,7 +588,9 @@ void kdirent_destroy(struct kdirent *self) {
  free(self);
 }
 
-__ref struct kdirent *__kdirent_alloc(struct kdirent *parent, struct kdirentname const *name) {
+__ref struct kdirent *
+__kdirent_alloc(struct kdirent *parent,
+                struct kdirentname const *name) {
  struct kdirent *result;
  kassert_kdirent(parent);
  kassertobj(name);
@@ -612,8 +615,9 @@ err_freer: free(result); return NULL;
  return result;
 }
 
-kerrno_t kdirent_insnod(struct kdirent *self, struct kdirentname const *name,
-                        struct kinode *__restrict node, __ref struct kdirent **resent) {
+kerrno_t
+kdirent_insnod(struct kdirent *self, struct kdirentname const *name,
+               struct kinode *__restrict node, __ref struct kdirent **resent) {
  struct kdirent *used_resent;
  struct kinode *selfnode;
  kerrno_t error;
@@ -647,8 +651,9 @@ err_node:
  goto end_selfnode;
 }
 
-kerrno_t kdirent_mount(struct kdirent *self, struct kdirentname const *name,
-                       struct ksuperblock *sblock, __ref /*opt*/struct kdirent **resent) {
+kerrno_t
+kdirent_mount(struct kdirent *self, struct kdirentname const *name,
+              struct ksuperblock *sblock, __ref /*opt*/struct kdirent **resent) {
  struct kdirent *used_resent; kerrno_t error;
  kassert_kdirent(self);
  kassert_ksuperblock(sblock);
@@ -678,7 +683,8 @@ kerrno_t kdirent_mount(struct kdirent *self, struct kdirentname const *name,
 }
 
 
-__ref struct kinode *kdirent_getnode(struct kdirent *self) {
+__ref struct kinode *
+kdirent_getnode(struct kdirent *self) {
  struct kinode *result;
  kassert_kdirent(self);
  kdirent_lock(self,KDIRENT_LOCK_NODE);
@@ -690,9 +696,10 @@ __ref struct kinode *kdirent_getnode(struct kdirent *self) {
  return result;
 }
 
-__ref struct kdirent *__kdirent_newinherited(__ref struct kdirent *parent,
-                                             struct kdirentname const *name,
-                                             __ref struct kinode *__restrict inode) {
+__ref struct kdirent *
+__kdirent_newinherited(__ref struct kdirent *parent,
+                       struct kdirentname const *name,
+                       __ref struct kinode *__restrict inode) {
  struct kdirent *result;
  kassert_kdirent(parent);
  kassert_kinode(inode);
@@ -773,23 +780,23 @@ void kdirent_unlinknode(struct kdirent *self) {
 
 
 
-kerrno_t kdirent_getfilename(struct kdirent const *self, char *__restrict buf,
-                             size_t bufsize, size_t *__restrict reqsize) {
+void
+kdirent_getfilename(struct kdirent const *self, char *__restrict buf,
+                    size_t bufsize, size_t *__restrict reqsize) {
  size_t copysize;
  if (reqsize) *reqsize = (self->d_name.dn_size+1)*sizeof(char);
  copysize = self->d_name.dn_size;
  if (bufsize < copysize) copysize = bufsize;
  memcpy(buf,self->d_name.dn_name,copysize);
  if (bufsize > copysize) buf[copysize] = '\0';
- return KE_OK;
 }
-kerrno_t kdirent_getpathname(struct kdirent const *self, struct kdirent *__restrict root,
-                             char *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
- char *iter = buf,*end = buf+bufsize; size_t temp; kerrno_t error;
+static void
+kdirent_dogetpathname(struct kdirent const *self, struct kdirent *__restrict root,
+                      char *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
+ char *iter = buf,*end = buf+bufsize; size_t temp;
  kassert_kdirent(root);
  if (self->d_parent && self->d_parent != root) {
-  error = kdirent_getpathname(self->d_parent,root,iter,bufsize,&temp);
-  if __unlikely(KE_ISERR(error)) return error;
+  kdirent_dogetpathname(self->d_parent,root,iter,bufsize,&temp);
   iter += (temp-1);
  }
  if (iter < end) { *iter = KFS_SEP; } ++iter;
@@ -800,8 +807,37 @@ kerrno_t kdirent_getpathname(struct kdirent const *self, struct kdirent *__restr
  iter += self->d_name.dn_size;
  if (iter < end) { *iter = '\0'; } ++iter;
  if (reqsize) *reqsize = (size_t)(iter-buf);
- return KE_OK;
 }
+void kdirent_getpathname(struct kdirent const *self, struct kdirent *__restrict root,
+                         char *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
+ /* Due to some minor exceptions to the strict chroot()-rules in KOS, it is
+  * possible for the given 'root' to not be 'self' or apart of its chain.
+  * Because of that, we must manually figure out if 'root' is actually a parent of 'self'.
+  * If it isn't we simply handle a path-request as a filename request, not
+  * returning an absolute path, but also not reveling anything about the
+  * filesystem world beyond your little chroot()-corner. */
+ if (!kdirent_isvisible(root,self)) {
+  kdirent_getfilename(self,buf,bufsize,reqsize);
+ } else {
+  kdirent_dogetpathname(self,root,buf,bufsize,reqsize);
+ }
+}
+
+int
+kdirent_isvisible(struct kdirent const *root,
+                  struct kdirent const *some_entry) {
+ kassert_kdirent(root);
+ kassert_kdirent(some_entry);
+ /* Follow the parent-chain of entries from 'some_entry',
+  * checking if any part of it is the given root. */
+ for (;;) {
+  if (root == some_entry) return 1;
+  some_entry = some_entry->d_parent;
+  if __unlikely(!some_entry) break;
+ }
+ return 0;
+}
+
 
 kerrno_t kdirent_walklast(struct kfspathenv const *env, __ref struct kdirent **newroot,
                           struct kdirentname *lastpart, char const *path, size_t pathmax) {

@@ -384,7 +384,16 @@ kdirent_new(struct kdirent *parent,
 //////////////////////////////////////////////////////////////////////////
 // Returns the Inode associated with a given directory entry
 // @return: NULL: No node is associated with the entry (can happen if the entry was removed)
-extern __wunused __nonnull((1)) __ref struct kinode *kdirent_getnode(struct kdirent *self);
+extern __wunused __nonnull((1)) __ref struct kinode *
+kdirent_getnode(struct kdirent *self);
+
+
+//////////////////////////////////////////////////////////////////////////
+// Returns TRUE(1) if 'some_entry' is visible from
+// a given 'root', or returns FALSE(0) otherwise.
+extern __wunused __nonnull((1,2)) int
+kdirent_isvisible(struct kdirent const *root,
+                  struct kdirent const *some_entry);
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the directory entry associated with the given name
@@ -471,10 +480,10 @@ extern __nonnull((1)) void kdirent_unlinknode(struct kdirent *self);
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the filename/absolute path of a given directory entry
-extern __wunused __nonnull((1,2)) kerrno_t
+extern __nonnull((1,2)) void
 kdirent_getfilename(struct kdirent const *self, char *__restrict buf,
                     __size_t bufsize, __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,2,3)) kerrno_t
+extern __nonnull((1,2,3)) void
 kdirent_getpathname(struct kdirent const *self, struct kdirent *__restrict root,
                     char *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
 
