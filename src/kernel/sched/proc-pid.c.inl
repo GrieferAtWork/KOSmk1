@@ -26,6 +26,7 @@
 #include <kos/kernel/proc.h>
 #include <kos/kernel/mutex.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 __DECL_BEGIN
 
@@ -162,11 +163,11 @@ __crit __ref struct kproc *kproclist_getproc_k(__u32 pid) {
  return result;
 }
 
-kerrno_t kproclist_enumpid(__pid_t *__restrict pidv,
+kerrno_t kproclist_enumpid(pid_t *__restrict pidv,
                            size_t pidc, size_t *__restrict reqpidc) {
  __pid_t *iter,*end; kerrno_t error;
  struct kproc **piter,**pend,*proc;
- kassertmem(pidv,pidc);
+ kassertmem(pidv,pidc*sizeof(pid_t));
  kassertobjnull(reqpidc);
  end = (iter = pidv)+pidc;
  if __likely(KE_ISOK(error = kmutex_lock(&pl.pl_lock))) {
@@ -183,6 +184,38 @@ kerrno_t kproclist_enumpid(__pid_t *__restrict pidv,
   if (reqpidc) *reqpidc = (size_t)(iter-pidv);
  }
  return error;
+}
+
+__crit size_t
+kproclist_enumproc(__ref struct kproc **__restrict procv, size_t procc) {
+ KTASK_CRIT_MARK
+ __ref struct kproc **iter,**end;
+ struct kproc **piter,**pend,*proc;
+ size_t result;
+ kassertmem(procv,procc*sizeof(struct kproc *));
+ kassertobjnull(reqprocc);
+ end = (iter = procv)+procc;
+ if __unlikely(KE_ISERR(kmutex_lock(&pl.pl_lock))) return 0;
+ pend = (piter = pl.pl_procv)+pl.pl_proca;
+ for (; piter != pend; ++piter) {
+  if ((proc = *piter) != NULL &&
+      katomic_load(proc->p_refcnt) &&
+      kproc_isrootvisible_c(proc)) {
+   if (iter < end) {
+    asserte(katomic_fetchinc(proc->p_refcnt) != 0);
+    *iter = proc;
+   }
+   ++iter;
+  }
+ }
+ kmutex_unlock(&pl.pl_lock);
+ result = (size_t)(iter-procv);
+ if (result > procc) {
+  /* Drop all references already acquired. */
+  end = (iter = procv)+procc;
+  for (; iter != end; ++iter) kproc_decref(*iter);
+ }
+ return result;
 }
 
 

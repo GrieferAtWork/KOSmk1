@@ -258,18 +258,18 @@ struct kinode kvinode_dev_zero    = KINODE_INIT(&kinode_generic_emptytype,&kvfil
 // The static portion of the '/dev' filesystem.
 extern struct kvsdirsuperblock kvfs_dev;
 static struct kvsdirent vfsent_dev[] = {
- KVDIRENT_INIT("full",   &kvinode_dev_full),
- KVDIRENT_INIT("kbevent",&kvinode_dev_kbevent),
- KVDIRENT_INIT("kbkey",  &kvinode_dev_kbkey),
- KVDIRENT_INIT("kbscan", &kvinode_dev_kbscan),
- KVDIRENT_INIT("kbtext", &kvinode_dev_kbtext),
- KVDIRENT_INIT("null",   &kvinode_dev_null),
- KVDIRENT_INIT("stderr", &kvinode_dev_stderr),
- KVDIRENT_INIT("stdin",  &kvinode_dev_stdin),
- KVDIRENT_INIT("stdout", &kvinode_dev_stdout),
- KVDIRENT_INIT("tty",    &kvinode_dev_tty),
- KVDIRENT_INIT("zero",   &kvinode_dev_zero),
- KVDIRENT_INIT_SENTINAL
+ KVSDIRENT_INIT("full",   &kvinode_dev_full),
+ KVSDIRENT_INIT("kbevent",&kvinode_dev_kbevent),
+ KVSDIRENT_INIT("kbkey",  &kvinode_dev_kbkey),
+ KVSDIRENT_INIT("kbscan", &kvinode_dev_kbscan),
+ KVSDIRENT_INIT("kbtext", &kvinode_dev_kbtext),
+ KVSDIRENT_INIT("null",   &kvinode_dev_null),
+ KVSDIRENT_INIT("stderr", &kvinode_dev_stderr),
+ KVSDIRENT_INIT("stdin",  &kvinode_dev_stdin),
+ KVSDIRENT_INIT("stdout", &kvinode_dev_stdout),
+ KVSDIRENT_INIT("tty",    &kvinode_dev_tty),
+ KVSDIRENT_INIT("zero",   &kvinode_dev_zero),
+ KVSDIRENT_INIT_SENTINAL
 };
 struct kvsdirsuperblock kvfs_dev = KVSDIRSUPERBLOCK_INIT(vfsent_dev);
 

@@ -749,6 +749,14 @@ extern __crit __wunused __ref struct kproc *kproclist_getproc_k(__u32 pid);
 extern __crit kerrno_t kproclist_enumpid(__pid_t *__restrict pidv,
                                          __size_t pidc, __size_t *__restrict reqpidc);
 
+//////////////////////////////////////////////////////////////////////////
+// Enumerate all processes, storing a reference to each in the provided buffer.
+// NOTE: If the buffer is not big enough, nothing is stored.
+// @return: *: The required amount of buffer entries.
+//             Unless this value is <= 'procc', 'procv' does not contain references.
+extern __crit __size_t
+kproclist_enumproc(__ref struct kproc **__restrict procv, __size_t procc);
+
 
 
 #ifdef __MAIN_C__

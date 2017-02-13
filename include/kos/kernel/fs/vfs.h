@@ -72,8 +72,8 @@ struct kvsdirent {
  struct kdirentname   vd_name;  /*< [eof(vd_name.dn_name == NULL)] Entry name, or NULL for directory end. */
  __ref struct kinode *vd_node;  /*< [1..1] Entry node. */
 };
-#define KVDIRENT_INIT(name,node) {KDIRENTNAME_INIT(name),node}
-#define KVDIRENT_INIT_SENTINAL   {KDIRENTNAME_INIT_EMPTY,NULL}
+#define KVSDIRENT_INIT(name,node) {KDIRENTNAME_INIT(name),node}
+#define KVSDIRENT_INIT_SENTINAL   {KDIRENTNAME_INIT_EMPTY,NULL}
 
 //////////////////////////////////////////////////////////////////////////
 // A virtual, static directory node.
@@ -96,7 +96,6 @@ extern kerrno_t kvsdirnode_enumdir(struct kinode *self, pkenumdir callback, void
 struct kvsdirsuperblock { KSUPERBLOCK_TYPE(struct kvsdirnode) };
 #define KVSDIRSUPERBLOCK_INIT(entries) \
  {KSUPERBLOCK_INIT_HEAD KVSDIRNODE_INIT(NULL,entries)}
-
 
 
 
