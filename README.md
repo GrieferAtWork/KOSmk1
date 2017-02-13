@@ -66,8 +66,8 @@ As usual, this is a <b>one-person project</b>, with development having started o
    - OK:      Read/write existing files
    - MISSING: create/delete/rename files/folders
    - VFS (Virtual filesystem)
-     - OK:      /dev (incomplete)
-     - MISSING: /proc, /sys
+     - OK:      /dev, /proc (incomplete)
+     - MISSING: /sys
  - Highly posix-compliant
  - PS/2 keyboard input
  - ANSI-compliant Terminal
