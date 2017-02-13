@@ -240,6 +240,9 @@
     <ClInclude Include="..\include\kos\kernel\addist.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\fs\vfs-proc.h">
+      <Filter>include\fs</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.c">
@@ -342,6 +345,9 @@
       <Filter>src\kernel</Filter>
     </ClCompile>
     <ClCompile Include="..\src\kernel\fs\vfs-dev.c">
+      <Filter>src\kernel\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\fs\vfs-proc.c">
       <Filter>src\kernel\fs</Filter>
     </ClCompile>
   </ItemGroup>
@@ -598,6 +604,9 @@
     </None>
     <None Include="..\src\kernel\sched\sync\addist-recv.c.inl">
       <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\linker-recent.c.inl">
+      <Filter>src\kernel</Filter>
     </None>
   </ItemGroup>
 </Project>

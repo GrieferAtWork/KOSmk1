@@ -187,12 +187,6 @@ void kernel_main(void) {
  assert(!karch_irq_enabled());
  karch_irq_enable();
 
- //setenv("LD_LIBRARY_PATH","/usr/lib:/lib",0);
- //setenv("PATH","/bin:/usr/bin:/usr/local/bin",0);
- //setenv("USER","kernel",0);
- //setenv("HOME","/",0);
-
-
 #define RUN(x) extern void x(void); x()
  //RUN(test_interrupts);
  //RUN(test_tasks);
@@ -209,6 +203,7 @@ void kernel_main(void) {
  karch_irq_disable();
  kernel_finalize_process();
  kernel_finalize_filesystem();
+ kshlibrecent_clear();
  ketherframe_clearcache();
  _malloc_printleaks_d();
 

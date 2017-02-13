@@ -79,7 +79,7 @@ struct kfspathenv;
 #define kassert_ksuperblock(ob) kassert_refobject(ob,s_root.i_refcnt,KOBJECT_MAGIC_SUPERBLOCK)
 
 typedef kerrno_t (*__wunused __nonnull((1,2)) pkenumdir)(struct kinode *__restrict inode,
-                                                         struct kdirentname *name,
+                                                         struct kdirentname const *name,
                                                          void *closure);
 
 struct kinodetype {
@@ -698,7 +698,7 @@ extern void kmountman_unmount_unsafe(struct ksuperblock *fs);
 #define kmountman_remove_unlocked_inheritref(sblock) \
  __xblock({ struct ksuperblock *const __sblock = (sblock);\
             assert((__sblock->s_mount.sm_prev != NULL) ==\
-                   (__sblock == kfs_mountman.mm_first));\
+                   (__sblock != kfs_mountman.mm_first));\
             if (__sblock->s_mount.sm_prev){ __sblock->s_mount.sm_prev\
                         ->s_mount.sm_next = __sblock->s_mount.sm_next;\
              __sblock->s_mount.sm_prev = NULL;\

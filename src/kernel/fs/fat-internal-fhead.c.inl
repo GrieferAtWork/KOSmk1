@@ -167,6 +167,7 @@ kerrno_t
 kfatfs_allocheaders(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
                     struct kfatfileheader const *first_header,
                     size_t header_count, struct kfatfilepos *filepos) {
+
  /* TODO. */
  debug_hexdump(first_header,header_count*sizeof(struct kfatfileheader));
  return KE_NOSYS;

@@ -57,6 +57,22 @@ static int long_mode = 0;
 static int recursive = 0;
 static int show_hidden = 0;
 
+static void print_link_target(char const *path) {
+ char buf[128]; ssize_t reqsize;
+ reqsize = readlink(path,buf,sizeof(buf));
+ if (reqsize < 0) printf("ERROR: %d: %s",errno,strerror(errno));
+ else {
+  if (reqsize > sizeof(buf)) {
+   char *dynbuf = (char *)malloc(reqsize);
+   readlink(path,dynbuf,reqsize);
+   printf("%s",dynbuf);
+   free(dynbuf);
+  } else {
+   printf("%s",buf);
+  }
+ }
+}
+
 static int ls_path(char const *path) {
  struct dirent *ent;
  DIR *d = opendir(path);
@@ -75,7 +91,7 @@ static int ls_path(char const *path) {
   if (!show_hidden && ent->d_name[0] == '.') continue;
   abspath = strdupf("%s%s%s",path,path_endswith_slash ? "" : "/",ent->d_name);
   if (long_mode) {
-   if (stat(abspath,&st) == -1) stat_failed = errno,memset(&st,0,sizeof(st));
+   if (lstat(abspath,&st) == -1) stat_failed = errno,memset(&st,0,sizeof(st));
    mkpermstr(st.st_mode,perm);
    localtime_r(&st.st_mtime,&mtime);
    mkpermstr(st.st_mode,perm);
@@ -86,7 +102,13 @@ static int ls_path(char const *path) {
    if (stat_failed) {
     printf("%s (%s)\n",abspath,strerror(stat_failed));
    } else {
-    printf("%s\n",abspath);
+    if (S_ISLNK(st.st_mode)) {
+     printf("%s -> ",abspath);
+     print_link_target(abspath);
+     printf("\n");
+    } else {
+     printf("%s\n",abspath);
+    }
    }
   } else {
    printf("%s\n",abspath);

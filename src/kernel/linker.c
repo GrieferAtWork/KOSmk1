@@ -193,7 +193,7 @@ kerrno_t ksymtable_rehash(struct ksymtable *self,
   struct ksymtablebucket *biter,*bend,*dest;
   struct ksymbol *niter,*nnext;
   struct ksymbol *aiter,*anext;
-  // The symbol table already has some entires (Must re-hash those)
+  // The symbol table already has some entries (Must re-hash those)
   bend = (biter = self->st_mapv)+self->st_mapa;
   for (; biter != bend; ++biter) {
    if ((niter = biter->b_lname) != NULL) do {
@@ -995,7 +995,7 @@ __crit kerrno_t kshlib_new_elf32(__ref struct kshlib **result, struct kfile *elf
  kreloc_init(&lib->sh_reloc);
  error = kshlib_load_elf32_sheaders(lib,&dyninfo,elf_file,&ehdr);
  if __unlikely(KE_ISERR(error)) goto err_post_pheaders;
-
+ else kshlibrecent_add(lib);
  lib->sh_flags |= KSHLIB_FLAG_LOADED;
  *result = lib;
  return error;
@@ -1427,6 +1427,7 @@ __DECL_END
 #include "linker-slloaders.c.inl"
 #include "linker-relocate.c.inl"
 #include "linker-cache.c.inl"
+#include "linker-recent.c.inl"
 #endif
 
 #endif /* !__KOS_KERNEL_LINKER_C__ */

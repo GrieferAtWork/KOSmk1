@@ -35,6 +35,7 @@
     <ClInclude Include="..\include\kos\kernel\fs\fs.h" />
     <ClInclude Include="..\include\kos\kernel\fs\hdd-mbr.h" />
     <ClInclude Include="..\include\kos\kernel\fs\vfs-dev.h" />
+    <ClInclude Include="..\include\kos\kernel\fs\vfs-proc.h" />
     <ClInclude Include="..\include\kos\kernel\fs\vfs.h" />
     <ClInclude Include="..\include\kos\kernel\gdt.h" />
     <ClInclude Include="..\include\kos\kernel\interrupts.h" />
@@ -86,6 +87,7 @@
     <ClCompile Include="..\src\kernel\fs\fat.c" />
     <ClCompile Include="..\src\kernel\fs\fs.c" />
     <ClCompile Include="..\src\kernel\fs\vfs-dev.c" />
+    <ClCompile Include="..\src\kernel\fs\vfs-proc.c" />
     <ClCompile Include="..\src\kernel\fs\vfs.c" />
     <ClCompile Include="..\src\kernel\gdt.c" />
     <ClCompile Include="..\src\kernel\interrupts.c" />
@@ -149,6 +151,7 @@
     <None Include="..\src\kernel\interrupts.S" />
     <None Include="..\src\kernel\iobuf-readimpl.c.inl" />
     <None Include="..\src\kernel\linker-cache.c.inl" />
+    <None Include="..\src\kernel\linker-recent.c.inl" />
     <None Include="..\src\kernel\linker-relocate.c.inl" />
     <None Include="..\src\kernel\linker-slloaders.c.inl" />
     <None Include="..\src\kernel\pageframe-alloc.c.inl" />

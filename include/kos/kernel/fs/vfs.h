@@ -65,7 +65,7 @@ extern struct kfiletype kvfile_empty_type;
 // A virtual static directory entry, used to describe the
 // contents of a virtual-only directory, such as '/dev'.
 // NOTE: Remember that ontop of this directory data,
-//       additional entires may be added, as available
+//       additional entries may be added, as available
 //       through the additional virtual layer of
 //       entries in kdirent.
 struct kvsdirent {
@@ -82,15 +82,20 @@ struct kvsdirnode {
  struct kinode     dn_node; /*< Underlying INode. */
  struct kvsdirent *dn_dir;  /*< [1..1] Vector of virtual directory entries. */
 };
-#define KVSDIRNODE_INIT(superblock,entires) \
- {KINODE_INIT(&kvsdirnode_type.st_node,&kdirfile_type,superblock,S_IFDIR),entires}
+#define KVSDIRNODE_INIT_EX(superblock,entries,type) \
+ {KINODE_INIT(type,&kdirfile_type,superblock,S_IFDIR),entries}
+#define KVSDIRNODE_INIT(superblock,entries) \
+ KVSDIRNODE_INIT_EX(superblock,entries,&kvsdirnode_type.st_node)
 extern struct ksuperblocktype kvsdirnode_type;
+extern kerrno_t kvsdirnode_walk(struct kinode *self, struct kdirentname const *name, __ref struct kinode **resnode);
+extern kerrno_t kvsdirnode_enumdir(struct kinode *self, pkenumdir callback, void *closure);
+
 
 //////////////////////////////////////////////////////////////////////////
 // The same as a static directory node, but suitable for use as superblock.
 struct kvsdirsuperblock { KSUPERBLOCK_TYPE(struct kvsdirnode) };
-#define KVSDIRSUPERBLOCK_INIT(entires) \
- {KSUPERBLOCK_INIT_HEAD KVSDIRNODE_INIT(NULL,entires)}
+#define KVSDIRSUPERBLOCK_INIT(entries) \
+ {KSUPERBLOCK_INIT_HEAD KVSDIRNODE_INIT(NULL,entries)}
 
 
 

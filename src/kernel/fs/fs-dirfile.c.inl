@@ -59,7 +59,7 @@ struct kdirfilelist {
 };
 __local kerrno_t kdirfilelist_append(struct kdirfilelist *self,
                                      __ref struct kinode *__restrict inode,
-                                     struct kdirentname *name) {
+                                     struct kdirentname const *name) {
  kerrno_t error;
  struct kdirfileentry *entry;
  kassert_kinode(inode);
@@ -84,7 +84,7 @@ __local kerrno_t kdirfilelist_append(struct kdirfilelist *self,
 }
 __local kerrno_t kdirfilelist_insertnew(struct kdirfilelist *self,
                                         __ref struct kinode *__restrict inode,
-                                        struct kdirentname *name) {
+                                        struct kdirentname const *name) {
  struct kdirfileentry *iter,*end;
  kassertobj(self);
  kassertobj(name);
@@ -102,7 +102,7 @@ __local kerrno_t kdirfilelist_insertnew(struct kdirfilelist *self,
 
 
 static kerrno_t kdirfile_enum(struct kinode *__restrict inode,
-                              struct kdirentname *name,
+                              struct kdirentname const *name,
                               struct kdirfilelist *buf) {
  kerrno_t error;
  if __unlikely(KE_ISERR(error = kinode_incref(inode))) return error;

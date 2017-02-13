@@ -261,11 +261,11 @@ union{
  kfatsec_t           f_sec4fat;       /*< [const] Amount of sectors for each FAT. */
  kfatsec_t           f_firstdatasec;  /*< [const] First data sector. */
  kfatsec_t           f_firstfatsec;   /*< [const] Sector number of the first FAT. */
- __u32               f_rootmax;       /*< [const] Max amount of entires within the root directory (max_size parameter when enumerating the root directory). */
+ __u32               f_rootmax;       /*< [const] Max amount of entries within the root directory (max_size parameter when enumerating the root directory). */
  __u32               f_fatcount;      /*< [const] Amount of consecutive FAT copies. */
  __size_t            f_fatsize;       /*< [const] == f_sec4fat*f_secsize. */
  kfatcls_t           f_clseof;        /*< [const] Cluster indices greater than or equal to this are considered EOF. */
- kfatcls_t           f_clseof_marker; /*< [const] Marker that should be used to mark EOF entires in the FAT. */
+ kfatcls_t           f_clseof_marker; /*< [const] Marker that should be used to mark EOF entries in the FAT. */
  pkfatfs_getfatsector f_getfatsec;    /*< [const][1..1] Get the sector offset of a given FAT entry (From 'f_firstfatsec' where the FAT table portion is written to). */
  pkfatfs_readfat     f_readfat;       /*< [const][1..1] Read a FAT entry at a given position. */
  pkfatfs_writefat    f_writefat;      /*< [const][1..1] Write a FAT entry at a given position. */

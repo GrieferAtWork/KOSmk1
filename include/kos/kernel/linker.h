@@ -30,6 +30,7 @@
 #include <kos/compiler.h>
 #include <kos/types.h>
 #include <kos/errno.h>
+#include <kos/kernel/features.h>
 #include <kos/kernel/object.h>
 #include <kos/kernel/paging.h>
 #include <kos/kernel/types.h>
@@ -457,6 +458,20 @@ extern __crit void kshlibcache_dellib(struct kshlib *__restrict lib);
 // @return: * :   A new reference to a cached shared library.
 extern __crit __ref struct kshlib *kshlibcache_getlib(char const *__restrict absolute_path);
 extern __crit __ref struct kshlib *kshlibcache_fgetlib(struct kfile *fp);
+
+
+
+#if KSHLIB_RECENT_CACHE_SIZE
+//////////////////////////////////////////////////////////////////////////
+// Special shlib cache for recently loaded libraries
+// >> This cache is used to keep libraries loaded for a
+//    while even when seemingly no one is using them.
+extern __crit void kshlibrecent_add(struct kshlib *lib);
+extern __crit void kshlibrecent_clear(void);
+#else
+#define kshlibrecent_add(lib) (void)0
+#define kshlibrecent_clear()  (void)0
+#endif
 
 
 __DECL_END

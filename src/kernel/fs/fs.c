@@ -1184,10 +1184,12 @@ void kmountman_unmountall(void) {
  struct ksuperblock *iter;
  kmountman_lock(KMOUNTMAN_LOCK_CHAIN);
  while ((iter = kfs_mountman.mm_first) != NULL) {
+#if 0
   if ((kfs_mountman.mm_first = iter->s_mount.sm_next) != NULL) {
    kfs_mountman.mm_first->s_mount.sm_prev = NULL;
    iter->s_mount.sm_next = NULL;
   }
+#endif
   kmountman_unlock(KMOUNTMAN_LOCK_CHAIN);
   kmountman_unmount_unsafe(iter);
   kmountman_lock(KMOUNTMAN_LOCK_CHAIN);
@@ -1211,7 +1213,7 @@ kerrno_t _ksuperblock_delmnt(struct ksuperblock *self,
  memmove(iter,iter+1,(((size_t)(end-iter))-1)*sizeof(struct kdirent *));
  // Try to conserve some memory
  iter = (struct kdirent **)realloc(self->s_mount.sm_mntv,
-                                   (self->s_mount.sm_mntc-1)*
+                                  (self->s_mount.sm_mntc-1)*
                                    sizeof(struct kdirent *));
  if __likely(iter) self->s_mount.sm_mntv = iter;
  // Drop the reference to the mounting point we just removed.

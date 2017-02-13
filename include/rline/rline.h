@@ -54,7 +54,7 @@ struct rline {
  int                     l_outfd;  /*< File descriptor used for output data (usually STDERR_FILENO). */
 #define RLINE_FLAG_NONE   0x00000000
 #define RLINE_FLAG_FREE   0x00000001 /*< rline_delete should free(self). */
-#define RLINE_FLAG_NOHIST 0x00000002 /*< Don't create historical rline entires. */
+#define RLINE_FLAG_NOHIST 0x00000002 /*< Don't create historical rline entries. */
  uint32_t                l_flags;  /*< RLine flags. */
  struct rline_operations l_ops;    /*< RLine callbacks. */
  size_t                  l_histi;  /*< Current history index (== 'l_histc' when not borwsing history). */

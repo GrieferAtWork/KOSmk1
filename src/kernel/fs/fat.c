@@ -458,15 +458,15 @@ static kerrno_t kfatfile_getchunksize(struct kblockfile const *self, size_t *chs
 
 
 struct kblockfiletype kfatfile_file_type = {
- .bft_file = KBLOCKFILETYPE_INITFILE,
- .bft_loadchunk = kfatfile_loadchunk,
- .bft_savechunk = kfatfile_savechunk,
- .bft_nextchunk = kfatfile_nextchunk,
- .bft_findchunk = kfatfile_findchunk,
+ .bft_file          = KBLOCKFILETYPE_INITFILE,
+ .bft_loadchunk     = kfatfile_loadchunk,
+ .bft_savechunk     = kfatfile_savechunk,
+ .bft_nextchunk     = kfatfile_nextchunk,
+ .bft_findchunk     = kfatfile_findchunk,
  .bft_releasechunks = kfatfile_releasechunks,
- .bft_getsize = kfatfile_getsize,
- .bft_setsize = kfatfile_setsize,
- .bft_getchunksize = kfatfile_getchunksize,
+ .bft_getsize       = kfatfile_getsize,
+ .bft_setsize       = kfatfile_setsize,
+ .bft_getchunksize  = kfatfile_getchunksize,
 };
 
 

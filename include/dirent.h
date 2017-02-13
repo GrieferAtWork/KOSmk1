@@ -36,7 +36,7 @@ __DECL_BEGIN
 #endif
 
 //////////////////////////////////////////////////////////////////////////
-// Enable support for directory entires with names longer than NAME_MAX
+// Enable support for directory entries with names longer than NAME_MAX
 // NOTE: This only affects 'readdir'. - 'readdir_r' is unaffected and
 //       will still be bound to a maximum name length of 'NAME_MAX'
 // WARNING: If your code depends on filenames read from directories,

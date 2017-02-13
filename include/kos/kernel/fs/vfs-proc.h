@@ -20,28 +20,27 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_KERNEL_SPINLOCK_H__
-#define __KOS_KERNEL_SPINLOCK_H__ 1
+#ifndef __KOS_KERNEL_FS_VFS_PROC_H__
+#define __KOS_KERNEL_FS_VFS_PROC_H__ 1
 
 #include <kos/config.h>
 #ifdef __KERNEL__
-#include <kos/atomic.h>
-#include <kos/compiler.h>
-#include <kos/kernel/sched_yield.h>
+#include <kos/kernel/fs/fs.h>
+#include <kos/kernel/fs/vfs.h>
 
 __DECL_BEGIN
 
-struct kspinlock;
+/* "/proc": The /proc filesystem superblock. */
+extern struct kvsdirsuperblock kvfs_proc;
+extern struct ksuperblocktype kvfsproc_type;
 
-struct kspinlock { __u8 s_spinner; };
-#define KSPINLOCK_INIT       {0}
-#define kspinlock_init(self) ((self)->s_spinner = 0)
 
-#define kspinlock_trylock(lock) katomic_cmpxch((lock)->s_spinner,0,1)
-#define kspinlock_lock(lock)    KTASK_SPIN(kspinlock_trylock(lock))
-#define kspinlock_unlock(lock)  katomic_store((lock)->s_spinner,0)
+/* "/proc/self": A symbolic link expanding to the pid of the calling process. */
+extern struct kinode kvinode_proc_self;
+extern struct kinodetype kvinodetype_proc_self;
+
 
 __DECL_END
 #endif /* __KERNEL__ */
 
-#endif /* !__KOS_KERNEL_SPINLOCK_H__ */
+#endif /* !__KOS_KERNEL_FS_VFS_PROC_H__ */

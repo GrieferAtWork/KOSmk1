@@ -26,6 +26,7 @@
 #include <kos/kernel/fs/vfs.h>
 #include <kos/kernel/fs/fs.h>
 #include <kos/kernel/fs/vfs-dev.h>
+#include <kos/kernel/fs/vfs-proc.h>
 #include <kos/kernel/fs/fs-dirfile.h>
 #include <sys/stat.h>
 #include <kos/kernel/tty.h>
@@ -74,12 +75,12 @@ struct kfiletype kvfile_empty_type = {
 //////////////////////////////////////////////////////////////////////////
 // === kvsdirnode ===
 extern struct ksuperblocktype kvsdirnode_type;
-static kerrno_t
+kerrno_t
 kvsdirnode_walk(struct kinode *self,
                 struct kdirentname const *name,
                 __ref struct kinode **resnode) {
  struct kvsdirent *iter;
- assert(self->i_type == &kvsdirnode_type.st_node);
+ //assert(self->i_type == &kvsdirnode_type.st_node);
  iter = ((struct kvsdirnode *)self)->dn_dir;
  kassertobj(iter);
  while (!kdirentname_isempty(&iter->vd_name)) {
@@ -89,10 +90,10 @@ kvsdirnode_walk(struct kinode *self,
  }
  return KE_NOENT;
 }
-static kerrno_t
+kerrno_t
 kvsdirnode_enumdir(struct kinode *self, pkenumdir callback, void *closure) {
  kerrno_t error; struct kvsdirent *iter;
- assert(self->i_type == &kvsdirnode_type.st_node);
+ //assert(self->i_type == &kvsdirnode_type.st_node);
  iter = ((struct kvsdirnode *)self)->dn_dir;
  kassertobj(iter);
  while (!kdirentname_isempty(&iter->vd_name)) {
@@ -229,6 +230,7 @@ static void vfs_mount(char const *path, struct ksuperblock *block) {
 
 void kernel_initialize_vfs(void) {
  vfs_mount("/dev",(struct ksuperblock *)&kvfs_dev);
+ vfs_mount("/proc",(struct ksuperblock *)&kvfs_proc);
 }
 
 

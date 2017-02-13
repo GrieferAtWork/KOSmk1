@@ -90,12 +90,10 @@
 #define KDEBUG_HAVE_TRACKEDDDIST 1
 #endif
 
-#ifndef KSECURITY_MAX_LOGIN_ATTEMPTS_PER_SESSION
-// Maximum amount of loging attempts per session,
-// before forkas will no longer allow a task to
-// escape its sandbox.
-#define KSECURITY_MAX_LOGIN_ATTEMPTS_PER_SESSION 32
-#endif
+/* Size for the global cache of recently loaded shared libraries
+ * & executables. Define as ZERO(0) to disable this cache. */
+#define KSHLIB_RECENT_CACHE_SIZE 32
+
 
 // Not fully implemented yet: copy-on-write fork() paging
 //#define KCONFIG_HAVE_SHM_COPY_ON_WRITE
@@ -140,6 +138,9 @@
 #if !KTASK_HAVE_CRITICAL_TASK
 #undef KTASK_HAVE_CRITICAL_TASK_INTERRUPT
 #define KTASK_HAVE_CRITICAL_TASK_INTERRUPT 0
+#endif
+#ifndef KSHLIB_RECENT_CACHE_SIZE
+#define KSHLIB_RECENT_CACHE_SIZE 0
 #endif
 
 

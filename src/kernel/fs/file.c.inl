@@ -332,7 +332,6 @@ err_res:
  return NULL; 
 }
 
-
 __DECL_END
 
 #endif /* !__KOS_KERNEL_FS_FILE_C_INL__ */

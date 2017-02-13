@@ -384,7 +384,7 @@ kprocenv_setargv_cu(struct kprocenv *__restrict self, size_t max_argc,
    // Must allocate more 
    assert(newmem <= self->pe_memmax);
    assert(curr_argc+max_argc >= max_argc);
-   // Calculate max amount of additional entires allowed
+   // Calculate max amount of additional entries allowed
    max_more_entries = (self->pe_memmax-newmem)/sizeof(char *);
    if (!max_more_entries) { free(arg); goto err_argiter_acces; }
    // Calculate max new buffer size

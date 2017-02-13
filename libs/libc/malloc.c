@@ -337,7 +337,7 @@ struct malltail {
 
 #define mallhead_size(self) (offsetof(struct mallhead,mh_tb)+(self)->mh_tsz*sizeof(void *))
 
-/* Amount of skipped entires in tracebacks
+/* Amount of skipped entries in tracebacks
  * (Adjustment to not include frame entries from mall itself). */
 #define MALL_TBOFF           2
 
