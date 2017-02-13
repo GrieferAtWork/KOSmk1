@@ -82,7 +82,7 @@ SYSCALL(sys_kmod_close) {
 
 /* _syscall3(void *,kmod_sym,kmodid_t,modid,char const *,name,size_t,namemax); */
 SYSCALL(sys_kmod_sym) {
- LOAD3(kmodid_t    ,U(modid),
+ LOAD3(kmodid_t    ,K(modid),
        char const *,U(name),
        size_t      ,K(namemax));
  void *result; namemax = strnlen(name,namemax);

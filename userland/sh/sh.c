@@ -36,6 +36,9 @@
 #include <string.h>
 #include <assert.h>
 #include <limits.h>
+#include <string.h>
+#include <kos/mod.h>
+#include <kos/syslog.h>
 
 int verbose = 0; /* Log every system()-style call. */
 int errorlevel = 0; /* $? */
@@ -206,7 +209,7 @@ int main(int argc, char *argv[]) {
  while ((optc = getopt_long(argc,argv,"c:irvSs:h",longopts,NULL)) != -1) {
   switch (optc) {
    case 'c': _exit(do_system(optarg)); break;
-   case 'i': /* ... Why doh? */ break;
+   case 'i': /* ... Why dou? */ break;
    case 'r': restricted_shell = 1; break;
    case 'v': verbose = 1; break;
    case 'S': sani_descriptors = 1; break;
@@ -216,6 +219,10 @@ int main(int argc, char *argv[]) {
    default: break;
   }
  }
+
+ k_syslogf(KLOG_INFO,"lnk: main() @ %p\n",&main);
+ k_syslogf(KLOG_INFO,"mod: main() @ %p\n",kmod_sym(KMODID_ALL,"main",(size_t)-1));
+
 
  // TODO: Tab-auto-complete
  r = rline_new(NULL,NULL,NULL,STDIN_FILENO,STDOUT_FILENO);

@@ -132,7 +132,7 @@ kproc_call_symaddr(struct kproc *__restrict self,
 __local __crit void
 kproc_call_symarray(struct kproc *__restrict self,
                     struct kprocmodule *module, ksymaddr_t array_start,
-                    __size_t array_size) {
+                    size_t array_size) {
  KTASK_CRIT_MARK
  // TODO: Iterate the array in reverse order and execute entries
  (void)self,(void)module,(void)array_start,(void)array_size;
@@ -245,7 +245,7 @@ err_modtab:
 
 __crit kerrno_t
 kproc_delmod_single_unlocked(struct kproc *__restrict self, kmodid_t module_id,
-                             kmodid_t **dep_idv, __size_t *dep_idc) {
+                             kmodid_t **dep_idv, size_t *dep_idc) {
  struct kprocmodule *module; size_t newvecsize;
  __ref struct kshlib *shlib;
  KTASK_CRIT_MARK
@@ -511,7 +511,7 @@ kproc_getmodat_unlocked(struct kproc *__restrict self,
 __crit __user void *
 kproc_dlsymex_unlocked(struct kproc *__restrict self,
                        kmodid_t module_id, char const *__restrict name,
-                       __size_t name_size, ksymhash_t name_hash) {
+                       size_t name_size, ksymhash_t name_hash) {
  struct kprocmodule *module; kmodid_t *iter,*end; __user void *result;
  struct ksymbol const *symbol; struct kshlib *lib;
  KTASK_CRIT_MARK
@@ -531,13 +531,17 @@ kproc_dlsymex_unlocked(struct kproc *__restrict self,
      symbol->s_shndx != 0) goto found_symbol;
  return NULL;
 found_symbol:
+#if 0
+ printf("Found symbol: %.*q @ %Iu\n",
+       (unsigned)name_size,name,symbol->s_addr);
+#endif
  return (__user void *)((uintptr_t)module->pm_base+symbol->s_addr);
 }
 
 __crit __user void *
 kproc_dlsymex_c(struct kproc *__restrict self,
                 kmodid_t module_id, char const *__restrict name,
-                __size_t name_size, ksymhash_t name_hash) {
+                size_t name_size, ksymhash_t name_hash) {
  void *result;
  KTASK_CRIT_MARK
  kassert_kproc(self);
@@ -549,7 +553,7 @@ kproc_dlsymex_c(struct kproc *__restrict self,
 
 __crit __user void *
 kproc_dlsymall_c(struct kproc *__restrict self, char const *__restrict name,
-                 __size_t name_size, ksymhash_t name_hash) {
+                 size_t name_size, ksymhash_t name_hash) {
  __user void *result;
  kmodid_t check_id = self->p_modules.pms_moda;
  while (check_id--) {
@@ -561,7 +565,7 @@ kproc_dlsymall_c(struct kproc *__restrict self, char const *__restrict name,
 
 __crit __user void *
 kproc_dlsymself_c(struct kproc *__restrict self, char const *__restrict name,
-                  __size_t name_size, ksymhash_t name_hash,
+                  size_t name_size, ksymhash_t name_hash,
                   __user void *caller_eip) {
  kmodid_t modid;
  if __unlikely(KE_ISERR(kproc_getmodat_unlocked(self,&modid,caller_eip))) return NULL;
@@ -570,7 +574,7 @@ kproc_dlsymself_c(struct kproc *__restrict self, char const *__restrict name,
 
 __crit __user void *
 kproc_dlsymnext_c(struct kproc *__restrict self, char const *__restrict name,
-                  __size_t name_size, ksymhash_t name_hash,
+                  size_t name_size, ksymhash_t name_hash,
                   __user void *caller_eip) {
  kmodid_t first_id,modid,maxid; __user void *result;
  if __unlikely(KE_ISERR(kproc_getmodat_unlocked(self,&first_id,caller_eip))) return NULL;
@@ -597,7 +601,7 @@ kproc_dlsymnext_c(struct kproc *__restrict self, char const *__restrict name,
 __crit __user void *
 kproc_dlsymex2_c(struct kproc *__restrict self,
                  kmodid_t module_id, char const *__restrict name,
-                 __size_t name_size, ksymhash_t name_hash,
+                 size_t name_size, ksymhash_t name_hash,
                  __user void *caller_eip) {
  void *result;
  KTASK_CRIT_MARK
