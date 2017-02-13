@@ -40,6 +40,7 @@
 #include <kos/kernel/paging.h>
 #include <stdlib.h>
 #include <kos/kernel/fs/fs.h>
+#include <ctype.h>
 
 __DECL_BEGIN
 
@@ -577,7 +578,7 @@ kshlib_parse_needed(struct kshlib *self, struct kfile *elf_file,
    if ((name = strtable+iter->d_un.d_val)[0] != '\0') {
     k_syslogf_prefixfile(KLOG_INFO,elf_file,"Searching for dependency: %s\n",name);
     // Recursively open dependencies
-    if __unlikely(KE_ISERR(error = kshlib_open(name,(size_t)-1,&dep))) {
+    if __unlikely(KE_ISERR(error = kshlib_openlib(name,(size_t)-1,&dep))) {
      k_syslogf_prefixfile(KLOG_ERROR,elf_file,"Missing dependency: %s\n",name);
      if (!KSHLIB_IGNORE_MISSING_DEPENDENCIES) {
       if (error == KE_NOENT) error = KE_NODEP;
@@ -955,7 +956,13 @@ __crit kerrno_t kshlib_new_elf32(__ref struct kshlib **result, struct kfile *elf
  error = kfile_incref(lib->sh_file = elf_file);
  if __unlikely(KE_ISERR(error)) goto err_lib;
  error = kshlibcache_addlib(lib);
- if __unlikely(KE_ISERR(error)) goto err_file;
+ /* If we can't cache the library, still allow it to be loaded,
+  * but make sure that we mark the library as not cached through
+  * use of an always out-of-bounds cache index. */
+ if __unlikely(KE_ISERR(error)) {
+  lib->sh_cidx = (__size_t)-1;
+  k_syslogf_prefixfile(KLOG_WARN,elf_file,"[LINKER] Failed to cache library file\n");
+ }
 
  dyninfo.dyn_strtable_header.sh_offset  = 0;
  dyninfo.dyn_strtable_header.sh_size    = (Elf32_Word)-1;
@@ -999,7 +1006,7 @@ err_post_pheaders:
  ksecdata_quit(&lib->sh_data);
  kshliblist_quit(&lib->sh_deps);
 err_cache: kshlibcache_dellib(lib);
-err_file: kfile_decref(lib->sh_file);
+/*err_file:*/ kfile_decref(lib->sh_file);
 err_lib: free(lib);
  return error;
 }
@@ -1112,65 +1119,162 @@ kshlib_fopenfile(struct kfile *fp, __ref struct kshlib **__restrict result) {
  return kshlib_new(result,fp);
 }
 
+
+// Generate a sanitized true-root path with normalized
+// slashes as well as prepending the true root path if
+// the given pathenv isn't connected.
+// Returns the required buffer size (Including the terminating ZERO-character).
+// WARNING: This function is not perfect!
+static size_t
+get_true_path(char *buf, size_t bufsize,
+              struct kfspathenv const *pathenv,
+              char const *path, size_t pathmax) {
+ size_t reqsize;
+ char *end = buf+bufsize,*iter = buf;
+ if (pathenv->env_root != kfs_getroot()) {
+  /* Must prepend the path's root path. */
+  __evalexpr(kdirent_getpathname(pathenv->env_root,kfs_getroot(),iter,
+                                 iter < end ? (size_t)(end-iter) : 0,&reqsize));
+  iter += (reqsize/sizeof(char))-1;
+  /* 'kdirent_getpathname' doesn't include a trailing slash. - append it now! */
+  if (iter < end) *iter = KFS_SEP;
+  ++iter;
+ }
+ if (!pathmax || !KFS_ISSEP(path[0])) {
+  /* The given path points into the CWD directory.
+   * >> Now we must also prepend the given cwd path. */
+  __evalexpr(kdirent_getpathname(pathenv->env_cwd,pathenv->env_root,iter,
+                                 iter < end ? (size_t)(end-iter) : 0,&reqsize));
+  iter += (reqsize/sizeof(char))-1;
+  if (pathenv->env_cwd != kfs_getroot()) {
+   /* 'kdirent_getpathname' doesn't include a trailing slash. - append it now! */
+   if (iter < end) *iter = KFS_SEP;
+   ++iter;
+  }
+ }
+ /* Now must append the given path, and we're done. */
+ /* WARNING: This isn't perfect because we don't
+  *          handle '.' and '..' directory references. */
+ while (pathmax && *path) {
+  if (iter < end) {
+   if ((*iter = *path) == KFS_ALTSEP) *iter = KFS_SEP;
+  }
+  ++iter;
+  ++path;
+  --pathmax;
+ }
+ if (iter < end) *iter = '\0';
+ ++iter;
+ return (size_t)(iter-buf);
+}
+
+
 __crit kerrno_t
-kshlib_openfile(char const *__restrict filename, size_t filename_max,
-                __ref struct kshlib **__restrict result) {
+kshlib_openfileenv(struct kfspathenv const *pathenv,
+                   char const *__restrict filename, __size_t filename_max,
+                   __ref struct kshlib **__restrict result) {
  struct kfile *fp; kerrno_t error;
+ char trueroot_buf[PATH_MAX];
+ char *trueroot,*newtrueroot;
+ size_t trueroot_size,trueroot_reqsize;
  KTASK_CRIT_MARK
- // Check for a cached version of the library
- // TODO: We must ensure that the given path is absolute,
- //       as otherwise there would be a race condition allowing
- //       user applications to change their CWD while we are
- //       scanning for a library, potentially causing the
- //       kernel to load a library more than once into the
- //       same executable. (While technically not really a problem,
- //       I can't imagine the resulting confusion when some library
- //       uses a different 'errno' than your main application...)
- if ((*result = kshlibcache_getlib(filename)) != NULL) return KE_OK;
- if (KE_ISERR(error = krootfs_open(filename,filename_max,O_RDONLY,0,NULL,&fp))) return error;
+ /* Generate the ~true~ absolute path for the given filename. */
+ trueroot = trueroot_buf,trueroot_size = sizeof(trueroot_buf);
+again_true_root:
+ trueroot_reqsize = get_true_path(trueroot,trueroot_size,
+                                  pathenv,filename,filename_max);
+ if (trueroot_reqsize > trueroot_size) {
+  newtrueroot = (trueroot == trueroot_buf)
+   ? (char *)malloc(trueroot_reqsize*sizeof(char))
+   : (char *)realloc(trueroot,trueroot_reqsize*sizeof(char));
+  if __unlikely(!newtrueroot) { error = KE_NOMEM; goto err_trueroot; }
+  trueroot = newtrueroot;
+  trueroot_size = trueroot_reqsize;
+  goto again_true_root;
+ }
+ /* Check the SHLIB cache for the trueroot path. */
+ if ((*result = kshlibcache_getlib(trueroot)) != NULL) { error = KE_OK; goto err_trueroot; }
+ /* Must opening a new shared library. */
+ //printf("filename = %.*q\n",(unsigned)filename_max,filename);
+ //printf("trueroot = %.*q\n",(unsigned)trueroot_size,trueroot);
+ if (KE_ISERR(error = krootfs_open(trueroot,trueroot_size,O_RDONLY,0,NULL,&fp))) goto err_trueroot;
+ /* Since get_true_path isn't perfect, generate another path based
+  * on the file we just opened, then use that to lookup the cache again!
+  * NOTE: It wasn't perfect because it can't handle '.' and '..' references. */
+again_true_root2:
+ error = __kfile_getpathname_fromdirent(fp,kfs_getroot(),trueroot,
+                                        trueroot_size,&trueroot_reqsize);
+ /* NOTE: Not all files may be able to actually have a path associated
+  *       with them. We still allow those files to be loaded if they
+  *       are binaries, but we simply don't cache them. */
+ if __likely(KE_ISOK(error)) {
+  if (trueroot_reqsize > trueroot_size) {
+   newtrueroot = (trueroot == trueroot_buf)
+    ? (char *)malloc(trueroot_reqsize*sizeof(char))
+    : (char *)realloc(trueroot,trueroot_reqsize*sizeof(char));
+   if __unlikely(!newtrueroot) { error = KE_NOMEM; goto err_fptrueroot; }
+   trueroot = newtrueroot;
+   trueroot_size = trueroot_reqsize;
+   goto again_true_root2;
+  }
+  /* Check the cache with the known true-root again. */
+  if ((*result = kshlibcache_getlib(trueroot)) != NULL) {
+   error = KE_OK;
+   goto err_fptrueroot;
+  }
+  /* NOPE! This library definitely isn't cached, or the given path
+   *       quite simply (while existing) isn't actually a valid binary. */
+ }
+ if (trueroot != trueroot_buf) free(trueroot);
  error = kshlib_new(result,fp);
  kfile_decref(fp);
- if (KE_ISOK(error)) {
-  k_syslogf(KLOG_TRACE,"Loaded shlib: %.*q\n",
-           (unsigned)filename_max,filename);
- }
+ return error;
+err_fptrueroot:
+ kfile_decref(fp);
+err_trueroot:
+ if (trueroot != trueroot_buf) free(trueroot);
  return error;
 }
 
 __crit kerrno_t
-kshlib_open(char const *__restrict name,
-            __size_t namemax,
-            __ref struct kshlib **__restrict result) {
- char const *search_path;
- char const *iter,*next;
+kshlib_opensearch(struct kfspathenv const *pathenv,
+                  char const *__restrict name, __size_t namemax,
+                  char const *__restrict search_paths, __size_t search_paths_max,
+                  __ref struct kshlib **__restrict result) {
+ char search_cat[PATH_MAX];
+ char const *iter,*end,*next;
  kerrno_t error,last_error = KE_NOENT;
- size_t namesize = strnlen(name,namemax);
  KTASK_CRIT_MARK
- search_path = getenv("LD_LIBRARY_PATH");
- if (!search_path) search_path = "/usr/lib:/lib";
- iter = search_path;
- for (;;) {
+ namemax = strnlen(name,namemax);
+ end = (iter = search_paths)+search_paths_max;
+ for (; iter != end; ++iter) {
   size_t partsize;
   next = strchr(iter,':');
   partsize = next ? next-iter : strlen(iter);
   if (partsize) {
-   char *path;
+   char *path; size_t reqsize;
    int hassep = KFS_ISSEP(iter[partsize-1]);
    if (!hassep) ++partsize;
-   path = (char *)malloc((partsize+namesize+1)*sizeof(char));
-   if __unlikely(!path) return KE_NOMEM;
+   reqsize = (partsize+namemax+1)*sizeof(char);
+   if (reqsize > sizeof(search_cat)) {
+    path = (char *)malloc(reqsize);
+    if __unlikely(!path) return KE_NOMEM;
+   } else {
+    path = search_cat;
+   }
    memcpy(path,iter,partsize*sizeof(char));
    if (!hassep) path[partsize-1] = KFS_SEP;
-   memcpy(path+partsize,name,namesize*sizeof(char));
-   path[partsize+namesize] = '\0';
-   error = kshlib_openfile(path,(size_t)-1,result);
-   free(path);
-   // If we did manage to load the library, we've succeeded
+   memcpy(path+partsize,name,namemax*sizeof(char));
+   path[partsize+namemax] = '\0';
+   error = kshlib_openfileenv(pathenv,path,(reqsize/sizeof(char))-1,result);
+   if (path != search_cat) free(path);
+   /* If we did manage to load the library, we've succeeded */
    if (KE_ISOK(error)) return error;
-   // Handle a hand full of errors specially
+   /* Handle a hand full of errors specially */
    switch (error) {
-    case KE_NOENT: break;
-    case KE_ACCES: last_error = KE_ACCES; break;
+    case KE_NOENT: break; /* File doesn't exist. */
+    case KE_ACCES: last_error = error; break;
+    case KE_DEVICE: return error; /*< A device error occurred. */
     case KE_NOEXEC:
     default:
      if (last_error == KE_OK) last_error = error;
@@ -1182,6 +1286,105 @@ kshlib_open(char const *__restrict name,
  }
  return last_error;
 }
+
+static kerrno_t copyenvstring(char const *name, char **result, size_t *result_size) {
+ char *resstring,*newresstring; kerrno_t error;
+ size_t reqsize,ressize = 256*sizeof(char);
+ struct kproc *caller = kproc_self();
+ if __unlikely((resstring = (char *)malloc(ressize)) == NULL) return KE_NOMEM;
+again_lookup:
+ error = kproc_getenv(caller,name,(size_t)-1,resstring,ressize,&reqsize);
+ if __unlikely(KE_ISERR(error)) {err_resstring: free(resstring); return error; }
+ if (reqsize != ressize) {
+  newresstring = (char *)realloc(resstring,reqsize*sizeof(char));
+  if __unlikely(!newresstring) { error = KE_NOMEM; goto err_resstring; }
+  resstring = newresstring;
+  if (reqsize > ressize) { ressize = reqsize; goto again_lookup; }
+ }
+ *result = newresstring;
+ *result_size = reqsize;
+ return error;
+}
+
+
+__crit kerrno_t
+kshlib_openlib(char const *__restrict name, __size_t namemax,
+               __ref struct kshlib **__restrict result) {
+ static char const default_libsearch_paths[] = "/lib:/usr/lib";
+ kerrno_t error; struct kfspathenv env;
+ env.env_root = NULL;
+ if __likely(KE_ISOK(error = kfspathenv_inituser(&env))) {
+  if (namemax && KFS_ISSEP(name[0])) {
+   /* Absolute library path (open directly in respect to chroot-prisons). */
+   error = kshlib_openfileenv(&env,name,namemax,result);
+  } else {
+   char *envval; size_t env_size;
+   /* Check for process-local environment variable 'LD_LIBRARY_PATH'. */
+   error = copyenvstring("LD_LIBRARY_PATH",&envval,&env_size);
+   if (error == KE_NOENT) {
+    error = kshlib_opensearch(&env,name,namemax,default_libsearch_paths,
+                              __compiler_STRINGSIZE(default_libsearch_paths),
+                              result);
+   } else if (KE_ISERR(error)) {
+    goto end_err;
+   } else {
+    error = kshlib_opensearch(&env,name,namemax,envval,env_size,result);
+    free(envval);
+   }
+  }
+ end_err:
+  kfspathenv_quituser(&env);
+  if __likely(KE_ISOK(error)) return error;
+ }
+ /* When searching for shared libraries, we somewhat break the rules
+  * by allowing applications to search for libraries outside their
+  * normal chroot-prison.
+  * Hard restrictions are in-place though, and they are not allowed
+  * to search in sub-folders or anywhere else for that matter because
+  * we don't do so if the library name contains slashes.
+  * >> By doing this, we make it much easier to place some executable
+  *    in a chroot prison because you don't have to create a copy of
+  *    all your libraries just for that one test. */
+ {
+  /* While questionable, this should still be completely save with respect
+   * to how KOS granst rootfork() permissions, making it impossible to
+   * use this mechanism to get the root-privileges of another library. */
+  static char const fs_seps[2] = {KFS_SEP,KFS_ALTSEP};
+  if (env.env_root != kfs_getroot() &&
+     !strnpbrk(name,namemax,fs_seps,2)) {
+   struct kfspathenv rootenv = KFSPATHENV_INITROOT;
+   error = kshlib_opensearch(&rootenv,name,namemax,default_libsearch_paths,
+                             __compiler_STRINGSIZE(default_libsearch_paths),
+                             result);
+  }
+ }
+ return error;
+}
+
+
+
+__crit kerrno_t
+kshlib_openexe(char const *__restrict name, __size_t namemax,
+               __ref struct kshlib **__restrict result,
+               int allow_path_search) {
+ kerrno_t error; struct kfspathenv env;
+ if __unlikely(KE_ISERR(error = kfspathenv_inituser(&env))) return error;
+ if (!allow_path_search || (namemax && KFS_ISSEP(name[0]))) {
+  /* Absolute executable path (open directly in respect to chroot-prisons). */
+  error = kshlib_openfileenv(&env,name,namemax,result);
+ } else {
+  char *envval; size_t env_size;
+  /* Check for process-local environment variable 'PATH'. */
+  error = copyenvstring("PATH",&envval,&env_size);
+  if __unlikely(KE_ISERR(error)) goto end_err;
+  error = kshlib_opensearch(&env,name,namemax,envval,env_size,result);
+  free(envval);
+ }
+end_err:
+ kfspathenv_quituser(&env);
+ return error;
+}
+
 
 __DECL_END
 

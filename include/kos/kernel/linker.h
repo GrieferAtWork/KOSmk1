@@ -377,9 +377,10 @@ kshlib_spawn(struct kshlib const *__restrict self,
              struct kproc *__restrict proc);
 
 
+struct kfspathenv;
 //////////////////////////////////////////////////////////////////////////
 // Opens a shared library, given its (file)name
-//  - 'kshlib_open' will walk the $LD_LIBRARY_PATH
+//  - 'kshlib_openlib' will walk the $LD_LIBRARY_PATH
 //    environment variable of the calling process.
 //  - If the calling process is running in windows compatibility mode,
 //    additional paths, such as $PATH, getcwd() and the directory of
@@ -389,11 +390,26 @@ kshlib_spawn(struct kshlib const *__restrict self,
 // @return: KE_NOEXEC: The found file isn't an executable.
 // @return: KE_ACCES:  The caller does not have access to the only matching file/dependency.
 extern __crit __wunused __nonnull((1,3)) kerrno_t
-kshlib_open(char const *__restrict name, __size_t namemax,
-            __ref struct kshlib **__restrict result);
+kshlib_openlib(char const *__restrict name, __size_t namemax,
+               __ref struct kshlib **__restrict result);
+
+/* Open a user-level executable as searched for by exec().
+ * Looks at the $PATH environment variable of the calling process,
+ * but also accepts absolute paths. */
 extern __crit __wunused __nonnull((1,3)) kerrno_t
-kshlib_openfile(char const *__restrict filename, __size_t filename_max,
-                __ref struct kshlib **__restrict result);
+kshlib_openexe(char const *__restrict name, __size_t namemax,
+               __ref struct kshlib **__restrict result, int allow_path_search);
+
+
+extern __crit __wunused __nonnull((1,2,4,6)) kerrno_t
+kshlib_opensearch(struct kfspathenv const *pathenv,
+                  char const *__restrict name, __size_t namemax,
+                  char const *__restrict search_paths, __size_t search_paths_max,
+                  __ref struct kshlib **__restrict result);
+extern __crit __wunused __nonnull((1,2,4)) kerrno_t
+kshlib_openfileenv(struct kfspathenv const *pathenv,
+                   char const *__restrict filename, __size_t filename_max,
+                   __ref struct kshlib **__restrict result);
 extern __crit __wunused __nonnull((1,2)) kerrno_t
 kshlib_fopenfile(struct kfile *fp, __ref struct kshlib **__restrict result);
 

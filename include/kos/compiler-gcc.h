@@ -134,10 +134,14 @@
 #endif
 
 #ifndef __evalexpr
+#ifdef __INTELLISENSE__
+#define __evalexpr /* nothing */
+#else
 #define __evalexpr(x) \
  __xblock({ __attribute_unused __typeof__(x) __x = (x);\
             __xreturn __x;\
  })
+#endif
 #endif
 
 #ifndef __likely

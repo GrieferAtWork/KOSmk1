@@ -88,6 +88,8 @@ __crit void __kinode_free(struct kinode *self) {
  free(self);
 }
 
+
+
 void ksuperblock_syslogprefix(int level, struct ksuperblock *self) {
  char fs_type[64],fs_name[64];
  if (KE_ISERR(ksuperblock_getattr(self,KATTR_DEV_TYPE,fs_type,sizeof(fs_type),NULL))) strcpy(fs_type,"??" "?");

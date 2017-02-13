@@ -686,8 +686,8 @@ SYSCALL(sys_ktask_exec) {
   args.ea_environ = NULL;
   args.ea_envlenv = NULL;
  }
- (void)flags; // TODO
- error = kshlib_openfile(given_path,(size_t)-1,&lib);
+ error = kshlib_openexe(given_path,(size_t)-1,&lib,
+                       (flags&KTASK_EXEC_FLAG_SEARCHPATH)!=0);
  if (uargs) free(given_path);
  if __unlikely(KE_ISERR(error)) goto end_path;
  KTASK_NOINTR_BEGIN

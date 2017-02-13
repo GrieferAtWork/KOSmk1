@@ -130,7 +130,13 @@ struct kinodeattribs {
  struct timespec ia_ctime; /*< [lock(KINODEATTRIB_LOCK_DATA)] Cached creation time. */
  struct timespec ia_mtime; /*< [lock(KINODEATTRIB_LOCK_DATA)] Cached last modification time. */
 };
+#define kinodeattribs_islocked(self,lock)  ((katomic_load((self)->ia_locks)&(lock))!=0)
+#define kinodeattribs_trylock(self,lock)   ((katomic_fetchor((self)->ia_locks,lock)&(lock))==0)
+#define kinodeattribs_lock(self,lock)      KTASK_SPIN(kinodeattribs_trylock(self,lock))
+#define kinodeattribs_unlock(self,lock)    assertef((katomic_fetchand((self)->ia_locks,~(lock))&(lock))!=0,"Lock not held")
+
 #define KINODEATTRIBS_INIT(kind) {0,0,KINODEATTRIB_FLAG_NONE,kind,{0,0},{0,0},{0,0}}
+
 
 struct kinode {
  KOBJECT_HEAD
@@ -187,6 +193,7 @@ extern __wunused kerrno_t kinode_close(struct kinode *self);
 
 //////////////////////////////////////////////////////////////////////////
 // Perform various operations on an INode.
+// @return: KE_NOSYS:     The operation is not supported by the node.
 // @return: KE_DESTROYED: The Associated node was closed.
 extern __wunused __nonnull((1,3)) kerrno_t kinode_getattr(struct kinode const *self, __size_t ac, union kinodeattr *av);
 extern __wunused __nonnull((1,3)) kerrno_t kinode_setattr(struct kinode *self, __size_t ac, union kinodeattr const *av);
@@ -197,11 +204,12 @@ extern __wunused __nonnull((1,3)) kerrno_t __kinode_setattr_legacy(struct kinode
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the directory entry associated with the given name
-// @return: KE_NOSYS:     The operation is not supported by the node
-// @return: KE_NODIR:     'self' is not a directory
-// @return: KE_DESTROYED: 'self' was deleted
-extern __wunused __nonnull((1,2)) kerrno_t kinode_walk(struct kinode *self, struct kdirentname const *name,
-                                                       __ref struct kinode **result);
+// @return: KE_NOSYS:     The operation is not supported by the node.
+// @return: KE_NODIR:     'self' is not a directory.
+// @return: KE_DESTROYED: 'self' was deleted.
+extern __wunused __nonnull((1,2)) kerrno_t
+kinode_walk(struct kinode *self, struct kdirentname const *name,
+            __ref struct kinode **result);
 
 //////////////////////////////////////////////////////////////////////////
 // Perform various operations on a given INode

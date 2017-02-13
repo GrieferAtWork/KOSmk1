@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <stddef.h>
 #include <kos/syslog.h>
+#include <kos/kernel/fs/fs.h>
 
 __DECL_BEGIN
 
@@ -151,10 +152,10 @@ kshlibcachetab_new(struct kshlib *lib) {
  // First attempt: Assume filename not longer than 'PATH_MAX'
  result = (struct kshlibcachetab *)malloc(offsetafter(struct kshlibcachetab,ct_size)+
                                          (PATH_MAX+1)*sizeof(char));
- error = kfile_getattr(lib->sh_file,KATTR_FS_PATHNAME,
-                       result ? result->ct_name : NULL,
-                       result ? (PATH_MAX+1)*sizeof(char) : 0,
-                       &reqsize);
+ error = __kfile_getpathname_fromdirent(lib->sh_file,kfs_getroot(),
+                                        result ? result->ct_name : NULL,
+                                        result ? (PATH_MAX+1)*sizeof(char) : 0,
+                                        &reqsize);
  if __unlikely(KE_ISERR(error)) { free(result); return NULL; }
  if (reqsize != (PATH_MAX+1)*sizeof(char)) {
   newreqsize = (PATH_MAX+1)*sizeof(char);
@@ -164,8 +165,9 @@ again_getpath:
   if (!newresult) { free(result); return NULL; }
   result = newresult;
   if (reqsize > newreqsize) {
-   error = kfile_getattr(lib->sh_file,KATTR_FS_PATHNAME,
-                         result->ct_name,reqsize,&newreqsize);
+   error = __kfile_getpathname_fromdirent(lib->sh_file,kfs_getroot(),
+                                          result->ct_name,reqsize,
+                                          &newreqsize);
    if __unlikely(KE_ISERR(error)) { free(result); return NULL; }
    if __unlikely(newreqsize != reqsize) { reqsize = newreqsize; goto again_getpath; }
   }

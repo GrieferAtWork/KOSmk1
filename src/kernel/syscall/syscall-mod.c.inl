@@ -39,7 +39,7 @@ SYSCALL(sys_kmod_open) {
  struct kproc *proc_self = kproc_self();
  KTASK_CRIT_BEGIN_FIRST
  (void)flags; // TODO
- error = kshlib_open(name,namemax,&lib);
+ error = kshlib_openlib(name,namemax,&lib);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kproc_insmod(proc_self,lib,modid);
  kshlib_decref(lib);
@@ -58,7 +58,7 @@ SYSCALL(sys_kmod_fopen) {
  KTASK_CRIT_BEGIN_FIRST
  fp = kproc_getfdfile(proc_self,fd);
  if __unlikely(!fp) { error = KE_BADF; goto end; }
- (void)flags; // TODO
+ (void)flags; /* As of now unused. */
  error = kshlib_fopenfile(fp,&lib);
  kfile_decref(fp);
  if __unlikely(KE_ISERR(error)) goto end;

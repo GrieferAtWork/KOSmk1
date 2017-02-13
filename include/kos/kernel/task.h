@@ -116,7 +116,7 @@ extern void kcpu_unlock(struct kcpu *self, __u8 lock);
 #else
 #define kcpu_islocked(self,lock)  ((katomic_load((self)->c_locks)&(lock))!=0)
 #define kcpu_trylock(self,lock)   ((katomic_fetchor((self)->c_locks,lock)&(lock))==0)
-#define kcpu_lock(self,lock)      __xblock({ KTASK_SPIN(kcpu_trylock(self,lock)); (void)0; })
+#define kcpu_lock(self,lock)      KTASK_SPIN(kcpu_trylock(self,lock))
 #define kcpu_unlock(self,lock)    assertef((katomic_fetchand((self)->c_locks,~(lock))&(lock))!=0,"Lock not held")
 #endif
 

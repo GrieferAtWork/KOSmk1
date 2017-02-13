@@ -76,7 +76,7 @@ int exec_fork(char *exe, char **argv) {
   if (fork_sandlevel) {
    proc_barrier(KSANDBOX_BARRIERLEVEL(fork_sandlevel));
   }
-  execv(exe,argv);
+  execvp(exe,argv);
   perror(exe);
   _exit(errno);
  }

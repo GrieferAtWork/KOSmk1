@@ -489,6 +489,7 @@ typedef kerrno_t (*penumcmd)(char const *arg, void *closure);
 // @return: KE_ACCES:     GETMEM/SETMEM permissions for the root task are
 //                        required for accessing environment variables.
 // @return: KE_DESTROYED: The given process is a zombie.
+// @return: KE_NOENT:    [kproc_getenv*] The given environment variable doesn't exist.
 extern __crit __wunused __nonnull((1,2,4)) kerrno_t kproc_getenv_ck(struct kproc *__restrict self, char const *__restrict name, __size_t namemax, char *buf, __size_t bufsize, __size_t *reqsize);
 extern __crit __wunused __nonnull((1,2,4)) kerrno_t kproc_setenv_ck(struct kproc *__restrict self, char const *__restrict name, __size_t namemax, char const *__restrict value, __size_t valuemax, int override);
 extern __crit __wunused __nonnull((1,2))   kerrno_t kproc_delenv_ck(struct kproc *__restrict self, char const *__restrict name, __size_t namemax);
