@@ -1117,6 +1117,7 @@ open_existing:
   error = kdirent_walknode(dir,name,&fileent,&filenode);
  }
  if __unlikely(KE_ISERR(error)) return error;
+ kassert_kinode(filenode);
  if (!(mode&_O_SYMLINK) && S_ISLNK(filenode->i_kind)) {
   struct kfspathenv target_env;
   struct kdirentname link_name;
@@ -1134,10 +1135,9 @@ open_existing:
   target_env.env_cwd = target_ent;
   error = kdirent_openlast(&target_env,target_ent,name,mode,create_ac,create_av,result);
   kdirent_decref(target_ent);
-  return error;
+ } else {
+  error = kfile_opennode(fileent,filenode,result,mode);
  }
- kassert_kinode(filenode);
- error = kfile_opennode(fileent,filenode,result,mode);
 end:
  kinode_decref(filenode);
  kdirent_decref(fileent);
