@@ -31,6 +31,7 @@
 __DECL_BEGIN
 
 #if KSHLIB_RECENT_CACHE_SIZE
+/* TODO: Allocate the recent cache dynamically? */
 static __ref struct kshlib *recent_libs[KSHLIB_RECENT_CACHE_SIZE] = {NULL,};
 
 /* Position of the where the next recent library is placed. */

@@ -37,7 +37,7 @@
 
 __DECL_BEGIN
 
-struct ksegment gdt_segments[6];
+struct ksegment gdt_segments[8];
 
 
 extern byte_t stack_top[];
@@ -67,18 +67,20 @@ void kernel_initialize_gdt(void) {
  ksegment_encode(&gdt_segments[2],0,SEG_LIMIT_MAX,SEG_DATA_PL0); /* Kernel data segment */
  ksegment_encode(&gdt_segments[3],0,SEG_LIMIT_MAX,SEG_CODE_PL3); /* User code */
  ksegment_encode(&gdt_segments[4],0,SEG_LIMIT_MAX,SEG_DATA_PL3); /* User data */
- ksegment_encode(&gdt_segments[5],(uintptr_t)tss0,sizeof(struct ktss),SEG_TSS); /* Kernel TSS */
+ ksegment_encode(&gdt_segments[5],0,SEG_LIMIT_MAX,SEG_CODE_PL0_16); /* Kernel code segment (16-bit) */
+ ksegment_encode(&gdt_segments[6],0,SEG_LIMIT_MAX,SEG_DATA_PL0_16); /* Kernel data segment (16-bit) */
+ ksegment_encode(&gdt_segments[7],(uintptr_t)tss0,sizeof(struct ktss),SEG_TSS); /* Kernel TSS */
 
  // Configure the IDT Pointer
  struct kidtpointer idt_pointer; /*< TODO: This one may not have to be global. */
  idt_pointer.base  = gdt_segments;
- idt_pointer.limit = sizeof(gdt_segments)-1;
+ idt_pointer.limit = sizeof(gdt_segments);
 
  assertf(!kpaging_enabled(),"Must initialize GDT before paging");
  gdt_flush(&idt_pointer); // Install the GDT table (overwriting the one set by GRUB)
- assert(gdt_segments[5].rw == 0);
+ assert(gdt_segments[7].rw == 0);
  tss_flush(KSEGMENT_KERNELTSS|3);    // Set the TSS segment
- assert(gdt_segments[5].rw == 1);
+ assert(gdt_segments[7].rw == 1);
 }
 
 __DECL_END

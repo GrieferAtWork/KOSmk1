@@ -487,10 +487,10 @@ kerrno_t kshlib_load_elf32_symtable(struct kshlib *self, Elf32_Shdr const *strta
    else if (bind == STB_WEAK) symtbl = &self->sh_weaksym;
    else goto sym_next;
    k_syslogf_prefixfile(KLOG_INSANE,elf_file,"SYMBOL: %s %s: %p\n",
-                    bind == STB_GLOBAL ? "__global" :
-                    bind == STB_LOCAL ? "__local" :
-                    bind == STB_WEAK ? "__weak" : "",
-                    name,(uintptr_t)sym_iter->st_value);
+                        bind == STB_GLOBAL ? "__global" :
+                        bind == STB_LOCAL ? "__local" :
+                        bind == STB_WEAK ? "__weak" : "",
+                        name,(uintptr_t)sym_iter->st_value);
    sym = ksymbol_new(name);
    if __unlikely(!sym) { error = KE_NOMEM; goto end_symtable; }
    sym->s_size = (size_t)sym_iter->st_size;

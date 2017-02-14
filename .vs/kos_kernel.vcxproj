@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\kos\kernel\addist.h" />
+    <ClInclude Include="..\include\kos\kernel\arch\x86\realmode.h" />
     <ClInclude Include="..\include\kos\kernel\closelock.h" />
     <ClInclude Include="..\include\kos\kernel\ddist.h" />
     <ClInclude Include="..\include\kos\kernel\debug.h" />
@@ -119,6 +120,7 @@
     <None Include="..\src\.sources" />
     <None Include="..\src\kernel\arch\x86\boot.S" />
     <None Include="..\src\kernel\arch\x86\linker.ld" />
+    <None Include="..\src\kernel\arch\x86\realmode.S" />
     <None Include="..\src\kernel\dev\socket-allocframe.c.inl" />
     <None Include="..\src\kernel\dev\socket-Ne2000.c.inl" />
     <None Include="..\src\kernel\dev\storage-ata-rwlba.c.inl" />

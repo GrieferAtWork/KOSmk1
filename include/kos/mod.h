@@ -200,8 +200,7 @@ struct kmodinfo {
      */
     void      *mi_begin;      /*< Begin of section-based memory. */
     void      *mi_end;        /*< End of section-based memory. */
-    void      *mi_padding[8]; /*< Unused data (Reserved for future use). */
-    char       mi_name[1];    /*< ZERO-terminated module file/path name. */
+    char      *mi_name;       /*< [?..1] ZERO-terminated module file/path name. */
 };
 #endif
 

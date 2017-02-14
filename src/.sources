@@ -7,7 +7,10 @@
 [define(__BUILDING_KERNEL__ = 1)] \
 {
 	[arch = i386] {
-		[compiler = asm] kernel/arch/x86/*.S;
+		[compiler = asm] {
+			kernel/arch/x86/boot.S;
+			kernel/arch/x86/realmode.S;
+		}
 	}
 	main.c;
 	kernel/*.c;

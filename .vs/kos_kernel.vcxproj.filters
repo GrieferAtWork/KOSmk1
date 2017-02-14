@@ -43,6 +43,12 @@
     <Filter Include="include\util">
       <UniqueIdentifier>{c6b183c7-0b68-4dbc-bcb0-528384379a0d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="include\arch">
+      <UniqueIdentifier>{0c617169-f226-4860-af81-a2f5a4ccab9c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\arch\x86">
+      <UniqueIdentifier>{489008d0-1b6c-4199-8e94-dc9f5b774269}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\kos\kernel\fd.h">
@@ -242,6 +248,9 @@
     </ClInclude>
     <ClInclude Include="..\include\kos\kernel\fs\vfs-proc.h">
       <Filter>include\fs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\arch\x86\realmode.h">
+      <Filter>include\arch\x86</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -607,6 +616,9 @@
     </None>
     <None Include="..\src\kernel\linker-recent.c.inl">
       <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\arch\x86\realmode.S">
+      <Filter>src\kernel\arch\x86</Filter>
     </None>
   </ItemGroup>
 </Project>

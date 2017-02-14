@@ -150,6 +150,29 @@ void test_write_file(void) {
 #endif
 }
 
+#include <kos/kernel/arch/x86/realmode.h>
+void test_realmode(void) {
+ struct realmode_regs regs;
+ //memset(&regs,0xa,sizeof(regs));
+
+ /* switch to 320x200x256 graphics mode */
+ regs.ax = 0x0013;
+ //assert(karch_irq_enabled());
+ realmode_interrupt(0x10,&regs);
+ //assert(karch_irq_enabled());
+ k_syslogf(KLOG_INFO,"EAX After: %I32x\n",regs);
+ 
+ // full screen with blue color (1)
+ memset((char *)0xA0000,1,(320*200));
+
+ struct timespec tmo = {1,0};
+ ktask_sleep(ktask_self(),&tmo);
+
+ // switch to 80x25x16 text mode
+ regs.ax = 0x0003;
+ realmode_interrupt(0x10,&regs);
+
+}
 
 
 void kernel_main(void) {
@@ -196,8 +219,8 @@ void kernel_main(void) {
  //RUN(test_terminate_suspended_critical);
 #undef RUN
  //test_taskstat();
-
  //test_write_file();
+ test_realmode();
  run_init();
 
  karch_irq_disable();

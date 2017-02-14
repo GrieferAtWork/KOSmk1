@@ -55,11 +55,11 @@ local ops = list {
    "mov","push","pop","lea",
    "add","sub","mul","div",
    "pushf","popf","and","or","xor",
-   "shl","shr","xchg",
+   "shl","shr","xchg","jmp","mov"
 };
 local longname = ((for (local x: ops) #x) > ...)+2;
 for (local o: ops) {
-  print "#define "+(o+"__I ").ljust(longname)+"      __I("+o+")";
+  print "#define "+(o+"I ").ljust(longname)+"      __I("+o+")";
   print "#define "+(o+"8 ").ljust(longname)+"     __O8("+o+")";
   print "#define "+(o+"16").ljust(longname)+"    __O16("+o+")";
   print "#define "+(o+"32").ljust(longname)+"    __O32("+o+")";
@@ -146,6 +146,16 @@ for (local o: ops) {
 #define xchg16     __O16(xchg)
 #define xchg32     __O32(xchg)
 #define xchg64     __O64(xchg)
+#define jmpI         __I(jmp)
+#define jmp8        __O8(jmp)
+#define jmp16      __O16(jmp)
+#define jmp32      __O32(jmp)
+#define jmp64      __O64(jmp)
+#define movI         __I(mov)
+#define mov8        __O8(mov)
+#define mov16      __O16(mov)
+#define mov32      __O32(mov)
+#define mov64      __O64(mov)
 //[[[end]]]
 
 #define LOCAL_FUNCTION(name)                .type name, @function; name

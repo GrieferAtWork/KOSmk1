@@ -57,7 +57,7 @@ SECTIONS
 
 	__kernel_rw_end = .;
 	__kernel_end = .;
-
+	
 	/DISCARD/ :
 	{
 		*(.comment)
