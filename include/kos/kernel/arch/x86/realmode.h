@@ -51,11 +51,21 @@ union __packed {
 
 #ifdef __INTELLISENSE__
 //////////////////////////////////////////////////////////////////////////
-// Switch to real mode and perform an interrupt before switching back to protected mode.
+// Switch to 16-bit real mode and perform an interrupt
+// before switching back to 32-bit protected mode.
+// >> Implemented in "/src/kernel/arch/x86/realmode.S"
 // @param: intnum: The interrupt number that shall be performed (as in 'int $<intnum>')
 // @param: regs: The register state before the when the interrupt instruction is
 //               being called on input, and the register state afterwards on output.
-// NOTES: 
+// NOTES:
+//   - The interrupt-enabled state is preserved across a call to this function. 
+//   - While executing, the interrupt vector is temporarily
+//     overwritten on the calling CPU, though restore afterwards.
+//   - It should be OK for other threads to 
+//   - The paging-enabled state is preserved across a call to this function. 
+//    (As a matter of fact: all bits from %CR0 are preserved)
+//   - The active page directory is _NOT_ 'preserved' and
+//     will be set to that of 'kpagedir_kernel()' upon return.
 extern void realmode_interrupt(__u8 intnum, struct realmode_regs *regs);
 #else
 extern void __realmode_interrupt(__u8 intnum, struct realmode_regs *regs);

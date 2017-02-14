@@ -1,4 +1,24 @@
-/*
+/* MIT License
+ *
+ * Copyright (c) 2017 GrieferAtWork
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 #include <kos/asm.h>
@@ -99,11 +119,15 @@ mode16_oldstack:
 /* extern void realmode_interrupt(__u8 intnum, struct realmode_regs *regs); */
 GLOBAL_FUNCTION(__realmode_interrupt):
 //	cli
-	mov %cr0, %eax
-	and $0x7FFFFFFF, %eax
-	mov %eax, %cr0
+	movI %cr0, %eax
+	pushI %eax
+	andI $0x7FFFFFFF, %eax
+	movI %eax, %cr0
+
+	/* CR3 must be ZERO before we can switch to 16-bit mode. */
 	movI $0, %eax
 	movI %eax, %cr3
+#define ARG(i) (PS*((i)+2))(%esp)
 
 	/* Relocate mode-16 code... */
 	MEMCPY(
@@ -114,12 +138,13 @@ GLOBAL_FUNCTION(__realmode_interrupt):
 	/* Copy the given registers as they will appear when we fire the interrupt. */
 	MEMCPY(
 		movI $MODE16_SYM(mode16_regs),
-		movI (PS*2)(%esp),
+		movI ARG(1),
 		movI $REALMODE_REGS_SIZE)
 
 	/* Set the corrent IRQ number. */
-	mov8 PS(%esp), %al
+	mov8 ARG(0), %al
 	mov8 %al, MODE16_SYM(move16_irqnum)
+#undef ARG
 
 	/* Safe old 32-bit registers on the stack. */
 	pushfI
@@ -148,8 +173,8 @@ mode16_leave:
 
 	leaI __kpagedir_kernel, %eax
 	movI %eax, %cr3
-	mov %cr0, %eax
-	or $0x80000000, %eax
+
+	popI %eax
 	mov %eax, %cr0
 //	sti
 
