@@ -29,6 +29,7 @@
 #ifndef __INTELLISENSE__
 #include <kos/kernel/interrupts.h>
 #endif
+
 __DECL_BEGIN
 
 #ifdef __ASSEMBLY__
@@ -73,8 +74,29 @@ extern void __realmode_interrupt(__u8 intnum, struct realmode_regs *regs);
 #define realmode_interrupt(intnum,regs) \
  NOIRQ_EVAL_V(__realmode_interrupt(intnum,regs))
 #endif
-
 #endif
+
+// Real-mode memory configuration.
+// These are used by memory initialization to
+// make sure that all low-memory used by the real-mode
+// interfacing code is marked as in-use and not handed
+// out as dynamically available memory.
+#define MODE16_RELOC_BASE   0x7C00
+#ifdef __KOS_KERNEL_ARCH_X86_REALMODE_S__
+#define MODE16_RELOC_SIZE  (mode16_reloc_end-mode16_reloc_begin)
+#elif !defined(__ASSEMBLY__)
+#define MODE16_RELOC_SIZE  \
+ ((size_t)(mode16_reloc_end-mode16_reloc_begin)+\
+   sizeof(struct realmode_regs))
+extern __u8 const mode16_reloc_begin[];
+extern __u8 const mode16_reloc_end[];
+#ifdef __MAIN_C__
+/* Relocate realmode bootstrap code into a low region of memory. */
+extern void kernel_initialize_realmode(void);
+#endif
+#endif
+
+
 
 __DECL_END
 #endif /* __KERNEL__ */

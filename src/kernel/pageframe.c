@@ -36,6 +36,10 @@
 #include <kos/kernel/serial.h>
 #include <kos/kernel/spinlock.h>
 
+#if defined(__i386__) || defined(__x86_64__)
+#include <kos/kernel/arch/x86/realmode.h>
+#endif
+
 __DECL_BEGIN
 
 __STATIC_ASSERT(sizeof(struct kpageframe) == PAGESIZE);
@@ -65,7 +69,6 @@ void raminfo_addregion(__u64 start, __u64 size) {
   ++native_start,--native_size;
   if __unlikely(!native_size) return;
  }
- 
 
  if (native_start < (uintptr_t)__kernel_end &&
      native_start+native_size > (uintptr_t)__kernel_begin) {
@@ -100,6 +103,17 @@ void raminfo_addregion(__u64 start, __u64 size) {
 
 multiboot_info_t *__grub_mbt;
 unsigned int      __grub_magic;
+
+#if defined(__i386__) || defined(__x86_64__)
+static void x64_reserve_realmode_bootstrap(void) {
+ /* Mark low memory used by realmode interfacing mode as in-use. */
+ __evalexpr(kpageframe_allocat((struct kpageframe *)alignd(MODE16_RELOC_BASE,PAGEALIGN),
+                               ceildiv(MODE16_RELOC_SIZE,PAGESIZE)));
+}
+#else
+#define x64_reserve_realmode_bootstrap() (void)0
+#endif
+
 
 void kernel_initialize_raminfo(void) {
  extern int kernel_initialize_dlmalloc(void);
@@ -176,9 +190,15 @@ nocmdline:
   extern void kernel_initialize_cmdline(char const *cmd, size_t cmdlen);
   // Restore the saved cmdline portion (leading (up to) 12/24 bytes)
   memcpy(cmdline_addr,cmdline_safe_v,cmdline_safe_c);
+  x64_reserve_realmode_bootstrap();
   kernel_initialize_cmdline(cmdline_addr,cmdline_length);
   kpageframe_free(cmdline_page_v,cmdline_page_c);
  }
+ /* Reserve memory again in case the first attempt
+  * failed because the region of memory in question
+  * was allocated as part of the commandline. */
+ x64_reserve_realmode_bootstrap();
+
 }
 
 

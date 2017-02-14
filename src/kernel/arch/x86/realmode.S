@@ -20,14 +20,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+#define __KOS_KERNEL_ARCH_X86_REALMODE_S__ 1
 
 #include <kos/asm.h>
 #include <kos/kernel/gdt.h>
 #include <kos/kernel/arch/x86/realmode.h>
 
-#define MODE16_RELOC_BASE   0x7C00
-#define MODE16_RELOC_SIZE  (mode16_reloc_end-mode16_reloc_begin)
 #define MODE16_SYM(name) (((name)-mode16_reloc_begin)+MODE16_RELOC_BASE)
+
+.global mode16_reloc_begin
+.global mode16_reloc_end
+
 .code16
 mode16_reloc_begin:
 	mov $KSEGMENT_KERNEL_DATA_16, %eax
@@ -115,6 +118,15 @@ mode16_oldstack:
 	cld;\
 	rep  movsb;
 
+/* extern void kernel_initialize_realmode(void); */
+GLOBAL_FUNCTION(kernel_initialize_realmode):
+	/* Relocate mode-16 code... */
+	MEMCPY(
+		movI $MODE16_RELOC_BASE,
+		leaI mode16_reloc_begin,
+		movI $MODE16_RELOC_SIZE)
+	ret
+SYMBOLEND(kernel_initialize_realmode)
 
 /* extern void realmode_interrupt(__u8 intnum, struct realmode_regs *regs); */
 GLOBAL_FUNCTION(__realmode_interrupt):
@@ -127,14 +139,8 @@ GLOBAL_FUNCTION(__realmode_interrupt):
 	/* CR3 must be ZERO before we can switch to 16-bit mode. */
 	movI $0, %eax
 	movI %eax, %cr3
+
 #define ARG(i) (PS*((i)+2))(%esp)
-
-	/* Relocate mode-16 code... */
-	MEMCPY(
-		movI $MODE16_RELOC_BASE,
-		leaI mode16_reloc_begin,
-		movI $MODE16_RELOC_SIZE)
-
 	/* Copy the given registers as they will appear when we fire the interrupt. */
 	MEMCPY(
 		movI $MODE16_SYM(mode16_regs),
