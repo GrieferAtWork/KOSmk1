@@ -24,8 +24,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libpthread", "libs\libpthre
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libfdlibm", "libs\libfdlibm.vcxproj", "{DAB19C9A-80FE-47E5-954D-9E51173F3248}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libk", "libs\libk.vcxproj", "{E14DFDE1-63DF-459D-A14B-B1529884A4CE}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cat", "userland\cat.vcxproj", "{66D88386-3AEE-45B0-865D-0203EAD95558}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "echo", "userland\echo.vcxproj", "{76C807A4-B6CA-424D-B8EE-8D1024D70647}"
@@ -168,6 +166,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "x86", "x86", "{CEDD95BB-909E-49E8-BC58-C3F84641788A}"
 	ProjectSection(SolutionItems) = preProject
 		..\include\kos\arch\x86\asm.h = ..\include\kos\arch\x86\asm.h
+		..\include\kos\arch\x86\bios.h = ..\include\kos\arch\x86\bios.h
 		..\include\kos\arch\x86\cpuid.h = ..\include\kos\arch\x86\cpuid.h
 		..\include\kos\arch\x86\eflags.h = ..\include\kos\arch\x86\eflags.h
 		..\include\kos\arch\x86\features.h = ..\include\kos\arch\x86\features.h
@@ -252,10 +251,6 @@ Global
 		{DAB19C9A-80FE-47E5-954D-9E51173F3248}.Debug|Win32.Build.0 = Debug|Win32
 		{DAB19C9A-80FE-47E5-954D-9E51173F3248}.Release|Win32.ActiveCfg = Release|Win32
 		{DAB19C9A-80FE-47E5-954D-9E51173F3248}.Release|Win32.Build.0 = Release|Win32
-		{E14DFDE1-63DF-459D-A14B-B1529884A4CE}.Debug|Win32.ActiveCfg = Debug|Win32
-		{E14DFDE1-63DF-459D-A14B-B1529884A4CE}.Debug|Win32.Build.0 = Debug|Win32
-		{E14DFDE1-63DF-459D-A14B-B1529884A4CE}.Release|Win32.ActiveCfg = Release|Win32
-		{E14DFDE1-63DF-459D-A14B-B1529884A4CE}.Release|Win32.Build.0 = Release|Win32
 		{66D88386-3AEE-45B0-865D-0203EAD95558}.Debug|Win32.ActiveCfg = Debug|Win32
 		{66D88386-3AEE-45B0-865D-0203EAD95558}.Debug|Win32.Build.0 = Debug|Win32
 		{66D88386-3AEE-45B0-865D-0203EAD95558}.Release|Win32.ActiveCfg = Release|Win32
@@ -326,7 +321,6 @@ Global
 		{A2791917-78D5-45B6-89E4-89AE7D4760D4} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
 		{0F0971C0-1376-429B-B57E-061779BBD0E5} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
 		{DAB19C9A-80FE-47E5-954D-9E51173F3248} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
-		{E14DFDE1-63DF-459D-A14B-B1529884A4CE} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
 		{66D88386-3AEE-45B0-865D-0203EAD95558} = {9430368A-404E-4917-982A-DABD0023453A}
 		{76C807A4-B6CA-424D-B8EE-8D1024D70647} = {9430368A-404E-4917-982A-DABD0023453A}
 		{841EFC9D-0B78-4E01-80EB-8D199053EBD1} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}

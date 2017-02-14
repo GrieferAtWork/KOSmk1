@@ -97,7 +97,7 @@ struct __packed {
  __be16       tcp_urgent;        /*< Urgent pointer (For TCP_FLAG_URG: index of last urgent data byte). */
 
  // More options (as allowed through tcp_offset > 5) would go here
- __u8         tcp_payload[1460]; /*< [6..1460] TCP payload. */
+ __byte_t     tcp_payload[1460]; /*< [6..1460] TCP payload. */
 };
 
 
@@ -106,11 +106,11 @@ struct __packed {
 // Layer 4 UDP packet
 //////////////////////////////////////////////////////////////////////////
 struct __packed udp_packet {
- __be16 udp_srcport;       /*< Source port address. */
- __be16 udp_dstport;       /*< Destination port address. */
- __be16 udp_length;        /*< Length of the entire datagram (aka. non-fragmented udp size). */
- __be16 udp_checksum;      /*< UDP Checksum. */
- __u8   udp_payload[1472]; /*< Payload (of a single frame). */
+ __be16   udp_srcport;       /*< Source port address. */
+ __be16   udp_dstport;       /*< Destination port address. */
+ __be16   udp_length;        /*< Length of the entire datagram (aka. non-fragmented udp size). */
+ __be16   udp_checksum;      /*< UDP Checksum. */
+ __byte_t udp_payload[1472]; /*< Payload (of a single frame). */
 };
 
 
@@ -167,7 +167,7 @@ struct __packed {
 union{
  struct tcp_packet v4_tcp;           /*< [IPV4_PROT_TCP] TCP packet payload. */
  struct udp_packet v4_udp;           /*< [IPV4_PROT_UDP] UDP packet payload. */
- __u8              v4_payload[1480]; /*< [26..1480] IPv4 Payload (within this fragment). */
+ __byte_t          v4_payload[1480]; /*< [26..1480] IPv4 Payload (within this fragment). */
 };
 };
 
@@ -181,7 +181,7 @@ struct __packed etherframe {
  __be16             ef_type;          /*< Frame type (IEEE 802.3 defines this as length). */
 union __packed {
  struct ipv4_packet ef_ipv4;          /*< IPv4 packet. */
- __u8               ef_payload[1500]; /*< [46..1500] Frame payload. */
+ __byte_t           ef_payload[1500]; /*< [46..1500] Frame payload. */
 };
  __be32             ef_fcs;           /*< CRC checksum (depends on frame type). */
 };

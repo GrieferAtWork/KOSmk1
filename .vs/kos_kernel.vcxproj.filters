@@ -49,6 +49,9 @@
     <Filter Include="include\arch\x86">
       <UniqueIdentifier>{489008d0-1b6c-4199-8e94-dc9f5b774269}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\misc">
+      <UniqueIdentifier>{210e5188-ff10-4332-880b-cb036f903447}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\kos\kernel\fd.h">
@@ -91,9 +94,6 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="..\include\kos\kernel\tss.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\kos\kernel\tty.h">
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="..\include\kos\kernel\types.h">
@@ -251,6 +251,18 @@
     </ClInclude>
     <ClInclude Include="..\include\kos\kernel\arch\x86\realmode.h">
       <Filter>include\arch\x86</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\tty.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\misc\textbits.h">
+      <Filter>src\misc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\misc\font2_8x16.h">
+      <Filter>src\misc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\misc\histd_8x8.h">
+      <Filter>src\misc</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

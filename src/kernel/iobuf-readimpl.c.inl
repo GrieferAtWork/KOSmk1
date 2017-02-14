@@ -45,10 +45,10 @@ kiobuf_read_c(struct kiobuf *__restrict self, void *__restrict buf,
 #endif
 {
  size_t max_read_linear,max_read,destsize;
- kerrno_t error; __u8 *bufend,*rpos,*start_rpos;
+ kerrno_t error; byte_t *bufend,*rpos,*start_rpos;
  KTASK_CRIT_MARK
 #ifndef SKIP_MEMORY
- __u8 *destbuf;
+ byte_t *destbuf;
 #endif
  kassert_kiobuf(self);
  kassertobj(rsize);
@@ -57,7 +57,7 @@ kiobuf_read_c(struct kiobuf *__restrict self, void *__restrict buf,
 #endif
 again_full:
 #ifndef SKIP_MEMORY
- destbuf = (__u8 *)buf;
+ destbuf = (byte_t *)buf;
 #endif
  destsize = bufsize;
  *rsize = 0;

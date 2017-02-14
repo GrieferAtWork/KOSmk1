@@ -31,6 +31,12 @@
 .global mode16_reloc_begin
 .global mode16_reloc_end
 
+/* For those interested in what is actually happening here,
+ * I suggest reading the list of bullet points here:
+ * http://wiki.osdev.org/Real_Mode#Switching_from_Protected_Mode_to_Real_Mode
+ */
+
+
 .code16
 mode16_reloc_begin:
 	mov $KSEGMENT_KERNEL_DATA_16, %eax
@@ -107,9 +113,17 @@ mode16_reloc_end:
 mode16_regs:
 	/* 'REALMODE_REGS_SIZE' bytes of memory here! */
 .code32
-
 mode16_oldstack:
 	.long 0x00000000
+
+
+
+
+
+
+
+
+
 
 #define MEMCPY(dst,src,bytes) \
 	src, %esi;\
@@ -117,16 +131,6 @@ mode16_oldstack:
 	bytes, %ecx;\
 	cld;\
 	rep  movsb;
-
-/* extern void kernel_initialize_realmode(void); */
-GLOBAL_FUNCTION(kernel_initialize_realmode):
-	/* Relocate mode-16 code... */
-	MEMCPY(
-		movI $MODE16_RELOC_BASE,
-		leaI mode16_reloc_begin,
-		movI $MODE16_RELOC_SIZE)
-	ret
-SYMBOLEND(kernel_initialize_realmode)
 
 /* extern void realmode_interrupt(__u8 intnum, struct realmode_regs *regs); */
 GLOBAL_FUNCTION(__realmode_interrupt):
@@ -192,6 +196,19 @@ mode16_leave:
 
 	ret
 SYMBOLEND(__realmode_interrupt)
+
+
+
+
+/* extern void kernel_initialize_realmode(void); */
+GLOBAL_FUNCTION(kernel_initialize_realmode):
+	/* Relocate mode-16 code... */
+	MEMCPY(
+		movI $MODE16_RELOC_BASE,
+		leaI mode16_reloc_begin,
+		movI $MODE16_RELOC_SIZE)
+	ret
+SYMBOLEND(kernel_initialize_realmode)
 
 
 

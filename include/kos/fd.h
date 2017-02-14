@@ -48,7 +48,7 @@
 //          process will otherwise have a chance to escape:
 //          >> #1: Find a parent-given fd that points outside of its root-trap
 //                 NOTE: This is easier said, than done if you consider the following commandline:
-//                 :~$ sandbox --root:/opt/sandbox dangerzone > log.txt
+//                 :~$ sandbox --root /opt/sandbox dangerzone > log.txt
 //                 'log.txt' is an open descriptor, visible to 'dangerzone'
 //                 and pointing to a file in your home folder.
 //             #2: Using that fd, re-open the directory its file is located within.
@@ -175,16 +175,19 @@ __local _syscall1(kerrno_t,kfd_close,int,fd);
 // >> unsigned int kfd_closeall(int lo, int hi) {
 // >>   unsigned int result = 0;
 // >>   for (int i = lo; i <= hi; ++i) {
-// >>     if (KE_ISOK(kfd_close(i))) ++i;
+// >>     if (KE_ISOK(kfd_close(i))) ++result;
 // >>   }
 // >>   return result;
 // >> }
 //  - This function is very useful to close all descriptors
 //    potentially posing security risks after a fork:
 // >> if (fork() == 0) {
-// >>   kfd_closeall(3,INT_MAX); // Close all descriptors, except for std files
+// >>   if (!isafile(0)) close(0);
+// >>   if (!isafile(1)) close(1);
+// >>   if (!isafile(2)) close(2);
+// >>   kfd_closeall(3,INT_MAX); // Close all other descriptors
 // >> }
-// @return: *: The amount of closed descriptors
+// @return: *: The amount of successfully closed descriptors.
 __local _syscall2(unsigned int,kfd_closeall,int,low,int,high);
 
 //////////////////////////////////////////////////////////////////////////

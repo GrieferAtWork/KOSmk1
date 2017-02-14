@@ -64,9 +64,9 @@ struct krawbuf {
  __u8          rb_flags;   /*< [lock(KRAWBUF_LOCK_DATA)] Flags. */
  __u16         rb_padding; /*< Padding data. */
  __size_t      rb_maxsize; /*< [lock(KRAWBUF_LOCK_DATA)] Maximal allowed buffer size. */
- __u8         *rb_buffer;  /*< [lock(KRAWBUF_LOCK_DATA)][0..1] Start address for the buffer. */
- __u8         *rb_bufend;  /*< [lock(KRAWBUF_LOCK_DATA)][0..1] Start address for the buffer. */
- __u8         *rb_bufpos;  /*< [lock(KRAWBUF_LOCK_DATA)][in(rb_buffer..rb_bufend)] Current write position. */
+ __byte_t     *rb_buffer;  /*< [lock(KRAWBUF_LOCK_DATA)][0..1] Start address for the buffer. */
+ __byte_t     *rb_bufend;  /*< [lock(KRAWBUF_LOCK_DATA)][0..1] Start address for the buffer. */
+ __byte_t     *rb_bufpos;  /*< [lock(KRAWBUF_LOCK_DATA)][in(rb_buffer..rb_bufend)] Current write position. */
 };
 #define KRAWBUF_INIT  KRAWBUF_INIT_EX((__size_t)-1)
 #define KRAWBUF_INIT_EX(max_size) \
@@ -207,7 +207,7 @@ __local kerrno_t
 krawbuf_write(struct krawbuf *__restrict self, void const *buf,
               __size_t bufsize, __size_t *wsize) {
  __size_t newsize,bufavail,copysize = 0;
- __u8 *newbuf; kerrno_t error = KE_OK;
+ __byte_t *newbuf; kerrno_t error = KE_OK;
  kassert_krawbuf(self); kassertobj(wsize);
  NOIRQ_BEGINLOCK(krawbuf_trylock(self,KRAWBUF_LOCK_DATA));
  assert((self->rb_bufend != NULL) == (self->rb_buffer != NULL));
@@ -223,7 +223,7 @@ krawbuf_write(struct krawbuf *__restrict self, void const *buf,
    newsize = self->rb_maxsize;
    if (newsize == (__size_t)(self->rb_bufend-self->rb_buffer)) { error = KE_ACCES; goto end; }
   }
-  newbuf = (__u8 *)realloc(self->rb_buffer,newsize);
+  newbuf = (__byte_t *)realloc(self->rb_buffer,newsize);
   if __unlikely(!newbuf) { error = KE_NOMEM; goto end; }
   bufpos = (__size_t)(self->rb_bufpos-self->rb_buffer);
   assert(newsize > bufpos);

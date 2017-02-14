@@ -54,14 +54,14 @@ struct kiobuf {
  KOBJECT_HEAD
 #define KIOBUF_FLAG_INTR_BLOCKFIRST 0x01
 #define ib_flags ib_avail.s_useru
- struct ksignal ib_avail;   /*< Signal send when data becomes available (Used as a condition variable). */
- struct ksignal ib_nfull;   /*< Signal send when memory becomes available in a previously full buffer. */
- struct krwlock ib_rwlock;  /*< Read-write lock for all members below (Main lock; aka. used for close/reset). */
- __size_t       ib_maxsize; /*< [lock(ib_rwlock)] Max size, the buffer is allowed to grow to, before data is dropped. */
- __size_t       ib_size;    /*< [lock(ib_rwlock)] Allocated buffer size. */
- __u8          *ib_buffer;  /*< [lock(ib_rwlock)][0..ib_size][owned] Base address of the R/W buffer. */
- __atomic __u8 *ib_rpos;    /*< [lock(ib_rwlock)][0..1][in(ib_buffer+=ib_size)][cyclic:<=ib_wpos] Read pointer within the cyclic R/W buffer (Note atomic-write is allowed when holding a read-lock). */
- __u8          *ib_wpos;    /*< [lock(ib_rwlock)][0..1][in(ib_buffer+=ib_size)][cyclic:>=ib_rpos] Write pointer within the cyclic R/W buffer. */
+ struct ksignal     ib_avail;   /*< Signal send when data becomes available (Used as a condition variable). */
+ struct ksignal     ib_nfull;   /*< Signal send when memory becomes available in a previously full buffer. */
+ struct krwlock     ib_rwlock;  /*< Read-write lock for all members below (Main lock; aka. used for close/reset). */
+ __size_t           ib_maxsize; /*< [lock(ib_rwlock)] Max size, the buffer is allowed to grow to, before data is dropped. */
+ __size_t           ib_size;    /*< [lock(ib_rwlock)] Allocated buffer size. */
+ __byte_t          *ib_buffer;  /*< [lock(ib_rwlock)][0..ib_size][owned] Base address of the R/W buffer. */
+ __atomic __byte_t *ib_rpos;    /*< [lock(ib_rwlock)][0..1][in(ib_buffer+=ib_size)][cyclic:<=ib_wpos] Read pointer within the cyclic R/W buffer (Note atomic-write is allowed when holding a read-lock). */
+ __byte_t          *ib_wpos;    /*< [lock(ib_rwlock)][0..1][in(ib_buffer+=ib_size)][cyclic:>=ib_rpos] Write pointer within the cyclic R/W buffer. */
 };
 
 #define __kiobuf_bufend(self)        ((self)->ib_buffer+(self)->ib_size)
@@ -327,7 +327,7 @@ kiobuf_getrsize_c(struct kiobuf const *__restrict self,
  KTASK_CRIT_MARK
  kassert_kiobuf(self); kassertobj(result);
  if __likely(KE_ISOK(error = krwlock_beginread(&((struct kiobuf *)self)->ib_rwlock))) {
-  __u8 *rpos = katomic_load(self->ib_rpos);
+  __byte_t *rpos = katomic_load(self->ib_rpos);
   *result = __kiobuf_maxread(self,rpos);
   krwlock_endread(&((struct kiobuf *)self)->ib_rwlock);
  }
@@ -340,7 +340,7 @@ kiobuf_getwsize_c(struct kiobuf const *__restrict self,
  KTASK_CRIT_MARK
  kassert_kiobuf(self); kassertobj(result);
  if __likely(KE_ISOK(error = krwlock_beginread(&((struct kiobuf *)self)->ib_rwlock))) {
-  __u8 *rpos = katomic_load(self->ib_rpos);
+  __byte_t *rpos = katomic_load(self->ib_rpos);
   *result = __kiobuf_maxwrite(self,rpos);
   krwlock_endread(&((struct kiobuf *)self)->ib_rwlock);
  }

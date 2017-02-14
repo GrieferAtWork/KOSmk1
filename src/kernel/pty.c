@@ -284,8 +284,10 @@ kerrno_t kpty_m_special_canon(struct kpty *__restrict self, __u8 ch) {
     error = kiobuf_write(&self->ty_s2m,ERASE,sizeof(ERASE),&temp,PTY_WRITE_BLOCKING_MODE);
     if __unlikely(KE_ISERR(error)) break;
    }
+  } else {
+   return KE_OK;
   }
-  return error;
+  goto ret_error_nosignal;
  } else if (ch == self->ty_ios.c_cc[VERASE]) {
   int did_erase;
   // Erase single character from canon
@@ -317,7 +319,7 @@ kerrno_t kpty_m_special_canon(struct kpty *__restrict self, __u8 ch) {
     ktask_decref(root_task);
    } else error = KE_OK;
    KTASK_CRIT_END
-   return KE_ISSIG(error) ? KE_OK : error;
+   goto ret_error_nosignal;
   }
   return KE_OK;
  } else if (ch == self->ty_ios.c_cc[VEOF]) {
@@ -337,7 +339,8 @@ kerrno_t kpty_m_special_canon(struct kpty *__restrict self, __u8 ch) {
    error = kiobuf_interrupt(&self->ty_m2s);
   }
   KTASK_CRIT_END
-  return error;
+ret_error_nosignal:
+   return KE_ISERR(error) ? error : KE_OK;
  }
  return KS_UNCHANGED;
 }

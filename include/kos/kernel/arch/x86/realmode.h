@@ -37,7 +37,8 @@ __DECL_BEGIN
 #else
 struct __packed realmode_regs {
  __u16 di,si,bp,sp;
- /* TODO: Might we need eflags here? If so: they can be added... */
+ /* todo: Might we need eflags here? If so: they can be added... */
+ /* TODO: Add segment registers! */
 union __packed {
  struct __packed { __u32 ebx,edx,ecx,eax; };
  struct __packed { __u16 bx,__hbx;

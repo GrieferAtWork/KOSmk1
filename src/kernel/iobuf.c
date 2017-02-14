@@ -32,7 +32,7 @@
 __DECL_BEGIN
 
 __crit kerrno_t kiobuf_flush_c(struct kiobuf *__restrict self) {
- kerrno_t error; __u8 *newbuf; size_t newsize;
+ kerrno_t error; byte_t *newbuf; size_t newsize;
  KTASK_CRIT_MARK
  kassert_kiobuf(self);
  if __unlikely(KE_ISERR(error = krwlock_beginwrite(&self->ib_rwlock))) goto end_always;
@@ -44,7 +44,7 @@ __crit kerrno_t kiobuf_flush_c(struct kiobuf *__restrict self) {
    self->ib_wpos   = NULL;
   } else {
    size_t rindex = self->ib_rpos-self->ib_buffer;
-   newbuf = (__u8 *)realloc(self->ib_buffer,newsize);
+   newbuf = (byte_t *)realloc(self->ib_buffer,newsize);
    if __unlikely(!newbuf) { error = KE_NOMEM; goto end; }
    /* Shift unread memory towards the start */
    memmove(newbuf,newbuf+rindex,newsize-rindex);
@@ -65,7 +65,7 @@ __crit size_t
 kiobuf_reserve_c(struct kiobuf *__restrict self,
                  size_t write_size) {
  size_t result,new_total_size;
- __u8 *new_buffer;
+ byte_t *new_buffer;
  KTASK_CRIT_MARK
  kassert_kiobuf(self);
  if __unlikely(KE_ISERR(krwlock_beginwrite(&self->ib_rwlock))) { result = 0; goto end_always; }
@@ -78,7 +78,7 @@ kiobuf_reserve_c(struct kiobuf *__restrict self,
  if (new_total_size != self->ib_size) {
   size_t rpos,wpos;
   assert(new_total_size);
-  new_buffer = (__u8 *)realloc(self->ib_buffer,new_total_size);
+  new_buffer = (byte_t *)realloc(self->ib_buffer,new_total_size);
   if __unlikely(!new_buffer) goto res_zero;
   result = new_total_size-self->ib_size;
   /* Install the new buffer */
@@ -116,7 +116,7 @@ __crit kerrno_t
 kiobuf_write_c(struct kiobuf *__restrict self, void const *buf,
                size_t bufsize, size_t *__restrict wsize, kioflag_t mode) {
  size_t max_write;
- kerrno_t error; __u8 *bufend;
+ kerrno_t error; byte_t *bufend;
  KTASK_CRIT_MARK
  kassert_kiobuf(self);
  kassertobj(wsize);
@@ -147,7 +147,7 @@ buffer_is_full:
  }
  bufend = __kiobuf_bufend(self);
  if (max_write < bufsize) {
-  __u8 *new_buffer;
+  byte_t *new_buffer;
   size_t read_pos,write_pos,new_buffer_size;
   /* Difficult case: Check if we can reallocate the buffer to be large enough */
   read_pos = (size_t)(self->ib_rpos-self->ib_buffer);
@@ -158,7 +158,7 @@ buffer_is_full:
   assert(new_buffer_size >= self->ib_size);
   assert(new_buffer_size <= self->ib_maxsize);
   if (new_buffer_size != self->ib_size) {
-   new_buffer = (__u8 *)realloc(self->ib_buffer,new_buffer_size);
+   new_buffer = (byte_t *)realloc(self->ib_buffer,new_buffer_size);
    if __unlikely(!new_buffer) { error = KE_NOMEM; goto end; }
    self->ib_buffer = new_buffer;
    self->ib_size = new_buffer_size;

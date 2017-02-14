@@ -35,9 +35,9 @@ __DECL_BEGIN
 // Compile with -lterm
 
 
-// NOTE: Although this source doesn't include any license, I though
-//       I should mention that this ANSI terminal emulator is based
-//       on this: http://dakko.us/~k/ansi.c.html
+// NOTE: Although this source doesn't include any license, I thought
+//       I should mention that this ANSI terminal emulator is inspired
+//       by this: http://dakko.us/~k/ansi.c.html
 
 __COMPILER_PACK_PUSH(1)
 struct __packed term_rgba {union __packed {

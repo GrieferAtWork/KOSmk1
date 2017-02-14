@@ -78,6 +78,9 @@
     <ClInclude Include="..\include\kos\kernel\util\string.h" />
     <ClInclude Include="..\src\kernel\syscall\syscall-common.h" />
     <ClInclude Include="..\src\kernel\syscall\syscall-groups.h" />
+    <ClInclude Include="..\src\misc\font2_8x16.h" />
+    <ClInclude Include="..\src\misc\histd_8x8.h" />
+    <ClInclude Include="..\src\misc\textbits.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\kernel\debug.c" />

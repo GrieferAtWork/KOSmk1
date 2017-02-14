@@ -45,11 +45,11 @@ static kerrno_t __katadev_pio28_readlba
  kassertobj(readsectors);
  kassertmem(buf,(sectors*KATA_SECTORSIZE));
  assertf(lba < dev->ad_sdev.sd_blockcount
-         ,"Invalid block address (range)\n"
-          "    addr       = %I64u\n"
-          "    c          = 1\n"
-          "    blockcount = %I64u\n"
-         ,lba,dev->ad_sdev.sd_blockcount);
+        ,"Invalid block address (range)\n"
+         "    addr       = %I64u\n"
+         "    c          = 1\n"
+         "    blockcount = %I64u\n"
+        ,lba,dev->ad_sdev.sd_blockcount);
 #ifdef LBA48
  if (sectors > 0xffff) sectors = 0xffff;
 #else
@@ -121,11 +121,11 @@ static kerrno_t __katadev_pio28_writelba
  kassertobj(writesectors);
  kassertmem(buf,(sectors*KATA_SECTORSIZE));
  assertf(lba < dev->ad_sdev.sd_blockcount
-         ,"Invalid block address (range)\n"
-          "    addr       = %I64u\n"
-          "    c          = 1\n"
-          "    blockcount = %I64u\n"
-         ,lba,dev->ad_sdev.sd_blockcount);
+        ,"Invalid block address (range)\n"
+         "    addr       = %I64u\n"
+         "    c          = 1\n"
+         "    blockcount = %I64u\n"
+        ,lba,dev->ad_sdev.sd_blockcount);
 #ifdef LBA48
  if (sectors > 0xffff) sectors = 0xffff;
 #else

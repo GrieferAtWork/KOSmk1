@@ -162,7 +162,11 @@ int joinproc(int p) {
 
 
 int do_system(char *cmd) {
- // TODO: Logic and stuff...
+ // TODO: Logic operator: cmda && cmdb, cmda || cmdb, !cmda
+ // TODO: Expand environment variables: $FOO, ${FOO}
+ // TODO: Run and insert stdout of process: `echo foo`, $(echo foo)
+ // TODO: Expand '*' paths: "/dir/f*" --> "/dir/file1 /dir/file2 /dir/file42"
+ // TODO: Redirect/duplicate descriptors: cmd > foo.txt, cmd < bar.txt, cmd 2>&1
  return exec_system(cmd);
 }
 
@@ -230,7 +234,7 @@ int main(int argc, char *argv[]) {
  interactive = 1;
  update_prompt();
 
- // Do the interactive loop thingy!
+ /* Do the interactive loop thingy! */
  for (;;) {
   char *text;
   term_setunbuffered();
@@ -238,12 +242,12 @@ int main(int argc, char *argv[]) {
   term_setbuffered();
   if (error != RLINE_OK) break;
   text = rline_text(r);
-  // Remove a trailing linefeed
+  /* Remove a trailing linefeed */
   if (rline_size(r) && text[rline_size(r)-1] == '\n'
       ) text[rline_size(r)-1] = '\0';
-  if (!*text) continue; // Ignore empty lines
+  if (!*text) continue; /* Ignore empty lines */
   if ((text = strdup(text)) != NULL) {
-   // Do a system-style exec
+   /* Do a system-style exec */
    do_system(text);
    free(text);
   } else {

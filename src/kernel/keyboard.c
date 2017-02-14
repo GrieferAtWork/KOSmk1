@@ -171,7 +171,7 @@ void kernel_initialize_keyboard(void) {
 
 static struct kkeymap keymaps[] = {
 
-#define A  (__u8)
+#define A  (__uchar_t)
  {"en_US",{
    KEY_NONE,27,A'1',A'2',A'3',A'4',A'5',A'6',A'7',A'8',A'9',A'0',A'-',A'=',A'\b',A'\t',
    'q',A'w',A'e',A'r',A't',A'y',A'u',A'i',A'o',A'p',A'[',A']',A'\n',KEY_LCTRL,

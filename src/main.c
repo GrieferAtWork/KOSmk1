@@ -150,27 +150,49 @@ void test_write_file(void) {
 #endif
 }
 
+#include <kos/arch/x86/bios.h>
 #include <kos/kernel/arch/x86/realmode.h>
+static void print_realmode_regs(struct realmode_regs const *regs) {
+ k_syslogf(KLOG_INFO
+          ,"realmode_regs(%p) {\n"
+           " di = %#.4I16x; si = %#.4I16x\n"
+           " bp = %#.4I16x; sp = %#.4I16x\n"
+           " ebx = %#.8I32x; bx = %#.4I16x; bh = %#.2I8x; bl = %#.2I8x\n"
+           " edx = %#.8I32x; dx = %#.4I16x; dh = %#.2I8x; dl = %#.2I8x\n"
+           " ecx = %#.8I32x; cx = %#.4I16x; ch = %#.2I8x; cl = %#.2I8x\n"
+           " eax = %#.8I32x; ax = %#.4I16x; ah = %#.2I8x; al = %#.2I8x\n"
+           "}"
+          ,regs
+          ,regs->di,regs->si,regs->bp,regs->sp
+          ,regs->ebx,regs->bx,regs->bh,regs->bl
+          ,regs->edx,regs->dx,regs->dh,regs->dl
+          ,regs->ecx,regs->cx,regs->ch,regs->cl
+          ,regs->eax,regs->ax,regs->ah,regs->al);
+}
+
+
 void test_realmode(void) {
  struct realmode_regs regs;
- //memset(&regs,0xa,sizeof(regs));
+ memset(&regs,0,sizeof(regs));
 
- /* switch to 320x200x256 graphics mode */
- regs.ax = 0x0013;
- //assert(karch_irq_enabled());
- realmode_interrupt(0x10,&regs);
- //assert(karch_irq_enabled());
- k_syslogf(KLOG_INFO,"EAX After: %I32x\n",regs);
- 
- // full screen with blue color (1)
- memset((char *)0xA0000,1,(320*200));
+ regs.ax = 0x0118;
+ regs.ah = BIOS_VGA_SETMODE;
+ regs.al = BIOS_VGA_MODE_GFX_640x480x16;
+ realmode_interrupt(BIOS_INTNO_VGA,&regs);
+
+ memset((char *)0xA0000,0x0f,320*100);
+
+ regs.ah = 0x0f;
+ realmode_interrupt(BIOS_INTNO_VGA,&regs);
+ print_realmode_regs(&regs);
 
  struct timespec tmo = {1,0};
  ktask_sleep(ktask_self(),&tmo);
 
  // switch to 80x25x16 text mode
- regs.ax = 0x0003;
- realmode_interrupt(0x10,&regs);
+ regs.ah = BIOS_VGA_SETMODE;
+ regs.al = BIOS_VGA_MODE_TEXT_80x25x16_COLOR;
+ realmode_interrupt(BIOS_INTNO_VGA,&regs);
 
 }
 
@@ -182,10 +204,6 @@ void kernel_main(void) {
  // TODO: Kernel modules
  // TODO: Create a /proc file system
  
- // TODO: Add support for deleting files.
- // TODO: Intrinsic support for wiping patterns.
- // TODO: Wiping pattern: https://youtu.be/NG9Cg_vBKOg?t=4m5s
-
  // TODO: Fix the mess that is user-kernel pointer translation.
  //      !YOU CAN'T JUST CONVERT A USER-POINTER TO KERNEL-SPACE!
  //    >> The idea of doing so completely clashes with with the
@@ -201,10 +219,10 @@ void kernel_main(void) {
  kernel_initialize_gdt();
  kernel_initialize_interrupts();
  kernel_initialize_keyboard();
- kernel_initialize_process();
- kernel_initialize_paging();
  kernel_initialize_fpu();
  kernel_initialize_cmos();
+ kernel_initialize_process();
+ kernel_initialize_paging();
  kernel_initialize_filesystem();
  kernel_initialize_vfs();
  kernel_initialize_syscall();

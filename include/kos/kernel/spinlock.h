@@ -27,6 +27,7 @@
 #ifdef __KERNEL__
 #include <kos/atomic.h>
 #include <kos/compiler.h>
+#include <kos/types.h>
 #include <kos/kernel/sched_yield.h>
 
 __DECL_BEGIN

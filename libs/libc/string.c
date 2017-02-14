@@ -31,6 +31,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/types.h>
 
 #ifndef __KERNEL__
 #include <errno.h>
@@ -67,11 +68,11 @@ __public void *memcpy(void *__restrict dst,
   __STRING_ASSERTMEM(src,bytes);
   return karch_memcpy(dst,src,bytes);
 #elif 0
-  __u8 *iter,*end; __u8 const *siter;
+  byte_t *iter,*end; byte_t const *siter;
   __STRING_ASSERTMEM(dst,bytes);
   __STRING_ASSERTMEM(src,bytes);
-  siter = (__u8 const *)src;
-  end = (iter = (__u8 *)dst)+bytes;
+  siter = (byte_t const *)src;
+  end = (iter = (byte_t *)dst)+bytes;
   while (iter != end) *iter++ = *siter++;
 #else
   int *iter,*end; int const *siter;
@@ -83,16 +84,16 @@ __public void *memcpy(void *__restrict dst,
 #if __SIZEOF_INT__ > 1
   switch (bytes % __SIZEOF_INT__) {
 #if __SIZEOF_INT__ > 4
-   case 7: *(*(__u8 **)&iter)++ = *(*(__u8 **)&siter)++;
-   case 6: *(*(__u8 **)&iter)++ = *(*(__u8 **)&siter)++;
-   case 5: *(*(__u8 **)&iter)++ = *(*(__u8 **)&siter)++;
-   case 4: *(*(__u8 **)&iter)++ = *(*(__u8 **)&siter)++;
+   case 7: *(*(byte_t **)&iter)++ = *(*(byte_t **)&siter)++;
+   case 6: *(*(byte_t **)&iter)++ = *(*(byte_t **)&siter)++;
+   case 5: *(*(byte_t **)&iter)++ = *(*(byte_t **)&siter)++;
+   case 4: *(*(byte_t **)&iter)++ = *(*(byte_t **)&siter)++;
 #endif
 #if __SIZEOF_INT__ > 2
-   case 3: *(*(__u8 **)&iter)++ = *(*(__u8 **)&siter)++;
-   case 2: *(*(__u8 **)&iter)++ = *(*(__u8 **)&siter)++;
+   case 3: *(*(byte_t **)&iter)++ = *(*(byte_t **)&siter)++;
+   case 2: *(*(byte_t **)&iter)++ = *(*(byte_t **)&siter)++;
 #endif
-   case 1: *(*(__u8 **)&iter)++ = *(*(__u8 **)&siter)++;
+   case 1: *(*(byte_t **)&iter)++ = *(*(byte_t **)&siter)++;
    default: break;
   }
 #endif /* __SIZEOF_INT__ > 1 */
@@ -109,9 +110,9 @@ memccpy(void *__restrict dst,
 #if defined(karch_memccpy)
  return karch_memccpy(dst,src,c,bytes);
 #else
- __u8 *iter,*end; __u8 const *src_iter;
- end = (iter = (__u8 *)dst)+bytes;
- src_iter = (__u8 const *)src;
+ byte_t *iter,*end; byte_t const *src_iter;
+ end = (iter = (byte_t *)dst)+bytes;
+ src_iter = (byte_t const *)src;
  while (iter != end) {
   __STRING_ASSERTBYTE(iter);
   __STRING_ASSERTBYTE(src_iter);
@@ -131,16 +132,16 @@ __public void *memmove(void *dst,
  __STRING_ASSERTMEM(src,bytes);
  return karch_memmove(dst,src,bytes);
 #else
- __u8 *iter,*end; __u8 const *siter;
+ byte_t *iter,*end; byte_t const *siter;
  __STRING_ASSERTMEM(dst,bytes);
  __STRING_ASSERTMEM(src,bytes);
  if (dst < src) {
-  siter = (__u8 const *)src;
-  end = (iter = (__u8 *)dst)+bytes;
+  siter = (byte_t const *)src;
+  end = (iter = (byte_t *)dst)+bytes;
   while (iter != end) *iter++ = *siter++;
  } else {
-  siter = (__u8 const *)src+bytes;
-  iter = (end = (__u8 *)dst)+bytes;
+  siter = (byte_t const *)src+bytes;
+  iter = (end = (byte_t *)dst)+bytes;
   while (iter != end) *--iter = *--siter;
  }
  return dst;
@@ -154,10 +155,10 @@ __public void *memset(void *__restrict dst,
  __STRING_ASSERTMEM(dst,bytes);
  return karch_memset(dst,byte,bytes);
 #else
- __u8 *iter,*end;
+ byte_t *iter,*end;
  __STRING_ASSERTMEM(dst,bytes);
- end = (iter = (__u8 *)dst)+bytes;
- while (iter != end) *iter++ = (__u8)byte;
+ end = (iter = (byte_t *)dst)+bytes;
+ while (iter != end) *iter++ = (byte_t)byte;
  return dst;
 #endif
 }
@@ -171,10 +172,10 @@ __public int memcmp(void const *a,
  __STRING_ASSERTMEM(b,bytes);
  return karch_memcmp(a,b,bytes);
 #else
- __u8 const *aiter,*biter,*end; __u8 av = 0,bv = 0;
+ byte_t const *aiter,*biter,*end; byte_t av = 0,bv = 0;
  __STRING_ASSERTMEM(a,bytes);
  __STRING_ASSERTMEM(b,bytes);
- end = (aiter = (__u8 const *)a)+bytes,biter = (__u8 const *)b;
+ end = (aiter = (byte_t const *)a)+bytes,biter = (byte_t const *)b;
  while (aiter != end && ((av = *aiter++) == (bv = *biter++)));
  return (int)(av-bv);
 #endif
@@ -186,9 +187,9 @@ __public void *memchr(void const *p, int needle, size_t bytes) {
  __STRING_ASSERTMEM(p,bytes);
  return karch_memchr(p,needle,bytes);
 #else
- __u8 *iter,*end;
+ byte_t *iter,*end;
  __STRING_ASSERTMEM(p,bytes);
- end = (iter = (__u8 *)p)+bytes;
+ end = (iter = (byte_t *)p)+bytes;
  while (iter != end) {
   if (*iter == needle) return iter;
   ++iter;
@@ -203,9 +204,9 @@ __public void *memrchr(void const *p, int needle, size_t bytes) {
  __STRING_ASSERTMEM(p,bytes);
  return karch_memrchr(p,needle,bytes);
 #else
- __u8 *iter,*end,*result = NULL;
+ byte_t *iter,*end,*result = NULL;
  __STRING_ASSERTMEM(p,bytes);
- end = (iter = (__u8 *)p)+bytes;
+ end = (iter = (byte_t *)p)+bytes;
  while (iter != end) {
   if (*iter == needle) result = iter;
   ++iter;
@@ -710,10 +711,10 @@ __public int _memicmp(void const *a,
  __STRING_ASSERTMEM(b,bytes);
  return karch_memicmp(a,b,bytes);
 #else
- __u8 const *aiter,*biter,*end; __u8 av = 0,bv = 0;
+ char const *aiter,*biter,*end; char av = 0,bv = 0;
  __STRING_ASSERTMEM(a,bytes);
  __STRING_ASSERTMEM(b,bytes);
- end = (aiter = (__u8 const *)a)+bytes,biter = (__u8 const *)b;
+ end = (aiter = (char const *)a)+bytes,biter = (char const *)b;
  while (aiter != end && ((av = STRICAST(*aiter++)) == (bv = STRICAST(*biter++))));
  return (int)(av-bv);
 #endif
@@ -1074,10 +1075,10 @@ __public char *_strnset(char *__restrict dst, int chr, size_t maxlen) {
 
 #undef _memrev
 __public void *_memrev(void *p, size_t bytes) {
- __u8 *iter,*end,*swap,temp;
+ byte_t *iter,*end,*swap,temp;
  __STRING_ASSERTMEM(p,bytes);
  if (bytes > 1) {
-  end = (iter = (__u8 *)p)+(bytes/2);
+  end = (iter = (byte_t *)p)+(bytes/2);
   swap = iter+bytes;
   assert(iter != end);
   do {

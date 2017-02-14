@@ -769,8 +769,8 @@ extern struct kdirent __kfs_root; /*< ~Real~ filesystem root directory. */
 // @param: target:  The target text of the link to-be created.
 // @return: KE_OK:        The directory/file/link was created successfully.
 // @return: KE_ACCES:    [kuserfs_*] The calling process does not have write permissions to some part of the directory chain.
-// @return: KE_NOCWD:    [kuserfs_*] The KFD_CWD descriptor of the calling process does not referr to a valid directory.
-// @return: KE_NOROOT:   [kuserfs_*] The KFD_ROOT descriptor of the calling process does not referr to a valid directory.
+// @return: KE_NOCWD:    [kuserfs_*] The KFD_CWD descriptor of the calling process does not refer to a valid directory.
+// @return: KE_NOROOT:   [kuserfs_*] The KFD_ROOT descriptor of the calling process does not refer to a valid directory.
 // @return: KE_NOSYS:     An requested operation is not supported by the underlying filesystem.
 // @return: KE_DESTROYED: A part of the given path was recently deleted and has become inaccessible.
 // @return: KE_NOENT:     A part of the given path does not exist.
@@ -794,15 +794,15 @@ __local __crit __wunused __nonnull((1,5)) kerrno_t kuserfs_mklnk(char const *__r
 // @param: pathmax: The strnlen-style maximum string length of 'path'.
 // @return: KE_OK:        A filesystem entity was successfully removed.
 // @return: KE_ACCES:    [kuserfs_*] The calling process does not have write permissions to some part of the directory chain.
-// @return: KE_NOCWD:    [kuserfs_*] The KFD_CWD descriptor of the calling process does not referr to a valid directory.
-// @return: KE_NOROOT:   [kuserfs_*] The KFD_ROOT descriptor of the calling process does not referr to a valid directory.
+// @return: KE_NOCWD:    [kuserfs_*] The KFD_CWD descriptor of the calling process does not refer to a valid directory.
+// @return: KE_NOROOT:   [kuserfs_*] The KFD_ROOT descriptor of the calling process does not refer to a valid directory.
 // @return: KE_NOSYS:     An requested operation is not supported by the underlying filesystem.
 // @return: KE_DESTROYED: A part of the given path was recently deleted and has become inaccessible.
 // @return: KE_NOENT:     A part of the given path does not exist.
 // @return: KE_NODIR:     The given path tried to dereference a node that isn't a directory.
 // @return: KE_DEVICE:    An error in the underlying disk-system prevent the operation from succeeding.
-// @return: KE_ISDIR:     [*unlink] 'self' is a directory or the root of a superblock.
-// @return: KE_NODIR:     [*rmdir] 'self' is not a directory or the root of a superblock
+// @return: KE_ISDIR:     [*unlink] The given path is a directory or the root of a superblock.
+// @return: KE_NODIR:     [*rmdir] The given path is not a directory or the root of a superblock.
 // @return: KE_ISERR(*):  Some other filesystem/hardware-specific error has occurred.
 __local __crit __wunused __nonnull((1)) kerrno_t krootfs_rmdir(char const *__restrict path, __size_t pathmax);
 __local __crit __wunused __nonnull((1)) kerrno_t kuserfs_rmdir(char const *__restrict path, __size_t pathmax);
