@@ -159,9 +159,10 @@ __crit kerrno_t kmutex_unlock(struct kmutex *__restrict self) {
  KMUTEX_ONRELEASE(self);
  assertf(kmutex_islocked(self),"Lock not held");
  katomic_store(self->m_locked,0);
- // Signal a single task (Ignoring tasks that were destroyed due to race conditions)
- while ((error = ksignal_sendone(&self->m_sig)) == KE_DESTROYED);
- return error != KS_UNCHANGED ? error : KE_OK;
+ // Signal a single task (Ignoring tasks that were re-schedued due to race conditions)
+ while ((error = ksignal_sendone(&self->m_sig)) == KS_UNCHANGED);
+ assertf(error != KE_DESTROYED,"How did a non-critical task manage to wait for a mutex?");
+ return error;
 }
 
 #ifndef __INTELLISENSE__

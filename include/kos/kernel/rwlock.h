@@ -191,14 +191,60 @@ extern __crit __nonnull((1)) kerrno_t krwlock_endwrite(struct krwlock *__restric
 //   which a write-lock would have otherwise been available.
 // - It also prevents a possible KE_DESTROYED error that may
 //   have occurred within a call to 'krwlock_beginread'.
-// @return: KE_OK:    The lock was released, and waiting tasks were signaled.
+// @return: KE_OK:    The write-lock was released, and waiting tasks were signaled.
 // @return: KS_EMPTY: The exclusive lock has been released, but no tasks
 //                    were waiting, and therefor none were signaled.
 //                    NOTE: This is NOT an error, but simply additional
 //                          information to the caller.
 extern __crit __nonnull((1)) kerrno_t krwlock_downgrade(struct krwlock *__restrict self);
-// TODO: 'krwlock_upgrade': Prevent any other task from getting a write-lock
-//                          by upgrading a read-lock into a read/write lock.
+
+
+//////////////////////////////////////////////////////////////////////////
+// Upgrade a read-lock into a write lock, potentially while ensuring
+// no other task had a chance to begin writing before the caller
+// was able to begin doing so them self (aka. atomic upgrade).
+// WARNING: In all KE_ISERR(return) situations, the read-lock
+//          previously held by the caller will be lost.
+// @return: KE_OK:         The caller was able upgrade its read-lock to a write-lock.
+// @return: KS_BLOCKING:   [krwlock_*{timed|timeout}upgrade]
+//                         Similar to KE_OK, but the calling task was blocked for a moment,
+//                         meaning that a call to 'krwlock_*tryupgrade' would have
+//                         failed with 'KE_WOULDBLOCK'.
+// @return: KE_TIMEDOUT:   [krwlock_*(timed|timeout)upgrade] The given timeout has expired.
+// @return: KE_INTR:       [!krwlock_*tryupgrade] The calling task was interrupted.
+// @return: KE_WOULDBLOCK: [krwlock_*tryupgrade] Failed to upgrade the lock immediately.
+// @return: KE_PERM:       [krwlock_atomic_upgrade|krwlock_atomic_(timed|timeout)upgrade]
+//                         The read lock held by the caller was released,
+//                         but because another task attempted to upgrade
+//                         its lock at the same time, it was impossible
+//                         to uphold the guaranty of no other task acquiring
+//                         a write-lock before the caller would get their's.
+//                         NOTE: 'krwlock_upgrade' does not technically solve this problem,
+//                               simply handling this situation by acquiring a normal
+//                               write-lock with the same semantics as calling:
+//                            >> krwlock_endread(self);
+//                            >> krwlock_beginwrite(self);
+//                               Though using 'krwlock_upgrade' will be faster in most
+//                               situations when this special case does not arise.
+// @return: KE_DESTROYED:  [krwlock_*{timed|timeout}upgrade]
+//                         Due to how upgrades handle failure, a situation in which
+//                         the R/W lock can be destroyed before the caller was able
+//                         to acquire their write-lock, handling for the destruction
+//                         of a R/W lock must be performed the same way 'krwlock_beginwrite'
+//                         may have returned the same error.
+extern __crit __wunused __nonnull((1))   kerrno_t krwlock_upgrade(struct krwlock *__restrict self);
+extern __crit __wunused __nonnull((1))   kerrno_t krwlock_tryupgrade(struct krwlock *__restrict self);
+extern __crit __wunused __nonnull((1,2)) kerrno_t krwlock_timedupgrade(struct krwlock *__restrict self, struct timespec const *__restrict abstime);
+extern __crit __wunused __nonnull((1,2)) kerrno_t krwlock_timeoutupgrade(struct krwlock *__restrict self, struct timespec const *__restrict timeout);
+extern __crit __wunused __nonnull((1))   kerrno_t krwlock_atomic_upgrade(struct krwlock *__restrict self);
+extern __crit __wunused __nonnull((1,2)) kerrno_t krwlock_atomic_timedupgrade(struct krwlock *__restrict self, struct timespec const *__restrict abstime);
+extern __crit __wunused __nonnull((1,2)) kerrno_t krwlock_atomic_timeoutupgrade(struct krwlock *__restrict self, struct timespec const *__restrict timeout);
+#ifdef __INTELLISENSE__
+extern __crit __wunused __nonnull((1))   kerrno_t krwlock_atomic_tryupgrade(struct krwlock *__restrict self);
+#else
+#define krwlock_atomic_tryupgrade        krwlock_tryupgrade
+#endif
+
 
 
 #define _krwlock_endwrite_andclose(self) ksignal_close(&(self)->rw_sig)

@@ -496,7 +496,7 @@ extern struct timespec __kernel_boot_time;
 //       Also note, that since the task will remain scheduled,
 //       a minuscule portion of CPU cycles are spend skipping
 //       this task during scheduling.
-// WARNING: If the only existing task has its priority set to
+// WARNING: If the only task of any cup has its priority set to
 //          'KTASK_PRIORITY_SUSPENDED', it will actually be
 //          re-scheduling with whatever code running inside
 //          being executed.
@@ -510,22 +510,22 @@ extern struct timespec __kernel_boot_time;
 #ifndef __ASSEMBLY__
 struct ktask {
  KOBJECT_HEAD
- // Address of the task's stack end.
- //  - read/write exclusive to the running thread.
- //  - [lock(KTASK_LOCK_MEMORY)] in a suspended thread.
- // NOTES
- //  - This is a user-level address
- //  - In a suspended task, this is the address to return to
- //  - 't_userpd' describes the last active page directory of the task,
- //    and usually is either kpagedir_kernel(), or kproc_pagedir(t_proc).
- //  - 't_esp' must be mapped according to 't_userpd'
+ /* Address of the task's stack end.
+  *  - read/write exclusive to the running thread.
+  *  - [lock(KTASK_LOCK_MEMORY)] in a suspended thread.
+  * NOTES
+  *  - This is a user-level address
+  *  - In a suspended task, this is the address to return to
+  *  - 't_userpd' describes the last active page directory of the task,
+  *    and usually is either kpagedir_kernel(), or kproc_pagedir(t_proc).
+  *  - 't_esp' must be mapped according to 't_userpd' */
  __user void                 *t_esp;
  struct kpagedir             *t_userpd;
  __user void                 *t_esp0; /*< [1..1][const] This task's ESP0 mapped pointer.
                                            NOTE: This property has no effect in kernel tasks.
                                            NOTE: This pointer is __always__ mapped with 'kproc_pagedir(t_proc)' */
  __u32                        t_refcnt; /*< Reference counter. */
- __u8                         t_locks;  /*< Task locks. */
+ __u8                         t_locks;  /*< Task locks (Set of 'KTASK_LOCK_*'). */
 #define KTASK_LOCK_STATE    0x01
 #define KTASK_LOCK_SIGCHAIN 0x02
 #define KTASK_LOCK_CHILDREN 0x04
@@ -534,9 +534,12 @@ struct ktask {
 #ifdef __DEBUG__
 #define KTASK_LOCK_RELEASEDATA 0x80 /*< Debug-only safeguard to make sure releasing data is synchronized. */
 #endif
- // NOTE: When the task is not scheduled (t_cpu != NULL), its state must be any of
- //       'KTASK_STATE_SUSPENDED', 'KTASK_STATE_TERMINATED' or 'KTASK_STATE_WAITING'
- //       This condition can quickly be checked using 'KTASK_STATE_HASCPU()'
+ /* NOTE: When the task is not scheduled (t_cpu == NULL), its state must be any of
+  *       'KTASK_STATE_SUSPENDED', 'KTASK_STATE_TERMINATED' or 'KTASK_STATE_WAITING'
+  *       This condition can quickly be checked using 'KTASK_STATE_HASCPU()'
+  *       Note though, that 'KTASK_STATE_WAITINGTMO' does not fall under this category
+  *       as it will remain scheduled on a CPU that will be responsible for waking it
+  *       at a later point in time. */
  __atomic __u8                t_state;    /*< [lock(KTASK_LOCK_STATE)] State of the task (atomic read). */
 #define KTASK_STATE_RUNNING    0x00 /*< Task is currently running. */
 #define KTASK_STATE_SUSPENDED  0x01 /*< Task is suspended by use of ktask_suspend_k(), or was created suspended. */
@@ -547,7 +550,7 @@ struct ktask {
 #define KTASK_STATE_ISWAITING(state) (((state)&0x10)!=0)
 #define KTASK_STATE_HASCPU(state)    (((state)&0x01)==0) /*< Task is associated with an explicit CPU */
  __u8                         t_newstate; /*< [lock(KTASK_LOCK_STATE)] New state to switch to at the end of a critical block/after resuming from suspension. */
- __u8                         t_flags;    /*< [const] Task flags. */
+ __u8                         t_flags;    /*< [const] Task flags (Set of 'KTASK_FLAG_*'). */
 #define KTASK_FLAG_NONE       0x00
 #define KTASK_FLAG_USERTASK   0x01 /*< [const] This task is running in ring 3. */
 #define KTASK_FLAG_OWNSUSTACK 0x02 /*< [const] t_ustackvp is free'd upon task destruction (Requires the 'KTASK_FLAG_USERTASK' flag). */
@@ -561,30 +564,30 @@ struct ktask {
 #define KTASK_FLAG_WASINTR    0x40 /*< [lock(KTASK_LOCK_STATE)] An interrupt signal was send to a critical task (While set, the signal is still pending). */
 #define KTASK_FLAG_NOINTR     0x80 /*< [lock(r:KTASK_LOCK_STATE|ktask_self();w:KTASK_LOCK_STATE)] Don't send KE_INTR errors to this task when it gets terminated while inside a critical block. */
 #endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
- void                        *t_exitcode; /*< [?..?][lock(KTASK_LOCK_STATE)] Exitcode of the task (unlocked, read-only after termination). */
+ void                        *t_exitcode; /*< [?..?][lock(KTASK_LOCK_STATE)] Exitcode of the task (non-locked & read-only after termination). NOTE: This must not necessarily be a pointer! */
  struct kcpu                 *t_cpu;      /*< [0..1][lock(KTASK_LOCK_STATE)] CPU Hosting the task (Only non-NULL if the state implies 'KTASK_STATE_HASCPU'). */
  __ref struct ktask          *t_prev;     /*< [?..1][lock(t_cpu:KCPU_LOCK_TASKS|KCPU_LOCK_SLEEP)] Previous sleeping/pending task (Only used if a cpu is present). */
  __ref struct ktask          *t_next;     /*< [?..1][lock(t_cpu:KCPU_LOCK_TASKS|KCPU_LOCK_SLEEP)] Next sleeping/pending task (Only used if a cpu is present). */
- struct timespec              t_abstime;  /*< [lock(KTASK_LOCK_STATE)]. */
+ struct timespec              t_abstime;  /*< [lock(KTASK_LOCK_STATE)] Absolute point in time used when the task is in a waiting-tmo state. */
 #define KTASK_SUSPEND_MIN INT32_MIN
 #define KTASK_SUSPEND_MAX INT32_MAX
- __atomic __s32               t_suspended;/*< Recursive suspension counter. (Must be ZERO(0) if t_state != KTASK_STATE_SUSPENDED) */
+ __atomic __s32               t_suspended;/*< Recursive suspension counter. (Must be ZERO(0) if 't_state != KTASK_STATE_SUSPENDED') */
  __atomic ktaskprio_t         t_setpriority; /*< Set task priority level. */
           ktaskprio_t         t_curpriority; /*< [lock(t_cpu:KCPU_LOCK_TASKS)] Current priority level. */
- __kernel void               *t_sigval;   /*< [0..1][running:ktask_self()|*:lock(KTASK_LOCK_SIGVAL)] Optional buffer to store a signal values inside of. */
+ __kernel void               *t_sigval;   /*< [0..1][running:ktask_self()|*:lock(KTASK_LOCK_SIGVAL)] Pointer to some buffer used during vsignal-transmissions. */
  struct ktasksig              t_sigchain; /*< [lock(KTASK_LOCK_SIGCHAIN)] List of signal chains used by waiting tasks. */
  struct ksignal               t_joinsig;  /*< One-time signal closed (and therefor send) when the task is terminated. - Used for joining of a task. */
- __ref struct kproc          *t_proc;     /*< [1..1][const] Shared context for stuff like file descriptors, et al. */
+ __ref struct kproc          *t_proc;     /*< [1..1][const] Shared context for stuff like file descriptors, et al (aka. process). */
  __ref struct ktask          *t_parent;   /*< [1..1][const] Parent of this task (== self for 'ktask_zero()'). */
- __size_t                     t_parid;    /*< [const] This child's index within its parent task's child vector. */
- __size_t                     t_tid;      /*< [const] This task's thread-id, aka its index in the context's task list. */
+ __size_t                     t_parid;    /*< [const] This child's index within its parent task's (t_parent) child vector (t_children). */
+ __size_t                     t_tid;      /*< [const] This task's thread-id; aka. its index in the process's task list ('t_proc->p_threads'). */
  struct ktasklist             t_children; /*< [lock(KTASK_LOCK_CHILDREN)] List of this tasks children (Index == child->t_parid). */
- // NOTE: The stack and its mappings are freed upon termination.
+ /* NOTE: The stack and its mappings are freed upon termination. */
  __user                 void *t_ustackvp; /*< [0..1][const] Virtual address of the user stack (NULL for kernel tasks). */
  __size_t                     t_ustacksz; /*< [const] Size of the user stack (ZERO(0) for kernel tasks). */
- // NOTE: The following two must only be page-aligned when 'KTASK_FLAG_MALLKSTACK' isn't set.
- __user   __pagealigned void *t_kstackvp; /*< [1..1][const] Virtual address of the kernel stack (tanslated == t_kstack) (NOTE: Unaligned). */
- __kernel __pagealigned void *t_kstack;   /*< [1..1][const][owned(KTASK_FLAG_OWNSKSTACK)] Physical address of the kernel stack. */
+ /* NOTE: The following two must only be page-aligned when 'KTASK_FLAG_MALLKSTACK' isn't set. */
+ __user   __pagealigned void *t_kstackvp; /*< [1..1][const] Virtual address of the kernel stack ('tanslated() == t_kstack'; '== t_kstack' for kernel tasks) (NOTE: Potentially unaligned). */
+ __kernel __pagealigned void *t_kstack;   /*< [1..1][const][owned(KTASK_FLAG_OWNSKSTACK)] Physical address of the kernel stack (NOTE: Potentially unaligned). */
  __kernel void               *t_kstackend;/*< [1..1][const] Physical address of the kernel stack end. */
 #if KCONFIG_HAVE_TASKNAMES
  __atomic char               *t_name;     /*< [0..1][write_once(!NULL)] Name for this task (May only be set once). */

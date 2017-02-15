@@ -743,10 +743,15 @@ _ksignal_popone_andunlock_c(struct ksignal *self);
 //////////////////////////////////////////////////////////////////////////
 // Send a given signal to one waiting task.
 // @param: newcpu: If NULL, schedule any waiting task on the calling (aka. current) CPU
-// @return: KE_DESTROYED: The task has been terminated
+// @return: KE_DESTROYED: The task has been terminated and due to race-conditions
+//                        was not yet able to remove itself from this signal.
+//                        NOTE: This error is only returned if the task that
+//                              would have been signaled was not critical.
 // @return: KS_EMPTY:     No task was waiting, or the signal is dead
-// @return: KS_UNCHANGED: The task has already been re-scheduled
-//                       (Due to race-conditions, this should not be considered an error)
+// @return: KS_UNCHANGED: The task has already been re-scheduled.
+//                        e.g.: It timed out, or was interrupted.
+//                       (Due to race-conditions and depending on this signal's context,
+//                        this should, or should not be considered an error)
 extern        __nonnull((1)) kerrno_t ksignal_sendone(struct ksignal *__restrict self);
 extern __crit __nonnull((1)) kerrno_t _ksignal_sendone_andunlock_c(struct ksignal *__restrict self);
 extern __crit __nonnull((1)) kerrno_t ksignal_sendoneex(struct ksignal *__restrict self, struct kcpu *__restrict newcpu, int hint);

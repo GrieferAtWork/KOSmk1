@@ -79,8 +79,8 @@ buffer_is_empty:
     if (*rsize) goto end_rpos;
     if (self->ib_flags&KIOBUF_FLAG_INTR_BLOCKFIRST) {
 handle_intr:
-     krwlock_endread(&self->ib_rwlock);
-     if __unlikely(KE_ISERR(error = krwlock_beginwrite(&self->ib_rwlock))) goto end_always;
+     error = krwlock_upgrade(&self->ib_rwlock);
+     if __unlikely(KE_ISERR(error)) goto end_always;
      if (self->ib_flags&KIOBUF_FLAG_INTR_BLOCKFIRST) {
       self->ib_flags &= ~(KIOBUF_FLAG_INTR_BLOCKFIRST);
       krwlock_endwrite(&self->ib_rwlock);
@@ -176,8 +176,8 @@ end_rpos:
    // AFTER: r-pos (out-of-bounds) v
    //   |==========================|
    //   ^ w-pos
-   krwlock_endread(&self->ib_rwlock);
-   if __unlikely(KE_ISERR(error = krwlock_beginwrite(&self->ib_rwlock))) goto end_always;
+   error = krwlock_upgrade(&self->ib_rwlock);
+   if __unlikely(KE_ISERR(error)) goto end_always;
    __compiler_barrier();
    // Make sure our original start r-pos is still valid.
    // Also make sure no other was performed a write, thus making this just a regular case.

@@ -134,12 +134,13 @@ kerrno_t kfatfs_fat_readandalloc(struct kfatfs *self, kfatcls_t index, kfatcls_t
  if (meta_val&meta_mask) {
   // Entry is already cached (no need to start writing)
   *target = (*self->f_readfat)(self,index);
-  krwlock_endread(&self->f_fatlock);
-  if (!kfatfs_iseofcluster(self,*target)) goto end;
- } else {
-  krwlock_endread(&self->f_fatlock);
+  if (!kfatfs_iseofcluster(self,*target)) {
+   krwlock_endread(&self->f_fatlock);
+   goto end;
+  }
  }
- if __unlikely(KE_ISERR(error = LOCK_WRITE_BEGIN())) return error;
+ error = krwlock_upgrade(&self->f_fatlock);
+ if __unlikely(KE_ISERR(error)) return error;
  meta_val = self->f_fatmeta[meta_addr];
  // Make sure that no other task loaded the
  // FAT while we were switching to write-mode.
@@ -241,8 +242,8 @@ kerrno_t kfatfs_fat_read(struct kfatfs *self, kfatcls_t index, kfatcls_t *target
   krwlock_endread(&self->f_fatlock);
   return KE_OK;
  }
- krwlock_endread(&self->f_fatlock);
- if __unlikely(KE_ISERR(error = LOCK_WRITE_BEGIN())) return error;
+ error = krwlock_upgrade(&self->f_fatlock);
+ if __unlikely(KE_ISERR(error)) return error;
  meta_val = self->f_fatmeta[meta_addr];
  // Make sure that no other task loaded the
  // FAT while we were switching to write-mode.
