@@ -194,8 +194,8 @@ extern __crit __nonnull((1)) kerrno_t krwlock_endwrite(struct krwlock *__restric
 // @return: KE_OK:    The write-lock was released, and waiting tasks were signaled.
 // @return: KS_EMPTY: The exclusive lock has been released, but no tasks
 //                    were waiting, and therefor none were signaled.
-//                    NOTE: This is NOT an error, but simply additional
-//                          information to the caller.
+//                    NOTE: This is NOT an error, but simply
+//                          additional information for the caller.
 extern __crit __nonnull((1)) kerrno_t krwlock_downgrade(struct krwlock *__restrict self);
 
 
@@ -205,7 +205,7 @@ extern __crit __nonnull((1)) kerrno_t krwlock_downgrade(struct krwlock *__restri
 // was able to begin doing so them self (aka. atomic upgrade).
 // WARNING: In all KE_ISERR(return) situations, the read-lock
 //          previously held by the caller will be lost.
-// @return: KE_OK:         The caller was able upgrade its read-lock to a write-lock.
+// @return: KE_OK:         The read-lock held by the caller was upgraded into a write-lock.
 // @return: KS_BLOCKING:   [krwlock_*{timed|timeout}upgrade]
 //                         Similar to KE_OK, but the calling task was blocked for a moment,
 //                         meaning that a call to 'krwlock_*tryupgrade' would have
@@ -247,12 +247,14 @@ extern __crit __wunused __nonnull((1,2)) kerrno_t krwlock_atomic_timedupgrade(st
 extern __crit __wunused __nonnull((1,2)) kerrno_t krwlock_atomic_timeoutupgrade(struct krwlock *__restrict self, struct timespec const *__restrict timeout);
 #ifdef __INTELLISENSE__
 extern __crit __wunused __nonnull((1))   kerrno_t krwlock_atomic_tryupgrade(struct krwlock *__restrict self);
-#else
+#else /* try-upgrade is already atomic by nature. */
 #define krwlock_atomic_tryupgrade        krwlock_tryupgrade
 #endif
 
 
-
+/* Since a closed R/W-lock must be in write-mode and because
+ * in order to close a R/W-lock, you must first acquire a write-lock,
+ * semantically speaking this is the simplest form of closing such a lock. */
 #define _krwlock_endwrite_andclose(self) ksignal_close(&(self)->rw_sig)
 
 #ifndef __INTELLISENSE__

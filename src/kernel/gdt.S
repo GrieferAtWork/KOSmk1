@@ -24,38 +24,27 @@
 #include <kos/kernel/gdt.h>
 
 
+/* void gdt_flush(struct kidtpointer *p); */
 GLOBAL_FUNCTION(gdt_flush):
 	STACKBEGIN
 	/* Load GDT */
 	movI STACKARG(0), %eax
 	lgdt (%eax)
 
-#if 1
-	mov $KSEGMENT_KERNEL_DATA, %ax
+	mov $KSEG_KERNEL_DATA, %ax
 	mov %ax,   %ds
 	mov %ax,   %es
 	mov %ax,   %fs
 	mov %ax,   %gs
 	mov %ax,   %ss
 
-	ljmp $KSEGMENT_KERNEL_CODE, $.flush
+	ljmp $KSEG_KERNEL_CODE, $.flush
 .flush:
-#else
-	jmp $KSEGMENT_KERNEL_CODE, $.reload_cs
-.reload_cs:
-	mov $KSEGMENT_KERNEL_DATA, %ax
-	mov %ax,   %ds
-	mov %ax,   %es
-	mov %ax,   %fs
-	mov %ax,   %gs
-	mov %ax,   %ss
-#endif
-
 	STACKEND
 	ret
 SYMBOLEND(gdt_flush)
 
-
+/* void tss_flush(ksegid_t sel); */
 GLOBAL_FUNCTION(tss_flush):
 	STACKBEGIN
 	mov STACKARG(0), %ax

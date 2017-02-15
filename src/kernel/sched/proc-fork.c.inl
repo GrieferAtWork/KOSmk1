@@ -74,21 +74,33 @@ kprocsand_initcopy(struct kprocsand *__restrict self,
  return KE_OK;
 }
 
+static kerrno_t
+kprocregs_initcopy(struct kprocregs *self,
+                   struct kprocregs *right) {
+ self->pr_cs = right->pr_cs;
+ self->pr_ds = right->pr_ds;
+ return kldt_initcopy(&self->pr_ldt,&right->pr_ldt);
+}
+
 __local void kprocsand_quit(struct kprocsand *self);
 __crit __ref struct kproc *
 kproc_copy4fork(__u32 flags, struct kproc *__restrict proc) {
  __ref struct kproc *result; kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kproc(proc);
- (void)flags; // TODO
  if __unlikely((result = omalloc(struct kproc)) == NULL) return NULL;
  kobject_init(result,KOBJECT_MAGIC_PROC);
  result->p_refcnt = 1;
- 
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_MODS))) goto err_free;
+
+ if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_REGS))) goto err_free;
+ error = kprocregs_initcopy(&result->p_regs,&proc->p_regs);
+ kproc_unlock(proc,KPROC_LOCK_REGS);
+ if __unlikely(KE_ISERR(error)) goto err_free;
+
+ if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_MODS))) goto err_ldt;
  error = kprocmodules_initcopy(&result->p_modules,&proc->p_modules);
  kproc_unlock(proc,KPROC_LOCK_MODS);
- if __unlikely(KE_ISERR(error)) goto err_free;
+ if __unlikely(KE_ISERR(error)) goto err_ldt;
 
  if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_FDMAN))) goto err_shlib;
  error = kfdman_initcopy(&result->p_fdman,&proc->p_fdman);
@@ -131,6 +143,7 @@ err_sand:  kprocsand_quit(&result->p_sand);
 err_shm:   kshm_quit(&result->p_shm);
 err_fd:    kfdman_quit(&result->p_fdman);
 err_shlib: kprocmodules_quit(&result->p_modules);
+err_ldt:   kprocregs_quit(&result->p_regs);
 err_free:  free(result);
  return NULL;
 }
@@ -250,13 +263,13 @@ ktask_copy4fork(struct ktask *__restrict self,
   basic_userregs->edx = userregs->edx;
   basic_userregs->ecx = userregs->ecx;
   basic_userregs->eax = KE_OK; // Return 0 in EAX for child task
-  layout.regs.ds      = KSEGMENT_KERNEL_DATA;
+  layout.regs.ds      = KSEG_KERNEL_DATA;
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS
-  layout.regs.es      = KSEGMENT_KERNEL_DATA;
-  layout.regs.fs      = KSEGMENT_KERNEL_DATA;
-  layout.regs.gs      = KSEGMENT_KERNEL_DATA;
+  layout.regs.es      = KSEG_KERNEL_DATA;
+  layout.regs.fs      = KSEG_KERNEL_DATA;
+  layout.regs.gs      = KSEG_KERNEL_DATA;
 #endif
-  layout.regs.cs      = KSEGMENT_KERNEL_CODE;
+  layout.regs.cs      = KSEG_KERNEL_CODE;
   layout.regs.main    = (void(*)())&ktask_ring3_bootstrap_regs;
   // NOTE: Interrupts are (re-)enabled by 'ktask_ring3_bootstrap'.
   layout.regs.eflags = userregs->eflags&~(KARCH_X86_EFLAGS_IF);

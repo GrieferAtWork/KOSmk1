@@ -27,8 +27,9 @@
 #ifdef __KERNEL__
 #include <kos/compiler.h>
 #include <kos/kernel/fdman.h>
-#include <kos/kernel/mutex.h>
+#include <kos/kernel/gdt.h>
 #include <kos/kernel/mmutex.h>
+#include <kos/kernel/mutex.h>
 #include <kos/kernel/object.h>
 #include <kos/kernel/procenv.h>
 #include <kos/kernel/procmodules.h>
@@ -93,19 +94,29 @@ struct kprocsand {
  ,KPROCSTATE_FLAG_NONE}
 extern __crit kerrno_t kprocsand_initroot(struct kprocsand *self);
 
+struct kprocregs {
+ struct kldt pr_ldt; /*< Per-process local descriptor table. */
+ __u16       pr_cs;  /*< Code-segment used for new threads. (Usually an index within the LDT) */
+ __u16       pr_ds;  /*< Data-segment used for new threads. (Usually an index within the LDT) */
+};
+#define KPROCREGS_INIT(gdtid,cs,ds) {KLDT_INIT(gdtid),cs,ds}
+#define kprocregs_quit(self)         kldt_quit(&(self)->pr_ldt)
+
 
 struct kproc {
  KOBJECT_HEAD
  __atomic __u32       p_refcnt;   /*< Reference counter. */
  __u32                p_pid;      /*< Process ID (unsigned to prevent negative numbers). */
-#define KPROC_LOCK_MODS    KMMUTEX_LOCK(0)
-#define KPROC_LOCK_FDMAN   KMMUTEX_LOCK(1)
-#define KPROC_LOCK_SHM     KMMUTEX_LOCK(2)
-#define KPROC_LOCK_SAND    KMMUTEX_LOCK(3)
-#define KPROC_LOCK_TLSMAN  KMMUTEX_LOCK(4)
-#define KPROC_LOCK_THREADS KMMUTEX_LOCK(5)
-#define KPROC_LOCK_ENVIRON KMMUTEX_LOCK(6)
+#define KPROC_LOCK_REGS    KMMUTEX_LOCK(0)
+#define KPROC_LOCK_MODS    KMMUTEX_LOCK(1)
+#define KPROC_LOCK_FDMAN   KMMUTEX_LOCK(2)
+#define KPROC_LOCK_SHM     KMMUTEX_LOCK(3)
+#define KPROC_LOCK_SAND    KMMUTEX_LOCK(4)
+#define KPROC_LOCK_TLSMAN  KMMUTEX_LOCK(5)
+#define KPROC_LOCK_THREADS KMMUTEX_LOCK(6)
+#define KPROC_LOCK_ENVIRON KMMUTEX_LOCK(7)
  struct kmmutex       p_lock;     /*< Lock for the task context. */
+ struct kprocregs     p_regs;     /*< [lock(KPROC_LOCK_REGS)] Per-process register-configuration & related. */
  struct kprocmodules  p_modules;  /*< [lock(KPROC_LOCK_MODS)] Shared libraries associated with this process. */
  struct kfdman        p_fdman;    /*< [lock(KPROC_LOCK_FDMAN)] File descriptor manager. */
  struct kshm          p_shm;      /*< [lock(KPROC_LOCK_SHM)] Shared memory management & page directory. */
@@ -129,11 +140,13 @@ struct kproc {
 #define kproc_gid(self)       0 /*< TODO */
 #define kproc_pagedir(self)  (self)->p_shm.sm_pd
 
-#define KPROC_INITROOT(root,pagedir) \
+#define KPROC_INITROOT(root,pagedir,gdtid,cs,ds) \
  {KOBJECT_INIT(KOBJECT_MAGIC_PROC) 0xffff\
- ,0,KMMUTEX_INIT,KPROCMODULES_INIT,KFDMAN_INITROOT(root)\
+ ,0,KMMUTEX_INIT,KPROCREGS_INIT(gdtid,cs,ds)\
+ ,KPROCMODULES_INIT,KFDMAN_INITROOT(root)\
  ,KSHM_INITROOT(pagedir),KPROCSAND_INITROOT\
- ,KTLSMAN_INITROOT,KTASKLIST_INIT,KPROCENV_INIT_ROOT}
+ ,KTLSMAN_INITROOT,KTASKLIST_INIT\
+ ,KPROCENV_INIT_ROOT}
 
 #define __kassert_kproc(self) kassert_object(self,KOBJECT_MAGIC_PROC)
 __local KOBJECT_DEFINE_INCREF(kproc_incref,struct kproc,p_refcnt,kassert_kproc);

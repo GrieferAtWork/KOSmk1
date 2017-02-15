@@ -172,7 +172,7 @@ GLOBAL_FUNCTION(ktask_ring3_bootstrap):
 	 *       we don't need to re-arrange anything.
 	 */
 	call _S(kcpu_setesp0)
-	movI $(KSEGMENT_USER_DATA|3), %eax /* |3: RPL: Request ring 3 */
+	movI $(KSEG_USER_DATA|3), %eax /* |3: RPL: Request ring 3 */
 	movI %eax, %ds
 	movI %eax, %es 
 	movI %eax, %fs 
@@ -196,10 +196,10 @@ GLOBAL_FUNCTION(ktask_ring3_bootstrap):
 #endif
 
 	/* NOTE: The |3 in these describe the current ring (which will be 3, the CPL in SS and CS) */
-	pushI $(KSEGMENT_USER_DATA|3)  // SS     (0x23)
+	pushI $(KSEG_USER_DATA|3)  // SS     (0x23)
 	pushI %ecx                     // ESP    (bootstrap)
 	pushI $(KARCH_X86_EFLAGS_IF)   // EFLAGS (IF)
-	pushI $(KSEGMENT_USER_CODE|3)  // CS     (0x1B)
+	pushI $(KSEG_USER_CODE|3)  // CS     (0x1B)
 	pushI %edx                     // EIP    (bootstrap)
 
 #if KCONFIG_SECUREUSERBOOTSTRAP

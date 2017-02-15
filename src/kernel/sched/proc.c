@@ -48,8 +48,8 @@ void kproc_destroy(struct kproc *__restrict self) {
  assert(self != kproc_kernel());
  kproclist_delproc(self);
  kproc_close(self);
- // Must destroy the SHM here, because the kernel process
- // may not destroy its statically allocated page directory!
+ /* Must destroy the SHM here, because the kernel process
+  * may not destroy its statically allocated page directory! */
  kshm_quit(&self->p_shm);
  free(self);
 }
@@ -64,6 +64,7 @@ kerrno_t kproc_close(struct kproc *__restrict self) {
   ktlsman_quit(&self->p_tlsman);
   kprocmodules_quit(&self->p_modules);
   kprocenv_quit(&self->p_environ);
+  kprocregs_quit(&self->p_regs);
  }
  return error;
 }
@@ -89,12 +90,30 @@ __crit kerrno_t kprocsand_initroot(struct kprocsand *self) {
  return KE_OK;
 }
 
+static kerrno_t kprocregs_init(struct kprocregs *self) {
+ static struct ksegment const defseg_cs = KSEGMENT_INIT(0,SEG_LIMIT_MAX,SEG_CODE_PL3);
+ static struct ksegment const defseg_ds = KSEGMENT_INIT(0,SEG_LIMIT_MAX,SEG_DATA_PL3);
+ kerrno_t error = kldt_init(&self->pr_ldt,2);
+ if __unlikely(KE_ISERR(error)) return error;
+ /* TODO: Using this, we can restrict execute access within the process. */
+ if __unlikely((self->pr_cs = kldt_alloc(&self->pr_ldt,&defseg_cs)) == KSEG_NULL) goto err_nomem;
+ if __unlikely((self->pr_ds = kldt_alloc(&self->pr_ldt,&defseg_ds)) == KSEG_NULL) goto err_nomem;
+ return error;
+err_nomem:
+ error = KE_NOMEM;
+ kldt_quit(&self->pr_ldt);
+ return error;
+}
+
+
 __crit __ref struct kproc *kproc_newroot(void) {
  struct kproc *result;
  KTASK_CRIT_MARK
  if __unlikely((result = omalloc(struct kproc)) == NULL) return NULL;
  if __unlikely(KE_ISERR(kprocsand_initroot(&result->p_sand))) goto err_r;
  if __unlikely(KE_ISERR(kshm_init(&result->p_shm))) goto err_sand;
+
+ if __unlikely(KE_ISERR(kprocregs_init(&result->p_regs))) goto err_shm;
  kobject_init(result,KOBJECT_MAGIC_PROC);
  kobject_init(&result->p_fdman,KOBJECT_MAGIC_FDMAN);
  kmmutex_init(&result->p_lock);
@@ -123,6 +142,7 @@ decref_result:
   result->p_fdman.fdm_cwd = result->p_fdman.fdm_root;
  }
  return result;
+err_shm: kshm_quit(&result->p_shm);
 err_sand: kprocsand_quit(&result->p_sand);
 err_r: free(result);
  return NULL;

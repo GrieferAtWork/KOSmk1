@@ -39,7 +39,7 @@
 
 .code16
 mode16_reloc_begin:
-	mov $KSEGMENT_KERNEL_DATA_16, %eax
+	mov $KSEG_KERNEL_DATA_16, %eax
 	mov %eax, %ds
 	mov %eax, %es
 	mov %eax, %fs
@@ -100,7 +100,7 @@ move16_irqnum:
 	mov32 %eax, %cr0
 
 	lidt (MODE16_SYM(mode16_oldidt)) /* save old 32-bit idt pointer */
-	jmp32 $KSEGMENT_KERNEL_CODE, $mode16_leave
+	jmp32 $KSEG_KERNEL_CODE, $mode16_leave
 mode16_newidt:
 	.word 0x03ff     /* 256 entries, 4b each = 1K */
 	.long 0x00000000 /* Real Mode IVT @ 0x0000 */
@@ -165,9 +165,9 @@ GLOBAL_FUNCTION(__realmode_interrupt):
 	movI %esp, mode16_oldstack
 
 	// Jump into 16-bit code
-	jmp16 $KSEGMENT_KERNEL_CODE_16, $MODE16_SYM(mode16_reloc_begin)
+	jmp16 $KSEG_KERNEL_CODE_16, $MODE16_SYM(mode16_reloc_begin)
 mode16_leave:
-	mov $KSEGMENT_KERNEL_DATA, %eax
+	mov $KSEG_KERNEL_DATA, %eax
 	mov %eax, %ds
 	mov %eax, %es
 	mov %eax, %fs

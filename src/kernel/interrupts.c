@@ -166,7 +166,7 @@ void kernel_initialize_interrupts(void) {
  outb_p(0xA1,0x00       );
  for (unsigned int i = 0; i < __compiler_ARRAYSIZE(idt); ++i) {
   __u8 flags = IDTFLAG_PRESENT|IDTTYPE_80386_32_INTERRUPT_GATE|IDTFLAG_DPL(3);
-  make_idt_entry(&idt[i],idt_functions[i],KSEGMENT_KERNEL_CODE,flags);
+  make_idt_entry(&idt[i],idt_functions[i],KSEG_KERNEL_CODE,flags);
  }
  lidt((uintptr_t)idt,sizeof(idt)-1);
 }

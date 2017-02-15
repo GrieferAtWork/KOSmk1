@@ -31,7 +31,7 @@
      *       we don't need to re-arrange anything.
      */
     call _S(kcpu_setesp0)
-    movI $(KSEGMENT_USER_DATA|3), %eax /* |3: RPL: Request ring 3 */
+    movI $(KSEG_USER_DATA|3), %eax /* |3: RPL: Request ring 3 */
     movI %eax, %ds
     movI %eax, %es 
     movI %eax, %fs 
@@ -54,20 +54,20 @@
     // before building the layout of IRET
     // >> struct __packed basicregs { __u32 edx,ecx,ebx,eax; };
     // In addition, 'PS*2+12' Bytes of unused stack memory must be available.
-    movI $(KSEGMENT_USER_DATA|3), (8*PS)(%esp)  // SS     (0x23)
+    movI $(KSEG_USER_DATA|3), (8*PS)(%esp)  // SS     (0x23)
     movI %ecx,                    (7*PS)(%esp)  // ESP    (bootstrap)
     movI $(KARCH_X86_EFLAGS_IF),  (6*PS)(%esp)  // EFLAGS (IF)
-    movI $(KSEGMENT_USER_CODE|3), (5*PS)(%esp)  // CS     (0x1B)
+    movI $(KSEG_USER_CODE|3), (5*PS)(%esp)  // CS     (0x1B)
     movI %edx,                    (4*PS)(%esp)  // EIP    (bootstrap)
     popI %edx
     popI %ecx
     popI %ebx
     popI %eax
 #else
-    pushI $(KSEGMENT_USER_DATA|3)  // SS     (0x23)
+    pushI $(KSEG_USER_DATA|3)  // SS     (0x23)
     pushI %ecx                     // ESP    (bootstrap)
     pushI $(KARCH_X86_EFLAGS_IF)   // EFLAGS (IF)
-    pushI $(KSEGMENT_USER_CODE|3)  // CS     (0x1B)
+    pushI $(KSEG_USER_CODE|3)  // CS     (0x1B)
     pushI %edx                     // EIP    (bootstrap)
 #if KCONFIG_SECUREUSERBOOTSTRAP
     movI $0,   %eax

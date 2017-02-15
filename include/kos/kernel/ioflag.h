@@ -32,9 +32,9 @@ __DECL_BEGIN
 
 typedef __u8 kioflag_t;
 
-// Unified I/O Flags
-// When used, always use exactly one 'KIO_BLOCK*' value,
-// that may be or'ed together with any of the other flags.
+/* Unified I/O Flags
+ * When used, always use exactly one 'KIO_BLOCK*' value,
+ * that may be or'ed together with any of the other flags. */
 
 #define KIO_BLOCKNONE  0x00 /*< Don't block if no (more) data can be read/written. */
 #define KIO_BLOCKFIRST 0x01 /*< Only block if no data existed when reading started/buffer was full when writing started. */
@@ -42,7 +42,7 @@ typedef __u8 kioflag_t;
 #define KIO_NONE       0x00 /*< This flag does nothing... */
 #define KIO_PEEK       0x10 /*< Don't advance the read/write-pointer. */
 #define KIO_QUICKMOVE  0x20 /*< Don't restart the read/write process if another task read the same data (May lead to data being read/written more than once).
-                                NOTE: This flag may be ignored by locking I/O interfaces. */
+                                NOTE: This flag may not have any effect in locking I/O interfaces incapable of performing true asynchronous reads/writes. */
 
 __DECL_END
 

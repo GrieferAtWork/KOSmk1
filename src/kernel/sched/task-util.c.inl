@@ -70,12 +70,12 @@ __COMPILER_PACK_POP
  result = ktask_newkernel(parent,ctx,stacksize,flags);
  if __unlikely(!result) return NULL;
  memset(&stack,0,sizeof(stack));
- stack.regs.cs       = KSEGMENT_KERNEL_CODE;
- stack.regs.ds       = KSEGMENT_KERNEL_DATA;
+ stack.regs.cs       = KSEG_KERNEL_CODE;
+ stack.regs.ds       = KSEG_KERNEL_DATA;
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS
- stack.regs.es       = KSEGMENT_KERNEL_DATA;
- stack.regs.fs       = KSEGMENT_KERNEL_DATA;
- stack.regs.gs       = KSEGMENT_KERNEL_DATA;
+ stack.regs.es       = KSEG_KERNEL_DATA;
+ stack.regs.fs       = KSEG_KERNEL_DATA;
+ stack.regs.gs       = KSEG_KERNEL_DATA;
 #endif
  stack.regs.eflags   = KARCH_X86_EFLAGS_IF;
  stack.regs.callback = main;
@@ -470,13 +470,13 @@ void ktask_setupuserex(struct ktask *self, __user void *useresp,
          ,useresp,userdir);
  memset(&layout,0,sizeof(layout));
  // Start out in kernel space
- layout.regs.ds   = KSEGMENT_KERNEL_DATA;
+ layout.regs.ds   = KSEG_KERNEL_DATA;
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS
- layout.regs.es   = KSEGMENT_KERNEL_DATA;
- layout.regs.fs   = KSEGMENT_KERNEL_DATA;
- layout.regs.gs   = KSEGMENT_KERNEL_DATA;
+ layout.regs.es   = KSEG_KERNEL_DATA;
+ layout.regs.fs   = KSEG_KERNEL_DATA;
+ layout.regs.gs   = KSEG_KERNEL_DATA;
 #endif
- layout.regs.cs   = KSEGMENT_KERNEL_CODE;
+ layout.regs.cs   = KSEG_KERNEL_CODE;
  layout.regs.main = (void(*)())&ktask_ring3_bootstrap;
  // Fill the stack as required to call 'ktask_ring3_bootstrap'
  layout.esp0      = self->t_esp0;

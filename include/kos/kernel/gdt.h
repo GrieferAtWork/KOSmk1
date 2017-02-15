@@ -27,6 +27,7 @@
 #ifdef __KERNEL__
 #include <kos/compiler.h>
 #include <kos/types.h>
+#include <kos/errno.h>
 #include <assert.h>
 
 __DECL_BEGIN
@@ -153,7 +154,8 @@ __COMPILER_PACK_POP
 #define SEG_DATA_PL3    (SEG_FLAG_32BIT|SEG_FLAG_AVAILABLE|SEG_FLAG_GRAN|SEG_ACCESS_SYSTEM|SEG_ACCESS_PRESENT|SEG_ACCESS_PRIVL(3)|SEG_DATA_RDWR)
 #define SEG_CODE_PL0_16 (                             SEG_FLAG_AVAILABLE|SEG_ACCESS_SYSTEM|SEG_ACCESS_PRESENT|SEG_ACCESS_PRIVL(0)|SEG_CODE_EXRD)
 #define SEG_DATA_PL0_16 (                             SEG_FLAG_AVAILABLE|SEG_ACCESS_SYSTEM|SEG_ACCESS_PRESENT|SEG_ACCESS_PRIVL(0)|SEG_DATA_RDWR)
-#define SEG_TSS         (                                                                  SEG_ACCESS_PRESENT|SEG_ACCESS_PRIVL(3)|SEG_CODE_EXA)
+#define SEG_TSS         (                                                                  SEG_ACCESS_PRESENT|SEG_ACCESS_PRIVL(0)|SEG_CODE_EXA)
+#define SEG_LDT         (                                                                  SEG_ACCESS_PRESENT|SEG_ACCESS_PRIVL(0)|SEG_DATA_RDWR)
 
 #define SEG_LIMIT_MAX  0x000fffff
 
@@ -197,13 +199,88 @@ extern __crit void kernel_initialize_gdt(void);
 __STATIC_ASSERT(sizeof(struct ksegment) == 8);
 #endif
 
-#define KSEGMENT_KERNEL_CODE    (1*8) // 0x08
-#define KSEGMENT_KERNEL_DATA    (2*8) // 0x10
-#define KSEGMENT_USER_CODE      (3*8) // 0x18
-#define KSEGMENT_USER_DATA      (4*8) // 0x20
-#define KSEGMENT_KERNEL_CODE_16 (5*8) // 0x28
-#define KSEGMENT_KERNEL_DATA_16 (6*8) // 0x30
-#define KSEGMENT_KERNELTSS      (7*8) // 0x38
+
+#define KSEG(id)     ((id)*8)
+#define KSEG_ID(seg) ((seg)/8)
+
+/* When the third bit of a segment index is set,
+ * it's referencing the LDT instead of the GDT. */
+#define KSEG_TOGDT(seg) ((seg)&~(0x4))
+#define KSEG_TOLDT(seg) ((seg)|(0x4))
+#define KSEG_ISLDT(seg) (((seg)&0x4)!=0)
+#define KSEG_ISGDT(seg) (((seg)&0x4)==0)
+
+//////////////////////////////////////////////////////////////////////////
+// Hard-coded, special segments ids.
+#define KSEG_NULL           KSEG(0) /*< [0x00] NULL Segment. */
+#define KSEG_KERNEL_CODE    KSEG(1) /*< [0x08] Ring #0 code segment. */
+#define KSEG_KERNEL_DATA    KSEG(2) /*< [0x10] Ring #0 data segment. */
+#define KSEG_USER_CODE      KSEG(3) /*< [0x18] Ring #3 code segment. */
+#define KSEG_USER_DATA      KSEG(4) /*< [0x20] Ring #3 data segment. */
+#define KSEG_KERNEL_CODE_16 KSEG(5) /*< [0x28] Ring #0 16-bit code segment. */
+#define KSEG_KERNEL_DATA_16 KSEG(6) /*< [0x30] Ring #0 16-bit data segment. */
+#define KSEG_KERNELLDT      KSEG(7) /*< [0x38] Symbolic kernel LDT (Usually empty). */
+#define KSEG_CPU0TSS        KSEG(8) /*< [0x40] kcpu_zero()-tss segment. */
+
+#define KSEG_BUILTIN          9
+#define KSEG_MAX              0xffff
+#define KSEG_ISBUILTIN(seg) ((seg) >= KSEG(KSEG_BUILTIN))
+
+#ifndef __ASSEMBLY__
+typedef __u16 ksegid_t;
+struct kldt {
+ /* Local descriptor table (One for each process). */
+ __u16              ldt_gdtid; /*< Associated GDT offset. */
+ struct kidtpointer ldt_table; /*< Associated descriptor table. */
+};
+#define KLDT_INIT(gdtid)   {gdtid,{0,0}}
+
+//////////////////////////////////////////////////////////////////////////
+// Initialize/Finalize a given local descriptor table.
+// @return: KE_OK:       Successfully initialized the given LDT.
+// @return: KE_OVERFLOW: Too many LDTs have already been allocated.
+// @return: KE_NOMEM:    Not enough available memory.
+extern __crit __wunused kerrno_t kldt_init(struct kldt *self, __u16 sizehint);
+extern __crit __wunused kerrno_t kldt_initcopy(struct kldt *self, struct kldt const *right);
+extern __crit void kldt_quit(struct kldt *self);
+
+//////////////////////////////////////////////////////////////////////////
+// Allocate/Free segments within a local descriptor table.
+// Upon successful allocation, the new segment will have already
+// been flushed and capable of being used for whatever means necessary.
+// NOTE: On success, the returned index always compares true for 'KSEG_ISLDT()'
+// @param: seg:   The initial contents of the segment to-be allocated.
+//                HINT: Contents can later be changed through calls to 'kldt_setseg'.
+// @param: reqid: The requested segment id to allocate the entry at.
+//                NOTE: This value must be compare true for 'KSEG_ISLDT()'
+// @return: * :        Having successfully registered the given segment,
+//                     this function returns a value capable of being
+//                     written into a segment register without causing
+//                     what is the origin on the term 'SEGFAULT'.
+// @return: reqid:     Successfully reserved the given index.
+// @return: KSEG_NULL: Failed to allocate a new segment (no-memory/too-many-segments)
+//                    [kldt_allocsegat] The given ID is already in use.
+extern __nomp __crit __wunused __nonnull((1,2)) ksegid_t kldt_alloc(struct kldt *self, struct ksegment const *seg);
+extern __nomp __crit __wunused __nonnull((1,3)) ksegid_t kldt_allocat(struct kldt *self, ksegid_t reqid, struct ksegment const *seg);
+extern __nomp __crit           __nonnull((1)) void kldt_free(struct kldt *self, ksegid_t id);
+
+//////////////////////////////////////////////////////////////////////////
+// Get/Set the segment data associated with a given segment ID.
+// NOTE: 'kldt_setseg' will flush the changed segment upon success.
+extern __nomp __crit __nonnull((1,3)) void kldt_get(struct kldt *self, ksegid_t id, struct ksegment *seg);
+extern __nomp __crit __nonnull((1,3)) void kldt_set(struct kldt *self, ksegid_t id, struct ksegment const *seg);
+
+
+//////////////////////////////////////////////////////////////////////////
+// Allocate/Free/Update a (new) descriptor index within global descriptor table.
+// These are mainly used to implement the higher-level LDT table and its functions.
+extern __crit __nonnull((1)) ksegid_t kgdt_alloc(struct ksegment const *seg);
+extern __crit                void kgdt_free(ksegid_t id);
+extern __crit __nonnull((2)) void kgdt_update(ksegid_t id, struct ksegment const *seg);
+
+
+#endif
+
 
 __DECL_END
 #endif /* __KERNEL__ */
@@ -216,7 +293,7 @@ __DECL_END
 
 #ifdef __ASSEMBLY__
 .macro SET_KERNEL_SEGMENTS
-    mov $KSEGMENT_KERNEL_DATA, %ax
+    mov $KSEG_KERNEL_DATA, %ax
     mov %ax, %ds
     mov %ax, %es
     mov %ax, %fs

@@ -56,15 +56,15 @@ krwlock_beginread(struct krwlock *__restrict self) {
 again:
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  if (self->rw_sig.s_flags&KRWLOCK_FLAG_WRITEMODE) {
-  // Wait for other tasks to finish writing
-  // NOTE: When we're here, the R/W lock may have also been closed.
+  /* Wait for other tasks to finish writing
+   * NOTE: When we're here, the R/W lock may have also been closed. */
   error = _ksignal_recv_andunlock_c(&self->rw_sig);
   if __unlikely(KE_ISERR(error)) return error;
-  // The R/W lock was released because the write task is finished.
-  // -> Try again.
+  /* The R/W lock was released because the write task is finished.
+   * -> Try again. */
   goto again;
  }
- // Lock is not in write-mode. --> begin reading
+ /* Lock is not in write-mode. --> begin reading */
  ++self->rw_readc;
  ksignal_unlock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  return KE_OK;
@@ -76,17 +76,17 @@ krwlock_trybeginread(struct krwlock *__restrict self) {
  kassert_krwlock(self);
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  if (self->rw_sig.s_flags&KRWLOCK_FLAG_WRITEMODE) {
-  // NOTE: Since we're not going to wait for the
-  //       signal, we must manually check if we're
-  //       about to fail because someone is writing,
-  //       or because the R/W lock was closed
-  //      (and therefor the signal killed).
-  //      Otherwise, the lock is in write-mode,
-  //      so we need to fail with a timeout.
+  /* NOTE: Since we're not going to wait for the
+   *       signal, we must manually check if we're
+   *       about to fail because someone is writing,
+   *       or because the R/W lock was closed
+   *       (and therefor the signal killed).
+   *       Otherwise, the lock is in write-mode,
+   *       so we need to fail with would-block. */
   error = (self->rw_sig.s_flags&KSIGNAL_FLAG_DEAD)
    ? KE_DESTROYED : KE_WOULDBLOCK;
  } else {
-  // Lock is not in write-mode. --> begin reading
+  /* Lock is not in write-mode. --> begin reading */
   ++self->rw_readc;
   error = KE_OK;
  }
@@ -102,15 +102,15 @@ krwlock_timedbeginread(struct krwlock *__restrict self,
 again:
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  if (self->rw_sig.s_flags&KRWLOCK_FLAG_WRITEMODE) {
-  // Wait for other tasks to finish writing
-  // NOTE: When we're here, the R/W lock may have also been closed.
+  /* Wait for other tasks to finish writing
+   * NOTE: When we're here, the R/W lock may have also been closed. */
   error = _ksignal_timedrecv_andunlock_c(&self->rw_sig,abstime);
   if __unlikely(KE_ISERR(error)) return error;
-  // The R/W lock was released because the write task is finished.
-  // -> Try again.
+  /* The R/W lock was released because the write task is finished.
+   * -> Try again. */
   goto again;
  }
- // Lock is not in write-mode. --> begin reading
+ /* Lock is not in write-mode. --> begin reading */
  ++self->rw_readc;
  ksignal_unlock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  return KE_OK;
@@ -137,13 +137,13 @@ again:
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  if (self->rw_sig.s_flags&KRWLOCK_FLAG_WRITEMODE ||
      self->rw_readc != 0) {
-  // Lock is already in write-mode, or other tasks are reading.
-  // >> Wait for the other tasks to finish.
+  /* Lock is already in write-mode, or other tasks are reading.
+   * >> Wait for the other tasks to finish. */
   error = _ksignal_recv_andunlock_c(&self->rw_sig);
   if __unlikely(KE_ISERR(error)) return error;
   goto again;
  }
- // Enter write-mode
+ /* Enter write-mode */
  self->rw_sig.s_flags |= KRWLOCK_FLAG_WRITEMODE;
  ksignal_unlock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  return KE_OK;
@@ -156,14 +156,14 @@ krwlock_trybeginwrite(struct krwlock *__restrict self) {
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  if (self->rw_sig.s_flags&KRWLOCK_FLAG_WRITEMODE ||
      self->rw_readc != 0) {
-  // Lock is already in write-mode, or other tasks are reading.
-  // >> Wait for the other tasks to finish.
-  // NOTE: Just as in trybeginread, we must manually
-  //       check if the signal was destroyed.
+  /* Lock is already in write-mode, or other tasks are reading.
+   * >> Wait for the other tasks to finish.
+   * NOTE: Just as in trybeginread, we must manually
+   *       check if the signal was destroyed. */
   error = (self->rw_sig.s_flags&KSIGNAL_FLAG_DEAD)
    ? KE_DESTROYED : KE_WOULDBLOCK;
  } else {
-  // Enter write-mode
+  /* Enter write-mode */
   self->rw_sig.s_flags |= KRWLOCK_FLAG_WRITEMODE;
   error = KE_OK;
  }
@@ -180,13 +180,13 @@ again:
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  if (self->rw_sig.s_flags&KRWLOCK_FLAG_WRITEMODE ||
      self->rw_readc != 0) {
-  // Lock is already in write-mode, or other tasks are reading.
-  // >> Wait for the other tasks to finish.
+  /* Lock is already in write-mode, or other tasks are reading.
+   * >> Wait for the other tasks to finish. */
   error = _ksignal_timedrecv_andunlock_c(&self->rw_sig,abstime);
   if __unlikely(KE_ISERR(error)) return error;
   goto again;
  }
- // Enter write-mode
+ /* Enter write-mode */
  self->rw_sig.s_flags |= KRWLOCK_FLAG_WRITEMODE;
  ksignal_unlock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  return KE_OK;

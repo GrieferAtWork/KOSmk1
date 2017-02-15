@@ -217,8 +217,8 @@ void kernel_main(void) {
  kernel_initialize_serial();
  kernel_initialize_raminfo(); /*< NOTE: Also initializes arguments/environ. */
  kernel_initialize_realmode();
- kernel_initialize_gdt();
  kernel_initialize_interrupts();
+ kernel_initialize_gdt();
  kernel_initialize_keyboard();
  kernel_initialize_fpu();
  kernel_initialize_cmos();
