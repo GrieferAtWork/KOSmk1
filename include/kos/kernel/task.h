@@ -184,12 +184,12 @@ kcpu_unschedulesleep_unlocked(struct kcpu *__restrict self,
 
 #define KTASKREGISTERS_OFFSETOF_DS       (0)
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS
-#define KTASKREGISTERS_OFFSETOF_ES       (__SIZEOF_POINTER__)
-#define KTASKREGISTERS_OFFSETOF_FS       (__SIZEOF_POINTER__*2)
-#define KTASKREGISTERS_OFFSETOF_GS       (__SIZEOF_POINTER__*3)
-#define KTASKREGISTERS_OFFSETOF_EDI      (__SIZEOF_POINTER__*4)
+#define KTASKREGISTERS_OFFSETOF_ES       (2)
+#define KTASKREGISTERS_OFFSETOF_FS       (4)
+#define KTASKREGISTERS_OFFSETOF_GS       (6)
+#define KTASKREGISTERS_OFFSETOF_EDI      (8)
 #else
-#define KTASKREGISTERS_OFFSETOF_EDI      (__SIZEOF_POINTER__)
+#define KTASKREGISTERS_OFFSETOF_EDI      (4)
 #endif
 #define KTASKREGISTERS_OFFSETOF_ESI      (KTASKREGISTERS_OFFSETOF_EDI+__SIZEOF_POINTER__)
 #define KTASKREGISTERS_OFFSETOF_EBP      (KTASKREGISTERS_OFFSETOF_EDI+__SIZEOF_POINTER__*2)
@@ -212,9 +212,9 @@ struct __packed ktaskregisters {
  //    using the 'ktask_stackpush_sp_unlocked' function before it may be launched by
  //    calling 'ktask_resume_k'.
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS
- __uintptr_t ds,es,fs,gs;
+ __u16 ds,es,fs,gs;
 #else
- __uintptr_t ds;
+ __u16 ds,__padding;
 #endif
  __uintptr_t edi,esi,ebp,ebx,edx,ecx,eax;
  // NOTE: The layout of everything below this point

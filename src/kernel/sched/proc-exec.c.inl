@@ -190,7 +190,7 @@ kproc_exec(struct kshlib *__restrict exec_main,
  k_syslogf_prefixfile(KLOG_DEBUG,exec_main->sh_file,"Inserting module on exec()\n");
  error = kproc_insmod_unlocked(self,exec_main,&modid);
  assertf(KE_ISOK(error)
-        ,"TODO: We must try (and fail to do) this before destroying the existing process... %d"
+        ,"TODO: We must (fail to) do this before destroying the existing process... %d"
         ,error);
 
  // Install the new environment

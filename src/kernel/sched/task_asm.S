@@ -173,58 +173,8 @@ SYMBOLEND(ktask_exitnormal)
 
 
 GLOBAL_FUNCTION(ktask_ring3_bootstrap):
-#if 1
 #undef POP_REGISTERS_FROM_ESP0
 #include "task_asm-ring3-bootstrap.S.inl"
-#else
-	/* NOTE: The task setup will have set up the stack:
-	 *     +0:  User-ESP0
-	 *     +4:  Physical address of the user's page directory (CR3)
-	 *     +8:  User-ESP
-	 *     +12: User-EIP
-	 * NOTE: With ESP0 already at the top of the stack,
-	 *       we don't need to re-arrange anything.
-	 */
-	call _S(kcpu_setesp0)
-	movI $(KSEG_USER_DATA|3), %eax /* |3: RPL: Request ring 3 */
-	movI %eax, %ds
-	movI %eax, %es 
-	movI %eax, %fs 
-	movI %eax, %gs 
-
-	/* Load the given arguments into registers */
-	movI (PS*0)(%esp), %eax /* ESP0 */
-	movI (PS*1)(%esp), %ebx /* CR3 */
-	movI (PS*2)(%esp), %ecx /* ESP */
-	movI (PS*3)(%esp), %edx /* EIP */
-
-	/* Switch to the virtual kernel stack and enable paging */
-	movI %eax, %esp
-	movI %ebx, %cr3
-
-#ifdef __DEBUG__
-	/* Push some stuff to make this stack appear ~normal~ */
-	pushI $0 /* Return address */
-	pushI $0 /* Old EBP */
-	movI %esp, %ebp
-#endif
-
-	/* NOTE: The |3 in these describe the current ring (which will be 3, the CPL in SS and CS) */
-	pushI $(KSEG_USER_DATA|3)  // SS     (0x23)
-	pushI %ecx                     // ESP    (bootstrap)
-	pushI $(KARCH_X86_EFLAGS_IF)   // EFLAGS (IF)
-	pushI $(KSEG_USER_CODE|3)  // CS     (0x1B)
-	pushI %edx                     // EIP    (bootstrap)
-
-#if KCONFIG_SECUREUSERBOOTSTRAP
-	movI $0,   %eax
-	movI %eax, %ebx
-	movI %eax, %ecx
-	movI %eax, %edx
-	movI %esp, %ebp
-#endif
-	iret
-#endif
 SYMBOLEND(ktask_ring3_bootstrap)
 
 GLOBAL_FUNCTION(ktask_ring3_bootstrap_regs):

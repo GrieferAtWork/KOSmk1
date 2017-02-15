@@ -38,12 +38,12 @@ __DECL_BEGIN
 #define KIRQ_REGISTERS_OFFSETOF_REGS_USERCR3  (__SIZEOF_POINTER__*1)
 #define KIRQ_REGISTERS_OFFSETOF_REGS_DS       (__SIZEOF_POINTER__*2)
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS
-#define KIRQ_REGISTERS_OFFSETOF_REGS_ES       (__SIZEOF_POINTER__*3)
-#define KIRQ_REGISTERS_OFFSETOF_REGS_FS       (__SIZEOF_POINTER__*4)
-#define KIRQ_REGISTERS_OFFSETOF_REGS_GS       (__SIZEOF_POINTER__*5)
-#define KIRQ_REGISTERS_OFFSETOF_REGS_EDI      (__SIZEOF_POINTER__*6)
+#define KIRQ_REGISTERS_OFFSETOF_REGS_ES       (__SIZEOF_POINTER__*2+2)
+#define KIRQ_REGISTERS_OFFSETOF_REGS_FS       (__SIZEOF_POINTER__*2+4)
+#define KIRQ_REGISTERS_OFFSETOF_REGS_GS       (__SIZEOF_POINTER__*2+6)
+#define KIRQ_REGISTERS_OFFSETOF_REGS_EDI      (__SIZEOF_POINTER__*2+8)
 #else
-#define KIRQ_REGISTERS_OFFSETOF_REGS_EDI      (__SIZEOF_POINTER__*3)
+#define KIRQ_REGISTERS_OFFSETOF_REGS_EDI      (__SIZEOF_POINTER__*2+4)
 #endif
 #define KIRQ_REGISTERS_OFFSETOF_REGS_ESI      (KIRQ_REGISTERS_OFFSETOF_REGS_EDI+__SIZEOF_POINTER__*1)
 #define KIRQ_REGISTERS_OFFSETOF_REGS_EBP      (KIRQ_REGISTERS_OFFSETOF_REGS_EDI+__SIZEOF_POINTER__*2)
@@ -64,9 +64,9 @@ __DECL_BEGIN
 __COMPILER_PACK_PUSH(1)
 struct __packed kirq_userregisters {
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS
- /*3*/__uintptr_t ds,es,fs,gs;
+ /*4*/__u16 ds,es,fs,gs;
 #else
- /*1*/__uintptr_t ds;
+ /*2*/__u16 ds,__padding;
 #endif
  /*7*/__uintptr_t edi,esi,ebp,ebx,edx,ecx,eax;
  /*2*/__u32       intno,ecode;
@@ -355,25 +355,14 @@ __DECL_END
     push32 %ebp
     push32 %esi
     push32 %edi
-#if 1
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS
-    push32 %gs
-    push32 %fs
-    push32 %es
-#endif
-    push32 %ds
+    push16 %gs
+    push16 %fs
+    push16 %es
 #else
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
-    mov %gs, %ebx
-    push32 %ebx
-    mov %fs, %ebx
-    push32 %ebx
-    mov %es, %ebx
-    push32 %ebx
+    push16 $0
 #endif
-    mov %ds, %ebx
-    push32 %ebx
-#endif
+    push16 %ds
 .endm
 
 .macro PUSH_REGISTERS
@@ -383,27 +372,17 @@ __DECL_END
 
 .macro POP_REGISTERS_NOEAX
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS
-#if 1
-    pop32 %ds
-    pop32 %es
-    pop32 %fs
-    pop32 %gs
+    pop16 %ds
+    pop16 %es
+    pop16 %fs
+    pop16 %gs
 #else
-    pop32 %ebx
-    mov %ebx, %ds
-    pop32 %ebx
-    mov %ebx, %es
-    pop32 %ebx
-    mov %ebx, %fs
-    pop32 %ebx
-    mov %ebx, %gs
-#endif
-#else
-    pop32 %ebx
-    mov %ebx, %ds
-    mov %ebx, %es
-    mov %ebx, %fs
-    mov %ebx, %gs
+    pop16 %ebx
+    mov16 %ebx, %ds
+    mov16 %ebx, %es
+    mov16 %ebx, %fs
+    mov16 %ebx, %gs
+    addI $2, %esp
 #endif
     pop32 %edi
     pop32 %esi

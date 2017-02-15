@@ -39,12 +39,12 @@
 
 .code16
 mode16_reloc_begin:
-	mov $KSEG_KERNEL_DATA_16, %eax
-	mov %eax, %ds
-	mov %eax, %es
-	mov %eax, %fs
-	mov %eax, %gs
-	mov %eax, %ss
+	mov16 $KSEG_KERNEL_DATA_16, %ax
+	mov16 %ax, %ds
+	mov16 %ax, %es
+	mov16 %ax, %fs
+	mov16 %ax, %gs
+	mov16 %ax, %ss
 	sidt (MODE16_SYM(mode16_oldidt)) /* save old 32-bit idt pointer */
 	lidt (MODE16_SYM(mode16_newidt)) /* load new 16-bit idt pointer */
 	
@@ -54,12 +54,12 @@ mode16_reloc_begin:
 	mov32 %eax, %cr0
 	jmp16 $0x0000, $MODE16_SYM(mode16_startup)
 mode16_startup:
-	mov $0, %eax
-	mov %eax, %ds
-	mov %eax, %es
-	mov %eax, %fs
-	mov %eax, %gs
-	mov %eax, %ss
+	mov16 $0, %ax
+	mov16 %ax, %ds
+	mov16 %ax, %es
+	mov16 %ax, %fs
+	mov16 %ax, %gs
+	mov16 %ax, %ss
 	mov16 $MODE16_SYM(mode16_regs), %sp
 	pop16 %di
 	pop16 %si
@@ -167,12 +167,12 @@ GLOBAL_FUNCTION(__realmode_interrupt):
 	// Jump into 16-bit code
 	jmp16 $KSEG_KERNEL_CODE_16, $MODE16_SYM(mode16_reloc_begin)
 mode16_leave:
-	mov $KSEG_KERNEL_DATA, %eax
-	mov %eax, %ds
-	mov %eax, %es
-	mov %eax, %fs
-	mov %eax, %gs
-	mov %eax, %ss
+	mov16 $KSEG_KERNEL_DATA, %ax
+	mov16 %ax, %ds
+	mov16 %ax, %es
+	mov16 %ax, %fs
+	mov16 %ax, %gs
+	mov16 %ax, %ss
 	
 	movI mode16_oldstack, %esp
 

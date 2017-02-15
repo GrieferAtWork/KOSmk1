@@ -301,11 +301,11 @@ __DECL_END
 
 #ifdef __ASSEMBLY__
 .macro SET_KERNEL_SEGMENTS
-    mov $KSEG_KERNEL_DATA, %ax
-    mov %ax, %ds
-    mov %ax, %es
-    mov %ax, %fs
-    mov %ax, %gs
+    mov16 $KSEG_KERNEL_DATA, %ax
+    mov16 %ax, %ds
+    mov16 %ax, %es
+    mov16 %ax, %fs
+    mov16 %ax, %gs
 .endm
 #endif
 
