@@ -188,6 +188,16 @@ mode16_leave:
 	mov %eax, %cr0
 //	sti
 
+	/* It is possible for an unhandled interrupt to have occurred
+	 * while we were in real mode. While we can't know for sure,
+	 * or even figure out what it was (if it even existed), we
+	 * must inform the CPU that we are ready to handle more, as
+	 * not to break scheduling or other interrupt-driven devices. */
+	mov $0xA0, %al
+	outb %al, $0x20
+	mov $0x20, %al
+	outb %al, $0x20
+
 	/* Copy output register values from after the interrupt. */
 	MEMCPY(
 		movI (PS*2)(%esp),

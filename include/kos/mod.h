@@ -201,6 +201,7 @@ struct kmodinfo {
     void      *mi_begin;      /*< Begin of section-based memory. */
     void      *mi_end;        /*< End of section-based memory. */
     char      *mi_name;       /*< [?..1] ZERO-terminated module file/path name. */
+    /* Future members & dynamic buffer space are located here. */
 };
 #endif
 

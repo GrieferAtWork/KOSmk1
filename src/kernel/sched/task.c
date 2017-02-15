@@ -516,7 +516,7 @@ extern void ktask_schedule(struct scheddata *state) {
   // New state was requested
   // >> Recognize the changed state
   if (prevtask->t_next == prevtask) {
-   // There's nothing we can do here... (we can't approve the state change)
+   /* There's nothing we can do here... (we can't approve the state change) */
    ktask_unlock(prevtask,KTASK_LOCK_STATE);
    kcpu_unlock(cpuself,KCPU_LOCK_TASKS);
    return;
@@ -525,8 +525,8 @@ extern void ktask_schedule(struct scheddata *state) {
   prevtask->t_next->t_prev = prevtask->t_prev;
   prevtask->t_prev->t_next = prevtask->t_next;
   if (prevtask->t_newstate == KTASK_STATE_WAITINGTMO) {
-   // Special handling for remote-cpu request to
-   // re-schedule with a local timeout.
+   /* Special handling for remote-cpu request
+    * to re-schedule with a local timeout. */
    while (!kcpu_trylock(cpuself,KCPU_LOCK_SLEEP)) {
     kcpu_unlock(cpuself,KCPU_LOCK_TASKS);
     kcpu_lock(cpuself,KCPU_LOCK_SLEEP);
@@ -1514,11 +1514,12 @@ restart_cputask:
      goto end;
     }
 #endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
-    // Unschedule, then switch to a different task
-    // WARNING: We're about to unschedule ourselves
+    /* Unschedule, then switch to a different task
+     * WARNING: We're about to unschedule ourselves */
     cpuself->c_current = self->t_next;
     if __unlikely(cpuself->c_current == self) {
-     assert(self->t_prev == self && self->t_next == self);
+     assert(self->t_prev == self &&
+            self->t_next == self);
      cpuself->c_current = NULL;
     } else {
      self->t_prev->t_next = self->t_next;
@@ -1533,6 +1534,21 @@ restart_cputask:
     error = ktask_dopostunscheduling(cputask,self,newstate,arg,sigc,sigv);
     if __unlikely(KE_ISERR(error)) goto end;
     assert(self->t_state == newstate);
+#if 0
+    if (newstate == KTASK_STATE_TERMINATED) {
+     kcpu_unlock(cputask,KCPU_LOCK_TASKS);
+     self->t_exitcode = arg;
+     ktask_onterminate(self);
+     ktask_unlock(self,KTASK_LOCK_STATE);
+     /* The following call will not return
+      * because the new state is termination */
+     ktask_selectcurr_anddecref_ni(self);
+     __builtin_unreachable();
+    } else {
+     ktask_unlock(self,KTASK_LOCK_STATE);
+     ktask_selectcurrunlock_anddecref_ni(cpuself,self);
+    }
+#else
     kcpu_unlock(cputask,KCPU_LOCK_TASKS);
     if (newstate == KTASK_STATE_TERMINATED) {
      self->t_exitcode = arg;
@@ -1541,6 +1557,7 @@ restart_cputask:
     ktask_unlock(self,KTASK_LOCK_STATE);
     // The following call may not return if the new state was terminated
     ktask_selectcurr_anddecref_ni(self);
+#endif
 #if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
     ktask_lock(self,KTASK_LOCK_STATE);
     if ((self->t_flags&(KTASK_FLAG_NOINTR|KTASK_FLAG_WASINTR)) == KTASK_FLAG_WASINTR) {
@@ -1642,7 +1659,6 @@ ktask_unschedule_aftercrit(struct ktask *__restrict self) {
  assertf(self->t_flags&KTASK_FLAG_CRITICAL,
          "The 'KTASK_FLAG_CRITICAL' flag was not set. - You're not a critical task!");
  self->t_flags &= ~(KTASK_FLAG_CRITICAL);
- //printf("UNSCHED AFTER CRIT\n");
  //_printtraceback_d();
 #endif /* KTASK_HAVE_CRITICAL_TASK */
  switch (self->t_newstate) {

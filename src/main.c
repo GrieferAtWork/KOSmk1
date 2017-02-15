@@ -172,6 +172,7 @@ static void print_realmode_regs(struct realmode_regs const *regs) {
 
 
 void test_realmode(void) {
+ struct timespec tmo = {1,0};
  struct realmode_regs regs;
  memset(&regs,0,sizeof(regs));
 
@@ -186,7 +187,6 @@ void test_realmode(void) {
  realmode_interrupt(BIOS_INTNO_VGA,&regs);
  print_realmode_regs(&regs);
 
- struct timespec tmo = {1,0};
  ktask_sleep(ktask_self(),&tmo);
 
  // switch to 80x25x16 text mode
@@ -203,6 +203,7 @@ void kernel_main(void) {
  // TODO: Get away from a text-based GUI
  // TODO: Kernel modules
  // TODO: Create a /proc file system
+ // TODO: ELF thread-local memory
  
  // TODO: Fix the mess that is user-kernel pointer translation.
  //      !YOU CAN'T JUST CONVERT A USER-POINTER TO KERNEL-SPACE!
