@@ -146,6 +146,7 @@ kerrno_t kfatfs_fat_readandalloc(struct kfatfs *self, kfatcls_t index, kfatcls_t
  // FAT while we were switching to write-mode.
  if (meta_val&meta_mask) {
   *target = (*self->f_readfat)(self,index);
+  error   = KE_OK;
  } else {
   // Entry is not cached --> Load the fat's entry.
   error = kfatfs_loadsectors(self,FAT_GETCLUSTERADDR(fat_index),1,

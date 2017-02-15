@@ -84,6 +84,7 @@ typedef int kerrno_t;
 #define KS_FOUND         4  /*< SIGNAL: The sought after object was found. */
 #define KS_NODATA        5  /*< SIGNAL: No data was transferred (Used for v-signals). */
 #define KS_FULL          6  /*< SIGNAL: A buffer is full and special behavior was invoked. */
+#define KS_UNLOCKED      7  /*< SIGNAL: A special lock was released before successful completion. */
 
 __DECL_END
 

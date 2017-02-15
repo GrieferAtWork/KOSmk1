@@ -232,6 +232,12 @@ extern __crit __nonnull((1)) kerrno_t krwlock_downgrade(struct krwlock *__restri
 //                         to acquire their write-lock, handling for the destruction
 //                         of a R/W lock must be performed the same way 'krwlock_beginwrite'
 //                         may have returned the same error.
+// @return: KS_UNLOCKED:   [!*atomic*] Successfully managed to upgrade the lock,
+//                         but in order to do so, the calling task momentarily held
+//                         no lock at all. (*atomic* would have returned 'KE_PERM')
+//                         The caller should handle this signal by reloading cached
+//                         variables affected by the lock, as their current values
+//                         may no longer be up to date.
 extern __crit __wunused __nonnull((1))   kerrno_t krwlock_upgrade(struct krwlock *__restrict self);
 extern __crit __wunused __nonnull((1))   kerrno_t krwlock_tryupgrade(struct krwlock *__restrict self);
 extern __crit __wunused __nonnull((1,2)) kerrno_t krwlock_timedupgrade(struct krwlock *__restrict self, struct timespec const *__restrict abstime);

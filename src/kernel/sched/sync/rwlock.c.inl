@@ -399,10 +399,11 @@ krwlock_upgrade(struct krwlock *__restrict self) {
  KTASK_CRIT_MARK
  kassert_krwlock(self);
  if __likely(KE_ISOK(error = krwlock_atomic_upgrade(self))) return error;
- if __unlikely(error != KE_WOULDBLOCK) return error;
+ if __unlikely(error != KE_PERM) return error;
  /* The read-lock was lost and atomicity failed due to some other task.
   * >> Try the manual way and acquire a regular write-lock. */
- return krwlock_beginwrite(self);
+ error = krwlock_beginwrite(self);
+ return KE_ISERR(error) ? error : KS_UNLOCKED;
 }
 __crit kerrno_t
 krwlock_timedupgrade(struct krwlock *__restrict self,
@@ -411,10 +412,11 @@ krwlock_timedupgrade(struct krwlock *__restrict self,
  KTASK_CRIT_MARK
  kassert_krwlock(self);
  if __likely(KE_ISOK(error = krwlock_atomic_timedupgrade(self,abstime))) return error;
- if __unlikely(error != KE_WOULDBLOCK) return error;
+ if __unlikely(error != KE_PERM) return error;
  /* The read-lock was lost and atomicity failed due to some other task.
   * >> Try the manual way and acquire a regular write-lock. */
- return krwlock_timedbeginwrite(self,abstime);
+ error = krwlock_timedbeginwrite(self,abstime);
+ return KE_ISERR(error) ? error : KS_UNLOCKED;
 }
 __crit kerrno_t
 krwlock_timeoutupgrade(struct krwlock *__restrict self,

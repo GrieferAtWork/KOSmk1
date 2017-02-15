@@ -81,7 +81,10 @@ buffer_is_empty:
 handle_intr:
      error = krwlock_upgrade(&self->ib_rwlock);
      if __unlikely(KE_ISERR(error)) goto end_always;
-     if (self->ib_flags&KIOBUF_FLAG_INTR_BLOCKFIRST) {
+     /* Must check for the block-first flag again
+      * if we had to release the read-lock. */
+     if __unlikely(error == KS_UNLOCKED &&
+                   self->ib_flags&KIOBUF_FLAG_INTR_BLOCKFIRST) {
       self->ib_flags &= ~(KIOBUF_FLAG_INTR_BLOCKFIRST);
       krwlock_endwrite(&self->ib_rwlock);
       error = KS_EMPTY;
@@ -183,7 +186,8 @@ end_rpos:
    // Also make sure no other was performed a write, thus making this just a regular case.
    DEBUG_TRACE(("BUFFER BECAME EMPTY\n"));
    /* NOTE: the second check might fail if some other task quickly performed a read/write. */
-   if __unlikely(self->ib_rpos != start_rpos || rpos != self->ib_wpos) {
+   if __unlikely(error == KS_UNLOCKED &&
+                (self->ib_rpos != start_rpos || rpos != self->ib_wpos)) {
     // Some other task already performed a read.
     krwlock_endwrite(&self->ib_rwlock);
     //printf("Some other task already performed a read.\n");
@@ -203,6 +207,7 @@ end_rpos:
     goto wake_writers;
    }
    krwlock_endwrite(&self->ib_rwlock);
+   error = KE_OK;
    goto end_always;
   }
   // Overwrite the read-position, if we're the fastest in doing so.
