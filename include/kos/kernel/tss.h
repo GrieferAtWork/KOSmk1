@@ -31,6 +31,8 @@
 
 __DECL_BEGIN
 
+#define KTSS_OFFSETOF_ESP0    4
+
 #ifndef __ASSEMBLY__
 __COMPILER_PACK_PUSH(1)
 

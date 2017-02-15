@@ -99,8 +99,8 @@ GROUPBEGIN(sys_ktask)
   ENTRY(ktask_join)         /*< _syscall2(kerrno_t,ktask_join,int,self,void **__restrict,exitcode); */
   ENTRY(ktask_tryjoin)      /*< _syscall2(kerrno_t,ktask_tryjoin,int,self,void **__restrict,exitcode); */
   ENTRY(ktask_timedjoin)    /*< _syscall3(kerrno_t,ktask_timedjoin,int,self,struct timespec const *__restrict,abstime,void **__restrict,exitcode); */
-  ENTRY(ktask_newthread)    /*< _syscall4(int,ktask_newthread,ktask_threadfunc,thread_main,void *,closure,__u32,flags,void **,arg); */
-  ENTRY(ktask_newthreadi)   /*< _syscall5(int,ktask_newthreadi,ktask_threadfunc,thread_main,void const *,buf,size_t,bufsize,__u32,flags,void **,arg); */
+  ENTRY(ktask_newthread)    /*< _syscall4(int,ktask_newthread,ktask_threadfun_t,thread_main,void *,closure,__u32,flags,void **,arg); */
+  ENTRY(ktask_newthreadi)   /*< _syscall5(int,ktask_newthreadi,ktask_threadfun_t,thread_main,void const *,buf,size_t,bufsize,__u32,flags,void **,arg); */
   ENTRY(ktask_fork)         /*< _syscall2(kerrno_t,ktask_fork,uintptr_t *,childfd_or_exitcode,__u32,flags); */
   ENTRY(ktask_exec)         /*< _syscall6(kerrno_t,ktask_exec,char const *,path,size_t,pathmax,size_t,argc,char const *const *,argv,char const *const *,envp,__u32,flags); */
   ENTRY(ktask_fexec)        /*< _syscall5(kerrno_t,ktask_exec,int,fd,size_t,argc,char const *const *,argv,char const *const *,envp,__u32,flags); */

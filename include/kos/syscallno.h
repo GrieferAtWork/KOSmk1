@@ -101,8 +101,8 @@ __DECL_BEGIN
 #define SYS_ktask_join         __SYSCALL(SYSCALL_GROUP_TASK,16) /*< _syscall3(kerrno_t,ktask_join,int,self,void **__restrict,exitcode,__u32,pending_argument); */
 #define SYS_ktask_tryjoin      __SYSCALL(SYSCALL_GROUP_TASK,17) /*< _syscall3(kerrno_t,ktask_tryjoin,int,self,void **__restrict,exitcode,__u32,pending_argument); */
 #define SYS_ktask_timedjoin    __SYSCALL(SYSCALL_GROUP_TASK,18) /*< _syscall4(kerrno_t,ktask_timedjoin,int,self,struct timespec const *__restrict,abstime,void **__restrict,exitcode,__u32,pending_argument); */
-#define SYS_ktask_newthread    __SYSCALL(SYSCALL_GROUP_TASK,19) /*< _syscall4(int,ktask_newthread,ktask_threadfunc,thread_main,void *,closure,__u32,flags,void **,arg); */
-#define SYS_ktask_newthreadi   __SYSCALL(SYSCALL_GROUP_TASK,20) /*< _syscall5(int,ktask_newthreadi,ktask_threadfunc,thread_main,void const *,buf,size_t,bufsize,__u32,flags,void **,arg); */
+#define SYS_ktask_newthread    __SYSCALL(SYSCALL_GROUP_TASK,19) /*< _syscall4(int,ktask_newthread,ktask_threadfun_t,thread_main,void *,closure,__u32,flags,void **,arg); */
+#define SYS_ktask_newthreadi   __SYSCALL(SYSCALL_GROUP_TASK,20) /*< _syscall5(int,ktask_newthreadi,ktask_threadfun_t,thread_main,void const *,buf,size_t,bufsize,__u32,flags,void **,arg); */
 #define SYS_ktask_fork         __SYSCALL(SYSCALL_GROUP_TASK,21) /*< _syscall2(kerrno_t,ktask_fork,uintptr_t *,childfd_or_exitcode,__u32,flags); */
 #define SYS_ktask_exec         __SYSCALL(SYSCALL_GROUP_TASK,22) /*< _syscall4(kerrno_t,ktask_exec,char const *,path,__size_t,pathmax,struct kexecargs const *,args,__u32,flags); */
 #define SYS_ktask_fexec        __SYSCALL(SYSCALL_GROUP_TASK,23) /*< _syscall3(kerrno_t,ktask_fexec,int,fd,struct kexecargs const *,args,__u32,flags); */

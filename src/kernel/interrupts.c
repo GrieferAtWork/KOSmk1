@@ -235,7 +235,6 @@ void x86_interrupt_handler(struct kirq_registers *regs) {
    }
   }
   debug_hexdump((void *)(regs->regs.eip-60),121);
-  debug_hexdump((void *)0x7C00,0xff);
 #undef abort
   abort();
  }

@@ -40,7 +40,7 @@
 
 __DECL_BEGIN
 
-struct timespec;
+__struct_fwd(timespec);
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -133,6 +133,7 @@ struct timespec;
 #define KSANDBOX_BARRIER_NONE      0x0
 #define KSANDBOX_BARRIER_COUNT     4
 
+#ifndef __ASSEMBLY__
 #ifndef __ksandbarrier_t_defined
 #define __ksandbarrier_t_defined 1
 typedef __ksandbarrier_t ksandbarrier_t;
@@ -142,6 +143,7 @@ typedef __ksandbarrier_t ksandbarrier_t;
 #define __ktaskprio_t_defined 1
 typedef __ktaskprio_t ktaskprio_t;
 #endif
+#endif /* !__ASSEMBLY__ */
 
 #define KTASKOPFLAG_NONE      0x00000000
 #define KTASKOPFLAG_RECURSIVE 0x00000001 /*< Perform the operation recursively on the given task and all child tasks within the same process. */
@@ -149,17 +151,26 @@ typedef __ktaskprio_t ktaskprio_t;
 #define KTASKOPFLAG_ASYNC     0x00000004 /*< Don't wait until an asynchronous operation has finished (e.g.: join all task during termination;
                                              required if the to-be-terminated task must finish performing a critical operation, such as writing a file). */
 #define KTASKOPFLAG_NOCALLER  0x00000008 /*< Always prevent the calling task from being affected. */
+
+#ifndef __ASSEMBLY__
+#ifndef __ktaskopflag_t_defined
+#define __ktaskopflag_t_defined 1
 typedef __ktaskopflag_t ktaskopflag_t;
+#endif
 
 #ifndef __ktid_t_defined
 #define __ktid_t_defined 1
 #define KTID_INVALID   __KTID_INVALID
 typedef __ktid_t ktid_t;
 #endif
+#endif /* !__ASSEMBLY__ */
 
 #ifndef __KERNEL__
+
+#ifndef __ASSEMBLY__
 typedef int ktask_t;
 typedef int kproc_t;
+#endif /* !__ASSEMBLY__ */
 
 #ifndef __NO_PROTOTYPES
 
@@ -258,6 +269,7 @@ extern __wunused __constcall ktask_t ktask_proc(void);
 #define ktask_proc() KFD_TASKROOT
 #endif
 
+#ifndef __ASSEMBLY__
 //////////////////////////////////////////////////////////////////////////
 // Exit the calling thread with the given exitcode
 __local __noreturn void ktask_exit(void *exitcode) {
@@ -274,6 +286,7 @@ __local __noreturn void kproc_exit(void *exitcode) {
  ktask_terminate(ktask_proc(),exitcode,KTASKOPFLAG_RECURSIVE);
  __builtin_unreachable();
 }
+#endif /* !__ASSEMBLY__ */
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the process root task (thread) of a given task.
@@ -360,10 +373,12 @@ __local __nonnull((2)) kerrno_t ktask_getname(ktask_t self, char *buffer, __size
 __local __nonnull((2)) kerrno_t ktask_setname_ex(ktask_t self, char const *__restrict name, size_t namesize) { return kfd_setattr(self,KATTR_GENERIC_NAME,name,namesize*sizeof(char)); }
 __local __nonnull((2)) kerrno_t ktask_setname(ktask_t self, char const *__restrict name) { return ktask_setname_ex(self,name,strlen(name)); }
 
+#ifndef __ASSEMBLY__
 #ifndef __ktls_t_defined
 #define __ktls_t_defined 1
 typedef __ktls_t ktls_t;
 #endif
+#endif /* !__ASSEMBLY__ */
 
 //////////////////////////////////////////////////////////////////////////
 // Get the value of a TLS slot in the calling thread.
@@ -398,8 +413,10 @@ __local _syscall1(kerrno_t,kproc_freetls,ktls_t,slot);
 
 #endif /* !__NO_PROTOTYPES */
 #else /* !__KERNEL__ */
+#ifndef __ASSEMBLY__
 typedef struct ktask *ktask_t;
 typedef struct kproc *kproc_t;
+#endif /* !__ASSEMBLY__ */
 #endif /* __KERNEL__ */
 
 #define KTASK_NEW_FLAG_NONE        0x00000000
@@ -452,6 +469,7 @@ typedef struct kproc *kproc_t;
 #define KTASK_NEW_FLAG_ROOTFORK    0x00000008
 
 
+#ifndef __ASSEMBLY__
 // Prototype for the entry point of a user-level thread.
 // NOTE: Threads exit their control flow by terminating
 //       themselves (for simplicity, 'ktask_exit' may be called)
@@ -459,7 +477,11 @@ typedef struct kproc *kproc_t;
 //       may be set to point to a given buffer. Using this,
 //       a real thread callback can be specified that is then
 //       allowed to return through normal means.
-typedef void (*__noreturn ktask_threadfunc) __P((void *));
+#ifndef __ktask_threadfun_t_defined
+#define __ktask_threadfun_t_defined 1
+typedef void (*__noreturn ktask_threadfun_t) __P((void *));
+#endif /* !__ktask_threadfun_t_defined */
+#endif /* !__ASSEMBLY__ */
 
 #ifndef __KERNEL__
 #ifndef __NO_PROTOTYPES
@@ -477,7 +499,7 @@ typedef void (*__noreturn ktask_threadfunc) __P((void *));
 // @return: KE_ISERR(*) : An error occurred.
 // @return: KE_ISOK(*)  : A new file descriptor used to interact with the child task.
 // @return: KE_MFILE:     Too many open file descriptors.
-__local _syscall4(kerrno_t,ktask_newthread,ktask_threadfunc,thread_main,
+__local _syscall4(kerrno_t,ktask_newthread,ktask_threadfun_t,thread_main,
                   void *,closure,__u32,flags,void **,arg);
 
 //////////////////////////////////////////////////////////////////////////
@@ -501,12 +523,12 @@ __local _syscall4(kerrno_t,ktask_newthread,ktask_threadfunc,thread_main,
 // >> ktask_t spawn_thread(__u32 flags) {
 // >>   struct thread_data tdata = { ... };
 // >>   // A copy of 'tdata' will be stored on the stack of 'threadmain'
-// >>   return ktask_newthreadi((ktask_threadfunc)&threadmain,&tdata,sizeof(tdata),flags);
+// >>   return ktask_newthreadi((ktask_threadfun_t)&threadmain,&tdata,sizeof(tdata),flags);
 // >> }
 // @return: KE_ACCES: The caller is not allowed to spawn any more threads.
 // @return: KE_NOMEM: Not enough available memory.
 // @return: KE_MFILE: Too many open file descriptors.
-__local _syscall5(uintptr_t,ktask_newthreadi,ktask_threadfunc,thread_main,
+__local _syscall5(uintptr_t,ktask_newthreadi,ktask_threadfun_t,thread_main,
                   void const *,buf,__size_t,bufsize,__u32,flags,void **,arg);
 
 #endif /* !__NO_PROTOTYPES */
@@ -546,7 +568,7 @@ __local _syscall5(uintptr_t,ktask_newthreadi,ktask_threadfunc,thread_main,
 // @param: flags: A set of 'KTASK_NEW_FLAG_*' flags.
 __local _syscall2(kerrno_t,ktask_fork,uintptr_t *,childfd_or_exitcode,__u32,flags);
 
-struct kexecargs;
+__struct_fwd(kexecargs);
 
 //////////////////////////////////////////////////////////////////////////
 // Overwrite the address space of the calling process with the given executable.
@@ -597,6 +619,7 @@ __local _syscall3(kerrno_t,ktask_fexec,int,fd,
 #define KTASK_EXEC_FLAG_NONE       0x00000000
 #define KTASK_EXEC_FLAG_SEARCHPATH 0x00000001 /*< Search $PATH for the given executable (Ignored in fexec). */
 
+#ifndef __ASSEMBLY__
 struct kexecargs {
  __size_t           ea_argc;    /*< Max amount of arguments (NOTE: Argument vector may also be terminated by NULL-entry). */
  char const *const *ea_argv;    /*< [1..1][0..(ea_argc|first(NULL))] Vector of arguments. */
@@ -609,6 +632,7 @@ struct kexecargs {
                                         >> To exec the process in an empty environment, pass a pointer to NULL. */
  __size_t const    *ea_envlenv; /*< [0..ea_argc|NULL] Max length of individual environment strings (optional; strnlen-style). */
 };
+#endif /* !__ASSEMBLY__ */
 
 
 #ifndef __KERNEL__
@@ -820,7 +844,6 @@ __local _syscall4(kerrno_t,kproc_getcmd,int,self,
 #else /* !__KERNEL__ */
 #define kproc_getpid(self)  ((self)->p_pid)
 #endif /* __KERNEL__ */
-
 
 __DECL_END
 

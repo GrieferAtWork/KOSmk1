@@ -31,6 +31,7 @@
 
 __DECL_BEGIN
 
+#ifndef __ASSEMBLY__
 #if defined(__GNUC__)
 typedef __builtin_va_list va_list;
 #   define _crt_va_start  __builtin_va_start
@@ -60,6 +61,7 @@ typedef char *va_list;
 #   define __builtin_va_copy   __va_copy
 #   define __builtin_va_arg    _crt_va_arg
 #endif /* ... */
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 

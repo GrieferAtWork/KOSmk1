@@ -181,15 +181,12 @@ kldt_set(struct kldt *self, ksegid_t id,
 }
 
 
-//#define GDT_MAX_ENTRIES  -1
-#define GDT_MAX_ENTRIES  128
-
-
-#if GDT_MAX_ENTRIES < 0
-#define GDT_USE_DYNAMIC_MEMORY 1
+#if 0
+#define GDT_MAX_ENTRIES         (-1)
 #else
-#define GDT_USE_DYNAMIC_MEMORY 0
+#define GDT_MAX_ENTRIES        (128)
 #endif
+#define GDT_USE_DYNAMIC_MEMORY (GDT_MAX_ENTRIES < 0)
 
 
 

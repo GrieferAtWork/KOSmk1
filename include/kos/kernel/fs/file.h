@@ -36,11 +36,11 @@
 
 __DECL_BEGIN
 
-struct kfiletype;
-struct kfile;
-struct kinode;
-struct kdirent;
-struct kdirentname;
+__struct_fwd(kfiletype);
+__struct_fwd(kfile);
+__struct_fwd(kinode);
+__struct_fwd(kdirent);
+__struct_fwd(kdirentname);
 
 #define KOBJECT_MAGIC_FILE       0xF17E     /*< FILE. */
 #define kassert_kfile(ob)       kassert_refobject(ob,f_refcnt,KOBJECT_MAGIC_FILE)
@@ -55,6 +55,7 @@ struct kdirentname;
 #   define SEEK_END 2
 #endif
 
+#ifndef __ASSEMBLY__
 struct kfiletype {
  __size_t   ft_size; /*< Size of the implemented file-structure (if not at least 'sizeof(struct kfile)', the file cannot be opened) */
  void     (*ft_quit)(struct kfile *__restrict self);
@@ -273,6 +274,7 @@ extern kerrno_t kfile_generic_read_isdir(struct kfile *__restrict self, void *__
 extern kerrno_t kfile_generic_write_isdir(struct kfile *__restrict self, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
 extern kerrno_t kfile_generic_readat_isdir(struct kfile *__restrict self, __pos_t pos, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
 extern kerrno_t kfile_generic_writeat_isdir(struct kfile *__restrict self, __pos_t pos, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 #endif /* __KERNEL__ */

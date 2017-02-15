@@ -57,19 +57,15 @@ __DECL_BEGIN
 
 #define LINK_MAX  64 /*< Max amount of times a link is allowed to be dereferenced. */
 
-struct kinodetype;
-struct kinode;
-
-struct kdirent;
-struct kdirentname;
-
-struct kfiletype;
-struct kfile;
-
-struct ksuperblock;
-struct ksuperblocktype;
-
-struct kfspathenv;
+__struct_fwd(kinodetype);
+__struct_fwd(kinode);
+__struct_fwd(kdirent);
+__struct_fwd(kdirentname);
+__struct_fwd(kfiletype);
+__struct_fwd(kfile);
+__struct_fwd(ksuperblock);
+__struct_fwd(ksuperblocktype);
+__struct_fwd(kfspathenv);
 
 #define KOBJECT_MAGIC_INODE      0x1A0DE    /*< INODE. */
 #define KOBJECT_MAGIC_DIRENT     0xD15EA7   /*< DIRENT. */
@@ -78,6 +74,7 @@ struct kfspathenv;
 #define kassert_kdirent(ob)     kassert_refobject(ob,d_refcnt,KOBJECT_MAGIC_DIRENT)
 #define kassert_ksuperblock(ob) kassert_refobject(ob,s_root.i_refcnt,KOBJECT_MAGIC_SUPERBLOCK)
 
+#ifndef __ASSEMBLY__
 typedef kerrno_t (*__wunused __nonnull((1,2)) pkenumdir)(struct kinode *__restrict inode,
                                                          struct kdirentname const *name,
                                                          void *closure);
@@ -1033,6 +1030,7 @@ extern struct kinodetype kinode_generic_emptytype; // No special features
 extern void kernel_initialize_filesystem(void);
 extern void kernel_finalize_filesystem(void);
 #endif
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 #endif /* __KERNEL__ */

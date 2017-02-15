@@ -54,7 +54,7 @@ int pthread_create(pthread_t *newthread, pthread_attr_t const *attr,
  (void)attr; // TODO
  closure.arg           = arg;
  closure.start_routine = start_routine;
- result = ktask_newthreadi((ktask_threadfunc)&pthread_main,&closure,
+ result = ktask_newthreadi((ktask_threadfun_t)&pthread_main,&closure,
                            sizeof(closure),KTASK_NEW_FLAG_NONE,NULL);
  if __unlikely(KE_ISERR(result)) return -result;
  *newthread = result;

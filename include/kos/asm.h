@@ -53,7 +53,7 @@ __DECL_BEGIN
 /*[[[deemon
 local ops = list {
    "mov","push","pop","lea",
-   "add","sub","mul","div",
+   "add","sub","mul","div","cmp",
    "pushf","popf","and","or","xor",
    "shl","shr","xchg","jmp","mov"
 };
@@ -106,6 +106,11 @@ for (local o: ops) {
 #define div16      __O16(div)
 #define div32      __O32(div)
 #define div64      __O64(div)
+#define cmpI         __I(cmp)
+#define cmp8        __O8(cmp)
+#define cmp16      __O16(cmp)
+#define cmp32      __O32(cmp)
+#define cmp64      __O64(cmp)
 #define pushfI       __I(pushf)
 #define pushf8      __O8(pushf)
 #define pushf16    __O16(pushf)

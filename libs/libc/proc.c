@@ -267,7 +267,7 @@ __public task_t task_newthread(task_threadfunc thread_main,
  closuredata.thread_main = thread_main;
  closuredata.real_closure = closure;
  // Use a wrapper function that allows the user-specified task to return normally
- result = ktask_newthreadi((ktask_threadfunc)&taskmain,
+ result = ktask_newthreadi((ktask_threadfun_t)&taskmain,
                             &closuredata,sizeof(closuredata),
                             flags,NULL);
  if __likely(KE_ISOK(result)) return result;
@@ -280,7 +280,7 @@ __public task_t task_newthread(task_threadfunc thread_main,
  proxy_closure->thread_main = thread_main;
  proxy_closure->real_closure = closure;
  // Use a wrapper function that allows the user-specified task to return normally
- result = ktask_newthread((ktask_threadfunc)&taskmain,proxy_closure,flags);
+ result = ktask_newthread((ktask_threadfun_t)&taskmain,proxy_closure,flags);
  if __likely(KE_ISOK(result)) return result;
  free(proxy_closure);
  __set_errno(-result);

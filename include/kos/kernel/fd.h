@@ -40,15 +40,18 @@
 
 __DECL_BEGIN
 
-struct kfile;
-struct kinode;
-struct kdirent;
+__struct_fwd(kfile);
+__struct_fwd(kinode);
+__struct_fwd(kdirent);
 
 #define kassert_kfdentry kassertobj
 
 #define KFD_FLAG_NONE    0x0000
 #define KFD_FLAG_CLOEXEC FD_CLOEXEC
+
+#ifndef __ASSEMBLY__
 typedef __u16 kfdflag_t;
+#endif /* !__ASSEMBLY__ */
 
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
@@ -58,6 +61,7 @@ typedef __u16 kfdflag_t;
 #endif
 
 // Process file descriptor management
+#ifndef __ASSEMBLY__
 struct __packed kfdentry {
  // NOTE: Members of this structure are protected
  //       by the associated fd manager.
@@ -156,6 +160,7 @@ __local __crit void kfdentry_quit(struct kfdentry *__restrict self) {
 #endif
 }
 #endif
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 #endif /* __KERNEL__ */

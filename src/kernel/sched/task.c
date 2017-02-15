@@ -38,6 +38,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <kos/kernel/pageframe.h>
+#include <stddef.h>
 
 __DECL_BEGIN
 
@@ -53,6 +54,22 @@ __DECL_BEGIN
 #define KTASK_ONSWITCH(reason,oldtask,newtask) (void)0
 #define KTASK_ONTERMINATE(task)                (void)0
 #endif
+
+/* Pick some random members to assert our contant offsets of. */
+__STATIC_ASSERT(offsetof(struct ktask,t_cpu)       == KTASK_OFFSETOF_CPU);
+__STATIC_ASSERT(offsetof(struct ktask,t_abstime)   == KTASK_OFFSETOF_ABSTIME);
+__STATIC_ASSERT(offsetof(struct ktask,t_sigval)    == KTASK_OFFSETOF_SIGVAL);
+__STATIC_ASSERT(offsetof(struct ktask,t_joinsig)   == KTASK_OFFSETOF_JOINSIG);
+__STATIC_ASSERT(offsetof(struct ktask,t_proc)      == KTASK_OFFSETOF_PROC);
+__STATIC_ASSERT(offsetof(struct ktask,t_children)  == KTASK_OFFSETOF_CHILDREN);
+__STATIC_ASSERT(offsetof(struct ktask,t_ustackvp)  == KTASK_OFFSETOF_USTACKVP);
+__STATIC_ASSERT(offsetof(struct ktask,t_ustacksz)  == KTASK_OFFSETOF_USTACKSZ);
+__STATIC_ASSERT(offsetof(struct ktask,t_kstackvp)  == KTASK_OFFSETOF_KSTACKVP);
+__STATIC_ASSERT(offsetof(struct ktask,t_kstackend) == KTASK_OFFSETOF_KSTACKEND);
+__STATIC_ASSERT(offsetof(struct ktask,t_tls)       == KTASK_OFFSETOF_TLS);
+#if KTASK_HAVE_STATS
+__STATIC_ASSERT(offsetof(struct ktask,t_stats)     == KTASK_OFFSETOF_STAT);
+#endif /* KTASK_HAVE_STATS */
 
 
 extern struct kcpu  __kcpu_zero;
@@ -452,6 +469,10 @@ struct kcpu *kcpu_leastload(void) {
 #endif
 
 
+#define LOAD_LDT(x) \
+ __asm_volatile__("lldt %0\n" : "=g" (x))
+
+
 __local kerrno_t kcpu_rotate_unlocked(struct kcpu *__restrict self);
 extern void ktask_schedule(struct scheddata *state) {
  // IRQ Task scheduling callback.
@@ -476,6 +497,10 @@ extern void ktask_schedule(struct scheddata *state) {
    kcpu_unlock(cpuself,KCPU_LOCK_TASKS);
    if __unlikely(!currtask) return;
    KTASK_ONSWITCH("IRQ",NULL,currtask);
+   { /* Load local descriptor table of the new process. */
+    __u16 id = currtask->t_proc->p_regs.pr_ldt.ldt_gdtid;
+    LOAD_LDT(id);
+   }
    goto setcurrtask;
   }
  } else if (!prevtask) {
@@ -565,6 +590,11 @@ rotate_normal:
  prevtask->t_userpd = state->pd;
  prevtask->t_esp    = state->esp;
  KTASK_ONLEAVEQUANTUM(prevtask,cpuself);
+ if (prevtask->t_proc != currtask->t_proc) {
+  /* Load local descriptor table of the new process. */
+  __u16 id = currtask->t_proc->p_regs.pr_ldt.ldt_gdtid;
+  LOAD_LDT(id);
+ }
  kcpu_unlock(cpuself,KCPU_LOCK_TASKS);
 setcurrtask:
  assertf(kpagedir_translate(currtask->t_userpd
@@ -891,6 +921,7 @@ __noinline void ktask_switchdecref(struct ktask *__restrict newtask,
  kassert_ktask(oldtask);
  assert(!karch_irq_enabled());
  assert(kcpu_self()->c_current == newtask);
+ kassert_kproc(newtask->t_proc);
  KTASK_ONSWITCH("YIELD",oldtask,newtask);
 #if 0
  void *esp,*pd;

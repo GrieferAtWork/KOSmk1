@@ -417,9 +417,9 @@ end:
  RETURN(error);
 }
 
-/* _syscall4(int,ktask_newthread,ktask_threadfunc,thread_main,void *,closure,__u32,flags,void **,arg); */
+/* _syscall4(int,ktask_newthread,ktask_threadfun_t,thread_main,void *,closure,__u32,flags,void **,arg); */
 SYSCALL(sys_ktask_newthread) {
- LOAD4(ktask_threadfunc,K(thread_main),
+ LOAD4(ktask_threadfun_t,K(thread_main),
        void           *,K(closure),
        __u32           ,K(flags),
        void          **,K(arg));
@@ -521,9 +521,9 @@ end:
  RETURN(error);
 }
 
-/* _syscall5(int,ktask_newthreadi,ktask_threadfunc,thread_main,void const *,buf,size_t,bufsize,__u32,flags,void **,arg); */
+/* _syscall5(int,ktask_newthreadi,ktask_threadfun_t,thread_main,void const *,buf,size_t,bufsize,__u32,flags,void **,arg); */
 SYSCALL(sys_ktask_newthreadi) {
- LOAD5(ktask_threadfunc,K(thread_main),
+ LOAD5(ktask_threadfun_t,K(thread_main),
        void const     *,K(buf),
        size_t          ,K(bufsize),
        __u32           ,K(flags),

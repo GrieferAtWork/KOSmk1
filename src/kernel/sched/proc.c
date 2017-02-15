@@ -32,8 +32,11 @@
 #include <kos/kernel/linker.h>
 #include <kos/kernel/proc.h>
 #include <malloc.h>
+#include <stddef.h>
 
 __DECL_BEGIN
+
+__STATIC_ASSERT(offsetof(struct kproc,p_modules) == KPROC_OFFSETOF_MODULES);
 
 __local void kprocsand_quit(struct kprocsand *__restrict self) {
  struct ktask *oldtask;

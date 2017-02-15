@@ -135,7 +135,24 @@ extern void ksyscall_handler_unix __P((struct kirq_registers *__regs));
 extern void kernel_initialize_syscall __P((void));
 #endif /* __MAIN_C__ */
 #endif /* __KERNEL__ */
-#endif /* !__ASSEMBLY__ */
+#else /* !__ASSEMBLY__ */
+#define __IDsyscall0(type,name,id)                                                                              /* nothing */
+#define __IDsyscall1(type,name,id,type1,arg1)                                                                   /* nothing */
+#define __IDsyscall2(type,name,id,type1,arg1,type2,arg2)                                                        /* nothing */
+#define __IDsyscall3(type,name,id,type1,arg1,type2,arg2,type3,arg3)                                             /* nothing */
+#define __IDsyscall4(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4)                                  /* nothing */
+#define __IDsyscall5(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5)                       /* nothing */
+#define __IDsyscall6(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6)            /* nothing */
+#define __IDsyscall7(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6,type7,arg7) /* nothing */
+#define _syscall0(type,name)                                                                              /* nothing */
+#define _syscall1(type,name,type1,arg1)                                                                   /* nothing */
+#define _syscall2(type,name,type1,arg1,type2,arg2)                                                        /* nothing */
+#define _syscall3(type,name,type1,arg1,type2,arg2,type3,arg3)                                             /* nothing */
+#define _syscall4(type,name,type1,arg1,type2,arg2,type3,arg3,type4,arg4)                                  /* nothing */
+#define _syscall5(type,name,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5)                       /* nothing */
+#define _syscall6(type,name,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6)            /* nothing */
+#define _syscall7(type,name,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6,type7,arg7) /* nothing */
+#endif /* __ASSEMBLY__ */
 
 __DECL_END
 

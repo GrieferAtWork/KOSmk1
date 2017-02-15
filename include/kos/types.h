@@ -374,4 +374,10 @@ typedef __u32    __ktaskopflag_t;
 __DECL_END
 #endif /* !__ASSEMBLY__ */
 
+#if _TIME_T_BITS == 64
+#define __SIZEOF_TIME_T  8
+#else
+#define __SIZEOF_TIME_T  4
+#endif
+
 #endif /* !__KOS_TYPES_H__ */

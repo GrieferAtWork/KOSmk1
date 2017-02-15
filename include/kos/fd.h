@@ -313,9 +313,8 @@ __local _syscall4(kerrno_t,kfd_readlink,int,fd,char *,buf,
 __local _syscall2(int,kfd_dup,int,fd,int,flags);
 __local _syscall3(int,kfd_dup2,int,fd,int,resfd,int,flags);
 
-
-struct termios;
-struct winsize;
+__struct_fwd(termios);
+__struct_fwd(winsize);
 
 // TODO: DOC
 __local _syscall2(kerrno_t,kfd_pipe,int *,pipefd,int,flags);
@@ -369,6 +368,7 @@ __local _syscall2(kerrno_t,kfd_trunc,int,fd,__u64,size);
 #endif
 #endif /* !__NO_PROTOTYPES */
 
+#ifndef __ASSEMBLY__
 struct kfddirent {
  // NOTE: If the 'kd_namev' buffer is too small, it will be filled with
  //       as many characters as possible kd_namec, possibly leaving
@@ -381,6 +381,7 @@ struct kfddirent {
  __ino_t  kd_ino;   /*< File INode number. */
  __mode_t kd_mode;  /*< File type and permissions. */
 };
+#endif /* !__ASSEMBLY__ */
 
 #define KFD_READDIR_FLAG_NONE    0x00000000
 #define KFD_READDIR_FLAG_PEEK    0x00000001 /*< Only retrieve the current entry. - don't advance the directory file. */
@@ -403,10 +404,12 @@ __local _syscall3(kerrno_t,kfd_readdir,int,fd,struct kfddirent *,dent,__u32,flag
  (KFD_READDIR_FLAG_PEEK)
 #endif
 
+#ifndef __ASSEMBLY__
 #ifndef __kfdtype_t_defined
 #define __kfdtype_t_defined 1
 typedef __kfdtype_t kfdtype_t;
 #endif
+#endif /* !__ASSEMBLY__ */
 
 #define KFDTYPE_NONE   0 /*< Invalid/Empty/Unused file descriptor. */
 #define KFDTYPE_FILE   1 /*< [struct kfile] File descriptor. */
@@ -416,8 +419,6 @@ typedef __kfdtype_t kfdtype_t;
 #define KFDTYPE_DIRENT 5 /*< [struct kdirent] Dirent descriptor. */
 #define KFDTYPE_DEVICE 6 /*< [struct kdev] Device descriptor. */
 
-#ifndef __NO_PROTOTYPES
-#endif
 
 __DECL_END
 

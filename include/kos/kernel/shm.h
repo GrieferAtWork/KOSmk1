@@ -52,8 +52,9 @@ __DECL_BEGIN
 #define KSHMTAB_FLAG_K 0x10       /*< The tab can only be accessed by the kernel (Usually means this is a kernel stack). */
 #define KSHMTAB_FLAG_D 0x20       /*< The tab references device memory that should not be freed. */
 
-struct kfile;
+__struct_fwd(kfile);
 
+#ifndef __ASSEMBLY__
 struct kshmtabscatter {
  struct kshmtabscatter *ts_next;  /*< [0..1][owned] Next scatter entry. */
  __kernel void         *ts_addr;  /*< [1..1][owned] Physical (kernel) address of this scatter portion. */
@@ -85,8 +86,10 @@ kshmtabscatter_contains(struct kshmtabscatter *__restrict self,
 extern __nonnull((1,2)) void
 kshmtabscatter_copybytes(struct kshmtabscatter const *__restrict dst,
                          struct kshmtabscatter const *__restrict src);
+#endif /* !__ASSEMBLY__ */
 
 
+#ifndef __ASSEMBLY__
 struct kshmtab {
  KOBJECT_HEAD
  __atomic __u32        mt_refcnt; /*< Amount of processes using this tab NOTE: Owns a reference to 'mt_refcnt' (When >1, KSHMTAB_FLAG_W and !KSHMTAB_FLAG_S, write-access must cause a pagefault for copy-on-write). */
@@ -154,7 +157,9 @@ extern int kshmtab_contains(struct kshmtab const *__restrict self,
 #else
 #define kshmtab_contains(self,addr) kshmtabscatter_contains(&(self)->mt_scat,addr)
 #endif
+#endif /* !__ASSEMBLY__ */
 
+#ifndef __ASSEMBLY__
 struct kshmtabentry {
  __pagealigned __user void *te_map;   /*< [1..1] User-space address this tab is mapped to. */
  __u32                      te_flags; /*< Set of (MAP_PRIVATE|MAP_SHARED). */
@@ -163,8 +168,11 @@ struct kshmtabentry {
 
 #define KSHM_GROUPCOUNT                 16
 #define KSHM_GROUPOF(uaddr)     (__u8)((__uintptr_t)(uaddr) >> ((__SIZEOF_POINTER__*8)-4))
+#endif /* !__ASSEMBLY__ */
 
-struct kpagedir;
+
+#ifndef __ASSEMBLY__
+__struct_fwd(kpagedir);
 struct kshm {
  KOBJECT_HEAD
  // Per-process shared memory manager
@@ -299,6 +307,7 @@ extern           __nonnull((1))   __size_t kshm_memcpy_u2u(struct kshm const *__
 extern __wunused __nonnull((1,3)) __kernel void *kshm_translate_1(struct kshm const *__restrict self, __user void const *addr, /*out*/__size_t *__restrict max_bytes, int read_write);
 extern __wunused __nonnull((1,3)) __kernel void *kshm_translate_u(struct kshm const *__restrict self, __user void const *addr, /*inout*/__size_t *__restrict max_bytes, int read_write);
 #endif
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 

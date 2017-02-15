@@ -116,6 +116,7 @@
 #define __SIZEOF_INT__       4
 #define __SIZEOF_LONG__      __SIZEOF_POINTER__
 #define __SIZEOF_LONG_LONG__ 8
+#define __SIZEOF_SIZE_T__    __SIZEOF_POINTER__
 
 #define __INT8_C(c)    c##i8
 #define __INT16_C(c)   c##i16
@@ -416,7 +417,7 @@ int __builtin_setjmp(void *);
 __declspec(noreturn) void __builtin_longjmp(void *, int);
 
 
-#define __builtin_offsetof(s,m) (__UINTPTR_TYPE__)&reinterpret_cast<const volatile char&>((((s*)0)->m))
+#define __builtin_offsetof(s,m) (__SIZE_TYPE__)(&((s*)0)->m)
 #define __builtin_constant_p(x) 0
 
 template<bool> struct ____INTELLISENE_static_if_helper {};

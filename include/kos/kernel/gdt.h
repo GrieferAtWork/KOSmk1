@@ -99,7 +99,12 @@ struct __packed {
 };};
  __u8         basehigh;
 };};};
+#endif /* !__ASSEMBLY__ */
 
+#define KIDTPOINTER_SIZEOF           (2+__SIZEOF_POINTER__)
+#define KIDTPOINTER_OFFSETOF_LIMIT   (0)
+#define KIDTPOINTER_OFFSETOF_BASE    (2)
+#ifndef __ASSEMBLY__
 struct __packed kidtpointer {
  __u16            limit;
  struct ksegment *base;
@@ -226,11 +231,14 @@ __STATIC_ASSERT(sizeof(struct ksegment) == 8);
 #define KSEG_MAX              0xffff
 #define KSEG_ISBUILTIN(seg) ((seg) >= KSEG(KSEG_BUILTIN))
 
+#define KLDT_SIZEOF          (2+KIDTPOINTER_SIZEOF)
+#define KLDT_OFFSETOF_GDTID  (0)
+#define KLDT_OFFSETOF_TABLE  (2)
 #ifndef __ASSEMBLY__
 typedef __u16 ksegid_t;
 struct kldt {
  /* Local descriptor table (One for each process). */
- __u16              ldt_gdtid; /*< Associated GDT offset. */
+ __u16              ldt_gdtid; /*< [const] Associated GDT offset/index. */
  struct kidtpointer ldt_table; /*< Associated descriptor table. */
 };
 #define KLDT_INIT(gdtid)   {gdtid,{0,0}}

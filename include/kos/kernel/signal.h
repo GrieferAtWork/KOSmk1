@@ -302,20 +302,33 @@ extern void kassert_ksignals(__size_t sigc, struct ksignal const *const *sigv);
 //    way as it also would if the receive had timed out.
 //////////////////////////////////////////////////////////////////////////
 
+#define KSIGNAL_SIZEOF             (KOBJECT_SIZEOFHEAD+4+2*__SIZEOF_POINTER__)
+#define KSIGNAL_OFFSETOF_LOCKS     (KOBJECT_SIZEOFHEAD+0)
+#define KSIGNAL_OFFSETOF_FLAGS     (KOBJECT_SIZEOFHEAD+1)
+#define KSIGNAL_OFFSETOF_USER      (KOBJECT_SIZEOFHEAD+2)
+#define KSIGNAL_OFFSETOF_WAKEFIRST (KOBJECT_SIZEOFHEAD+4)
+#define KSIGNAL_OFFSETOF_WAKELAST  (KOBJECT_SIZEOFHEAD+4+__SIZEOF_POINTER__)
+
 #ifndef __ASSEMBLY__
 struct ksignal {
  KOBJECT_HEAD
+#endif /* !__ASSEMBLY__ */
 #define KSIGNAL_LOCK_WAIT    0x01
 #define KSIGNAL_LOCK_USER_COUNT  7
 #define KSIGNAL_LOCK_USER(n) (0x2 << (n)) /*< Returns up to 7 different signal locks (0..6) */
+#ifndef __ASSEMBLY__
  __atomic __u8   s_locks; /*< Internal set available spinlocks. */
+#endif /* !__ASSEMBLY__ */
 #define KSIGNAL_FLAG_NONE    0x00
 #define KSIGNAL_FLAG_DEAD    0x01 /*< [lock(KSIGNAL_LOCK_WAIT)] Set to mark dead signals. */
 #define KSIGNAL_FLAG_USER_COUNT  7
 #define KSIGNAL_FLAG_USER(i) (0x2 << (i)) /*< Returns up to 7 different signal flags (0..6) */
+#ifndef __ASSEMBLY__
           __u8   s_flags; /*< Signal flags. */
 union{ /* 16 bits of Userdata (Used by extended implementations; set to 0 when not needed). */
+#endif /* !__ASSEMBLY__ */
 #define KSIGNAL_USERBITS 16
+#ifndef __ASSEMBLY__
           __u16  s_useru;
           __s16  s_users;
           __u8   s_useru8[2];

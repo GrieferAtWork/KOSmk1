@@ -43,6 +43,7 @@ __DECL_BEGIN
 #define kassert_kprocmodule(self)  kassert_object(self,KOBJECT_MAGIC_PROCMODULE)
 #define kassert_kprocmodules(self) kassert_object(self,KOBJECT_MAGIC_PROCMODULES)
 
+#ifndef __ASSEMBLY__
 struct kshlib;
 struct kprocmodule {
  KOBJECT_HEAD
@@ -88,7 +89,7 @@ extern __nonnull((1)) void kprocmodules_init(struct kprocmodules *__restrict sel
  kobject_initzero(self,KOBJECT_MAGIC_PROCMODULES)
 #endif
 extern __nonnull((1)) void kprocmodules_quit(struct kprocmodules *__restrict self);
-
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 #endif /* __KERNEL__ */

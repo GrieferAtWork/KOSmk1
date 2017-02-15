@@ -55,6 +55,7 @@ __DECL_BEGIN
 #define KPROCENV_HASH_SIZE 16
 
 
+#ifndef __ASSEMBLY__
 // Returns the hash of a given environment variable name.
 extern __size_t kenventry_hashof(char const *text, __size_t text_size);
 
@@ -189,7 +190,7 @@ kprocenv_setargv_cu(struct kprocenv *__restrict self, __size_t max_argc,
  KTASK_CRIT(kprocenv_setargv_c(self,max_argc,argv,max_arglenv))
 #define kprocenv_setargv_u(self,max_argc,argv,max_arglenv) \
  KTASK_CRIT(kprocenv_setargv_cu(self,max_argc,argv,max_arglenv))
-
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 #endif /* __KERNEL__ */

@@ -107,8 +107,14 @@ extern void ktlsman_freetls(struct ktlsman *__restrict self, __ktls_t slot);
 //////////////////////////////////////////////////////////////////////////
 // Returns true (non-ZERO) if the given slot is valid.
 extern int ktlsman_validtls(struct ktlsman const *__restrict self, __ktls_t slot);
+#endif /* !__ASSEMBLY__ */
 
 
+#define KTLSPT_SIZEOF        (KOBJECT_SIZEOFHEAD+__SIZEOF_SIZE_T__+__SIZEOF_POINTER__)
+#define KTLSPT_OFFSETOF_VECC (KOBJECT_SIZEOFHEAD)
+#define KTLSPT_OFFSETOF_VECV (KOBJECT_SIZEOFHEAD+__SIZEOF_SIZE_T__)
+
+#ifndef __ASSEMBLY__
 struct ktlspt {
  KOBJECT_HEAD
  // TLS Per-task data block, found stored in each task

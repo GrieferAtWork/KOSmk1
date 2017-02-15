@@ -298,6 +298,9 @@ void __compiler_unreachable_impl __D0() {
 #ifndef __private
 #   define __private /* nothing */
 #endif
+#ifndef __struct_fwd
+#   define __struct_fwd(T) struct T
+#endif
 
 
 #ifndef __local

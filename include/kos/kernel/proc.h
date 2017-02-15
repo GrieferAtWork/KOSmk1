@@ -50,14 +50,17 @@ __DECL_BEGIN
 //       calling it by what is really just simply is.
 //       So if see me mention ktaskctx anywhere, I'm talking about processes.
 
+#ifndef __ASSEMBLY__
 struct ktask;
 struct kproc;
 struct kshlib;
+#endif /* !__ASSEMBLY__ */
 
 #define KOBJECT_MAGIC_PROC  0x960C // PROC
 #define kassert_kproc(self) kassert_refobject(self,p_refcnt,KOBJECT_MAGIC_PROC)
 
 
+#ifndef __ASSEMBLY__
 struct kprocsand {
  // (expected) ORDER: ts_gpbarrier >= ts_spbarrier >= ts_gmbarrier >= ts_smbarrier
  //                  (Where >= means ktask_issameorchildof(rhs,lhs))
@@ -93,7 +96,14 @@ struct kprocsand {
  ,KTASKPRIO_MIN,KTASKPRIO_MAX,(__size_t)-1,(__size_t)-1,0xffffffff\
  ,KPROCSTATE_FLAG_NONE}
 extern __crit kerrno_t kprocsand_initroot(struct kprocsand *self);
+#endif /* !__ASSEMBLY__ */
 
+
+#define KPROCREGS_SIZEOF        (KLDT_SIZEOF+4)
+#define KPROCREGS_OFFSETOF_LDT  (0)
+#define KPROCREGS_OFFSETOF_CS   (KLDT_SIZEOF)
+#define KPROCREGS_OFFSETOF_DS   (KLDT_SIZEOF+2)
+#ifndef __ASSEMBLY__
 struct kprocregs {
  struct kldt pr_ldt; /*< Per-process local descriptor table. */
  __u16       pr_cs;  /*< Code-segment used for new threads. (Usually an index within the LDT) */
@@ -101,8 +111,16 @@ struct kprocregs {
 };
 #define KPROCREGS_INIT(gdtid,cs,ds) {KLDT_INIT(gdtid),cs,ds}
 #define kprocregs_quit(self)         kldt_quit(&(self)->pr_ldt)
+#endif /* !__ASSEMBLY__ */
 
 
+#define KPROC_OFFSETOF_REFCNT  (KOBJECT_SIZEOFHEAD)
+#define KPROC_OFFSETOF_PID     (KOBJECT_SIZEOFHEAD+4)
+#define KPROC_OFFSETOF_LOCK    (KOBJECT_SIZEOFHEAD+8)
+#define KPROC_OFFSETOF_REGS    (KOBJECT_SIZEOFHEAD+8+KMMUTEX_SIZEOF)
+#define KPROC_OFFSETOF_MODULES (KOBJECT_SIZEOFHEAD+8+KMMUTEX_SIZEOF+KPROCREGS_SIZEOF)
+
+#ifndef __ASSEMBLY__
 struct kproc {
  KOBJECT_HEAD
  __atomic __u32       p_refcnt;   /*< Reference counter. */
@@ -858,6 +876,7 @@ kproc_dlsym_c(struct kproc *__restrict self,
                         ksymhash_of(name,name_size));
 }
 #endif
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 #endif /* __KERNEL__ */

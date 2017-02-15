@@ -34,11 +34,26 @@
 
 __DECL_BEGIN
 
+__struct_fwd(kmutex);
+
 #define KOBJECT_MAGIC_MUTEX  0x707E3E /*< MUTEX */
 #define kassert_kmutex(self) kassert_object(self,KOBJECT_MAGIC_MUTEX)
 
 //////////////////////////////////////////////////////////////////////////
 // A non-recursive bi-state mutex.
+
+
+#define KMUTEX_OFFSETOF_SIG    (KOBJECT_SIZEOFHEAD)
+#define KMUTEX_OFFSETOF_LOCKED (KOBJECT_SIZEOFHEAD+KSIGNAL_OFFSETOF_USER)
+#if KDEBUG_HAVE_TRACKEDMUTEX
+#define KMUTEX_OFFSETOF_HOLDER (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
+#define KMUTEX_OFFSETOF_LOCKTB (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+__SIZEOF_POINTER__)
+#define KMUTEX_SIZEOF          (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+__SIZEOF_POINTER__*2)
+#else /* KDEBUG_HAVE_TRACKEDMUTEX */
+#define KMUTEX_SIZEOF          (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
+#endif /* !KDEBUG_HAVE_TRACKEDMUTEX */
+
+#ifndef __ASSEMBLY__
 struct kmutex {
  KOBJECT_HEAD
  struct ksignal     m_sig; /*< Signal used for locking. */
@@ -129,6 +144,7 @@ extern __crit __wunused __nonnull((1,2)) kerrno_t kmutex_timeoutlock(struct kmut
 // @return: KS_UNCHANGED: The mutex was unlocked, but with no waiting
 //                        tasks, no signal was send. (NOT AN ERROR)
 extern __crit __nonnull((1)) kerrno_t kmutex_unlock(struct kmutex *__restrict self);
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 #endif /* __KERNEL__ */

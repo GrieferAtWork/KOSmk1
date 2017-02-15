@@ -34,8 +34,8 @@
 __DECL_BEGIN
 #define KOBJECT_MAGIC_CLOSELOCK 0xC705E70C /*< CLOSELOC */
 
-struct timespec;
-struct kcloselock;
+__struct_fwd(timespec);
+__struct_fwd(kcloselock);
 
 #define kassert_kcloselock(self) kassert_object(self,KOBJECT_MAGIC_CLOSELOCK)
 
@@ -54,10 +54,20 @@ struct kcloselock;
 //      the closing task waits until all operating tasks finish,
 //      though no new tasks can start operating.
 
+#define KCLOSELOCK_OFFSETOF_OPSIG   (KOBJECT_SIZEOFHEAD)
+#if KCLOSELOCK_OPCOUNTBITS <= KSIGNAL_USERBITS
+#define KCLOSELOCK_OFFSETOF_OPCOUNT (KOBJECT_SIZEOFHEAD+KSIGNAL_OFFSETOF_USER)
+#define KCLOSELOCK_SIZEOF           (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
+#else
+#define KCLOSELOCK_OFFSETOF_OPCOUNT (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
+#define KCLOSELOCK_SIZEOF           (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+(KCLOSELOCK_OPCOUNTBITS/8))
+#endif
+
+#ifndef __ASSEMBLY__
 struct kcloselock {
  KOBJECT_HEAD
 #define KCLOSELOCK_FLAG_CLOSEING  \
- KSIGNAL_FLAG_USER(0) /*< [lock(KSIGNAL_LOCK_WAIT)] Set while attempting to close the object. */
+       KSIGNAL_FLAG_USER(0) /*< [lock(KSIGNAL_LOCK_WAIT)] Set while attempting to close the object. */
  struct ksignal cl_opsig;   /*< The signal a closing task waits for. */
  // [lock(KSIGNAL_LOCK_WAIT)] Amount of tasks currently performing operations.
 #if KCLOSELOCK_OPCOUNTBITS <= KSIGNAL_USERBITS
@@ -128,6 +138,7 @@ extern __crit __wunused __nonnull((1,2)) kerrno_t kcloselock_timeoutclose(struct
 // Resets a close lock after it has already been closed.
 // @return: KS_UNCHANGED: The lock wasn't closed to being with
 extern __crit __nonnull((1)) kerrno_t kcloselock_reset(struct kcloselock *__restrict self);
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 #endif /* __KERNEL__ */

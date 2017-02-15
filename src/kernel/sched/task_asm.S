@@ -27,6 +27,7 @@
 #include <kos/kernel/gdt.h>
 #include <kos/kernel/interrupts.h>
 #include <kos/kernel/task.h>
+#include <kos/kernel/proc.h>
 #include <kos/arch.h>
 #ifdef __x86__
 #include <kos/arch/x86/eflags.h>
@@ -126,8 +127,21 @@ GLOBAL_FUNCTION(ktask_switchimpl):
 
 	pushI %ecx
 	call _S(ktask_decref_f)
-	POPARGS(1)
+	popI %ecx
 
+	/* Switch the LDT table if the new task's differs from the old. */
+	movI KTASK_OFFSETOF_PROC(%ebx), %eax
+	movI KTASK_OFFSETOF_PROC(%ecx), %edx
+	cmpI %eax, %edx
+	jnz .post_ldt
+
+	/* Different processes -> Load LDT from '%eax' */
+	lldt (KPROC_OFFSETOF_REGS    \
+	    + KPROCREGS_OFFSETOF_LDT \
+	    + KLDT_OFFSETOF_GDTID    \
+	)(%eax)
+
+.post_ldt:
 	/* Update the ESP0 in the cpu's TSS */
 	pushI %ebx
 	movI (KTASK_OFFSETOF_ESP0)(%ebx), %edx

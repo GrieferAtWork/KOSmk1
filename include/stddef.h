@@ -34,7 +34,7 @@
 __DECL_BEGIN
 
 #undef offsetof
-#if __has_builtin(__builtin_offsetof)
+#if __has_builtin(__builtin_offsetof) || defined(__GNUC__)
 #   define offsetof(T,member) __builtin_offsetof(T,member)
 #else
 #   define offsetof(T,member) ((__size_t)&((T*)0)->member)

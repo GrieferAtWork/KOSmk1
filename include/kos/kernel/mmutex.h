@@ -39,10 +39,15 @@ __DECL_BEGIN
 #define kassert_kmmutex(self) kassert_object(self,KOBJECT_MAGIC_MMUTEX)
 
 #if KDEBUG_HAVE_TRACKEDMMUTEX
+#define KMMUTEX_DEBUG_SIZEOF           (__SIZEOF_POINTER__*2)
+#define KMMUTEX_DEBUG_OFFSETOF_HOLDER  (0)
+#define KMMUTEX_DEBUG_OFFSETOF_LOCKTB  (__SIZEOF_POINTER__)
+#ifndef __ASSEMBLY__
 struct kmmutex_debug {
  struct ktask      *md_holder; /*< [0..1][lock(this)] Current holder of the mutex lock. */
  struct dtraceback *md_locktb; /*< [0..1][lock(this)] Traceback of where the lock was acquired. */
 };
+#endif /* !__ASSEMBLY__ */
 #endif /* KDEBUG_HAVE_TRACKEDMMUTEX */
 
 //////////////////////////////////////////////////////////////////////////
@@ -54,6 +59,16 @@ struct kmmutex_debug {
 #define KMMUTEX_ISONELOCK(lock) ((lock) == KMMUTEX_LOCK(KMMUTEX_LOCKID(lock)))
 #define KMMUTEX_LOCKMASK        ((1 << KMMUTEX_LOCKC)-1)
 
+
+#ifdef KMMUTEX_DEBUG_SIZEOF
+#define KMMUTEX_SIZEOF          (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+KMMUTEX_DEBUG_SIZEOF*KMMUTEX_LOCKC)
+#define KMMUTEX_OFFSETOF_DEBUG  (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
+#else
+#define KMMUTEX_SIZEOF          (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
+#endif
+#define KMMUTEX_OFFSETOF_SIG    (KOBJECT_SIZEOFHEAD)
+
+#ifndef __ASSEMBLY__
 //////////////////////////////////////////////////////////////////////////
 // A non-recursive multi-lock mutex.
 struct kmmutex {
@@ -166,6 +181,7 @@ extern __crit __wunused __nonnull((1,2)) kerrno_t kmmutex_timeoutlocks(struct km
 //                        tasks, no signal was send. (NOT AN ERROR)
 extern __crit __nonnull((1)) kerrno_t kmmutex_unlock(struct kmmutex *__restrict self, kmmutex_lock_t lock);
 extern __crit __nonnull((1)) kerrno_t kmmutex_unlocks(struct kmmutex *__restrict self, kmmutex_lock_t locks);
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 #endif /* __KERNEL__ */

@@ -34,6 +34,7 @@ __DECL_BEGIN
 #define KOBJECT_MAGIC_FDMAN  0xFD77AA /*< FDMAN */
 #define kassert_kfdman(self) kassert_object(self,KOBJECT_MAGIC_FDMAN)
 
+#ifndef __ASSEMBLY__
 struct kfdman {
  KOBJECT_HEAD
  // NOTE: The following are int, because the FD number (an int) is
@@ -133,7 +134,7 @@ __local struct kfdentry *kfdman_slot(struct kfdman *__restrict self, int fd) {
  return &self->fdm_fdv[fd];
 }
 #endif
-
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 #endif /* __KERNEL__ */

@@ -29,6 +29,8 @@
 
 __DECL_BEGIN
 
+#define __TIMESPEC_SIZEOF   (__SIZEOF_TIME_T+__SIZEOF_LONG__)
+
 #ifndef __ASSEMBLY__
 #ifndef __timespec_defined
 #define __timespec_defined 1

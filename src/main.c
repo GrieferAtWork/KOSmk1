@@ -240,7 +240,7 @@ void kernel_main(void) {
 #undef RUN
  //test_taskstat();
  //test_write_file();
- test_realmode();
+ //test_realmode();
  run_init();
 
  karch_irq_disable();

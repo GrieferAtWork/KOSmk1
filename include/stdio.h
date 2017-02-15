@@ -47,6 +47,7 @@ __DECL_BEGIN
 #   define SEEK_END 2
 #endif
 
+#ifndef __ASSEMBLY__
 #ifndef __off_t_defined
 #define __off_t_defined 1
 typedef __off_t off_t;
@@ -81,6 +82,7 @@ extern FILE *stdin;
 extern FILE *stdout;
 extern FILE *stderr;
 #endif
+#endif /* !__ASSEMBLY__ */
 
 #define EOF    (-1)
 #define BUFSIZ  256
@@ -88,6 +90,7 @@ extern FILE *stderr;
 #define P_tmpdir  "/tmp"
 #define L_tmpnam  20
 
+#ifndef __ASSEMBLY__
 extern __wunused __nonnull((1,2)) FILE *
 fopen __P((char const *__restrict __filename,
            char const *__restrict __mode));
@@ -209,6 +212,7 @@ extern __coldcall __nonnull((1)) void perror __P((char const *__s));
 extern __nonnull((2)) __attribute_vaformat(__printf__,2,3) int dprintf __P((int __fd, char const *__restrict __format, ...));
 extern __nonnull((2)) __attribute_vaformat(__printf__,2,0) int vdprintf __P((int __fd, char const *__restrict __format, va_list __args));
 #endif /* !__CONFIG_MIN_LIBC__ */
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 
