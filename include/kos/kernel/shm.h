@@ -175,7 +175,6 @@ struct kshmtabentry {
 __struct_fwd(kpagedir);
 
 #define KSHM_LDT_BUFSIZE    (8)
-#define KSHM_LDT_ALIGNMENT  (16)
 #define KSHM_LDT_PAGEFLAGS  (PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE)
 
 #define KLDT_SIZEOF          (2+KIDTPOINTER_SIZEOF+__SIZEOF_POINTER__)
@@ -186,9 +185,10 @@ __struct_fwd(kpagedir);
 __COMPILER_PACK_PUSH(1)
 struct __packed kldt {
  /* Local descriptor table (One for each process). */
- __u16                      ldt_gdtid;  /*< [const] Associated GDT offset/index. */
- __user  struct kidtpointer ldt_table;  /*< Associated descriptor table (with virtual mapping). */
- __kernel struct ksegment  *ldt_vector; /*< [1..1] Physical address of the LDT vector. */
+ __u16                                   ldt_gdtid;  /*< [const] Associated GDT offset/index. */
+ __u16                                   ldt_limit;  /*< LDT vector limit. */
+ __user struct ksegment                 *ldt_base;   /*< [0..1] User-mapped base address of the LDT vector. */
+ __pagealigned __kernel struct ksegment *ldt_vector; /*< [0..1][owned] Physical address of the LDT vector. */
 };
 __COMPILER_PACK_POP
 #endif /* !__ASSEMBLY__ */
@@ -214,7 +214,7 @@ struct kshm {
 };
 #define KSHM_INITROOT(pagedir,gdtid) \
  {KOBJECT_INIT(KOBJECT_MAGIC_SHM) pagedir,\
- {gdtid,{0,NULL},NULL},0,NULL,{NULL,}}
+ {gdtid,0,NULL,NULL},0,NULL,{NULL,}}
 
 //////////////////////////////////////////////////////////////////////////
 // Initialize/Finalize a given SHM manager.

@@ -220,14 +220,14 @@ __STATIC_ASSERT(sizeof(struct ksegment) == 8);
 #define KSEG_NULL           KSEG(0) /*< [0x00] NULL Segment. */
 #define KSEG_KERNEL_CODE    KSEG(1) /*< [0x08] Ring #0 code segment. */
 #define KSEG_KERNEL_DATA    KSEG(2) /*< [0x10] Ring #0 data segment. */
-#define KSEG_USER_CODE      KSEG(3) /*< [0x18] Ring #3 code segment. */
-#define KSEG_USER_DATA      KSEG(4) /*< [0x20] Ring #3 data segment. */
-#define KSEG_KERNEL_CODE_16 KSEG(5) /*< [0x28] Ring #0 16-bit code segment. */
-#define KSEG_KERNEL_DATA_16 KSEG(6) /*< [0x30] Ring #0 16-bit data segment. */
-#define KSEG_KERNELLDT      KSEG(7) /*< [0x38] Symbolic kernel LDT (Usually empty). */
-#define KSEG_CPU0TSS        KSEG(8) /*< [0x40] kcpu_zero()-tss segment. */
+#define KSEG_KERNEL_CODE_16 KSEG(3) /*< [0x18] Ring #0 16-bit code segment. */
+#define KSEG_KERNEL_DATA_16 KSEG(4) /*< [0x20] Ring #0 16-bit data segment. */
+#define KSEG_KERNELLDT      KSEG(5) /*< [0x28] Symbolic kernel LDT (Usually empty). */
+#define KSEG_CPU0TSS        KSEG(6) /*< [0x30] kcpu_zero()-tss segment. */
+//#define KSEG_USER_CODE    KSEG(7) /*< [0x38] Ring #3 code segment. */
+//#define KSEG_USER_DATA    KSEG(8) /*< [0x40] Ring #3 data segment. */
 
-#define KSEG_BUILTIN          9
+#define KSEG_BUILTIN          7
 #define KSEG_MAX              0xffff
 #define KSEG_ISBUILTIN(seg) ((seg) >= KSEG(KSEG_BUILTIN))
 
@@ -239,9 +239,8 @@ typedef __u16 ksegid_t;
 // These are mainly used to implement the higher-level LDT table and its functions.
 // @return: KSEG_NULL: Failed to allocate a new segment.
 extern __crit __nonnull((1)) ksegid_t kgdt_alloc(struct ksegment const *seg);
-extern __crit                void kgdt_free(ksegid_t id);
-extern __crit __nonnull((2)) void kgdt_update(ksegid_t id, struct ksegment const *seg);
-
+extern __crit                    void kgdt_free(ksegid_t id);
+extern __crit __nonnull((2))     void kgdt_update(ksegid_t id, struct ksegment const *seg);
 
 #endif
 

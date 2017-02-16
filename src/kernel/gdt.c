@@ -44,7 +44,10 @@ extern void tss_flush(ksegid_t sel);
 
 #if 0
 /* TODO: A dynamic GDT would have to be mapped in all user page directories.
- *       The static one already is because we always map the entire kernel. */
+ *       The static one already is because we always map the entire kernel.
+ *    >> In the long run we must switch to a dynamic GDT system,
+ *       because otherwise our kernel will be limited to a maximum
+ *       of 'GDT_MAX_ENTRIES' parallel processes. */
 #define GDT_MAX_ENTRIES         (-1)
 #else
 #define GDT_MAX_ENTRIES        (128)
@@ -231,12 +234,16 @@ void kernel_initialize_gdt(void) {
  ksegment_encode(&gdt_segments[KSEG_ID(KSEG_NULL          )],0,0,0);                           /* NULL segment */
  ksegment_encode(&gdt_segments[KSEG_ID(KSEG_KERNEL_CODE   )],0,SEG_LIMIT_MAX,SEG_CODE_PL0);    /* Kernel code segment */
  ksegment_encode(&gdt_segments[KSEG_ID(KSEG_KERNEL_DATA   )],0,SEG_LIMIT_MAX,SEG_DATA_PL0);    /* Kernel data segment */
- ksegment_encode(&gdt_segments[KSEG_ID(KSEG_USER_CODE     )],0,SEG_LIMIT_MAX,SEG_CODE_PL3);    /* User code */
- ksegment_encode(&gdt_segments[KSEG_ID(KSEG_USER_DATA     )],0,SEG_LIMIT_MAX,SEG_DATA_PL3);    /* User data */
  ksegment_encode(&gdt_segments[KSEG_ID(KSEG_KERNEL_CODE_16)],0,SEG_LIMIT_MAX,SEG_CODE_PL0_16); /* 16-bit kernel code segment. */
  ksegment_encode(&gdt_segments[KSEG_ID(KSEG_KERNEL_DATA_16)],0,SEG_LIMIT_MAX,SEG_DATA_PL0_16); /* 16-bit kernel data segment. */
  ksegment_encode(&gdt_segments[KSEG_ID(KSEG_KERNELLDT     )],0,0,SEG_LDT);                     /* Kernel LDT table (technically lives in 'kproc_kernel()->p_ldt', but is empty by default). */
  ksegment_encode(&gdt_segments[KSEG_ID(KSEG_CPU0TSS       )],(uintptr_t)tss0,sizeof(struct ktss),SEG_TSS); /* CPU-0 TSS */
+#ifdef KSEG_USER_CODE
+ ksegment_encode(&gdt_segments[KSEG_ID(KSEG_USER_CODE     )],0,SEG_LIMIT_MAX,SEG_CODE_PL3);    /* User code */
+#endif
+#ifdef KSEG_USER_DATA
+ ksegment_encode(&gdt_segments[KSEG_ID(KSEG_USER_DATA     )],0,SEG_LIMIT_MAX,SEG_DATA_PL3);    /* User data */
+#endif
 
  gdt_flush(&gdt); /* Install the GDT table (overwriting the one set up by GRUB) */
  assert(gdt_segments[KSEG_ID(KSEG_CPU0TSS)].rw == 0);
