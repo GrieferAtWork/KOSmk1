@@ -141,7 +141,7 @@ void keyboard_sendscan(kbscan_t scan) {
 
  // Broadcast the keyboard event through the data distributer
  // NOTE: This needs to be asynchronous because we can't use
- //       preemption as described in the doc of 'set_irq_handler'
+ //       preemption as described in the doc of 'kirq_sethandler'
  kaddist_vsend(&keyboard_input,&event);
 }
 
@@ -163,7 +163,7 @@ static void kb_irq_handler(struct kirq_registers *__restrict regs) {
 static void kernel_initialize_bklayout(void);
 
 void kernel_initialize_keyboard(void) {
- set_irq_handler(33,&kb_irq_handler);
+ kirq_sethandler(33,&kb_irq_handler);
  inb(PS2_DATA);
  kernel_initialize_bklayout();
 }

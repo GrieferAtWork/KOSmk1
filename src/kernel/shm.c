@@ -48,7 +48,7 @@ kpageflag_t kshmtab_getpageflags(struct kshmtab const *__restrict self) {
  //       the given tab ('tab->mt_refcnt > 1'; aka. copy-on-write)
  if (!(self->mt_flags&KSHMTAB_FLAG_K)) result |= PAGEDIR_FLAG_USER;
  if ((self->mt_flags&KSHMTAB_FLAG_W)
-#ifdef KCONFIG_HAVE_SHM_COPY_ON_WRITE
+#if KCONFIG_HAVE_SHM_COPY_ON_WRITE
   && katomic_load(self->mt_refcnt) == 1
 #endif
      ) result |= PAGEDIR_FLAG_READ_WRITE;
@@ -196,7 +196,7 @@ __kernel void *__kshmtab_translate_offset(struct kshmtab const *__restrict self,
  size_t scatter_size;
  kassert_kshmtab(self);
  kassertobj(maxbytes);
- scatter = &self->mt_scat;
+ scatter = &self->mt_scatter;
  do {
   scatter_size = scatter->ts_pages*PAGESIZE;
   if (offset < scatter_size) {
@@ -217,7 +217,7 @@ __kernel void *__kshmtab_translate_offset(struct kshmtab const *__restrict self,
 extern void kshmtab_destroy(struct kshmtab *__restrict self);
 void kshmtab_destroy(struct kshmtab *__restrict self) {
  if (!(self->mt_flags&KSHMTAB_FLAG_D)) {
-  kshmtabscatter_quit(&self->mt_scat);
+  kshmtabscatter_quit(&self->mt_scatter);
  }
  free(self);
 }
@@ -230,7 +230,7 @@ __ref struct kshmtab *kshmtab_newram(size_t pages, __u32 flags) {
  result->mt_refcnt = 1;
  result->mt_flags = flags;
  result->mt_pages = pages;
- if __unlikely(KE_ISERR(kshmtabscatter_init(&result->mt_scat,pages))) {
+ if __unlikely(KE_ISERR(kshmtabscatter_init(&result->mt_scatter,pages))) {
   free(result);
   result = NULL;
  }
@@ -244,7 +244,7 @@ __ref struct kshmtab *kshmtab_newram_linear(size_t pages, __u32 flags) {
  result->mt_refcnt = 1;
  result->mt_flags = flags;
  result->mt_pages = pages;
- if __unlikely(KE_ISERR(kshmtabscatter_init_linear(&result->mt_scat,pages))) {
+ if __unlikely(KE_ISERR(kshmtabscatter_init_linear(&result->mt_scatter,pages))) {
   free(result);
   result = NULL;
  }
@@ -265,9 +265,9 @@ __ref struct kshmtab *kshmtab_newdev(__pagealigned __kernel void *start, size_t 
  result->mt_refcnt        = 1;
  result->mt_flags         = flags|KSHMTAB_FLAG_D;
  result->mt_pages         = pages;
- result->mt_scat.ts_addr  = start;
- result->mt_scat.ts_pages = pages;
- result->mt_scat.ts_next  = NULL;
+ result->mt_scatter.ts_addr  = start;
+ result->mt_scatter.ts_pages = pages;
+ result->mt_scatter.ts_next  = NULL;
  return result;
 }
 
@@ -280,12 +280,12 @@ __ref struct kshmtab *kshmtab_copy(struct kshmtab const *__restrict self) {
  result->mt_refcnt = 1;
  result->mt_flags = self->mt_flags;
  result->mt_pages = self->mt_pages;
- if __unlikely(KE_ISERR(kshmtabscatter_init(&result->mt_scat,self->mt_pages))) {
+ if __unlikely(KE_ISERR(kshmtabscatter_init(&result->mt_scatter,self->mt_pages))) {
   free(result);
   return NULL;
  }
  // Now just copy the data!
- kshmtabscatter_copybytes(&result->mt_scat,&self->mt_scat);
+ kshmtabscatter_copybytes(&result->mt_scatter,&self->mt_scatter);
  return result;
 }
 
@@ -368,71 +368,15 @@ __local void kshm_updategroups(struct kshm *__restrict self) {
  KSHM_VALIDATE_GROUPS(self)
 }
 
-#ifdef KCONFIG_HAVE_SHM_COPY_ON_WRITE
-kerrno_t kshm_initfork(struct kshm *__restrict self,
-                       struct kshm *__restrict right) {
- struct kshmtabentry *tabiter,*tabend;
- kerrno_t error;
- kassertobj(self);
- kassert_kshm(right);
- kobject_init(self,KOBJECT_MAGIC_SHM);
- self->sm_pd = kpagedir_copy(right->sm_pd);
- if __unlikely(!self->sm_pd) return KE_NOMEM;
- self->sm_tabc = right->sm_tabc;
- self->sm_tabv = (struct kshmtabentry *)memdup(right->sm_tabv,right->sm_tabc*
-                                               sizeof(struct kshmtabentry));
- if __unlikely(!self->sm_tabv) { error = KE_NOMEM; err_pd: kpagedir_delete(self->sm_pd); return error; }
- tabend = (tabiter = self->sm_tabv)+self->sm_tabc;
- for (; tabiter != tabend; ++tabiter) {
-  kassert_kshmtab(tabiter->te_tab);
-  if (tabiter->te_tab->mt_flags&KSHMTAB_FLAG_K) {
-   --tabend;
-   memmove(tabiter,tabiter+1,(tabend-tabiter)*
-           sizeof(struct kshmtabentry));
-   --self->sm_tabc;
-   continue;
-  } else {
-   if __unlikely(KE_ISERR(error = kshmtab_incref(tabiter->te_tab))) {
-    if (tabiter->te_tab->mt_flags&KSHMTAB_FLAG_S) goto err_tabs;
-    // We can actually try to recover from this by doing a hard copy
-    tabiter->te_tab = kshmtab_copy(tabiter->te_tab);
-    if __unlikely(!tabiter->te_tab) {
-     error = KE_NOMEM; // No memory...
-err_tabs:
-     while (tabiter != self->sm_tabv) {
-      --tabiter;
-      kshmtab_decref(tabiter->te_tab);
-     }
-     free(self->sm_tabv);
-     goto err_pd;
-    }
-    error = kpagedir_mapscatter(self->sm_pd,&tabiter->te_tab->mt_scat,tabiter->te_map,
-                                kshmtab_getpageflags(tabiter->te_tab));
-    if __unlikely(KE_ISERR(error)) { kshmtab_decref(tabiter->te_tab); goto err_tabs; }
-   } else {
-    // TODO: Remap this tab as read-only in 'self->sm_pd' and 'right->sm_pd'
-    //    >> While that is fairly simple (only needing to remove the
-    //       'PAGEDIR_FLAG_READ_WRITE' flag from all affected pages),
-    //       the hard part is writing a #PF (Page Fault) handler capable
-    //       of correctly copying the pages.
-    //    >> OK. That shouldn't be too difficult either... (Yay!)
-   }
-  }
- }
- if (self->sm_tabc != right->sm_tabc) {
-  // Some kernel tabs were not copied. Release memory that was used for them
-  tabiter = (struct kshmtabentry *)realloc(self->sm_tabv,self->sm_tabc*
-                                           sizeof(struct kshmtabentry));
-  if __likely(tabiter) self->sm_tabv = tabiter;
- }
- // Finally, do a forced update the group cache
- kshm_updategroups(self);
- return KE_OK;
-}
-#endif
-
+#if KCONFIG_HAVE_SHM_COPY_ON_WRITE
 kerrno_t kshm_initcopy(struct kshm *__restrict self,
-                       struct kshm *__restrict right) {
+                       struct kshm *__restrict right,
+                       int force_full_copy)
+#else
+kerrno_t __kshm_initcopy_copy(struct kshm *__restrict self,
+                              struct kshm *__restrict right)
+#endif
+{
  struct kshmtabentry *tabiter,*tabend;
  kerrno_t error;
  kassertobj(self);
@@ -457,15 +401,18 @@ err_pd:
  while (tabiter != tabend) {
   kassert_kshmtab(tabiter->te_tab);
   if (tabiter->te_tab->mt_flags&KSHMTAB_FLAG_K) {
+   /*  */
    --tabend;
    memmove(tabiter,tabiter+1,(tabend-tabiter)*
            sizeof(struct kshmtabentry));
    --self->sm_tabc;
    continue;
   } else {
-   if ((tabiter->te_tab->mt_flags&KSHMTAB_FLAG_S) &&
-       (tabiter->te_flags&MAP_SHARED)) {
-    // This tab must be shared
+   if (!(tabiter->te_tab->mt_flags&KSHMTAB_FLAG_W) ||
+       ((tabiter->te_tab->mt_flags&KSHMTAB_FLAG_S) &&
+        (tabiter->te_flags&MAP_SHARED))) {
+    /* This tab, including any changes made to it, is shared.
+     * NOTE: Read-only memory tabs are also shared by default. */
     if __unlikely(KE_ISERR(error = kshmtab_incref(tabiter->te_tab))) {
 err_tabs:
      while (tabiter != self->sm_tabv) {
@@ -475,24 +422,41 @@ err_tabs:
      free(self->sm_tabv);
      goto err_ldt;
     }
-   } else {
-    // Copy the tab and its data
+   } else
+#if KCONFIG_HAVE_SHM_COPY_ON_WRITE
+   if (!force_full_copy && KE_ISOK(kshmtab_incref(tabiter->te_tab))) {
+    /* Insert a new reference to this tab and map it as read-only.
+     * NOTE: When performing the scatter-map, 'kshmtab_getpageflags' will
+     *       correctly notice that the tab's reference counter isn't ONE(1),
+     *       meaning that we aren't its unique owner, and will therefor
+     *       map it as read-only.
+     *    >> Now all that we have to do is remap it as read-only within 'right'.
+     * TODO: */
+    kpagedir_setflags(right->sm_pd,tabiter->te_map,
+                      tabiter->te_tab->mt_pages,
+                      ~(PAGEDIR_FLAG_READ_WRITE),0);
+    right->sm_pd;
+   } else
+#endif
+   {
+    /* Copy the tab and its data */
     tabiter->te_tab = kshmtab_copy(tabiter->te_tab);
     if __unlikely(!tabiter->te_tab) { error = KE_NOMEM; goto err_tabs; }
    }
-   error = kpagedir_mapscatter(self->sm_pd,&tabiter->te_tab->mt_scat,tabiter->te_map,
+   error = kpagedir_mapscatter(self->sm_pd,&tabiter->te_tab->mt_scatter,tabiter->te_map,
                                kshmtab_getpageflags(tabiter->te_tab));
    if __unlikely(KE_ISERR(error)) { kshmtab_decref(tabiter->te_tab); goto err_tabs; }
   }
   ++tabiter;
  }
  if (self->sm_tabc != right->sm_tabc) {
-  // Some kernel tabs were not copied. Release memory that was used for them
+  /* Some kernel tabs were not copied.
+   * -> Try to release memory that was used to track them. */
   tabiter = (struct kshmtabentry *)realloc(self->sm_tabv,self->sm_tabc*
                                            sizeof(struct kshmtabentry));
   if __likely(tabiter) self->sm_tabv = tabiter;
  }
- // Finally, do a forced update the group cache
+ /* Finally, forced an update of all cache groups. */
  kshm_updategroups(self);
  return KE_OK;
 }
@@ -603,7 +567,7 @@ kshm_instab_inherited(struct kshm *__restrict self,
   resaddr = kpagedir_findfreerange(self->sm_pd,tab->mt_pages,hint);
   if __unlikely(!resaddr) return KE_NOSPC;
  }
- if __unlikely(KE_ISERR(kpagedir_mapscatter(self->sm_pd,&tab->mt_scat,resaddr,
+ if __unlikely(KE_ISERR(kpagedir_mapscatter(self->sm_pd,&tab->mt_scatter,resaddr,
                                             kshmtab_getpageflags(tab)))
                ) return KE_NOMEM;
  resindex = kshm_findindexof(self,resaddr);
@@ -759,8 +723,8 @@ __crit __user void *kshm_mmap_linear(struct kshm *__restrict self, __user void *
  kassertobj(kaddr);
  tab = kshmtab_newram_linear(ceildiv(len,PAGESIZE),prot);
  if __unlikely(!tab) return MAP_FAIL;
- assertf(!tab->mt_scat.ts_next,"This! Is! Linear! *knocks guy down hole*");
- *kaddr = tab->mt_scat.ts_addr;
+ assertf(!tab->mt_scatter.ts_next,"This! Is! Linear! *knocks guy down hole*");
+ *kaddr = tab->mt_scatter.ts_addr;
  if __unlikely(KE_ISERR(kshm_instab_inherited(self,tab,flags,hint,&result))
                ) { kshmtab_decref(tab); result = MAP_FAIL; }
  return result;
@@ -784,7 +748,7 @@ kshm_mmapdev(struct kshm *__restrict self,
  if __unlikely(KE_ISERR(error)) return error;
  tab = kshmtab_newdev(phys_ptr,pages,prot);
  if __unlikely(!tab) return KE_NOMEM;
- assertf(!tab->mt_scat.ts_next,"Device memory must not be scattered");
+ assertf(!tab->mt_scatter.ts_next,"Device memory must not be scattered");
  error = kshm_instab_inherited(self,tab,flags,*hint_and_result,&result);
  if __unlikely(KE_ISERR(error)) { kshmtab_decref(tab); return error; }
  *(uintptr_t **)hint_and_result += align_offset;

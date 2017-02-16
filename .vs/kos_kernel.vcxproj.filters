@@ -632,5 +632,11 @@
     <None Include="..\src\kernel\shm-ldt.c.inl">
       <Filter>src\kernel</Filter>
     </None>
+    <None Include="..\src\kernel\shm-cow.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\shm-map.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
   </ItemGroup>
 </Project>

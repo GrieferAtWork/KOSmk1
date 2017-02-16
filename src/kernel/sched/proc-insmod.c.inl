@@ -44,7 +44,7 @@ kproc_loadmodsections(struct kproc *__restrict self,
  KTASK_CRIT_MARK
  end = (iter = module->sh_data.ed_secv)+module->sh_data.ed_secc;
  for (; iter != end; ++iter) {
-#ifndef KCONFIG_HAVE_SHM_COPY_ON_WRITE
+#if !KCONFIG_HAVE_SHM_COPY_ON_WRITE
   // Without copy-on-write, we need to
   // create hard copies of writable tabs.
   if (iter->sls_tab->mt_flags&KSHMTAB_FLAG_W) {

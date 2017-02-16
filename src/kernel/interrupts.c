@@ -173,19 +173,19 @@ void kernel_initialize_interrupts(void) {
 }
 
 
-static irq_handler_t interrupt_handlers[KIRQ_SIGNAL_COUNT];
+static kirq_handler_t interrupt_handlers[KIRQ_SIGNAL_COUNT];
 static void set_default_irq_handlers(void) {
- irq_handler_t *iter,*end;
+ kirq_handler_t *iter,*end;
  end = (iter = interrupt_handlers)+KIRQ_SIGNAL_COUNT;
- while (iter != end) *iter++ = irq_default_handler;
+ while (iter != end) *iter++ = kirq_default_handler;
 }
 
 
-irq_handler_t get_irq_handler(irq_t signum) {
+kirq_handler_t kirq_gethandler(kirq_t signum) {
  if (signum >= KIRQ_SIGNAL_COUNT) return NULL;
  return katomic_load(interrupt_handlers[signum]);
 }
-irq_handler_t set_irq_handler(irq_t signum, irq_handler_t new_handler) {
+kirq_handler_t kirq_sethandler(kirq_t signum, kirq_handler_t new_handler) {
  assert(new_handler);
  if (signum >= KIRQ_SIGNAL_COUNT) return NULL;
  return katomic_xch(interrupt_handlers[signum],new_handler);
@@ -200,17 +200,17 @@ static int print_error(char const *__restrict data,
 }
 
 
-void __irq_default_handler(struct kirq_registers *__unused(regs)) {}
+void __kirq_default_handler(struct kirq_registers *__unused(regs)) {}
 void x86_interrupt_handler(struct kirq_registers *regs) {
- irq_handler_t handler;
+ kirq_handler_t handler;
  //assert(ktask_self() != NULL);
  //printf("INTERADDR = %p\n",regs->esp);
  assertf(regs->regs.intno < KIRQ_SIGNAL_COUNT,
          "Invalid signal: %u|%u",regs->regs.intno,regs->regs.ecode);
  if (regs->regs.intno < 32) {
-  struct irq_siginfo const *info;
+  struct kirq_siginfo const *info;
   struct ktask *caller = ktask_self();
-  info = irq_getsiginfo(regs->regs.intno);
+  info = kirq_getsiginfo(regs->regs.intno);
   if __unlikely(KE_ISERR(kmem_validateob(caller))) caller = NULL;
   k_syslogf(KLOG_ERROR,"\nTask: %I32u|%Iu: %s"
             "\nException code received %u|%u\n>> [%s] %s\n",
@@ -221,7 +221,7 @@ void x86_interrupt_handler(struct kirq_registers *regs) {
             info ? info->isi_mnemonic : NULL,
             info ? info->isi_name : NULL);
   serial_print(SERIAL_01,"########### Registers:\n");
-  irq_print_registers(regs);
+  kirq_print_registers(regs);
 #define GETREG(name) __xblock({ void *temp; __asm_volatile__("movl %%" name ", %0" : "=r"(temp)); __xreturn temp; })
   printf("cr0     = % 8I32x\n",GETREG("cr0"));
 //printf("cr1     = % 8I32x\n",GETREG("cr1"));
@@ -261,7 +261,7 @@ void x86_interrupt_handler(struct kirq_registers *regs) {
  printf("Calling handler %u (%u) %p\n",regs->regs.intno,
         regs->regs.intno >= 32 ? regs->regs.intno-32 : regs->regs.intno,
         handler);
- //irq_print_registers(regs);
+ //kirq_print_registers(regs);
  //_printtraceback_d();
 #endif
  assertf(handler,"NULL-handler for interrupt %u at %p",
@@ -271,7 +271,7 @@ void x86_interrupt_handler(struct kirq_registers *regs) {
 
 
 
-static struct irq_siginfo const __irq_siginfo_data[] = {
+static struct kirq_siginfo const __irq_siginfo_data[] = {
    {"#DE",    "Divide-by-zero"},
    {"#DB",    "Debug"},
    {"-",      "Non-maskable Interrupt"},
@@ -309,8 +309,8 @@ static struct irq_siginfo const __irq_siginfo_data[] = {
 };
 enum{x=__compiler_ARRAYSIZE(__irq_siginfo_data)};
 
-struct irq_siginfo const *irq_getsiginfo(irq_t signum) {
- struct irq_siginfo const *result;
+struct kirq_siginfo const *kirq_getsiginfo(kirq_t signum) {
+ struct kirq_siginfo const *result;
  if (signum >= __compiler_ARRAYSIZE(__irq_siginfo_data)) return NULL;
  result = &__irq_siginfo_data[signum];
  if (!result->isi_mnemonic) result = NULL;
@@ -321,7 +321,7 @@ struct irq_siginfo const *irq_getsiginfo(irq_t signum) {
 
 
 
-void irq_print_registers(struct kirq_registers const *regs) {
+void kirq_print_registers(struct kirq_registers const *regs) {
  printf("regs @ %p\n",regs);
  printf("ds      = % 8I32x"
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS

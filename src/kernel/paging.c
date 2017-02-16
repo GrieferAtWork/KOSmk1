@@ -68,7 +68,7 @@ void kpagedir_quit(struct kpagedir *self) {
 }
 
 static int kpagedir_fillafterfork(__virtualaddr void *vbegin, __physicaladdr void *pbegin,
-                                  __size_t pagecount, kpageflag_t flags, void *closure) {
+                                  size_t pagecount, kpageflag_t flags, void *closure) {
  struct kpageframe *newframes; kerrno_t error;
  if (flags&PAGEDIR_FLAG_USER) {
   // TODO: Copy-on-write
@@ -173,10 +173,10 @@ kerrno_t kpagedir_mapkernel(struct kpagedir *self, kpageflag_t flags) {
  ((((titer)-x86_pde_getpte(diter))+(diter-(self)->d_entries)*X86_PTE4PDE) << 12)
 
 #define KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,on_nonpresent)\
- x86_pde const *diter,*dend,*dbegin; x86_pte const *titer,*tend;\
+ x86_pde *diter,*dend,*dbegin; x86_pte *titer,*tend;\
  kassertobj(self);\
  assert(isaligned((uintptr_t)virt,PAGEALIGN));\
- dbegin = diter = &self->d_entries[X86_VPTR_GET_PDID(virt)];\
+ dbegin = diter = (x86_pde *)&self->d_entries[X86_VPTR_GET_PDID(virt)];\
  dend = diter+ceildiv(pages,X86_PDE4DIC);\
  for (; diter != dend; ++diter) {\
   if (!diter->present) {\
@@ -200,41 +200,58 @@ kerrno_t kpagedir_mapkernel(struct kpagedir *self, kpageflag_t flags) {
 
 int kpagedir_rangeattr(struct kpagedir const *self,
                        __virtualaddr void const *virt,
-                       __size_t pages) {
+                       size_t pages) {
  int result = KPAGEDIR_RANGEATTR_NONE;
  KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,
-                       result |= KPAGEDIR_RANGEATTR_HASUNMAPPED)
+                       result |= KPAGEDIR_RANGEATTR_HASUNMAPPED) {
   result |= (titer->present
   ? KPAGEDIR_RANGEATTR_HASMAPPED
   : KPAGEDIR_RANGEATTR_HASUNMAPPED);
- KPAGEDIR_FOREACHEND;
+ } KPAGEDIR_FOREACHEND;
  return result;
 }
 
 int kpagedir_ismapped(struct kpagedir const *self,
                       __virtualaddr void const *virt,
-                      __size_t pages) {
+                      size_t pages) {
  KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,
-                       return 0)
+                       return 0) {
   if (!titer->present) return 0;
- KPAGEDIR_FOREACHEND;
+ } KPAGEDIR_FOREACHEND;
  return 1;
 }
 int kpagedir_ismappedex(struct kpagedir const *self,
                         __virtualaddr void const *virt,
-                        __size_t pages, kpageflag_t mask, kpageflag_t flags) {
+                        size_t pages, kpageflag_t mask, kpageflag_t flags) {
 #ifdef X86_PTE_FLAG_PRESENT
  mask  |= X86_PTE_FLAG_PRESENT;
  flags |= X86_PTE_FLAG_PRESENT;
 #endif
  KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,
-                       return 0)
+                       return 0) {
   if ((titer->u&mask) != flags) return 0;
- KPAGEDIR_FOREACHEND;
+ } KPAGEDIR_FOREACHEND;
  return 1;
 }
+
+size_t
+kpagedir_setflags(struct kpagedir *self, __virtualaddr void const *virt,
+                  size_t pages, kpageflag_t mask, kpageflag_t flags) {
+ size_t result = 0;
+#ifdef X86_PTE_FLAG_PRESENT
+ mask  |= X86_PTE_FLAG_PRESENT;
+ flags |= X86_PTE_FLAG_PRESENT;
+#endif
+ KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,) {
+  titer->u = (titer->u&mask)|flags;
+  ++result;
+ } KPAGEDIR_FOREACHEND;
+ return result;
+}
+
+
 int kpagedir_ismappedex_b(struct kpagedir const *self, __virtualaddr void const *virt,
-                          __size_t bytes, kpageflag_t mask, kpageflag_t flags) {
+                          size_t bytes, kpageflag_t mask, kpageflag_t flags) {
  uintptr_t aligned_virt = alignd((uintptr_t)virt,PAGEALIGN);
  return kpagedir_ismappedex(self,(void *)aligned_virt,
                             ceildiv(bytes+((uintptr_t)virt-aligned_virt),PAGESIZE),
@@ -243,15 +260,15 @@ int kpagedir_ismappedex_b(struct kpagedir const *self, __virtualaddr void const 
 
 int kpagedir_isunmapped(struct kpagedir const *self,
                         __virtualaddr void const *virt,
-                        __size_t pages) {
- KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,)
+                        size_t pages) {
+ KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,) {
   if (titer->present) return 0;
- KPAGEDIR_FOREACHEND;
+ } KPAGEDIR_FOREACHEND;
  return 1;
 }
 
 extern __virtualaddr void *
-kpagedir_findfreerange(struct kpagedir const *self, __size_t pages,
+kpagedir_findfreerange(struct kpagedir const *self, size_t pages,
                        __virtualaddr void const *hint) {
  uintptr_t iter; int attr;
  kassertobj(self);
@@ -288,7 +305,7 @@ kpagedir_findfreerange(struct kpagedir const *self, __size_t pages,
 
 extern __virtualaddr void *
 kpagedir_mapanyex(struct kpagedir *self, __physicaladdr void const *phys,
-                  __size_t pages, __virtualaddr void const *hint, kpageflag_t flags) {
+                  size_t pages, __virtualaddr void const *hint, kpageflag_t flags) {
  void *result;
  kassertobj(self);
  assertf(isaligned((uintptr_t)phys,PAGEALIGN),"Address not aligned: %p",phys);
@@ -305,7 +322,7 @@ kpagedir_mapanyex(struct kpagedir *self, __physicaladdr void const *phys,
 
 void kpagedir_unmap(struct kpagedir *self,
                     __virtualaddr void const *virt,
-                    __size_t pages) {
+                    size_t pages) {
  x86_pde *pde; x86_pte *iter,*end,*begin; size_t pdenusing;
  assertf(self != kpagedir_kernel(),"Can't unmap the kernel page directory");
  kassertobj(self);
@@ -350,7 +367,7 @@ free_pagetable:
 int kpagedir_enum(struct kpagedir const *self,
                   int (*callback)(__virtualaddr void *vbegin,
                                   __physicaladdr void *pbegin,
-                                  __size_t size,
+                                  size_t size,
                                   kpageflag_t flags,
                                   void *closure),
                   void *closure) {
@@ -410,7 +427,7 @@ next_pte:
 #ifdef __DEBUG__
 static int kpagedir_print_callback(__virtualaddr void *vbegin,
                                    __physicaladdr void *pbegin,
-                                   __size_t pagecount, kpageflag_t flags, void *closure) {
+                                   size_t pagecount, kpageflag_t flags, void *closure) {
  return printf("MAP %#.8Ix bytes (%#.8Ix pages) (%cR%c) V[%.8p ... %.8p] --> P[%.8p ... %.8p]\n"
                ,pagecount*PAGESIZE,pagecount
                ,flags&PAGEDIR_FLAG_USER ? 'U' : '-'

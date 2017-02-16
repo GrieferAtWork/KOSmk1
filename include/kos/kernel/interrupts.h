@@ -108,13 +108,13 @@ struct __packed kirq_registers {
 __COMPILER_PACK_POP
 #define kirq_registers_isuser(self) (((self)->regs.cs&0x3)==0x3)
 
-extern __nonnull((1)) void irq_print_registers(struct kirq_registers const *__restrict regs);
+extern __nonnull((1)) void kirq_print_registers(struct kirq_registers const *__restrict regs);
 
-typedef __u32 irq_t;
-typedef void (*irq_handler_t)(struct kirq_registers *__restrict regs);
+typedef __u32 kirq_t;
+typedef void (*kirq_handler_t)(struct kirq_registers *__restrict regs);
 
-extern __nonnull((1)) void __irq_default_handler(struct kirq_registers *__restrict regs);
-#define irq_default_handler  (&__irq_default_handler)
+extern __nonnull((1)) void __kirq_default_handler(struct kirq_registers *__restrict regs);
+#define kirq_default_handler  (&__kirq_default_handler)
 #endif /* !__ASSEMBLY__ */
 
 //////////////////////////////////////////////////////////////////////////
@@ -152,12 +152,12 @@ extern __nonnull((1)) void __irq_default_handler(struct kirq_registers *__restri
 //////////////////////////////////////////////////////////////////////////
 // Get/Set an irq interrupt handler for a given signal
 // -> Returns 'NULL' if 'signum' is invalid
-// -> Returns 'irq_default_handler' if no hander has been set
+// -> Returns 'kirq_default_handler' if no hander has been set
 // The setter acts as an atomic exchange, returning the previous handler.
 // -> Ids from 0..31   are the isr ids
 // -> Ids from 32..256 are the irq ids
 // e.g.: To register IRQ 0 (a programmable interrupt timer),
-//       you should use id 32: set_irq_handler(32,...);
+//       you should use id 32: kirq_sethandler(32,...);
 //       NOTE: IRQ 0 is used for scheduling
 // A list of exception codes can be found here:
 // >> http://wiki.osdev.org/Exceptions
@@ -173,12 +173,12 @@ extern __nonnull((1)) void __irq_default_handler(struct kirq_registers *__restri
 //       >> If you don't know if a call is preemptive (receives signals),
 //          you can usually look at its return value documentation, if which
 //          contains an entry for KE_INTR means that the call is _NOT_ safe.
-extern __wunused      irq_handler_t get_irq_handler(irq_t signum);
-extern __nonnull((2)) irq_handler_t set_irq_handler(irq_t signum, irq_handler_t new_handler);
+extern __wunused      kirq_handler_t kirq_gethandler(kirq_t signum);
+extern __nonnull((2)) kirq_handler_t kirq_sethandler(kirq_t signum, kirq_handler_t new_handler);
 #endif /* !__ASSEMBLY__ */
 
 #ifndef __ASSEMBLY__
-struct irq_siginfo {
+struct kirq_siginfo {
  char const *isi_mnemonic; /*< [1..1] */
  char const *isi_name;     /*< [1..1] */
 };
@@ -186,7 +186,7 @@ struct irq_siginfo {
 //////////////////////////////////////////////////////////////////////////
 // Returns human-readable information about a given IRQ error number.
 // Returns NULL if given given signum doesn't describe an error
-extern __wunused __constcall struct irq_siginfo const *irq_getsiginfo(irq_t signum);
+extern __wunused __constcall struct kirq_siginfo const *kirq_getsiginfo(kirq_t signum);
 #endif /* !__ASSEMBLY__ */
 
 #define CONFIG_COMPILETIME_NOINTERRUPT_OPTIMIZATIONS

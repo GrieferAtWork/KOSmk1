@@ -117,6 +117,7 @@ local default_attrib = dict {
 		"-fvisibility=hidden",
 		"-Wall",
 		"-Wno-nonnull-compare",
+		"-Wno-comment",
 	},
 	.include = list {
 		"include",

@@ -96,7 +96,7 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc) {
  if __unlikely(KE_ISERR(error)) goto err_shlib;
 
  if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) goto err_fd;
- error = kshm_initfork(&result->p_shm,&proc->p_shm);
+ error = kshm_initcopy(&result->p_shm,&proc->p_shm,0);
  kproc_unlock(proc,KPROC_LOCK_SHM);
  if __unlikely(KE_ISERR(error)) goto err_fd;
 

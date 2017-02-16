@@ -114,6 +114,13 @@ extern __nonnull((1)) kerrno_t kpagedir_remap(struct kpagedir *self, __physicala
                                               __virtualaddr void const *virt, __size_t pages, kpageflag_t flags);
 
 //////////////////////////////////////////////////////////////////////////
+// Modifies the flags of all pages within a given address range.
+// @return: * : Amount of successfully modified pages.
+extern __nonnull((1)) __size_t
+kpagedir_setflags(struct kpagedir *self, __virtualaddr void const *virt,
+                  __size_t pages, kpageflag_t mask, kpageflag_t flags);
+
+//////////////////////////////////////////////////////////////////////////
 // Find an unmapped range bit enough to map at least 'pages' pages.
 // NOTE: Will never map the NULL page
 // @return: * :   The virtual address the given physical range was mapped to.

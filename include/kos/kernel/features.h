@@ -96,7 +96,7 @@
 
 
 // Not fully implemented yet: copy-on-write fork() paging
-//#define KCONFIG_HAVE_SHM_COPY_ON_WRITE
+#define KCONFIG_HAVE_SHM_COPY_ON_WRITE 0
 
 #ifdef __INTELLISENSE__
 #undef KDEBUG_HAVE_TRACKEDMUTEX
@@ -134,6 +134,9 @@
 #endif
 #ifndef KTASK_HAVE_STATS
 #define KTASK_HAVE_STATS 0
+#endif
+#if !KCONFIG_HAVE_SHM_COPY_ON_WRITE
+#define KCONFIG_HAVE_SHM_COPY_ON_WRITE 0
 #endif
 #if !KTASK_HAVE_CRITICAL_TASK
 #undef KTASK_HAVE_CRITICAL_TASK_INTERRUPT

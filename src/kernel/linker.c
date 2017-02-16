@@ -1063,10 +1063,10 @@ struct kshmtab __omni_tab = {
  /* mt_refcnt        */0xffff,
  /* mt_flags         */KSHMTAB_FLAG_R|KSHMTAB_FLAG_W|KSHMTAB_FLAG_X|KSHMTAB_FLAG_S|KSHMTAB_FLAG_K,
  /* mt_pages         */((size_t)-1)/PAGESIZE,
- /* mt_scat          */{
- /* mt_scat.ts_next  */NULL,
- /* mt_scat.ts_addr  */NULL,
- /* mt_scat.ts_pages */((size_t)-1)/PAGESIZE}
+ /* mt_scatter          */{
+ /* mt_scatter.ts_next  */NULL,
+ /* mt_scatter.ts_addr  */NULL,
+ /* mt_scatter.ts_pages */((size_t)-1)/PAGESIZE}
 };
 struct kshlibsection __omni_sections[] = {{
  /* sls_tab      */&__omni_tab,

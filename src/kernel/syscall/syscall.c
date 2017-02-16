@@ -50,12 +50,12 @@
 __DECL_BEGIN
 
 void kernel_initialize_syscall(void) {
- set_irq_handler(__SYSCALL_INTNO,&ksyscall_handler);
+ kirq_sethandler(__SYSCALL_INTNO,&ksyscall_handler);
 #ifdef __KOS_HAVE_NTSYSCALL
- set_irq_handler(__NTSYSCALL_INTNO,&ksyscall_handler_nt);
+ kirq_sethandler(__NTSYSCALL_INTNO,&ksyscall_handler_nt);
 #endif
 #ifdef __KOS_HAVE_UNIXSYSCALL
- set_irq_handler(__UNIXSYSCALL_INTNO,&ksyscall_handler_unix);
+ kirq_sethandler(__UNIXSYSCALL_INTNO,&ksyscall_handler_unix);
 #endif
 }
 

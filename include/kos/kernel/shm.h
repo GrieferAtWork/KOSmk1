@@ -45,21 +45,13 @@ __DECL_BEGIN
 #define kassert_kshm(self)     kassert_object(self,KOBJECT_MAGIC_SHM)
 
 
-// NOTE: Dependent on the arch, some flags may not be enforced
-#define KSHMTAB_FLAG_X PROT_EXEC  /*< Data inside of this tab can be executed. */
-#define KSHMTAB_FLAG_W PROT_WRITE /*< The tab is writable. */
-#define KSHMTAB_FLAG_R PROT_READ  /*< The tab is readable. */
-#define KSHMTAB_FLAG_S 0x08       /*< The tab can be shared between processes. */
-#define KSHMTAB_FLAG_K 0x10       /*< The tab can only be accessed by the kernel (Usually means this is a kernel stack). */
-#define KSHMTAB_FLAG_D 0x20       /*< The tab references device memory that should not be freed. */
-
 __struct_fwd(kfile);
 
 #ifndef __ASSEMBLY__
 struct kshmtabscatter {
- struct kshmtabscatter *ts_next;  /*< [0..1][owned] Next scatter entry. */
- __kernel void         *ts_addr;  /*< [1..1][owned] Physical (kernel) address of this scatter portion. */
-               __size_t ts_pages; /*< [!0] Amount of pages in this scatter. */
+ __pagealigned __kernel void *ts_addr;  /*< [1..1][owned] Physical (kernel) address of this scatter portion. */
+                     __size_t ts_pages; /*< [!0] Amount of pages in this scatter. */
+       struct kshmtabscatter *ts_next;  /*< [0..1][owned] Next scatter entry. */
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -89,14 +81,29 @@ kshmtabscatter_copybytes(struct kshmtabscatter const *__restrict dst,
                          struct kshmtabscatter const *__restrict src);
 #endif /* !__ASSEMBLY__ */
 
+// NOTE: Dependent on the arch, some flags may not be enforced
+#define KSHMTAB_FLAG_X       PROT_EXEC  /*< Data inside of this tab can be executed. */
+#define KSHMTAB_FLAG_W       PROT_WRITE /*< The tab is writable. */
+#define KSHMTAB_FLAG_R       PROT_READ  /*< The tab is readable. */
+#define KSHMTAB_FLAG_S       0x0008     /*< The tab can be shared between processes. */
+#define KSHMTAB_FLAG_K       0x0010     /*< The tab can only be accessed by the kernel (Usually means this is a kernel stack). */
+#define KSHMTAB_FLAG_D       0x0020     /*< The tab references device memory that should not be freed. */
+#define KSHMTAB_KIND_LINEAR  0x0000     /*< Memory tab of linearly allocated memory. */
+#define KSHMTAB_KIND_SCATTER 0x1000     /*< Memory tab of scattered memory (acts as a set of linear chunks). */
+//#define KSHMTAB_KIND_FILE    0x2000     /*< Memory tab of file-mapped memory. */
 
 #ifndef __ASSEMBLY__
+typedef __u16 kshmtab_refcnt_t;
+typedef __u16 kshmtab_flag_t;
 struct kshmtab {
  KOBJECT_HEAD
- __atomic __u32        mt_refcnt; /*< Amount of processes using this tab NOTE: Owns a reference to 'mt_refcnt' (When >1, KSHMTAB_FLAG_W and !KSHMTAB_FLAG_S, write-access must cause a pagefault for copy-on-write). */
-          __u32        mt_flags;  /*< Tab flags (Set of 'KSHMTAB_FLAG_*'). */
-          __size_t     mt_pages;  /*< Total amount of pages (sum of all scatter entries). */
- struct kshmtabscatter mt_scat;   /*< First scatter entry. */
+ __atomic kshmtab_refcnt_t    mt_refcnt;  /*< Amount of processes using this tab NOTE: Owns a reference to 'mt_refcnt' (When >1, KSHMTAB_FLAG_W and !KSHMTAB_FLAG_S, write-access must cause a pagefault for copy-on-write). */
+          kshmtab_flag_t      mt_flags;   /*< Tab flags and kind (Set of 'KSHMTAB_FLAG_*'). */
+          __size_t            mt_pages;   /*< Total amount of pages (sum of all scatter entries). */
+union{
+ __pagealigned __kernel void *mt_linear;  /*< [1..1][owned] Physical (kernel) address of linear memory. */
+ struct kshmtabscatter        mt_scatter; /*< First scatter entry. */
+};
 };
 
 __local KOBJECT_DEFINE_INCREF(kshmtab_incref,struct kshmtab,mt_refcnt,kassert_kshmtab);
@@ -144,7 +151,7 @@ extern __kernel void *__kshmtab_translate_offset(struct kshmtab const *__restric
 // Special optimization for offset ZERO(0)
 #define kshmtab_translate_offset(self,offset,maxbytes) \
  ((__builtin_constant_p(offset) && (offset) == 0)\
-  ? (*(maxbytes) = (self)->mt_scat.ts_pages*PAGESIZE,(self)->mt_scat.ts_addr)\
+  ? (*(maxbytes) = (self)->mt_scatter.ts_pages*PAGESIZE,(self)->mt_scatter.ts_addr)\
   : __kshmtab_translate_offset(self,offset,maxbytes))
 
 #endif
@@ -156,10 +163,38 @@ extern __kernel void *__kshmtab_translate_offset(struct kshmtab const *__restric
 extern int kshmtab_contains(struct kshmtab const *__restrict self,
                             __kernel void const *addr);
 #else
-#define kshmtab_contains(self,addr) kshmtabscatter_contains(&(self)->mt_scat,addr)
+#define kshmtab_contains(self,addr) kshmtabscatter_contains(&(self)->mt_scatter,addr)
 #endif
 #endif /* !__ASSEMBLY__ */
 
+
+//////////////////////////////////////////////////////////////////////////
+// Shared memory tab design (Not yet implemented):
+// 
+// Each tab of shared memory can either reference a set of scattered
+// memory (that is non-continuous memory split into many chunks), or
+// be referencing a set of other shared memory tabs and be aliasing
+// their memory instead (called a cluster tab).
+// This allows us to easily divide a tab in the event of a
+// copy-on-write-style page fault, when we have to split a tab as follows:
+// 
+//         Write to shared memory here
+//            |
+// [..........w.........]
+//  |        ||\        \
+//  |        |\ \        \
+//  |        | | \        \
+//  |        | \  \        \
+//  |        | dup \        \
+//  |        |  \   \        |
+//  |        |   |   |       |
+//  |        |   |   |       |
+//  |  SHM   |  SHM  |  SHM  |
+// [..........] [.] [.........]
+//  |            |   |
+//  +------------|---|--- #1 --\
+//               +---|--- #2 ----- CLUSTER
+//                   +--- #3 --/
 #ifndef __ASSEMBLY__
 struct kshmtabentry {
  __pagealigned __user void *te_map;   /*< [1..1] User-space address this tab is mapped to. */
@@ -171,6 +206,131 @@ struct kshmtabentry {
 #define KSHM_GROUPOF(uaddr)     (__u8)((__uintptr_t)(uaddr) >> ((__SIZEOF_POINTER__*8)-4))
 #endif /* !__ASSEMBLY__ */
 
+#ifndef __ASSEMBLY__
+
+//////////////////////////////////////////////////////////////////////////
+// SHM Memory map.
+// - Similar to a binary tree, every layer splits pointer
+//   resolution, meaning that when taking PAGESIZE into
+//   account, lookup has a worst case time of O(20).
+//   Lookup time itself increases the closes an address
+//   is to '0x80000000', where '0x80000000' itself is O(1).
+// - WARNING: This is something completely custom... And it gets complicated quick!
+// - Splitting is done as follows:
+//   
+// PTR_MIN   = 0
+// PTR_MAX   = 63
+// GIVEN_PTR = 50
+//            <------------------------------64------------------------------>
+// [==============================================================================]
+// STEP #1:   <--------------32-------------->|<--------------31------------->
+// >> GIVEN_PTR(50) lies above semi(32) (increment semi by 16 and try again)
+// [==============================================================================]
+// STEP #2:   <--------------48------------------------------>|<------15----->
+// >> GIVEN_PTR(50) lies above semi(48) (increment semi by 8 and try again)
+// [==============================================================================]
+// STEP #3:   <--------------56-------------------------------------->|<--7-->
+// >> GIVEN_PTR(50) lies below semi(56) (decrement semi by 4 and try again)
+// [==============================================================================]
+// STEP #4:   <--------------52---------------------------------->|<----11--->
+// >> GIVEN_PTR(50) lies below semi(52) (decrement semi by 2 and try again)
+// [==============================================================================]
+// STEP #5:   <--------------50-------------------------------->|<-----13---->
+// >> GIVEN_PTR(50) equals semi(50)
+// >> If we still havn't found the correct SHM tab, we managed
+//    to determine that GIVEN_PTR isn't mapped in at most 5 steps.
+// 
+// >> If the branch of any of the prior steps covered GIVEN_PTR,
+//    or didn't lead to any other branches, we were able to
+//    stop searching before even getting to step #5.
+//
+
+struct kshmbranch {
+ /* [0..1][owned] Branch for addresses in ('addr < addr_semi')
+  *  When selected, continue with 'addr_semi -= (uintptr_t)1 << addr_level--;' */
+ struct kshmbranch *sb_min;
+ /* [0..1][owned] Branch for addresses in ('addr >= addr_semi')
+  *  When selected, continue with 'addr_semi += (uintptr_t)1 << --addr_level;' */
+ struct kshmbranch *sb_max;
+ /* NOTE: The range described within the following two members _MUST_ be located
+  *       within the valid range of memory of the associated address level.
+  *       These valid value ranges can be calculated using
+  *       'KSHMBRANCH_MAPMIN' and 'KSHMBRANCH_MAPMAX'. */
+ __uintptr_t        sb_map_min; /* [1..1] == sb_entry->se_map_min. */
+ __uintptr_t        sb_map_max; /* [1..1] == sb_entry->se_map_max. */
+ /* TODO: More members (including '__ref struct kshmtab *') here. */
+};
+#define KSHMBRANCH_ADDRSEMI_INIT       (((__uintptr_t)-1)/2)
+#define KSHMBRANCH_ADDRLEVEL_INIT      ((__SIZEOF_POINTER__*8)-1)
+#define KSHMBRANCH_MAPMIN(semi,level)  ((semi)-(((__uintptr_t)1 << (level))))
+#define KSHMBRANCH_MAPMAX(semi,level)  ((semi)+(((__uintptr_t)1 << (level))-1))
+#define KSHMBRANCH_WALKMIN(semi,level) ((semi) -= (__uintptr_t)1 << (level)--)
+#define KSHMBRANCH_WALKMAX(semi,level) ((semi) += (__uintptr_t)1 << --(level))
+
+//////////////////////////////////////////////////////////////////////////
+// Insert a given node into the given SHM tab map.
+// @return: KE_OK:     Successfully inserted the given node.
+// @return: KE_EXISTS: Some other branch was already using some
+//                     part of the memory specified within 'newnode'.
+// NOTE: The caller is responsible to ensure sufficient
+//       references can actually be created to the given entry.
+extern __crit __nomp __nonnull((1,2)) kerrno_t
+kshmbranch_insert(struct kshmbranch **__restrict proot,
+                  struct kshmbranch *__restrict newleaf);
+
+//////////////////////////////////////////////////////////////////////////
+// The reverse of insert, remove a given entry.
+// @return: * :   The inherited pointer of what was previously the entry
+//                possible to locate by calling 'kshmbranch_locate(...)'.
+// @return: NULL: No branch was associated with the given address.
+extern __crit __nomp __nonnull((1)) struct kshmbranch *
+kshmbranch_remove(struct kshmbranch **__restrict proot,
+                  __uintptr_t addr);
+
+
+__local struct kshmbranch *
+kshmbranch_locate(struct kshmbranch *root, __uintptr_t addr) {
+ /* addr_semi is the center point splitting the max
+  * ranges of the underlying sb_min/sb_max branches. */
+ __uintptr_t addr_semi = KSHMBRANCH_ADDRSEMI_INIT;
+ unsigned int addr_level = KSHMBRANCH_ADDRLEVEL_INIT;
+ while (root) {
+  kassertobj(root);
+#ifdef __DEBUG__
+  { /* Assert that the current branch has a valid min/max address range. */
+   __uintptr_t addr_min = KSHMBRANCH_MAPMIN(addr_semi,addr_level);
+   __uintptr_t addr_max = KSHMBRANCH_MAPMAX(addr_semi,addr_level);
+   assertf(root->sb_map_min <= root->sb_map_max,"Branch has invalid min/max configuration (min(%p) > max(%p))",root->sb_map_min,root->sb_map_max);
+   assertf(root->sb_map_min >= addr_min,"Unexpected branch min address (%p < %p)",root->sb_min,addr_min);
+   assertf(root->sb_map_max <= addr_max,"Unexpected branch max address (%p < %p)",root->sb_max,addr_max);
+  }
+#endif
+  /* Check if the given address lies within this branch. */
+  if (addr >= root->sb_map_min &&
+      addr <= root->sb_map_max) break;
+  assert(addr_level);
+  if (addr < addr_semi) {
+   /* Continue with min-branch */
+   KSHMBRANCH_WALKMIN(addr_semi,addr_level);
+   root = root->sb_min;
+  } else {
+   /* Continue with max-branch */
+   KSHMBRANCH_WALKMAX(addr_semi,addr_level);
+   root = root->sb_max;
+  }
+ }
+ return root;
+}
+
+struct kshmmap {
+ struct kshmbranch *m_root; /*< [0..1][owned] Root branch. */
+};
+#define kshmmap_locate(self,addr)    kshmbranch_locate((self)->m_root,addr)
+#define kshmmap_insert(self,newleaf) kshmbranch_insert(&(self)->m_root,newleaf)
+#define kshmmap_remove(self,addr)    kshmbranch_remove(&(self)->m_root,addr)
+
+
+#endif /* !__ASSEMBLY__ */
 
 __struct_fwd(kpagedir);
 
@@ -227,22 +387,24 @@ extern           __nonnull((1)) void kshm_quit(struct kshm *__restrict self);
 //////////////////////////////////////////////////////////////////////////
 // Initializes a given SHM as a copy of another.
 // >> This function re-configures paging to do all the copy-on-write magic.
-// NOTE: When calling 'kshm_initfork', SHM tabs will usually be re-used
-//       and marked as read-only to allow a PAGE-FAULT handler to
+// NOTE: When 'force_full_copy' is ZERO, SHM tabs will usually be
+//       re-used and marked as read-only to allow a PAGE-FAULT handler to
 //       perform copy-on-write, thus saving a lot of memory is the process.
 //    >> 'kshm_initcopy' bypasses this functionality,
 //       always creating hard copies of all stored SHM tabs.
 // @return: KE_OK:    Successfully initialized the given memory manager.
 // @return: KE_NOMEM: Not enough kernel/physical memory.
+#if KCONFIG_HAVE_SHM_COPY_ON_WRITE
 extern __wunused __nonnull((1,2)) kerrno_t
 kshm_initcopy(struct kshm *__restrict self,
-              struct kshm *__restrict right);
-#ifdef KCONFIG_HAVE_SHM_COPY_ON_WRITE
-extern __wunused __nonnull((1,2)) kerrno_t
-kshm_initfork(struct kshm *__restrict self,
-              struct kshm *__restrict right);
+              struct kshm *__restrict right,
+              int force_full_copy);
 #else
-#define kshm_initfork   kshm_initcopy
+extern __wunused __nonnull((1,2)) kerrno_t
+__kshm_initcopy_copy(struct kshm *__restrict self,
+                     struct kshm *__restrict right);
+#define kshm_initcopy(self,right,force_full_copy) \
+ __kshm_initcopy_copy(self,right)
 #endif
 
 //////////////////////////////////////////////////////////////////////////
@@ -369,6 +531,20 @@ extern __nomp __crit           __nonnull((1)) void kshm_ldtfree(struct kshm *sel
 extern __nomp __crit __nonnull((1,3)) void kshm_ldtget(struct kshm const *self, ksegid_t id, struct ksegment *seg);
 extern __nomp __crit __nonnull((1,3)) void kshm_ldtset(struct kshm *self, ksegid_t id, struct ksegment const *seg);
 
+
+#if KCONFIG_HAVE_SHM_COPY_ON_WRITE
+//////////////////////////////////////////////////////////////////////////
+// Page-fault IRQ handler to implement copy-on-write semantics.
+extern void kshm_pf_handler(struct kirq_registers *__restrict regs);
+
+#ifdef __MAIN_C__
+extern void kernel_initialize_copyonwrite(void);
+#endif
+#else /* KCONFIG_HAVE_SHM_COPY_ON_WRITE */
+#ifdef __MAIN_C__
+#define kernel_initialize_copyonwrite() (void)0
+#endif
+#endif /* !KCONFIG_HAVE_SHM_COPY_ON_WRITE */
 
 #endif /* !__ASSEMBLY__ */
 
