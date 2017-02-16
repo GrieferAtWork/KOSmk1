@@ -41,6 +41,7 @@
 #include <kos/kernel/gdt.h>
 #include <kos/kernel/task.h>
 #include <kos/kernel/proc.h>
+#include <disasm/disasm.h>
 
 __DECL_BEGIN
 
@@ -190,6 +191,15 @@ irq_handler_t set_irq_handler(irq_t signum, irq_handler_t new_handler) {
  return katomic_xch(interrupt_handlers[signum],new_handler);
 }
 
+static int print_error(char const *__restrict data,
+                       size_t maxchars,
+                       void *__unused(closure)) {
+ tty_printn(data,maxchars);
+ serial_printn(SERIAL_01,data,maxchars);
+ return 0;
+}
+
+
 void __irq_default_handler(struct kirq_registers *__unused(regs)) {}
 void x86_interrupt_handler(struct kirq_registers *regs) {
  irq_handler_t handler;
@@ -227,14 +237,22 @@ void x86_interrupt_handler(struct kirq_registers *regs) {
   serial_print(SERIAL_01,"########### Traceback (interrupt):\n");
   _printtraceback_d();
 #endif
-  if (caller) {
-   if (caller->t_proc->p_shm.sm_pd) {
-    kpagedir_print(caller->t_proc->p_shm.sm_pd);
-   } else {
-    printf("INVALID PAGEDIRECTORY (NULL POINTER)\n");
+  {
+   struct kpagedir *pd = NULL;
+   void *physical_eip;
+   size_t disasm_size = 120;
+   if (caller && caller->t_proc) {
+    if ((pd = caller->t_proc->p_shm.sm_pd) != NULL) {
+     kpagedir_print(pd);
+    } else {
+     printf("INVALID PAGEDIRECTORY (NULL POINTER)\n");
+    }
    }
+   physical_eip = (void *)regs->regs.eip;
+   if (pd) physical_eip = kpagedir_translate(pd,physical_eip);
+   disasm_x86((void *)((uintptr_t)physical_eip-(disasm_size/2)),
+              disasm_size+1,&print_error,NULL,DISASM_FLAG_ADDR);
   }
-  debug_hexdump((void *)(regs->regs.eip-60),121);
 #undef abort
   abort();
  }

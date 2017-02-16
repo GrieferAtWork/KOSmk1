@@ -48,6 +48,9 @@
 #ifndef __attribute_inline
 #define __attribute_inline      __inline
 #endif
+#ifndef __attribute_thread
+#define __attribute_thread __declspec(thread)
+#endif
 
 #ifndef __compiler_assume
 #define __compiler_assume   __assume

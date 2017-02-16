@@ -208,8 +208,13 @@ static struct option const longopts[] = {
  {NULL,0,NULL,0}
 };
 
+__attribute_thread int foo = 42;
+
 int main(int argc, char *argv[]) {
  int error; struct rline *r; int optc;
+ //(void)foo;
+ //printf("thread_local foo at: %p (%d)\n",&foo,foo);
+
  while ((optc = getopt_long(argc,argv,"c:irvSs:h",longopts,NULL)) != -1) {
   switch (optc) {
    case 'c': _exit(do_system(optarg)); break;

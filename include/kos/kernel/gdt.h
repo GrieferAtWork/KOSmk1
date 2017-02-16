@@ -180,14 +180,14 @@ __COMPILER_PACK_POP
      __SEG_ENCODEHI(base,size,config) }}}
 
 __local __nonnull((1)) void
-ksegment_encode(struct ksegment *self, __u32 base,
-                __u32 size, __u32 config);
+ksegment_encode(struct ksegment *self, __uintptr_t base,
+                __uintptr_t size, __u32 config);
 
 
 #ifndef __INTELLISENSE__
 __local __nonnull((1)) void
-ksegment_encode(struct ksegment *self, __u32 base,
-                __u32 size, __u32 config) {
+ksegment_encode(struct ksegment *self, __uintptr_t base,
+                __uintptr_t size, __u32 config) {
  assertf(size <= SEG_LIMIT_MAX,"Size %I32x is too large",size);
  self->ul32 = __SEG_ENCODELO(base,size,config);
  self->uh32 = __SEG_ENCODEHI(base,size,config);

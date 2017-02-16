@@ -36,8 +36,6 @@
 
 extern char **environ;
 
-//__thread int foo = 42;
-
 int main(int argc, char *argv[]) {
 
  // Set-up some default environment variables

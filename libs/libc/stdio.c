@@ -52,8 +52,8 @@
 __DECL_BEGIN
 
 #ifdef __KERNEL__
-#define IO_WRITEN(data,size) (serial_printn(SERIAL_01,data,size)/*,tty_printn(data,size)*/)
-#define IO_WRITES(data,size) (serial_prints(SERIAL_01,data,size)/*,tty_prints(data,size)*/)
+#define IO_WRITEN(data,size) (serial_printn(SERIAL_01,data,size),tty_printn(data,size))
+#define IO_WRITES(data,size) (serial_prints(SERIAL_01,data,size),tty_prints(data,size))
 #define IO_WRITE(data)       IO_WRITEN(data,(size_t)-1)
 #else
 #define IO_WRITEN(data,size) write(STDOUT_FILENO,data,strnlen(data,size))

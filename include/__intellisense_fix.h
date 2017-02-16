@@ -170,6 +170,7 @@ typedef bool _Bool;
 #define ____INTELLISENE_ATTR(...) ____INTELLISENE_ATTR_N(____INTELLISENE_PP_VA_NARGS(__VA_ARGS__),__VA_ARGS__)
 
 
+#define __thread                        __declspec(thread)
 #define ____INTELLISENE_ATTR_FUNC       __declspec(noreturn)
 #define ____INTELLISENE_ATTR_VAR        __declspec(allocate("~"))
 #define ____INTELLISENE_ATTR_FUNCORVAR  /* ??? */

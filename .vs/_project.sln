@@ -221,6 +221,13 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libterm", "libs\libterm.vcx
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libcurses", "libs\libcurses.vcxproj", "{E7DEA996-55E1-4544-AB9B-530678C0FCB4}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libdisasm", "libs\libdisasm.vcxproj", "{554D79C5-C397-406A-A108-8CF705747E4C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "disasm", "disasm", "{1B17C581-0732-44B6-9861-D272E2EE8AE3}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\disasm\disasm.h = ..\include\disasm\disasm.h
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -311,6 +318,10 @@ Global
 		{E7DEA996-55E1-4544-AB9B-530678C0FCB4}.Debug|Win32.Build.0 = Debug|Win32
 		{E7DEA996-55E1-4544-AB9B-530678C0FCB4}.Release|Win32.ActiveCfg = Release|Win32
 		{E7DEA996-55E1-4544-AB9B-530678C0FCB4}.Release|Win32.Build.0 = Release|Win32
+		{554D79C5-C397-406A-A108-8CF705747E4C}.Debug|Win32.ActiveCfg = Debug|Win32
+		{554D79C5-C397-406A-A108-8CF705747E4C}.Debug|Win32.Build.0 = Debug|Win32
+		{554D79C5-C397-406A-A108-8CF705747E4C}.Release|Win32.ActiveCfg = Release|Win32
+		{554D79C5-C397-406A-A108-8CF705747E4C}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -346,5 +357,7 @@ Global
 		{C2025DF0-F573-4139-B54B-80028BD05DE6} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
 		{CFE0241A-3332-48A2-9D6A-0B39C045A37B} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
 		{E7DEA996-55E1-4544-AB9B-530678C0FCB4} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
+		{554D79C5-C397-406A-A108-8CF705747E4C} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
+		{1B17C581-0732-44B6-9861-D272E2EE8AE3} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
 	EndGlobalSection
 EndGlobal

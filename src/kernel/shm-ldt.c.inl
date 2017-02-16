@@ -56,7 +56,7 @@ static kerrno_t kshm_alloc_and_map_ldt_vector(struct kshm *self, __u16 limit) {
                     KPAGEDIR_MAPANY_HINT_KINTERN,KSHM_LDT_PAGEFLAGS);
  if __unlikely(!self->sm_ldt.ldt_base) goto err_ldtvec;
  /* Re-align the mapped table base to fit match the physical address. */
- k_syslogf(KLOG_INFO,"[SHM] Mapped LDT vector at %p (limit %I16x; %Iu pages)\n",
+ k_syslogf(KLOG_DEBUG,"[SHM] Mapped LDT vector at %p (limit %I16x; %Iu pages)\n",
            self->sm_ldt.ldt_base,limit,(size_t)ceildiv(limit,PAGESIZE));
  return KE_OK;
 err_ldtvec:
@@ -183,7 +183,7 @@ kshm_ldtalloc(struct kshm *self, struct ksegment const *seg) {
   /* Found an empty slot */
   memcpy(iter,seg,sizeof(struct ksegment));
   result = (ksegid_t)((uintptr_t)iter-(uintptr_t)begin);
-  k_syslogf(KLOG_INFO,"[SHM] Handing out LDT segment %I16x\n",result);
+  k_syslogf(KLOG_DEBUG,"[SHM] Handing out LDT segment %I16x\n",result);
   goto end;
  }
  /* Must allocate a new segment */

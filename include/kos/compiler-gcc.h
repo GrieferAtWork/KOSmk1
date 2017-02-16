@@ -122,6 +122,9 @@
 #define __attribute_sentinel      __attribute__((__sentinel__))
 #endif
 #endif
+#ifndef __attribute_thread
+#define __attribute_thread        __thread
+#endif
 #ifndef __attribute_inline
 #if __GCC_VERSION(4,0,0)
 #define __attribute_inline        __inline__

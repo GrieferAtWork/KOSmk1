@@ -110,7 +110,7 @@ __crit ksegid_t kgdt_alloc(struct ksegment const *seg) {
 end:
  GDT_ALLOC_RELEASE
  if __likely(result != KSEG_NULL) {
-  k_syslogf(KLOG_INFO,"[GDT] Allocated GDT entry: %#.4I16x (%u)\n",
+  k_syslogf(KLOG_DEBUG,"[GDT] Allocated GDT entry: %#.4I16x (%u)\n",
             result,(unsigned)KSEG_ID(result));
  } else {
   k_syslogf(KLOG_ERROR,"[GDT] Failed to allocate GDT entry\n");
@@ -129,7 +129,7 @@ __crit void kgdt_free(ksegid_t id) {
  memset(seg,0,sizeof(struct ksegment));
  gdt_flush(&gdt);
  GDT_ALLOC_RELEASE
- k_syslogf(KLOG_INFO,"[GDT] Freed GDT entry: %#.4I16x (%u)\n",
+ k_syslogf(KLOG_DEBUG,"[GDT] Freed GDT entry: %#.4I16x (%u)\n",
            id,(unsigned)KSEG_ID(id));
 }
 #else /* GDT_USE_DYNAMIC_MEMORY */
@@ -156,7 +156,7 @@ __crit ksegid_t kgdt_alloc(struct ksegment const *seg) {
 end:
  GDT_ALLOC_RELEASE
  if __likely(result != KSEG_NULL) {
-  k_syslogf(KLOG_INFO,"[GDT] Allocated GDT entry: %#.4I16x (%u)\n",
+  k_syslogf(KLOG_DEBUG,"[GDT] Allocated GDT entry: %#.4I16x (%u)\n",
             result,(unsigned)KSEG_ID(result));
  }
  return result;
@@ -173,7 +173,7 @@ __crit void kgdt_free(ksegid_t id) {
  gdt.limit = GDT_MAX_ENTRIES*sizeof(struct ksegment);
  gdt_flush(&gdt);
  GDT_ALLOC_RELEASE
- k_syslogf(KLOG_INFO,"[GDT] Freed GDT entry: %#.4I16x (%u)\n",
+ k_syslogf(KLOG_DEBUG,"[GDT] Freed GDT entry: %#.4I16x (%u)\n",
            id,(unsigned)KSEG_ID(id));
 }
 #endif /* !GDT_USE_DYNAMIC_MEMORY */

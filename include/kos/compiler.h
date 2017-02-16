@@ -94,8 +94,8 @@
 // Ansi vs. Non-Ansi
 #if defined(__STDC__) || defined(__cplusplus) || \
     defined(__DEEMON__) || defined(__ANSI_COMPILER__) || \
-	defined(__TCC__) || defined(__GNUC__) || \
-	defined(__clang__) || defined(_MSC_VER)
+    defined(__TCC__) || defined(__GNUC__) || \
+    defined(__clang__) || defined(_MSC_VER)
 #ifndef __ANSI_COMPILER__
 #define __ANSI_COMPILER__ 1
 #endif
@@ -159,9 +159,7 @@ __attribute_forceinline
 #elif defined(__attribute_inline)
 __attribute_inline
 #endif
-void __compiler_unreachable_impl __D0() {
-	for (;;) {}
-}
+void __compiler_unreachable_impl __D0() { for (;;) {} }
 #else /* __noreturn */
 #   define __NO_compiler_unreachable
 #   define __compiler_unreachable() (void)0
@@ -274,6 +272,10 @@ void __compiler_unreachable_impl __D0() {
 #   define __NO_attribute_forceinline
 #   define __attribute_forceinline /* nothing */
 #endif
+#endif
+#ifndef __attribute_thread
+#   define __NO_attribute_thread
+#   define __attribute_thread /* nothing */
 #endif
 
 // Visibility attributes

@@ -84,7 +84,7 @@ __local kerrno_t kshlibcache_rehash(size_t new_bucket_count) {
  }
  assert(dest <= newvec+new_bucket_count);
  kslcache.c_freelib = (size_t)(dest-newvec);
- k_syslogf(KLOG_INFO,"[SHLIB] Rehasing cache to %Iu entries\n",new_bucket_count);
+ k_syslogf(KLOG_DEBUG,"[SHLIB] Rehasing cache to %Iu entries\n",new_bucket_count);
 
  biter = kslcache.c_bucketv;
  for (; biter != bend; ++biter) {

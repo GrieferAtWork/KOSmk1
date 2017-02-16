@@ -33,9 +33,9 @@ __DECL_BEGIN
 /* Callback functions prototypes provided to format functions. */
 typedef int (*pformatprinter) __P((char const *__restrict __data,
                                    __size_t __maxchars,
-                                   void *__restrict __closure));
-typedef int (*pformatscanner) __P((int *__restrict __ch, void *__restrict __closure));
-typedef int (*pformatreturn) __P((int __ch, void *__restrict __closure));
+                                   void *__closure));
+typedef int (*pformatscanner) __P((int *__restrict __ch, void *__closure));
+typedef int (*pformatreturn) __P((int __ch, void *__closure));
 
 //////////////////////////////////////////////////////////////////////////
 // Generic printf implementation
