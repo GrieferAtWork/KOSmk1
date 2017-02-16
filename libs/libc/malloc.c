@@ -625,7 +625,8 @@ static __crit __noinline void *mall_malloc(size_t s, size_t alignment __LIBC_DEB
  MALL_SYSRELEASE
  if __unlikely(!baseptr) return NULL;
  /* Align what will essentially become the malluser by the given alignment. */
- head = (struct mallhead *)(_align((uintptr_t)baseptr+headtailsize,alignment)-headtailsize);
+ head = (struct mallhead *)(_align((uintptr_t)baseptr+headtailsize+MALL_HEADERSIZE,alignment)-
+                                                     (headtailsize+MALL_HEADERSIZE));
  head->mh_magic  = MALL_MAGIC;
  head->mh_refcnt = 1;
  head->mh_base   = baseptr;
