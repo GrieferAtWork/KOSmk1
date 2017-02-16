@@ -184,7 +184,7 @@ err_appname: strcpy(appname,"??" "?");
 #else
      if (iter == end || !*iter) break;
 #endif
-     flush_start = iter+1;
+     flush_start = iter;
     }
    }
 #ifdef USER
