@@ -191,7 +191,6 @@
     <None Include="..\src\kernel\sched\task-timetick.c.inl" />
     <None Include="..\src\kernel\sched\task-usercheck.c.inl" />
     <None Include="..\src\kernel\sched\task-util.c.inl" />
-    <None Include="..\src\kernel\sched\task_asm-ring3-bootstrap.S.inl" />
     <None Include="..\src\kernel\sched\task_asm.S" />
     <None Include="..\src\kernel\sched\tls.c.inl" />
     <None Include="..\src\kernel\socket-packet.c.inl" />

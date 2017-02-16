@@ -470,9 +470,6 @@
     <None Include="..\src\kernel\sched\task_asm.S">
       <Filter>src\kernel\sched</Filter>
     </None>
-    <None Include="..\src\kernel\sched\task_asm-ring3-bootstrap.S.inl">
-      <Filter>src\kernel\sched</Filter>
-    </None>
     <None Include="..\src\kernel\sched\task-attr.c.inl">
       <Filter>src\kernel\sched</Filter>
     </None>

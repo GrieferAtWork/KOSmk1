@@ -470,7 +470,7 @@ struct kcpu *kcpu_leastload(void) {
 
 
 #define LOAD_LDT(x) \
- __asm_volatile__("lldt %0\n" : "=g" (x))
+ __asm_volatile__("lldt %0\n" : : "g" (x))
 
 
 __local kerrno_t kcpu_rotate_unlocked(struct kcpu *__restrict self);
