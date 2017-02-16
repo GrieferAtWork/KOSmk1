@@ -52,7 +52,7 @@ __DECL_BEGIN
 
 /*[[[deemon
 local ops = list {
-   "mov","push","pop","lea",
+   "mov","push","pop","lea","out",
    "add","sub","mul","div","cmp",
    "pushf","popf","and","or","xor",
    "shl","shr","xchg","jmp","mov"
@@ -86,6 +86,11 @@ for (local o: ops) {
 #define lea16      __O16(lea)
 #define lea32      __O32(lea)
 #define lea64      __O64(lea)
+#define outI         __I(out)
+#define out8        __O8(out)
+#define out16      __O16(out)
+#define out32      __O32(out)
+#define out64      __O64(out)
 #define addI         __I(add)
 #define add8        __O8(add)
 #define add16      __O16(add)
@@ -162,6 +167,11 @@ for (local o: ops) {
 #define mov32      __O32(mov)
 #define mov64      __O64(mov)
 //[[[end]]]
+
+#define DATA8(x)   .byte x;
+#define DATA16(x)  .word x;
+#define DATA32(x)  .long x;
+#define DATA64(x)  .qword x;
 
 #define LOCAL_FUNCTION(name)                .type name, @function; name
 #define GLOBAL_FUNCTION(name) .global name; .type name, @function; name

@@ -70,10 +70,10 @@ GLOBAL_FUNCTION(ktask_irq):
 	POP_REGISTERS_NOEAX
 
 	/* Signal interrupt handling completion */
-	mov $0xA0, %al
-	outb %al, $0x20
-	mov $0x20, %al
-	outb %al, $0x20
+	mov8 $0xa0, %al
+	out8 %al, $0x20
+	mov8 $0x20, %al
+	out8 %al, $0x20
 
 	popI %eax
 	iret
@@ -170,14 +170,3 @@ GLOBAL_FUNCTION(ktask_exitnormal):
 	call _S(ktask_exit)
 	DEBUGNOP /* To make sure that the return address stays inside of 'ktask_exitnormal' */
 SYMBOLEND(ktask_exitnormal)
-
-
-GLOBAL_FUNCTION(ktask_ring3_bootstrap):
-#undef POP_REGISTERS_FROM_ESP0
-#include "task_asm-ring3-bootstrap.S.inl"
-SYMBOLEND(ktask_ring3_bootstrap)
-
-GLOBAL_FUNCTION(ktask_ring3_bootstrap_regs):
-#define POP_REGISTERS_FROM_ESP0
-#include "task_asm-ring3-bootstrap.S.inl"
-SYMBOLEND(ktask_ring3_bootstrap_regs)

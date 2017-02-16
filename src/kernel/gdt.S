@@ -31,12 +31,12 @@ GLOBAL_FUNCTION(gdt_flush):
 	movI STACKARG(0), %eax
 	lgdt (%eax)
 
-	mov $KSEG_KERNEL_DATA, %ax
-	mov %ax,   %ds
-	mov %ax,   %es
-	mov %ax,   %fs
-	mov %ax,   %gs
-	mov %ax,   %ss
+	mov16 $KSEG_KERNEL_DATA, %ax
+	mov16 %ax, %ds
+	mov16 %ax, %es
+	mov16 %ax, %fs
+	mov16 %ax, %gs
+	mov16 %ax, %ss
 
 	ljmp $KSEG_KERNEL_CODE, $.flush
 .flush:
@@ -47,8 +47,8 @@ SYMBOLEND(gdt_flush)
 /* void tss_flush(ksegid_t sel); */
 GLOBAL_FUNCTION(tss_flush):
 	STACKBEGIN
-	mov STACKARG(0), %ax
-	ltr %ax
+	mov16 STACKARG(0), %ax
+	ltr   %ax
 	STACKEND
 	ret
 SYMBOLEND(tss_flush)

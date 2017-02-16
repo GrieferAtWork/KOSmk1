@@ -71,17 +71,15 @@ mode16_startup:
 	mov16 %ax, %sp
 	mov32 (MODE16_SYM(mode16_regs)+REALMODE_REGS_SIZE-4), %eax
 
-//	hlt
-
 	sti
 	/* We should be in 16-bit real mode at this point!
 	 * - Interrupts use custom handlers.
 	 * - Paging is disabled.
 	 * - All segment registers are ZERO. */
 
-	.byte 0xCD /* opcode of INT instruction with immediate byte. */
+	DATA8(0xcd) /* opcode of INT instruction with immediate byte. */
 move16_irqnum:
-	.byte 0x00 /* Interrupt number. */
+	DATA8(0x00) /* Interrupt number. */
 	cli
 
 	/* Store the new register values for 32-bit code to return. */
@@ -102,19 +100,19 @@ move16_irqnum:
 	lidt (MODE16_SYM(mode16_oldidt)) /* save old 32-bit idt pointer */
 	jmp32 $KSEG_KERNEL_CODE, $mode16_leave
 mode16_newidt:
-	.word 0x03ff     /* 256 entries, 4b each = 1K */
-	.long 0x00000000 /* Real Mode IVT @ 0x0000 */
+	DATA16(0x03ff)     /* 256 entries, 4b each = 1K */
+	DATA32(0x00000000) /* Real Mode IVT @ 0x0000 */
 mode16_oldidt:
-	.word 0x0000
-	.long 0x00000000
+	DATA16(0x0000)
+	DATA32(0x00000000)
 mode16_oldcr0:
-	.long 0x00000000
+	DATA32(0x00000000)
 mode16_reloc_end:
 mode16_regs:
 	/* 'REALMODE_REGS_SIZE' bytes of memory here! */
 .code32
 mode16_oldstack:
-	.long 0x00000000
+	DATA32(0x00000000)
 
 
 
@@ -185,7 +183,7 @@ mode16_leave:
 	movI %eax, %cr3
 
 	popI %eax
-	mov %eax, %cr0
+	movI %eax, %cr0
 //	sti
 
 	/* It is possible for an unhandled interrupt to have occurred
@@ -193,10 +191,10 @@ mode16_leave:
 	 * or even figure out what it was (if it even existed), we
 	 * must inform the CPU that we are ready to handle more, as
 	 * not to break scheduling or other interrupt-driven devices. */
-	mov $0xA0, %al
-	outb %al, $0x20
-	mov $0x20, %al
-	outb %al, $0x20
+	mov8 $0xa0, %al
+	out8 %al, $0x20
+	mov8 $0x20, %al
+	out8 %al, $0x20
 
 	/* Copy output register values from after the interrupt. */
 	MEMCPY(

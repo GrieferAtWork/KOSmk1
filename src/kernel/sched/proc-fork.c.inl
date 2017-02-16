@@ -148,10 +148,6 @@ err_free:  free(result);
  return NULL;
 }
 
-// Bootstrap RING-3 and preserve registers
-extern void ktask_ring3_bootstrap_regs(__user void *eip, __user void *esp,
-                                       __user void *esp0, struct kpagedir const *pd);
-
 __local __crit __ref struct ktask *
 ktask_copy4fork(struct ktask *__restrict self,
                 struct ktask *__restrict parent,
@@ -234,52 +230,27 @@ ktask_copy4fork(struct ktask *__restrict self,
         ,"Kernel stack address %p is not mapped",result->t_esp0);
 
  {
-  struct {
-   struct ktaskregisters     regs;
-   void                     *esp0;
-   __kernel struct kpagedir *userdir;
-   __user void              *useresp;
-   __user void              *usereip;
-  } layout;
-  struct __packed basicregs { __u32 edx,ecx,ebx,eax; };
-  struct          basicregs *basic_userregs;
-#define RESERVED_MEMORY    (sizeof(struct basicregs)+(__SIZEOF_POINTER__*2+12))
-  assert(kstacksize >= RESERVED_MEMORY);
-  basic_userregs = (struct basicregs *)((uintptr_t)result->t_kstack+(kstacksize-RESERVED_MEMORY));
-  *(uintptr_t *)&result->t_esp -= RESERVED_MEMORY;
-
-  // Configure the arguments for 'ktask_ring3_bootstrap' and the final user-level stack.
-  // -> Most of these are copies of the register states when ring-3 code called 'fork()',
-  //    though 'EAX' is set to KE_OK, as 'ktask_fork' (which should be the entry point
-  //    of the system call that lead us here) returned 'KE_OK' for the child task.
-  // NOTE: Because the ring-3 bootstrap code clobbers the basic user registers,
-  //       a second version is available, that can pop them from the ESP0 stack
-  //       before actually returning to Userland.
-  //    >> With that in mind, some registers must be setup differently...
-  layout.regs.edi     = userregs->edi;
-  layout.regs.esi     = userregs->esi;
-  layout.regs.ebp     = userregs->ebp;
-  basic_userregs->ebx = userregs->ebx;
-  basic_userregs->edx = userregs->edx;
-  basic_userregs->ecx = userregs->ecx;
-  basic_userregs->eax = KE_OK; // Return 0 in EAX for child task
-  layout.regs.ds      = KSEG_KERNEL_DATA;
+  struct ktaskregisters3 regs;
+  regs.base.ds     = userregs->ds;
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS
-  layout.regs.es      = KSEG_KERNEL_DATA;
-  layout.regs.fs      = KSEG_KERNEL_DATA;
-  layout.regs.gs      = KSEG_KERNEL_DATA;
+  regs.base.es     = userregs->es;
+  regs.base.fs     = userregs->fs;
+  regs.base.gs     = userregs->gs;
 #endif
-  layout.regs.cs      = KSEG_KERNEL_CODE;
-  layout.regs.main    = (void(*)())&ktask_ring3_bootstrap_regs;
-  // NOTE: Interrupts are (re-)enabled by 'ktask_ring3_bootstrap'.
-  layout.regs.eflags = userregs->eflags&~(KARCH_X86_EFLAGS_IF);
-  // Fill the stack as required to call 'ktask_ring3_bootstrap'
-  layout.esp0        = result->t_esp;
-  layout.userdir     = result->t_userpd;
+  regs.base.edi    = userregs->edi;
+  regs.base.esi    = userregs->esi;
+  regs.base.ebp    = userregs->ebp;
+  regs.base.ebx    = userregs->ebx;
+  regs.base.edx    = userregs->edx;
+  regs.base.ecx    = userregs->ecx;
+  regs.base.eax    = KE_OK; // Return 0 in EAX for child task
+  regs.base.eip    = userregs->eip;
+  regs.base.cs     = userregs->cs;
+  regs.base.eflags = userregs->eflags|KARCH_X86_EFLAGS_IF;
   // Use the same ESP address as originally set when 'fork()' was called.
-  layout.useresp     = (__user void *)userregs->useresp;
-  layout.usereip     = (__user void *)userregs->eip;
-  ktask_stackpush_sp_unlocked(result,&layout,sizeof(layout));
+  regs.useresp     = userregs->useresp;
+  regs.ss          = userregs->ss;
+  ktask_stackpush_sp_unlocked(result,&regs,sizeof(regs));
  }
 
  ktask_lock(self,KTASK_LOCK_CHILDREN);

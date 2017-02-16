@@ -448,43 +448,22 @@ struct ktask *ktask_procof(struct ktask *__restrict self) {
 
 
 
-extern void ktask_ring3_bootstrap(__user void *eip, __user void *esp,
-                                  __user void *esp0, struct kpagedir const *pd);
-void ktask_setupuserex(struct ktask *self, __user void *useresp,
-                       __user void *eip, __kernel struct kpagedir *userdir) {
- struct {
-  struct ktaskregisters     regs;
-  void                     *esp0;
-  __kernel struct kpagedir *userdir;
-  __user void              *useresp;
-  __user void              *usereip;
- } layout;
+void ktask_setupuser(struct ktask *self, __user void *useresp, __user void *eip) {
+ struct ktaskregisters3 regs;
  kassert_ktask(self);
- kassertobj(userdir);
  assert(ktask_isusertask(self));
- assertf(kpagedir_ismappedp(userdir,eip)
-         ,"The given EIP %p is not mapped in %p"
-         ,eip,userdir);
- assertf(kpagedir_ismappedp(userdir,(void *)((uintptr_t)useresp-PAGESIZE))
-         ,"The given ESP %p is not mapped in %p"
-         ,useresp,userdir);
- memset(&layout,0,sizeof(layout));
- // Start out in kernel space
- layout.regs.ds   = KSEG_KERNEL_DATA;
+ regs.base.ds     = KSEG_USER_DATA|3;
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS
- layout.regs.es   = KSEG_KERNEL_DATA;
- layout.regs.fs   = KSEG_KERNEL_DATA;
- layout.regs.gs   = KSEG_KERNEL_DATA;
+ regs.base.es     = KSEG_USER_DATA|3;
+ regs.base.fs     = KSEG_USER_DATA|3;
+ regs.base.gs     = KSEG_USER_DATA|3;
 #endif
- layout.regs.cs   = KSEG_KERNEL_CODE;
- layout.regs.main = (void(*)())&ktask_ring3_bootstrap;
- // Fill the stack as required to call 'ktask_ring3_bootstrap'
- layout.esp0      = self->t_esp0;
- layout.userdir   = userdir;
- layout.useresp   = useresp;
- layout.usereip   = eip;
- assert(layout.regs.eflags == 0); // Don't enable interrupts!
- ktask_stackpush_sp_unlocked(self,&layout,sizeof(layout));
+ regs.base.cs     = KSEG_USER_CODE|3;
+ regs.base.eip    = (uintptr_t)eip;
+ regs.useresp     = (uintptr_t)useresp;
+ regs.ss          = KSEG_USER_DATA|3;
+ regs.base.eflags = KARCH_X86_EFLAGS_IF;
+ ktask_stackpush_sp_unlocked(self,&regs,sizeof(regs));
 }
 
 __crit kerrno_t

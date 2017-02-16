@@ -73,10 +73,10 @@ int_handler_prep:
 	POP_REGISTERS_NOEAX
 
 	/* Signal interrupt handling completion */
-	mov $0xA0, %al
-	outb %al, $0x20
-	mov $0x20, %al
-	outb %al, $0x20
+	mov8 $0xa0, %al
+	out8 %al, $0x20
+	mov8 $0x20, %al
+	out8 %al, $0x20
 
 	pop32 %eax
 
@@ -90,8 +90,8 @@ SYMBOLEND(int_handler_prep)
 // Used for interrupt handlers where the CPU doesn't push 'ecode' for us
 .macro isr num
 	GLOBAL_FUNCTION(isr\num):
-		pushl $0    // Push 'ecode'
-		pushl $\num // Push 'intno'
+		push32 $0    // Push 'ecode'
+		push32 $\num // Push 'intno'
 		jmp int_handler_prep
 	SYMBOLEND(isr\num)
 .endm
@@ -100,15 +100,15 @@ SYMBOLEND(int_handler_prep)
 .macro isr_code num
 	GLOBAL_FUNCTION(isr\num):
 		cli
-		pushl $\num // Push 'intno'
+		push32 $\num // Push 'intno'
 		jmp int_handler_prep
 .endm
 
 /* Used for actual interrupts (Not exception handlers.) */
 .macro irq num
 	GLOBAL_FUNCTION(irq\num):
-		pushl $0
-		pushl $(\num +32)
+		push32 $0
+		push32 $(\num +32)
 		jmp int_handler_prep
 .endm
 

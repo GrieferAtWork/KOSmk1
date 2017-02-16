@@ -202,7 +202,6 @@ static struct kidtpointer gdt = {0,0};
 
 /* Do we need special memory for this? */
 static struct ksegment gdt_segments[GDT_MAX_ENTRIES];
-static __u16           gdt_used_size;
 #endif
 
 static struct kspinlock gdt_lock = KSPINLOCK_INIT;
@@ -282,12 +281,8 @@ __crit ksegid_t kgdt_alloc(struct ksegment const *seg) {
   /* Found one! */
   memcpy(iter,seg,sizeof(struct ksegment));
   result = (ksegid_t)((uintptr_t)iter-(uintptr_t)gdt_segments);
-  assert(result <= gdt_used_size);
-  if (result == gdt_used_size) {
-   gdt_used_size += sizeof(struct ksegment);
-  }
   gdt.base  = gdt_segments;
-  gdt.limit = gdt_used_size;
+  gdt.limit = GDT_MAX_ENTRIES*sizeof(struct ksegment);
   gdt_flush(&gdt);
   goto end;
  }
@@ -306,15 +301,11 @@ __crit void kgdt_free(ksegid_t id) {
  struct kidtpointer gdt;
  assert(isaligned(id,sizeof(struct ksegment)));
  GDT_ALLOC_ACQUIRE
- assert(id <= gdt_used_size);
+ assert(id < GDT_MAX_ENTRIES*sizeof(struct ksegment));
  seg = (struct ksegment *)((uintptr_t)gdt_segments+id);
  memset(seg,0,sizeof(struct ksegment));
- if (id == gdt_used_size) {
-  while ((assert(seg != gdt_segments),!seg[-1].present)) --seg;
-  gdt_used_size = (__u16)((uintptr_t)seg-(uintptr_t)gdt_segments);
- }
  gdt.base  = gdt_segments;
- gdt.limit = gdt_used_size;
+ gdt.limit = GDT_MAX_ENTRIES*sizeof(struct ksegment);
  gdt_flush(&gdt);
  GDT_ALLOC_RELEASE
  k_syslogf(KLOG_INFO,"Freed GDT entry: %#.4I16x (%u)\n",
@@ -330,7 +321,7 @@ __crit void kgdt_update(ksegid_t id, struct ksegment const *seg) {
 #endif
  GDT_ALLOC_ACQUIRE
  assert(id != KSEG_NULL);
- assert(id <= gdt_used_size);
+ assert(id <= GDT_MAX_ENTRIES*sizeof(struct ksegment));
  assert(isaligned(id,sizeof(struct ksegment)));
  kassertobj(seg);
  assertf(seg->present,"Segment must be present");
@@ -338,7 +329,7 @@ __crit void kgdt_update(ksegid_t id, struct ksegment const *seg) {
  memcpy(dst,seg,sizeof(struct ksegment));
 #if !GDT_USE_DYNAMIC_MEMORY
  gdt.base  = gdt_segments;
- gdt.limit = gdt_used_size;
+ gdt.limit = GDT_MAX_ENTRIES*sizeof(struct ksegment);
 #endif /* !GDT_USE_DYNAMIC_MEMORY */
  gdt_flush(&gdt);
  GDT_ALLOC_RELEASE
@@ -370,7 +361,7 @@ void kernel_initialize_gdt(void) {
  gdt.base  = (struct ksegment *)(calloc)(1,gdt.limit);
  assertf(gdt.base,"Failed to allocate GDT memory"); /* TODO: Panic */
 #else /* GDT_USE_DYNAMIC_MEMORY */
- gdt.limit = gdt_used_size = KSEG_BUILTIN*sizeof(struct ksegment);
+ gdt.limit = GDT_MAX_ENTRIES*sizeof(struct ksegment);
  gdt.base  = gdt_segments;
 #endif /* !GDT_USE_DYNAMIC_MEMORY */
 

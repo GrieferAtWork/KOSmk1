@@ -890,7 +890,7 @@ extern __wunused __nonnull((1)) struct ktaskregisters3 *ktask_getregisters3(stru
 //    the initial jump into user space.
 extern __nonnull((1,2,3,4)) void ktask_setupuserex(struct ktask *self, __user void *useresp,
                                                    __user void *eip, __kernel struct kpagedir *userdir);
-#ifdef __INTELLISENSE__
+#if defined(__INTELLISENSE__) || 1
 extern __nonnull((1,2,3)) void ktask_setupuser(struct ktask *self,
                                                __user void *useresp, __user void *eip);
 #else
