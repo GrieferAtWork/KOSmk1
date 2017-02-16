@@ -160,7 +160,7 @@ __COMPILER_PACK_POP
 #define SEG_CODE_PL0_16 (                             SEG_FLAG_AVAILABLE|SEG_ACCESS_SYSTEM|SEG_ACCESS_PRESENT|SEG_ACCESS_PRIVL(0)|SEG_CODE_EXRD)
 #define SEG_DATA_PL0_16 (                             SEG_FLAG_AVAILABLE|SEG_ACCESS_SYSTEM|SEG_ACCESS_PRESENT|SEG_ACCESS_PRIVL(0)|SEG_DATA_RDWR)
 #define SEG_TSS         (                                                                  SEG_ACCESS_PRESENT|SEG_ACCESS_PRIVL(0)|SEG_CODE_EXA)
-#define SEG_LDT         (                                                                  SEG_ACCESS_PRESENT|SEG_ACCESS_PRIVL(0)|SEG_DATA_RDWR)
+#define SEG_LDT         (                                                                  SEG_ACCESS_PRESENT|SEG_ACCESS_PRIVL(3)|SEG_DATA_RDWR)
 
 #define SEG_LIMIT_MAX  0x000fffff
 
@@ -188,7 +188,7 @@ ksegment_encode(struct ksegment *self, __u32 base,
 __local __nonnull((1)) void
 ksegment_encode(struct ksegment *self, __u32 base,
                 __u32 size, __u32 config) {
- assertf(size <= SEG_LIMIT_MAX,"Size %I32u is too large",size);
+ assertf(size <= SEG_LIMIT_MAX,"Size %I32x is too large",size);
  self->ul32 = __SEG_ENCODELO(base,size,config);
  self->uh32 = __SEG_ENCODEHI(base,size,config);
 }
@@ -231,57 +231,13 @@ __STATIC_ASSERT(sizeof(struct ksegment) == 8);
 #define KSEG_MAX              0xffff
 #define KSEG_ISBUILTIN(seg) ((seg) >= KSEG(KSEG_BUILTIN))
 
-#define KLDT_SIZEOF          (2+KIDTPOINTER_SIZEOF)
-#define KLDT_OFFSETOF_GDTID  (0)
-#define KLDT_OFFSETOF_TABLE  (2)
 #ifndef __ASSEMBLY__
 typedef __u16 ksegid_t;
-struct kldt {
- /* Local descriptor table (One for each process). */
- __u16              ldt_gdtid; /*< [const] Associated GDT offset/index. */
- struct kidtpointer ldt_table; /*< Associated descriptor table. */
-};
-#define KLDT_INIT(gdtid)   {gdtid,{0,0}}
-
-//////////////////////////////////////////////////////////////////////////
-// Initialize/Finalize a given local descriptor table.
-// @return: KE_OK:       Successfully initialized the given LDT.
-// @return: KE_OVERFLOW: Too many LDTs have already been allocated.
-// @return: KE_NOMEM:    Not enough available memory.
-extern __crit __wunused kerrno_t kldt_init(struct kldt *self, __u16 sizehint);
-extern __crit __wunused kerrno_t kldt_initcopy(struct kldt *self, struct kldt const *right);
-extern __crit void kldt_quit(struct kldt *self);
-
-//////////////////////////////////////////////////////////////////////////
-// Allocate/Free segments within a local descriptor table.
-// Upon successful allocation, the new segment will have already
-// been flushed and capable of being used for whatever means necessary.
-// NOTE: On success, the returned index always compares true for 'KSEG_ISLDT()'
-// @param: seg:   The initial contents of the segment to-be allocated.
-//                HINT: Contents can later be changed through calls to 'kldt_setseg'.
-// @param: reqid: The requested segment id to allocate the entry at.
-//                NOTE: This value must be compare true for 'KSEG_ISLDT()'
-// @return: * :        Having successfully registered the given segment,
-//                     this function returns a value capable of being
-//                     written into a segment register without causing
-//                     what is the origin on the term 'SEGFAULT'.
-// @return: reqid:     Successfully reserved the given index.
-// @return: KSEG_NULL: Failed to allocate a new segment (no-memory/too-many-segments)
-//                    [kldt_allocsegat] The given ID is already in use.
-extern __nomp __crit __wunused __nonnull((1,2)) ksegid_t kldt_alloc(struct kldt *self, struct ksegment const *seg);
-extern __nomp __crit __wunused __nonnull((1,3)) ksegid_t kldt_allocat(struct kldt *self, ksegid_t reqid, struct ksegment const *seg);
-extern __nomp __crit           __nonnull((1)) void kldt_free(struct kldt *self, ksegid_t id);
-
-//////////////////////////////////////////////////////////////////////////
-// Get/Set the segment data associated with a given segment ID.
-// NOTE: 'kldt_setseg' will flush the changed segment upon success.
-extern __nomp __crit __nonnull((1,3)) void kldt_get(struct kldt *self, ksegid_t id, struct ksegment *seg);
-extern __nomp __crit __nonnull((1,3)) void kldt_set(struct kldt *self, ksegid_t id, struct ksegment const *seg);
-
 
 //////////////////////////////////////////////////////////////////////////
 // Allocate/Free/Update a (new) descriptor index within global descriptor table.
 // These are mainly used to implement the higher-level LDT table and its functions.
+// @return: KSEG_NULL: Failed to allocate a new segment.
 extern __crit __nonnull((1)) ksegid_t kgdt_alloc(struct ksegment const *seg);
 extern __crit                void kgdt_free(ksegid_t id);
 extern __crit __nonnull((2)) void kgdt_update(ksegid_t id, struct ksegment const *seg);

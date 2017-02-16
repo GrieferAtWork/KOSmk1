@@ -42,146 +42,9 @@ __DECL_BEGIN
 extern void gdt_flush(struct kidtpointer *p);
 extern void tss_flush(ksegid_t sel);
 
-
-__local void kldt_genseg(struct kldt *self, struct ksegment *seg) {
- ksegment_encode(seg,
-                (__u32)(uintptr_t)self->ldt_table.base,
-                (__u32)self->ldt_table.limit,SEG_LDT);
-}
-__local void kldt_update(struct kldt *self) {
- struct ksegment seg;
- kldt_genseg(self,&seg);
- kgdt_update(self->ldt_gdtid,&seg);
-}
-
-__crit kerrno_t
-kldt_init(struct kldt *self, __u16 sizehint) {
- struct ksegment ldt_seg;
- kassertobj(self);
- self->ldt_table.limit = sizehint*sizeof(struct ksegment);
- self->ldt_table.base = (struct ksegment *)malloc(self->ldt_table.limit);
- if __unlikely(!self->ldt_table.base) return KE_NOMEM;
- memset(self->ldt_table.base,0,self->ldt_table.limit);
- kldt_genseg(self,&ldt_seg);
- self->ldt_gdtid = kgdt_alloc(&ldt_seg);
- if __unlikely(self->ldt_gdtid == KSEG_NULL) {
-  free(self->ldt_table.base);
-  return KE_NOMEM;
- }
- return KE_OK;
-}
-
-__crit kerrno_t
-kldt_initcopy(struct kldt *self,
-              struct kldt const *right) {
- struct ksegment ldt_seg;
- kassertobj(self);
- kassertobj(right);
- self->ldt_table.base = (struct ksegment *)memdup(right->ldt_table.base,
-                                                  right->ldt_table.limit);
- if __unlikely(!self->ldt_table.base) return KE_NOMEM;
- self->ldt_table.limit = right->ldt_table.limit;
- self->ldt_gdtid = kgdt_alloc(&ldt_seg);
- if __unlikely(self->ldt_gdtid == KSEG_NULL) {
-  free(self->ldt_table.base);
-  return KE_NOMEM;
- }
- return KE_OK;
-}
-
-__crit void
-kldt_quit(struct kldt *self) {
- kassertobj(self);
- kgdt_free(self->ldt_gdtid);
- free(self->ldt_table.base);
-}
-
-__nomp __crit ksegid_t
-kldt_alloc(struct kldt *self,
-           struct ksegment const *seg) {
- struct ksegment *iter,*begin,*newvec;
- __u16 new_limit; ksegid_t result;
- kassertobj(self);
- kassertobj(seg);
- assert(!(self->ldt_table.limit % sizeof(struct ksegment)));
- assert(seg->present);
- begin = self->ldt_table.base;
- iter = (struct ksegment *)((uintptr_t)begin+self->ldt_table.limit);
- while (iter-- != begin) if (!iter->present) {
-  /* Found an empty slot */
-  memcpy(iter,seg,sizeof(struct ksegment));
-  result = (ksegid_t)((uintptr_t)iter-(uintptr_t)begin);
-  goto end;
- }
- /* Must allocate a new segment */
- new_limit = self->ldt_table.limit*2;
- if (new_limit <= self->ldt_table.limit) new_limit = 0xffff;
- if (new_limit == self->ldt_table.limit) return KSEG_NULL;
- assert(!(new_limit % sizeof(struct ksegment)));
- assert(!(self->ldt_table.limit % sizeof(struct ksegment)));
- iter = newvec = (struct ksegment *)malloc(new_limit);
- if __unlikely(!newvec) return KSEG_NULL;
- assert(begin == self->ldt_table.base);
- memcpy(newvec,begin,(size_t)(result = self->ldt_table.limit));
- *(uintptr_t *)&iter += result;
- memcpy(iter,seg,sizeof(struct ksegment));
- self->ldt_table.base  = newvec;
- self->ldt_table.limit = new_limit;
- /* Update the LDT's area of memory before freeing the old one.
-  * Not doing so would create a security hole where a process
-  * could theoretically allocate memory still mapped as LDT
-  * table for itself, or some other process. */
- kldt_update(self);
- free(begin);
-end:
- return KSEG_TOLDT(result);
-}
-
-__nomp __crit ksegid_t
-kldt_allocat(struct kldt *self, ksegid_t reqid,
-             struct ksegment const *seg) {
- kassertobj(self);
- assert(KSEG_ISLDT(reqid));
- kassertobj(seg);
- reqid = reqid & (sizeof(struct ksegment)-1);
-
-
- return 0; // TODO
-}
-
-__nomp __crit void
-kldt_free(struct kldt *self, ksegid_t id) {
- kassertobj(self);
- assert(KSEG_ISLDT(id));
- id = id & (sizeof(struct ksegment)-1);
- assert(id < self->ldt_table.limit);
- // TODO
-}
-
-__nomp __crit void
-kldt_get(struct kldt *self, ksegid_t id,
-         struct ksegment *seg) {
- kassertobj(self);
- kassertobj(seg);
- assert(KSEG_ISLDT(id));
- id = id & (sizeof(struct ksegment)-1);
- assert(id < self->ldt_table.limit);
- // TODO
-}
-
-__nomp __crit void
-kldt_set(struct kldt *self, ksegid_t id,
-         struct ksegment const *seg) {
- kassertobj(self);
- kassertobj(seg);
- assert(KSEG_ISLDT(id));
- id = id & (sizeof(struct ksegment)-1);
- assert(id < self->ldt_table.limit);
- // TODO
-}
-
-
 #if 0
+/* TODO: A dynamic GDT would have to be mapped in all user page directories.
+ *       The static one already is because we always map the entire kernel. */
 #define GDT_MAX_ENTRIES         (-1)
 #else
 #define GDT_MAX_ENTRIES        (128)
@@ -207,7 +70,6 @@ static struct ksegment gdt_segments[GDT_MAX_ENTRIES];
 static struct kspinlock gdt_lock = KSPINLOCK_INIT;
 #define GDT_ALLOC_ACQUIRE   kspinlock_lock(&gdt_lock);
 #define GDT_ALLOC_RELEASE   kspinlock_unlock(&gdt_lock);
-
 
 #if GDT_USE_DYNAMIC_MEMORY
 __crit ksegid_t kgdt_alloc(struct ksegment const *seg) {
@@ -245,10 +107,10 @@ __crit ksegid_t kgdt_alloc(struct ksegment const *seg) {
 end:
  GDT_ALLOC_RELEASE
  if __likely(result != KSEG_NULL) {
-  k_syslogf(KLOG_INFO,"Allocated GDT entry: %#.4I16x (%u)\n",
+  k_syslogf(KLOG_INFO,"[GDT] Allocated GDT entry: %#.4I16x (%u)\n",
             result,(unsigned)KSEG_ID(result));
  } else {
-  k_syslogf(KLOG_ERROR,"Failed to allocate GDT entry\n");
+  k_syslogf(KLOG_ERROR,"[GDT] Failed to allocate GDT entry\n");
   _printtraceback_d();
  }
  return result;
@@ -264,7 +126,7 @@ __crit void kgdt_free(ksegid_t id) {
  memset(seg,0,sizeof(struct ksegment));
  gdt_flush(&gdt);
  GDT_ALLOC_RELEASE
- k_syslogf(KLOG_INFO,"Freed GDT entry: %#.4I16x (%u)\n",
+ k_syslogf(KLOG_INFO,"[GDT] Freed GDT entry: %#.4I16x (%u)\n",
            id,(unsigned)KSEG_ID(id));
 }
 #else /* GDT_USE_DYNAMIC_MEMORY */
@@ -286,12 +148,12 @@ __crit ksegid_t kgdt_alloc(struct ksegment const *seg) {
   gdt_flush(&gdt);
   goto end;
  }
- k_syslogf(KLOG_ERROR,"Failed to allocate GDT entry\n");
+ k_syslogf(KLOG_ERROR,"[GDT] Failed to allocate GDT entry\n");
  _printtraceback_d();
 end:
  GDT_ALLOC_RELEASE
  if __likely(result != KSEG_NULL) {
-  k_syslogf(KLOG_INFO,"Allocated GDT entry: %#.4I16x (%u)\n",
+  k_syslogf(KLOG_INFO,"[GDT] Allocated GDT entry: %#.4I16x (%u)\n",
             result,(unsigned)KSEG_ID(result));
  }
  return result;
@@ -308,7 +170,7 @@ __crit void kgdt_free(ksegid_t id) {
  gdt.limit = GDT_MAX_ENTRIES*sizeof(struct ksegment);
  gdt_flush(&gdt);
  GDT_ALLOC_RELEASE
- k_syslogf(KLOG_INFO,"Freed GDT entry: %#.4I16x (%u)\n",
+ k_syslogf(KLOG_INFO,"[GDT] Freed GDT entry: %#.4I16x (%u)\n",
            id,(unsigned)KSEG_ID(id));
 }
 #endif /* !GDT_USE_DYNAMIC_MEMORY */

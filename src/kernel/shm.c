@@ -306,18 +306,26 @@ kerrno_t kshmtab_unique(__ref struct kshmtab **__restrict self) {
 }
 
 
+static kerrno_t kshm_initldt(struct kshm *self, __u16 size_hint);
+static kerrno_t kshm_initldtcopy(struct kshm *self, struct kshm *right);
+static void kshm_quitldt(struct kshm *self);
 
-
-
-kerrno_t kshm_init(struct kshm *__restrict self) {
+kerrno_t kshm_init(struct kshm *__restrict self,
+                   __u16 ldt_size_hint) {
+ kerrno_t error;
  kassertobj(self);
  kobject_init(self,KOBJECT_MAGIC_SHM);
  self->sm_pd = kpagedir_new();
  if __unlikely(!self->sm_pd) return KE_NOMEM;
+ if __unlikely(KE_ISERR(error = kpagedir_mapkernel(self->sm_pd,PAGEDIR_FLAG_READ_WRITE))) goto err_pd;
+ if __unlikely(KE_ISERR(error = kshm_initldt(self,ldt_size_hint))) goto err_pd;
+ memset(self->sm_groups,0,sizeof(self->sm_groups));
  self->sm_tabc = 0;
  self->sm_tabv = NULL;
- memset(self->sm_groups,0,sizeof(self->sm_groups));
  return KE_OK;
+err_pd:
+ kpagedir_delete(self->sm_pd);
+ return error;
 }
 
 #ifdef __DEBUG__
@@ -432,12 +440,19 @@ kerrno_t kshm_initcopy(struct kshm *__restrict self,
  kobject_init(self,KOBJECT_MAGIC_SHM);
  self->sm_pd = kpagedir_new();
  if __unlikely(!self->sm_pd) return KE_NOMEM;
- if __unlikely(KE_ISERR(error = kpagedir_mapkernel(
-  self->sm_pd,PAGEDIR_FLAG_READ_WRITE))) goto err_pd;
+ if __unlikely(KE_ISERR(error = kpagedir_mapkernel(self->sm_pd,PAGEDIR_FLAG_READ_WRITE))) goto err_pd;
+ if __unlikely(KE_ISERR(error = kshm_initldtcopy(self,right))) goto err_pd;
  self->sm_tabc = right->sm_tabc;
  self->sm_tabv = (struct kshmtabentry *)memdup(right->sm_tabv,right->sm_tabc*
                                                sizeof(struct kshmtabentry));
- if __unlikely(!self->sm_tabv) { error = KE_NOMEM; err_pd: kpagedir_delete(self->sm_pd); return error; }
+ if __unlikely(!self->sm_tabv) {
+  error = KE_NOMEM;
+err_ldt:
+  kshm_quitldt(self);
+err_pd:
+  kpagedir_delete(self->sm_pd);
+  return error;
+ }
  tabend = (tabiter = self->sm_tabv)+self->sm_tabc;
  while (tabiter != tabend) {
   kassert_kshmtab(tabiter->te_tab);
@@ -458,7 +473,7 @@ err_tabs:
       kshmtab_decref(tabiter->te_tab);
      }
      free(self->sm_tabv);
-     goto err_pd;
+     goto err_ldt;
     }
    } else {
     // Copy the tab and its data
@@ -489,6 +504,7 @@ void kshm_quit(struct kshm *__restrict self) {
   kshmtab_decref(iter->te_tab);
  }
  free(self->sm_tabv);
+ kshm_quitldt(self);
  kpagedir_delete(self->sm_pd);
 }
 
@@ -865,8 +881,11 @@ kerrno_t kshm_allow_devmap(uintptr_t addr, size_t pages) {
  return KE_ACCES; // Deny access
 }
 
-
 __DECL_END
+
+#ifndef __INTELLISENSE__
+#include "shm-ldt.c.inl"
+#endif
 #endif /* __KERNEL__ */
 
 #endif /* !__KOS_KERNEL_SHM_C__ */

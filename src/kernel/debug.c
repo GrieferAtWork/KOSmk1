@@ -122,7 +122,7 @@ void debug_checkalloca_d(__size_t bytes __LIBC_DEBUG__PARAMS) {
 }
 #endif /* __KERNEL_HAVE_DEBUG_STACKCHECKS */
 
-#define OUT(s,max) (serial_printn(SERIAL_01,s,max),tty_printn(s,max))
+#define OUT(s,max) (serial_printn(SERIAL_01,s,max)/*,tty_printn(s,max)*/)
 void debug_hexdump(void const *p, size_t s) {
  byte_t line[16],temp;
  size_t i,line_size,spaceend;

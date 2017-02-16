@@ -74,14 +74,6 @@ kprocsand_initcopy(struct kprocsand *__restrict self,
  return KE_OK;
 }
 
-static kerrno_t
-kprocregs_initcopy(struct kprocregs *self,
-                   struct kprocregs *right) {
- self->pr_cs = right->pr_cs;
- self->pr_ds = right->pr_ds;
- return kldt_initcopy(&self->pr_ldt,&right->pr_ldt);
-}
-
 __local void kprocsand_quit(struct kprocsand *self);
 __crit __ref struct kproc *
 kproc_copy4fork(__u32 flags, struct kproc *__restrict proc) {
@@ -91,16 +83,12 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc) {
  if __unlikely((result = omalloc(struct kproc)) == NULL) return NULL;
  kobject_init(result,KOBJECT_MAGIC_PROC);
  result->p_refcnt = 1;
+ memcpy(&result->p_regs,&proc->p_regs,sizeof(struct kprocregs));
 
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_REGS))) goto err_free;
- error = kprocregs_initcopy(&result->p_regs,&proc->p_regs);
- kproc_unlock(proc,KPROC_LOCK_REGS);
- if __unlikely(KE_ISERR(error)) goto err_free;
-
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_MODS))) goto err_ldt;
+ if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_MODS))) goto err_free;
  error = kprocmodules_initcopy(&result->p_modules,&proc->p_modules);
  kproc_unlock(proc,KPROC_LOCK_MODS);
- if __unlikely(KE_ISERR(error)) goto err_ldt;
+ if __unlikely(KE_ISERR(error)) goto err_free;
 
  if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_FDMAN))) goto err_shlib;
  error = kfdman_initcopy(&result->p_fdman,&proc->p_fdman);
@@ -143,7 +131,6 @@ err_sand:  kprocsand_quit(&result->p_sand);
 err_shm:   kshm_quit(&result->p_shm);
 err_fd:    kfdman_quit(&result->p_fdman);
 err_shlib: kprocmodules_quit(&result->p_modules);
-err_ldt:   kprocregs_quit(&result->p_regs);
 err_free:  free(result);
  return NULL;
 }

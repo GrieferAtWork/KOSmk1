@@ -629,5 +629,8 @@
     <None Include="..\src\kernel\arch\x86\realmode.S">
       <Filter>src\kernel\arch\x86</Filter>
     </None>
+    <None Include="..\src\kernel\shm-ldt.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
   </ItemGroup>
 </Project>

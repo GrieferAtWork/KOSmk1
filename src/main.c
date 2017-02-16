@@ -57,8 +57,6 @@ void run_init(void) {
  process = kproc_newroot();
  assert(process);
  asserte(KE_ISOK(kproc_locks(process,KPROC_LOCK_SHM|KPROC_LOCK_MODS)));
- error = kpagedir_mapkernel(process->p_shm.sm_pd,PAGEDIR_FLAG_READ_WRITE);
- assertf(KE_ISOK(error),"%d",error);
  error = kshlib_openexe(path,(size_t)-1,&lib,1);
  assertf(KE_ISOK(error),"%d",error);
  error = kproc_insmod_unlocked(process,lib,&modid);

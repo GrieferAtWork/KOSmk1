@@ -126,18 +126,20 @@ kpagedir_findfreerange(struct kpagedir const *self, __size_t pages,
 // Map the given physical address range to the first available free virtual range
 // NOTE: Will never map the NULL page
 // @param: phys:  The physical address to map (must be page-aligned; PAGEALIGN)
+// @param: flags: Set of flags masked by 'PAGEDIR_FLAG_MASK'
 // @return: * :   The virtual address the given physical range was mapped to.
 // @return: NULL: Failed to find an unused are big enough to
 //                map the given range, or not enough memory.
 extern __nonnull((1,2)) __virtualaddr void *
 kpagedir_mapanyex(struct kpagedir *self, __physicaladdr void const *phys,
                   __size_t pages, __virtualaddr void const *hint, kpageflag_t flags);
-#define KPAGEDIR_MAPANY_HINT_UHEAP    ((void *)0x40000000)
-#define KPAGEDIR_MAPANY_HINT_USTACK   ((void *)0x80000000)
-#define KPAGEDIR_MAPANY_HINT_LIBS     ((void *)0xa0000000)
-#define KPAGEDIR_MAPANY_HINT_KSTACK   ((void *)0xf0000000)
-#define KPAGEDIR_MAPANY_HINT_UDEV     ((void *)0x20000000)
 
+#define KPAGEDIR_MAPANY_HINT_UDEV     ((void *)0x20000000) /*< mmap_dev-mapped device memory. */
+#define KPAGEDIR_MAPANY_HINT_UHEAP    ((void *)0x40000000) /*< User-space heap. */
+#define KPAGEDIR_MAPANY_HINT_USTACK   ((void *)0x80000000) /*< User-space stack. */
+#define KPAGEDIR_MAPANY_HINT_LIBS     ((void *)0xa0000000) /*< Shared libraries. */
+#define KPAGEDIR_MAPANY_HINT_KINTERN  ((void *)0xe0000000) /*< Various internal kernel-specific mappings (e.g.: LDT vectors). */
+#define KPAGEDIR_MAPANY_HINT_KSTACK   ((void *)0xf0000000) /*< Kernel-space stack. */
 
 #define KPAGEDIR_RANGEATTR_NONE         0
 #define KPAGEDIR_RANGEATTR_HASMAPPED    1

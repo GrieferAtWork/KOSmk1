@@ -377,11 +377,11 @@ __DECL_END
     pop16 %fs
     pop16 %gs
 #else
-    pop16 %ebx
-    mov16 %ebx, %ds
-    mov16 %ebx, %es
-    mov16 %ebx, %fs
-    mov16 %ebx, %gs
+    pop16 %bx
+    mov16 %bx, %ds
+    mov16 %bx, %es
+    mov16 %bx, %fs
+    mov16 %bx, %gs
     addI $2, %esp
 #endif
     pop32 %edi

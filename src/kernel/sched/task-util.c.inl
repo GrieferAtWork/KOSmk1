@@ -452,16 +452,23 @@ void ktask_setupuser(struct ktask *self, __user void *useresp, __user void *eip)
  struct ktaskregisters3 regs;
  kassert_ktask(self);
  assert(ktask_isusertask(self));
- regs.base.ds     = KSEG_USER_DATA|3;
+ /* The 'self->t_proc->p_shm.sm_ldt.ldt_vector' vector (aka. the LDT vector)
+  * must be mapped in the page directory active when in ring-#3
+  *       
+  * My god! Why do I have to figure this stuff out myself?
+  *         Why is there no one on the entire Internet that already had to deal with this?
+  * >> Like seriously: Am I writing the first hobby OS planned to include TRUE thread-local storage?
+  */
 #if KTASK_I386_SAVE_SEGMENT_REGISTERS
- regs.base.es     = KSEG_USER_DATA|3;
- regs.base.fs     = KSEG_USER_DATA|3;
- regs.base.gs     = KSEG_USER_DATA|3;
+ regs.base.es     =
+ regs.base.fs     =
+ regs.base.gs     =
 #endif
- regs.base.cs     = KSEG_USER_CODE|3;
+ regs.base.ds     =
+ regs.ss          = self->t_proc->p_regs.pr_ds|3;
+ regs.base.cs     = self->t_proc->p_regs.pr_cs|3;
  regs.base.eip    = (uintptr_t)eip;
  regs.useresp     = (uintptr_t)useresp;
- regs.ss          = KSEG_USER_DATA|3;
  regs.base.eflags = KARCH_X86_EFLAGS_IF;
  ktask_stackpush_sp_unlocked(self,&regs,sizeof(regs));
 }

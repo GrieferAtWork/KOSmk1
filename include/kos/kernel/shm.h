@@ -28,6 +28,7 @@
 #include <sys/mman.h>
 #include <kos/compiler.h>
 #include <kos/types.h>
+#include <kos/kernel/gdt.h>
 #include <kos/errno.h>
 #include <kos/kernel/features.h>
 #include <kos/kernel/object.h>
@@ -171,25 +172,56 @@ struct kshmtabentry {
 #endif /* !__ASSEMBLY__ */
 
 
-#ifndef __ASSEMBLY__
 __struct_fwd(kpagedir);
+
+#define KSHM_LDT_BUFSIZE    (8)
+#define KSHM_LDT_ALIGNMENT  (16)
+#define KSHM_LDT_PAGEFLAGS  (PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE)
+
+#define KLDT_SIZEOF          (2+KIDTPOINTER_SIZEOF+__SIZEOF_POINTER__)
+#define KLDT_OFFSETOF_GDTID  (0)
+#define KLDT_OFFSETOF_TABLE  (2)
+#define KLDT_OFFSETOF_VECTOR (2+KIDTPOINTER_SIZEOF)
+#ifndef __ASSEMBLY__
+__COMPILER_PACK_PUSH(1)
+struct __packed kldt {
+ /* Local descriptor table (One for each process). */
+ __u16                      ldt_gdtid;  /*< [const] Associated GDT offset/index. */
+ __user  struct kidtpointer ldt_table;  /*< Associated descriptor table (with virtual mapping). */
+ __kernel struct ksegment  *ldt_vector; /*< [1..1] Physical address of the LDT vector. */
+};
+__COMPILER_PACK_POP
+#endif /* !__ASSEMBLY__ */
+
+
+#define KSHM_OFFSETOF_PD     (KOBJECT_SIZEOFHEAD)
+#define KSHM_OFFSETOF_LDT    (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__)
+#define KSHM_OFFSETOF_TABC   (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__+KLDT_SIZEOF)
+#define KSHM_OFFSETOF_TABV   (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__+KLDT_SIZEOF+__SIZEOF_SIZE_T__)
+#define KSHM_OFFSETOF_GROUPS (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__*2+KLDT_SIZEOF+__SIZEOF_SIZE_T__)
+#define KSHM_SIZEOF          (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__*(2+KSHM_GROUPCOUNT)+KLDT_SIZEOF+__SIZEOF_SIZE_T__)
+#ifndef __ASSEMBLY__
 struct kshm {
  KOBJECT_HEAD
  // Per-process shared memory manager
  // NOTE: To allow for fast forking, all userland memory can be shared
  struct kpagedir     *sm_pd;   /*< [1..1][owned] Page directory associated with this process. */
+ struct kldt          sm_ldt;  /*< Local descriptor table information. */
  // NOTE: The vector is sorted ascending by virtual address mappings.
  __size_t             sm_tabc; /*< Amount of used shared memory tabs. */
  struct kshmtabentry *sm_tabv; /*< [1..1][0..tv_tabc][owned] Vector of shm-tabs (Sorted by virtual user address). */
  struct kshmtabentry *sm_groups[KSHM_GROUPCOUNT];
 };
-#define KSHM_INITROOT(pagedir) {KOBJECT_INIT(KOBJECT_MAGIC_SHM) pagedir,0,NULL,{NULL,}}
+#define KSHM_INITROOT(pagedir,gdtid) \
+ {KOBJECT_INIT(KOBJECT_MAGIC_SHM) pagedir,\
+ {gdtid,{0,NULL},NULL},0,NULL,{NULL,}}
 
 //////////////////////////////////////////////////////////////////////////
 // Initialize/Finalize a given SHM manager.
 // NOTE: 'kshm_init' can fail because it must allocate a new page directory.
-// @return: KE_NOMEM: Not enough memory to allocate a new page directory.
-extern __wunused __nonnull((1)) kerrno_t kshm_init(struct kshm *__restrict self);
+// @return: KE_OK:    Successfully initialized the given memory manager.
+// @return: KE_NOMEM: Not enough kernel/physical memory.
+extern __wunused __nonnull((1)) kerrno_t kshm_init(struct kshm *__restrict self, __u16 ldt_size_hint);
 extern           __nonnull((1)) void kshm_quit(struct kshm *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
@@ -200,7 +232,8 @@ extern           __nonnull((1)) void kshm_quit(struct kshm *__restrict self);
 //       perform copy-on-write, thus saving a lot of memory is the process.
 //    >> 'kshm_initcopy' bypasses this functionality,
 //       always creating hard copies of all stored SHM tabs.
-// @return: KE_NOMEM: Not enough memory (can still happen for control structures)
+// @return: KE_OK:    Successfully initialized the given memory manager.
+// @return: KE_NOMEM: Not enough kernel/physical memory.
 extern __wunused __nonnull((1,2)) kerrno_t
 kshm_initcopy(struct kshm *__restrict self,
               struct kshm *__restrict right);
@@ -307,6 +340,36 @@ extern           __nonnull((1))   __size_t kshm_memcpy_u2u(struct kshm const *__
 extern __wunused __nonnull((1,3)) __kernel void *kshm_translate_1(struct kshm const *__restrict self, __user void const *addr, /*out*/__size_t *__restrict max_bytes, int read_write);
 extern __wunused __nonnull((1,3)) __kernel void *kshm_translate_u(struct kshm const *__restrict self, __user void const *addr, /*inout*/__size_t *__restrict max_bytes, int read_write);
 #endif
+
+// === Local descriptor table ===
+
+//////////////////////////////////////////////////////////////////////////
+// Allocate/Free segments within a local descriptor table.
+// Upon successful allocation, the new segment will have already
+// been flushed and capable of being used for whatever means necessary.
+// NOTE: On success, the returned index always compares true for 'KSEG_ISLDT()'
+// @param: seg:   The initial contents of the segment to-be allocated.
+//                HINT: Contents can later be changed through calls to 'kldt_setseg'.
+// @param: reqid: The requested segment id to allocate the entry at.
+//                NOTE: This value must be compare true for 'KSEG_ISLDT()'
+// @return: * :        Having successfully registered the given segment,
+//                     this function returns a value capable of being
+//                     written into a segment register without causing
+//                     what is the origin on the term 'SEGFAULT'.
+// @return: reqid:     Successfully reserved the given index.
+// @return: KSEG_NULL: Failed to allocate a new segment (no-memory/too-many-segments)
+//                    [kldt_allocsegat] The given ID is already in use.
+extern __nomp __crit __wunused __nonnull((1,2)) ksegid_t kshm_ldtalloc(struct kshm *self, struct ksegment const *seg);
+extern __nomp __crit __wunused __nonnull((1,3)) ksegid_t kshm_ldtallocat(struct kshm *self, ksegid_t reqid, struct ksegment const *seg);
+extern __nomp __crit           __nonnull((1)) void kshm_ldtfree(struct kshm *self, ksegid_t id);
+
+//////////////////////////////////////////////////////////////////////////
+// Get/Set the segment data associated with a given segment ID.
+// NOTE: 'kldt_setseg' will flush the changed segment upon success.
+extern __nomp __crit __nonnull((1,3)) void kshm_ldtget(struct kshm const *self, ksegid_t id, struct ksegment *seg);
+extern __nomp __crit __nonnull((1,3)) void kshm_ldtset(struct kshm *self, ksegid_t id, struct ksegment const *seg);
+
+
 #endif /* !__ASSEMBLY__ */
 
 __DECL_END

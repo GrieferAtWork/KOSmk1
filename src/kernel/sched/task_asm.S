@@ -125,23 +125,25 @@ GLOBAL_FUNCTION(ktask_switchimpl):
 	movI %eax, %esp
 	/* We're now in the kernel-space ESP of the new task */
 
+	pushI %ebx
 	pushI %ecx
 	call _S(ktask_decref_f)
 	popI %ecx
+	popI %ebx
 
 	/* Switch the LDT table if the new task's differs from the old. */
 	movI KTASK_OFFSETOF_PROC(%ebx), %eax
 	movI KTASK_OFFSETOF_PROC(%ecx), %edx
 	cmpI %eax, %edx
-	jnz .post_ldt
+	jz .skip_ldt
 
-	/* Different processes -> Load LDT from '%eax' */
-	lldt (KPROC_OFFSETOF_REGS    \
-	    + KPROCREGS_OFFSETOF_LDT \
-	    + KLDT_OFFSETOF_GDTID    \
+	/* Different processes -> Load LDT from 'struct kproc *%eax' */
+	lldt (KPROC_OFFSETOF_SHM  \
+	    + KSHM_OFFSETOF_LDT	  \
+	    + KLDT_OFFSETOF_GDTID \
 	)(%eax)
 
-.post_ldt:
+.skip_ldt:
 	/* Update the ESP0 in the cpu's TSS */
 	pushI %ebx
 	movI (KTASK_OFFSETOF_ESP0)(%ebx), %edx
@@ -156,7 +158,26 @@ GLOBAL_FUNCTION(ktask_switchimpl):
 	movI %eax, %cr3
 	movI %ecx, %esp
 
-	POP_REGISTERS
+#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+	pop16 %ds
+	pop16 %es
+	pop16 %fs
+	pop16 %gs
+#else
+	pop16 %bx
+	mov16 %bx, %ds
+	mov16 %bx, %es
+	mov16 %bx, %fs
+	mov16 %bx, %gs
+	addI $2, %esp
+#endif
+	pop32 %edi
+	pop32 %esi
+	pop32 %ebp
+	pop32 %ebx
+	pop32 %edx
+	pop32 %ecx
+	pop32 %eax
 	/* Use iret because our stack is correctly layed out */
 	iret
 SYMBOLEND(ktask_switchimpl)

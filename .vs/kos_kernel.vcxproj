@@ -193,6 +193,7 @@
     <None Include="..\src\kernel\sched\task-util.c.inl" />
     <None Include="..\src\kernel\sched\task_asm.S" />
     <None Include="..\src\kernel\sched\tls.c.inl" />
+    <None Include="..\src\kernel\shm-ldt.c.inl" />
     <None Include="..\src\kernel\socket-packet.c.inl" />
     <None Include="..\src\kernel\syscall\syscall-generic.c.inl" />
     <None Include="..\src\kernel\syscall\syscall-kfd.c.inl" />

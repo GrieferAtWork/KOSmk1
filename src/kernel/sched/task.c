@@ -497,10 +497,8 @@ extern void ktask_schedule(struct scheddata *state) {
    kcpu_unlock(cpuself,KCPU_LOCK_TASKS);
    if __unlikely(!currtask) return;
    KTASK_ONSWITCH("IRQ",NULL,currtask);
-   { /* Load local descriptor table of the new process. */
-    __u16 id = currtask->t_proc->p_regs.pr_ldt.ldt_gdtid;
-    LOAD_LDT(id);
-   }
+   /* Load local descriptor table of the new process. */
+   LOAD_LDT(currtask->t_proc->p_shm.sm_ldt.ldt_gdtid);
    goto setcurrtask;
   }
  } else if (!prevtask) {
@@ -592,8 +590,7 @@ rotate_normal:
  KTASK_ONLEAVEQUANTUM(prevtask,cpuself);
  if (prevtask->t_proc != currtask->t_proc) {
   /* Load local descriptor table of the new process. */
-  __u16 id = currtask->t_proc->p_regs.pr_ldt.ldt_gdtid;
-  LOAD_LDT(id);
+  LOAD_LDT(currtask->t_proc->p_shm.sm_ldt.ldt_gdtid);
  }
  kcpu_unlock(cpuself,KCPU_LOCK_TASKS);
 setcurrtask:
@@ -1565,7 +1562,7 @@ restart_cputask:
     error = ktask_dopostunscheduling(cputask,self,newstate,arg,sigc,sigv);
     if __unlikely(KE_ISERR(error)) goto end;
     assert(self->t_state == newstate);
-#if 0
+#if 1
     if (newstate == KTASK_STATE_TERMINATED) {
      kcpu_unlock(cputask,KCPU_LOCK_TASKS);
      self->t_exitcode = arg;

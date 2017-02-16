@@ -39,10 +39,20 @@
 __DECL_BEGIN
 
 struct kdirfile __kproc_kernel_root = KDIRFILE_INIT(&__kfs_root,NULL);
-struct kproc __kproc_kernel = KPROC_INITROOT((struct kfile *)&__kproc_kernel_root,
-                                             (struct kpagedir *)kpagedir_kernel(),
-                                             KSEG_KERNELLDT,KSEG_KERNEL_CODE,
-                                             KSEG_KERNEL_DATA);
+struct kproc __kproc_kernel = {
+ KOBJECT_INIT(KOBJECT_MAGIC_PROC)
+ 0xffff,
+ 0,
+ KMMUTEX_INIT,
+ KSHM_INITROOT((struct kpagedir *)kpagedir_kernel(),KSEG_KERNELLDT),
+ KPROCREGS_INIT(KSEG_KERNEL_CODE,KSEG_KERNEL_DATA),
+ KPROCMODULES_INIT,
+ KFDMAN_INITROOT((struct kfile *)&__kproc_kernel_root),
+ KPROCSAND_INITROOT,
+ KTLSMAN_INITROOT,
+ KTASKLIST_INIT,
+ KPROCENV_INIT_ROOT
+};
 
 #if !KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_START)
 extern struct timespec __kernel_boot_time;
