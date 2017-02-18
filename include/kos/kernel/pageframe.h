@@ -58,7 +58,7 @@ union __packed {
   struct kpageframe *pff_prev; /*< [0..1] Previous free page (with a lower memory address). */
   struct kpageframe *pff_next; /*< [0..1] Next free page (with a greater memory address). */
   __size_t           pff_size; /*< Amount of consecutively available pages (including this one). */
-  // HINT: The total amount of free memory is 'pff_size*PAGESIZE'
+  /* HINT: The total amount of free memory is 'pff_size*PAGESIZE' */
  };
 };
 };

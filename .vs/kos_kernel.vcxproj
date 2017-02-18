@@ -64,6 +64,7 @@
     <ClInclude Include="..\include\kos\kernel\sem.h" />
     <ClInclude Include="..\include\kos\kernel\serial.h" />
     <ClInclude Include="..\include\kos\kernel\shm.h" />
+    <ClInclude Include="..\include\kos\kernel\shm2.h" />
     <ClInclude Include="..\include\kos\kernel\signal.h" />
     <ClInclude Include="..\include\kos\kernel\signal_v.h" />
     <ClInclude Include="..\include\kos\kernel\socket.h" />
@@ -109,6 +110,7 @@
     <ClCompile Include="..\src\kernel\sched\task.c" />
     <ClCompile Include="..\src\kernel\serial.c" />
     <ClCompile Include="..\src\kernel\shm.c" />
+    <ClCompile Include="..\src\kernel\shm2.c" />
     <ClCompile Include="..\src\kernel\socket.c" />
     <ClCompile Include="..\src\kernel\string.c" />
     <ClCompile Include="..\src\kernel\syscall\syscall.c" />
@@ -193,9 +195,9 @@
     <None Include="..\src\kernel\sched\task-util.c.inl" />
     <None Include="..\src\kernel\sched\task_asm.S" />
     <None Include="..\src\kernel\sched\tls.c.inl" />
-    <None Include="..\src\kernel\shm-cow.c.inl" />
     <None Include="..\src\kernel\shm-ldt.c.inl" />
-    <None Include="..\src\kernel\shm-map.c.inl" />
+    <None Include="..\src\kernel\shm2-ldt.c.inl" />
+    <None Include="..\src\kernel\shm2-map.c.inl" />
     <None Include="..\src\kernel\socket-packet.c.inl" />
     <None Include="..\src\kernel\syscall\syscall-generic.c.inl" />
     <None Include="..\src\kernel\syscall\syscall-kfd.c.inl" />

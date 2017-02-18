@@ -101,6 +101,8 @@ enditer:
   *did_alloc_pages = winner->pff_size;
   iter = winner;
   goto take_iter;
+ } else {
+  *did_alloc_pages = 0;
  }
 #endif
  /* Not page available with enough memory --> OUT-OF-MEMORY */

@@ -37,6 +37,7 @@
 #include <kos/kernel/paging.h>
 #include <kos/kernel/proc.h>
 #include <kos/kernel/serial.h>
+#include <kos/kernel/shm2.h>
 #include <kos/kernel/task.h>
 #include <kos/kernel/time.h>
 #include <kos/kernel/tty.h>

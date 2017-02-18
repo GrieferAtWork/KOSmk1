@@ -20,14 +20,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_KERNEL_SHM_MAP_C_INL__
-#define __KOS_KERNEL_SHM_MAP_C_INL__ 1
+#ifndef __KOS_KERNEL_SHM2_MAP_C_INL__
+#define __KOS_KERNEL_SHM2_MAP_C_INL__ 1
 
 #include <malloc.h>
 #include <kos/config.h>
 #include <kos/kernel/features.h>
 #include <kos/kernel/interrupts.h>
-#include <kos/kernel/shm.h>
+#include <kos/kernel/shm2.h>
 
 __DECL_BEGIN
 
@@ -52,6 +52,8 @@ again:
          newleaf_max,KSHMBRANCH_MAPMAX(addr_semi,addr_level));
  if ((iter = *pcurr) == NULL) {
   /* Simple case: First leaf. */
+  newleaf->sb_min = NULL;
+  newleaf->sb_max = NULL;
   *pcurr = newleaf;
   return KE_OK;
  }
@@ -61,7 +63,7 @@ again:
   /* ERROR: Requested address range is already covered. */
   return KE_EXISTS;
  }
- /* Special case: Our new covers this exact branch.
+ /* Special case: Our new leaf covers this exact branch.
   * --> Must move the existing leaf and replace '*proot' */
  if (newleaf_min <= addr_semi &&
      newleaf_max >= addr_semi) {
@@ -98,7 +100,65 @@ again:
 }
 
 
+__crit __nomp struct kshmbranch *
+kshmbranch_combine(struct kshmbranch *__restrict min_branch,
+                   struct kshmbranch *__restrict max_branch) {
+ /* NOTE: Technically we'd need to initialize the sizes to 1, but since
+  *       we're just comparing them later, we can just offset both. */
+ unsigned int min_size = 0,max_size = 0;
+ struct kshmbranch **min_pend,**max_pend;
+ kassertobj(min_branch);
+ kassertobj(max_branch);
+ min_pend = &min_branch->sb_max,
+ max_pend = &max_branch->sb_min;
+ /* Complicated case: the leaf we're supposed to remove
+  *                   has two branches coming off of it.
+  * >> We solve this situation by looking at how deep
+  *    the right-most branch of the left branch reaches,
+  *    as well as how deep the left-most of the right one does.
+  * >> Then we append the longer of the two at the end of the shorter:
+  *
+  *   .   e        >>|>>    .   e
+  *    \ /         >>|>>     \ /
+  * .   c   d   .  >>|>>  .   c
+  *  \ /     \ /   >>|>>   \ /
+  *   a       b    >>|>>    a   .
+  *    \     /     >>|>>     \ /
+  *     \   /      >>|>>      d
+  *      \ /       >>|>>       \
+  *      [x]       >>|>>        b
+  *      /         >>|>>       /
+  *     .          >>|>>      .
+  */
+ while (*min_pend) ++min_size,min_pend = &(*min_pend)->sb_max;
+ while (*max_pend) ++max_size,max_pend = &(*max_pend)->sb_min;
+ assert(!*max_pend);
+ assert(!*min_pend);
+ if (max_size <= min_size) {
+  /* Append min onto max & append max on *proot. */
+  *max_pend = min_branch;
+  return max_branch;
+ } else {
+  /* Append max onto min & append min on *proot. */
+  *min_pend = max_branch;
+  return min_branch;
+ }
+}
 
+
+__crit __nomp struct kshmbranch *
+kshmbranch_popone(struct kshmbranch **proot) {
+ struct kshmbranch *root;
+ kassertobj(proot);
+ root = *proot;
+ kassertobj(root);
+ kassert_kshmregion(root->sb_region);
+ *proot = root->sb_min ? (root->sb_max
+  ? kshmbranch_combine(root->sb_min,root->sb_max) /*< Combine min+max. */
+  : root->sb_min) /*< Only min branch. */
+  : root->sb_max; /*< Only max branch. */
+ return root;
+}
 
 
 __crit __nomp struct kshmbranch *
@@ -136,54 +196,10 @@ found_it:
  assert(iter == *proot);
  assert(addr >= iter->sb_map_min &&
         addr <= iter->sb_map_max);
- if (iter->sb_min) {
-  if (!iter->sb_max) *proot = iter->sb_min;
-  else {
-   /* NOTE: Technically we'd need to initialize the sizes to 1, but since
-    *       we're just comparing them later, we can just offset both. */
-   unsigned int min_size = 0,max_size = 0;
-   struct kshmbranch **min_pend = &iter->sb_min->sb_max,
-                     **max_pend = &iter->sb_max->sb_min;
-   /* Complicated case: the leaf we're supposed to remove
-    *                   has two branches coming off of it.
-    * >> We solve this situation by looking at how deep
-    *    the right-most branch of the left branch reaches,
-    *    as well as how deep the left-most of the right one does.
-    * >> Then we append the longer of the two at the end of the shorter:
-    *
-    *   .   e        >>|>>    .   e
-    *    \ /         >>|>>     \ /
-    * .   c   d   .  >>|>>  .   c
-    *  \ /     \ /   >>|>>   \ /
-    *   a       b    >>|>>    a   .
-    *    \     /     >>|>>     \ /
-    *     \   /      >>|>>      d
-    *      \ /       >>|>>       \
-    *      [x]       >>|>>        b
-    *      /         >>|>>       /
-    *     .          >>|>>      .
-    */
-   while (*min_pend) ++min_size,min_pend = &(*min_pend)->sb_max;
-   while (*max_pend) ++max_size,max_pend = &(*max_pend)->sb_min;
-   assert(!*max_pend);
-   assert(!*min_pend);
-   if (max_size <= min_size) {
-    /* Append min onto max & append max on *proot. */
-    *max_pend = iter->sb_min;
-    *proot    = iter->sb_max;
-   } else {
-    /* Append max onto min & append min on *proot. */
-    *min_pend = iter->sb_max;
-    *proot    = iter->sb_min;
-   }
-  }
- } else {
-  *proot = iter->sb_max;
- }
- return iter;
+ return kshmbranch_popone(proot);
 }
 
 
 __DECL_END
 
-#endif /* !__KOS_KERNEL_SHM_MAP_C_INL__ */
+#endif /* !__KOS_KERNEL_SHM2_MAP_C_INL__ */

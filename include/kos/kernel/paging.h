@@ -283,7 +283,7 @@ extern __kernel void *__kpagedir_translate_u(struct kpagedir const *self, __user
 extern __size_t kpagedir_memcpy_k2u(struct kpagedir const *self, __user void *dst, __kernel void const *__restrict src, __size_t bytes);
 extern __size_t kpagedir_memcpy_u2k(struct kpagedir const *self, __kernel void *__restrict dst, __user void const *src, __size_t bytes);
 extern __size_t kpagedir_memcpy_u2u(struct kpagedir const *self, __user void *dst, __user void const *src, __size_t bytes);
-extern __kernel void *kpagedir_translate_u(struct kpagedir const *self, __user void const *addr, __size_t *__restrict max_bytes, __u32 flags);
+extern __kernel void *kpagedir_translate_u(struct kpagedir const *self, __user void const *addr, __size_t *__restrict max_bytes, int read_write);
 #else
 __local __size_t __kpagedir_memcpy_k2u_fast(struct kpagedir const *self, __user void *dst,
                                             __kernel void const *__restrict src, __size_t bytes) {
