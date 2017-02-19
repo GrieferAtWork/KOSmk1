@@ -182,7 +182,7 @@ kshm_ldtsetlimit(struct kshm *__restrict self, __u16 newlimit) {
  return KE_OK;
 }
 
-__nomp __crit ksegid_t
+__crit __nomp ksegid_t
 kshm_ldtalloc(struct kshm *__restrict self,
               struct ksegment const *__restrict seg) {
  struct ksegment *iter,*begin;
@@ -213,7 +213,7 @@ end:
  return KSEG_TOLDT(result);
 }
 
-__nomp __crit ksegid_t
+__crit __nomp ksegid_t
 kshm_ldtallocat(struct kshm *__restrict self, ksegid_t reqid,
                 struct ksegment const *__restrict seg) {
  struct ksegment *result_seg;
@@ -238,7 +238,7 @@ kshm_ldtallocat(struct kshm *__restrict self, ksegid_t reqid,
  memcpy(result_seg,seg,sizeof(struct ksegment));
  return KSEG_TOLDT(reqid);
 }
-__nomp __crit void
+__crit __nomp void
 kshm_ldtfree(struct kshm *__restrict self, ksegid_t id) {
  struct ksegment *iter,*begin,*end;
  kassert_kshm(self);

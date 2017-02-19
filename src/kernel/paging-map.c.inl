@@ -57,6 +57,7 @@ kerrno_t kpagedir_map
    memset(begin,0,X86_PTE4PDE*sizeof(x86_pte));
    pde->u = (uintptr_t)begin|flags|X86_PDE_FLAG_PRESENT;
   } else {
+   pde->u |= flags|X86_PDE_FLAG_PRESENT;
    begin = x86_pde_getpte(pde);
 #ifndef REMAP
    // Make sure that none of the are already present

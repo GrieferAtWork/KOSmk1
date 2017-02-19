@@ -28,10 +28,11 @@
 #include <kos/kernel/pageframe.h>
 #include <kos/kernel/paging.h>
 #include <kos/kernel/shm.h>
+#include <kos/kernel/util/string.h>
 #include <kos/mem.h>
 #include <kos/syscallno.h>
 #include <math.h>
-#include <kos/kernel/util/string.h>
+#include <sys/mman.h>
 
 __DECL_BEGIN
 
@@ -74,8 +75,7 @@ SYSCALL(sys_kmem_map) {
  }
  region = kshmregion_newram(pages,prot);
  if __unlikely(!region) goto err;
- error = kshm_mapregion_inherited(&procself->p_shm,hint,region,0,
-                                  region->sre_chunk.sc_pages);
+ error = kshm_mapfullregion_inherited(&procself->p_shm,hint,region);
  if __unlikely(KE_ISERR(error)) { kshmregion_decref_full(region); goto err; }
 end: KTASK_CRIT_END
  RETURN(hint);
@@ -141,8 +141,7 @@ SYSCALL(sys_kmem_mapdev) {
  region = kshmregion_newphys(aligned_physptr,pages,prot);
  if __unlikely(!region) { error = KE_NOMEM; goto end; }
  /* Map the new region of memory within the calling process. */
- error = kshm_mapregion_inherited(&procself->p_shm,hint,region,0,
-                                  region->sre_chunk.sc_pages);
+ error = kshm_mapfullregion_inherited(&procself->p_shm,hint,region);
  if __unlikely(KE_ISERR(error)) kshmregion_decref_full(region);
 end: KTASK_CRIT_END
  RETURN(error);

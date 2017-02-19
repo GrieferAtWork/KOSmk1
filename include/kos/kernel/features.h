@@ -48,6 +48,10 @@
 //       sandboxing as a task is not able to get this information.
 #define KCONFIG_SECUREUSERBOOTSTRAP 1
 
+/* Count allocated pages within the pageframe allocator.
+ * >> Required for x/y-style memory usage statistics. */
+#define KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED 1
+
 
 // Save all segment registers individually during a task switch
 // When not defined, only '%es' is saved.
@@ -99,7 +103,7 @@
 #define KCONFIG_HAVE_SHM_COPY_ON_WRITE 0
 
 /* Use the new SHM engine. */
-#define KCONFIG_USE_SHM2 0
+#define KCONFIG_USE_SHM2 1
 
 #ifdef __INTELLISENSE__
 #undef KDEBUG_HAVE_TRACKEDMUTEX

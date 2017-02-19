@@ -381,15 +381,15 @@ extern __wunused __nonnull((1,3)) __kernel void *kshm_translate_u(struct kshm co
 // @return: reqid:     Successfully reserved the given index.
 // @return: KSEG_NULL: Failed to allocate a new segment (no-memory/too-many-segments)
 //                    [kldt_allocsegat] The given ID is already in use.
-extern __nomp __crit __wunused __nonnull((1,2)) ksegid_t kshm_ldtalloc(struct kshm *self, struct ksegment const *seg);
-extern __nomp __crit __wunused __nonnull((1,3)) ksegid_t kshm_ldtallocat(struct kshm *self, ksegid_t reqid, struct ksegment const *seg);
-extern __nomp __crit           __nonnull((1)) void kshm_ldtfree(struct kshm *self, ksegid_t id);
+extern __crit __nomp __wunused __nonnull((1,2)) ksegid_t kshm_ldtalloc(struct kshm *self, struct ksegment const *seg);
+extern __crit __nomp __wunused __nonnull((1,3)) ksegid_t kshm_ldtallocat(struct kshm *self, ksegid_t reqid, struct ksegment const *seg);
+extern __crit __nomp           __nonnull((1)) void kshm_ldtfree(struct kshm *self, ksegid_t id);
 
 //////////////////////////////////////////////////////////////////////////
 // Get/Set the segment data associated with a given segment ID.
 // NOTE: 'kldt_setseg' will flush the changed segment upon success.
-extern __nomp __crit __nonnull((1,3)) void kshm_ldtget(struct kshm const *self, ksegid_t id, struct ksegment *seg);
-extern __nomp __crit __nonnull((1,3)) void kshm_ldtset(struct kshm *self, ksegid_t id, struct ksegment const *seg);
+extern __crit __nomp __nonnull((1,3)) void kshm_ldtget(struct kshm const *self, ksegid_t id, struct ksegment *seg);
+extern __crit __nomp __nonnull((1,3)) void kshm_ldtset(struct kshm *self, ksegid_t id, struct ksegment const *seg);
 #endif /* !__ASSEMBLY__ */
 
 __DECL_END

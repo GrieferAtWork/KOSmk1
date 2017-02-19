@@ -244,7 +244,8 @@ kpagedir_setflags(struct kpagedir *self, __virtualaddr void const *virt,
  flags |= X86_PTE_FLAG_PRESENT;
 #endif
  KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,,{
-  diter->u |= X86_PDE_FLAG_USER|X86_PDE_FLAG_READ_WRITE;
+  //diter->u |= X86_PDE_FLAG_USER|X86_PDE_FLAG_READ_WRITE;
+  diter->u = (titer->u&mask)|flags;
  }) {
   titer->u = (titer->u&mask)|flags;
   ++result;

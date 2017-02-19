@@ -28,8 +28,8 @@
 #include <kos/compiler.h>
 #include <kos/errno.h>
 #include <kos/kernel/types.h>
-#include <kos/kernel/multiboot.h>
 #include <kos/kernel/paging.h>
+#include <kos/kernel/features.h>
 
 //////////////////////////////////////////////////////////////////////////
 // ============== Page Frame Allocator ==============
@@ -77,22 +77,22 @@ union __packed {
 // Allocate/Free 'n' consecutive page frames
 // >> The returned pointers are physical and 'KPAGEFRAME_INVPTR' is
 //    returned if no more memory was available.
-extern __crit __wunused __malloccall __pagealigned struct kpageframe *
+extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *
 kpageframe_alloc(__size_t n_pages);
-extern __crit __wunused __malloccall __pagealigned struct kpageframe *
+extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *
 kpageframe_tryalloc(__size_t n_pages, __size_t *__restrict did_alloc_pages);
 extern __crit __nonnull((1)) void
-kpageframe_free(__pagealigned struct kpageframe *__restrict start, __size_t n_pages);
+kpageframe_free(__kernel __pagealigned struct kpageframe *__restrict start, __size_t n_pages);
 
 //////////////////////////////////////////////////////////////////////////
 // Perform a memcpy of all memory from 'src' to 'dst',
 // copying 'n_pages' full pages of memory.
 // NOTE: Using arch-specific optimizations, this function
-//       may be faster than using regular memcpy().
+//       may be faster than the regular memcpy().
 // WARNING: Similar to memcpy, the given dst and src may not overlap!
 extern void
-kpageframe_memcpy(__pagealigned struct kpageframe *__restrict dst,
-                  __pagealigned struct kpageframe const *__restrict src,
+kpageframe_memcpy(__kernel __pagealigned struct kpageframe *__restrict dst,
+                  __kernel __pagealigned struct kpageframe const *__restrict src,
                   __size_t n_pages);
 
 //////////////////////////////////////////////////////////////////////////
@@ -102,8 +102,8 @@ kpageframe_memcpy(__pagealigned struct kpageframe *__restrict dst,
 // NOTE: If 'new_pages <= old_pages' free pages near the end of the given old_start.
 // NOTE: Unlike 'kpageframe_alloc'
 // @return: KPAGEFRAME_INVPTR: Failed to reallocate memory in-place.
-extern __crit __wunused __malloccall __pagealigned struct kpageframe *
-kpageframe_realloc_inplace(__pagealigned struct kpageframe *old_start,
+extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *
+kpageframe_realloc_inplace(__kernel __pagealigned struct kpageframe *old_start,
                            __size_t old_pages, __size_t new_pages);
 
 //////////////////////////////////////////////////////////////////////////
@@ -116,8 +116,8 @@ kpageframe_realloc_inplace(__pagealigned struct kpageframe *old_start,
 //       if it can potentially expand the given 'old_start' downwards.
 // @return: KPAGEFRAME_INVPTR: Failed to reallocate memory, but not portion
 //                             of the given old_start will have been freed.
-extern __crit __wunused __malloccall __pagealigned struct kpageframe *
-kpageframe_realloc(__pagealigned struct kpageframe *old_start,
+extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *
+kpageframe_realloc(__kernel __pagealigned struct kpageframe *old_start,
                    __size_t old_pages, __size_t new_pages);
 
 
@@ -125,15 +125,19 @@ kpageframe_realloc(__pagealigned struct kpageframe *old_start,
 // Allocate consecutive page frames at a pre-defined address
 // @return: KPAGEFRAME_INVPTR: The given start+n area is already allocated, or not mapped
 // @return: start: Successfully allocated 'n_pages' of memory starting at 'start'
-extern __crit __wunused __malloccall __pagealigned struct kpageframe *
-kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, __size_t n_pages);
+extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *
+kpageframe_allocat(__kernel __pagealigned struct kpageframe *__restrict start, __size_t n_pages);
+
+
 
 struct kpageframeinfo {
  __size_t pfi_minregion;   /*< The smallest free frame-region. */
  __size_t pfi_maxregion;   /*< The biggest free frame-region. (Maximum value for which 'kpageframe_alloc' can succeed) */
  __size_t pfi_freeregions; /*< The amount of existing free frame-regions (scatter). */
  __size_t pfi_freepages;   /*< The total amount of free pages. */
- __size_t pfi_freebytes;   /*< The total amount of free bytes. */
+#if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
+ __size_t pfi_usedpages;   /*< Total amount of pages in-use (When added with to 'pfi_freepages', total amount of memory). */
+#endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
 };
 
 //////////////////////////////////////////////////////////////////////////

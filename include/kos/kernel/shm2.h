@@ -25,19 +25,18 @@
 
 #include <kos/config.h>
 #ifdef __KERNEL__
-#include <sys/mman.h>
-#include <kos/kernel/features.h>
 #include <kos/compiler.h>
-#include <kos/types.h>
-#include <kos/kernel/gdt.h>
 #include <kos/errno.h>
-#include <kos/kernel/mutex.h>
 #include <kos/kernel/features.h>
+#include <kos/kernel/features.h>
+#include <kos/kernel/gdt.h>
+#include <kos/kernel/mutex.h>
 #include <kos/kernel/object.h>
 #include <kos/kernel/paging.h>
-#include <strings.h>
+#include <kos/types.h>
 #include <math.h>
 #include <stdio.h>
+#include <strings.h>
 #if KCONFIG_USE_SHM2
 
 // Shared memory layout
@@ -437,9 +436,31 @@ union{
 #define KSHMBRANCH_SEMILEVEL(semi)     (ffs(semi)-1) /*< Get the current level associated with a given semi-address. */
 
 
-extern __crit __nomp __nonnull((1,2)) kerrno_t kshmbranch_insert(struct kshmbranch **__restrict proot, struct kshmbranch *__restrict newleaf, __uintptr_t addr_semi, unsigned int addr_level);
-extern __crit __nomp __nonnull((1)) struct kshmbranch *kshmbranch_remove(struct kshmbranch **__restrict proot, __uintptr_t addr);
-__local __wunused struct kshmbranch *kshmbranch_locate(struct kshmbranch *root, __uintptr_t addr);
+//////////////////////////////////////////////////////////////////////////
+// Recursively delete an entire SHM-tree, starting at the given 'start'
+// NOTE: This function is not to be confused with 'kshmbranch_remove',
+//       which merely pops a single SHM leaf from its branch without
+//       even performing cleanup on that leaf, while this function
+//       will not remove any branches, but instead walk along
+//       the tree and recursively drop all references, as well
+//       as free all leaves.
+// WARNING: The caller is responsible to ensure no further use
+//          of the given 'start', or any branch that used to
+//          be reachable from it.
+extern void kshmbranch_deltree(struct kshmbranch *__restrict start);
+
+/* Low-level branch-version of generic mapping functions.
+ * For documentation, see the 'kshmmap_*' equivalents below. */
+extern __crit __nomp __nonnull((1,2)) kerrno_t
+kshmbranch_insert(struct kshmbranch **__restrict proot,
+                  struct kshmbranch *__restrict newleaf,
+                  __uintptr_t addr_semi, unsigned int addr_level);
+extern __crit __nomp __nonnull((1)) struct kshmbranch *
+kshmbranch_remove(struct kshmbranch **__restrict proot,
+                  __uintptr_t addr);
+__local __wunused struct kshmbranch *
+kshmbranch_locate(struct kshmbranch *__restrict root,
+                  __uintptr_t addr);
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -461,7 +482,7 @@ kshmbranch_combine(struct kshmbranch *__restrict min_branch,
 // If non-NULL, store the associated semi-address in '*result_semi' upon success.
 // @return: NULL: Failed to find a branch containing the given address.
 __local __wunused struct kshmbranch **
-kshmbranch_plocate(struct kshmbranch **proot, __uintptr_t addr,
+kshmbranch_plocate(struct kshmbranch **__restrict proot, __uintptr_t addr,
                    __uintptr_t *result_semi);
 
 //////////////////////////////////////////////////////////////////////////
@@ -476,8 +497,10 @@ kshmbranch_plocate(struct kshmbranch **proot, __uintptr_t addr,
 //     or into one of the sub-branches of '*pself', depending on whether
 //     or not the addr-semi lies before, or after the true address
 //     associated with the given 'page_offset'.
-// @param: pmin: When non-NULL, upon success, pointer to the branch < the given 'page_offset'.
-// @param: pmax: When non-NULL, upon success, pointer to the branch >= the given 'page_offset'.
+// @param: pmin:      [out] When non-NULL, upon success, pointer to the branch < the given 'page_offset'.
+// @param: pmax:      [out] When non-NULL, upon success, pointer to the branch >= the given 'page_offset'.
+// @param: pmin_semi: [out] When non-NULL, upon success, addr_semi value of the '**pmin'-branch.
+// @param: pmax_semi: [out] When non-NULL, upon success, addr_semi value of the '**pmax'-branch.
 // @return: KE_OK:    Successfully created the new split.
 // @return: KE_NOMEM: Failed to allocate the new branch.
 // WARNING: The given 'page_offset' is an offset within the SHM region of '*pself'.
@@ -493,11 +516,14 @@ kshmbrach_putsplit(struct kshmbranch **__restrict pself,
 // Merge two given branches 'pmin' and 'pmax' that are located directly next to each other.
 // Upon success and if non-NULL, store the branch-pointer and address-semi
 // of the merged branch in the given 'presult' and 'presult_semi' locations.
+// @param: pmin:    [in] Pointer to the min-branch that should be merged.
+// @param: pmax:    [in] Pointer to the max-branch that should be merged.
+// @param: presult: [out+opt] The final, merged branch.
 // @return: KE_NOMEM: Not enough available memory to merge the branches.
 extern __crit __nomp __wunused __nonnull((1,3)) kerrno_t
 kshmbrach_merge(struct kshmbranch **__restrict pmin, __uintptr_t min_semi,
                 struct kshmbranch **__restrict pmax, __uintptr_t max_semi,
-                struct kshmbranch ***__restrict presult, __uintptr_t *presult_semi);
+                struct kshmbranch ***presult, __uintptr_t *presult_semi);
 
 //////////////////////////////////////////////////////////////////////////
 // (Re-)maps the region associated with a given
@@ -509,9 +535,9 @@ kshmbrach_merge(struct kshmbranch **__restrict pmin, __uintptr_t min_semi,
 //       down the line.
 // @return: KE_OK:    Successfully mapped the given branch.
 // @return: KE_NOMEM: Not enough memory to create the necessary mappings.
-extern __crit __nomp __wunused kerrno_t
-kshmbranch_remap(struct kshmbranch const *self,
-                 struct kpagedir *pd);
+extern __crit __nomp __wunused __nonnull((1,2)) kerrno_t
+kshmbranch_remap(struct kshmbranch const *__restrict self,
+                 struct kpagedir *__restrict pd);
 
 
 typedef __u32 kshmunmap_flag_t; /*< A set of 'KSHMUNMAP_FLAG_*' */
@@ -523,7 +549,7 @@ typedef __u32 kshmunmap_flag_t; /*< A set of 'KSHMUNMAP_FLAG_*' */
 // Unmaps all mapped pages within the specified user-address-range.
 // NOTE: The SHM tree is searched recursively for potential branches.
 // @return: * : The total sum of all pages successfully unmapped.
-extern __crit __nomp __wunused __size_t
+extern __crit __nomp __wunused __nonnull((1,2)) __size_t
 kshmbranch_unmap(struct kshmbranch **__restrict proot,
                  struct kpagedir *__restrict pd,
                  __pagealigned __uintptr_t addr_min,
@@ -549,7 +575,7 @@ kshmbranch_unmap(struct kshmbranch **__restrict proot,
 // @return: KE_OK:    Successfully truncated/split the given branch and unmapped
 //                    the associated pages from the given page directory.
 // @return: KE_NOMEM: Not enough memory to create a necessary split.
-extern __crit __nomp __wunused kerrno_t
+extern __crit __nomp __wunused __nonnull((1,2)) kerrno_t
 kshmbranch_unmap_portion(struct kshmbranch **__restrict pself,
                          struct kpagedir *__restrict pd,
                          kshmregion_page_t first_page,
@@ -565,8 +591,8 @@ kshmbranch_unmap_portion(struct kshmbranch **__restrict pself,
 //       in the given 'right_pd', or are hard-copied.
 // @return: KE_NOMEM: Not enough available memory.
 extern __crit __nomp __wunused __nonnull((1,2,3,4)) kerrno_t
-kshmbranch_fillfork(struct kshmbranch **__restrict pself, struct kpagedir *self_pd,
-                    struct kshmbranch *__restrict source, struct kpagedir *source_pd);
+kshmbranch_fillfork(struct kshmbranch **__restrict pself, struct kpagedir *__restrict self_pd,
+                    struct kshmbranch *__restrict source, struct kpagedir *__restrict source_pd);
 #endif /* !__ASSEMBLY__ */
 
 
@@ -582,7 +608,8 @@ struct kshmmap {
 };
 #define KSHMMAP_INIT       {NULL}
 #define kshmmap_init(self) (void)((self)->m_root = NULL)
-extern __crit void kshmmap_quit(struct kshmmap *self);
+#define kshmmap_quit(self) ((self)->m_root ? kshmbranch_deltree((self)->m_root) : (void)0)
+
 
 
 #ifdef __INTELLISENSE__
@@ -610,8 +637,9 @@ kshmmap_remove(struct kshmmap *__restrict self,
 // Locate the SHM leaf associated with the given address.
 // @return: * :   The branch associated with the given address.
 // @return: NULL: No branch was associated with the given address.
-__local struct kshmbranch *
-kshmmap_locate(struct kshmmap const *self, __uintptr_t addr);
+__local __nonnull((1)) struct kshmbranch *
+kshmmap_locate(struct kshmmap const *__restrict self,
+               __uintptr_t addr);
 #else
 #define kshmmap_insert(self,newleaf) kshmbranch_insert(&(self)->m_root,newleaf,KSHMBRANCH_ADDRSEMI_INIT,KSHMBRANCH_ADDRLEVEL_INIT)
 #define kshmmap_remove(self,addr)    kshmbranch_remove(&(self)->m_root,addr)
@@ -669,8 +697,11 @@ struct kshm {
 // Initialize/Finalize a given SHM per-process controller structure.
 // @return: KE_OK:    Successfully initialized the given structure.
 // @return: KE_NOMEM: Not enough available memory (Such as when allocating the page directory).
-extern __crit __nomp __wunused kerrno_t kshm_init(struct kshm *self, __u16 ldt_size_hint);
-extern __crit __nomp void kshm_quit(struct kshm *self);
+extern __crit __nomp __wunused __nonnull((1)) kerrno_t
+kshm_init(struct kshm *__restrict self,
+          __u16 ldt_size_hint);
+extern __crit __nomp __nonnull((1)) void
+kshm_quit(struct kshm *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
 // Performs all the operations necessary to initialized 'self' as
@@ -683,7 +714,9 @@ extern __crit __nomp void kshm_quit(struct kshm *self);
 // of all regions before sharing all of them by reference.
 // @return: KE_OK:    Successfully initialized 'self' as a fork()-copy of 'right'.
 // @return: KE_NOMEM: Not enough available memory.
-extern __crit __nomp __wunused kerrno_t kshm_initfork(struct kshm *self, struct kshm *right);
+extern __crit __nomp __wunused __nonnull((1,2)) kerrno_t
+kshm_initfork(struct kshm *__restrict self,
+              struct kshm *__restrict right);
 
 
 
@@ -713,22 +746,26 @@ extern __crit __nomp __wunused kerrno_t kshm_initfork(struct kshm *self, struct 
 //                     already mapped by an SHM-style mapping.
 // @return: KE_NOMEM:  Not enough kernel memory to allocate the
 //                     necessary control entries and structures.
-extern __crit __nomp __wunused kerrno_t
+extern __crit __nomp __wunused __nonnull((1,3)) kerrno_t
 kshm_mapregion_inherited(struct kshm *__restrict self,
                          __pagealigned __user void *address,
                          __ref struct kshmregion *__restrict region,
                          kshmregion_page_t in_region_page_start,
                          __size_t in_region_page_count);
-extern __crit __nomp __wunused kerrno_t
+extern __crit __nomp __wunused __nonnull((1,3)) kerrno_t
 kshm_mapregion(struct kshm *__restrict self,
                __pagealigned __user void *address,
                struct kshmregion *__restrict region,
                kshmregion_page_t in_region_page_start,
                __size_t in_region_page_count);
-__local __crit __nomp __wunused kerrno_t
+__local __crit __nomp __wunused __nonnull((1,3)) kerrno_t
 kshm_mapfullregion(struct kshm *__restrict self,
                    __pagealigned __user void *address,
                    struct kshmregion *__restrict region);
+__local __crit __nomp __wunused __nonnull((1,3)) kerrno_t
+kshm_mapfullregion_inherited(struct kshm *__restrict self,
+                             __pagealigned __user void *address,
+                             struct kshmregion *__restrict region);
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -746,6 +783,10 @@ kshm_mapautomatic(struct kshm *__restrict self,
                   /*out*/__pagealigned __user void **__restrict user_address,
                   struct kshmregion *__restrict region, __pagealigned __user void *hint,
                   kshmregion_page_t in_region_page_start, __size_t in_region_page_count);
+__local __crit __nomp __wunused __nonnull((1,2,3)) kerrno_t
+kshm_mapfullautomatic(struct kshm *__restrict self,
+                      /*out*/__pagealigned __user void **__restrict user_address,
+                      struct kshmregion *__restrict region, __pagealigned __user void *hint);
 
 //////////////////////////////////////////////////////////////////////////
 // Fast-pass for quickly mapping (linear) RAM.
@@ -862,7 +903,7 @@ kshm_unmapregion(struct kshm *__restrict self,
 // the specified area of physical (aka. device) memory.
 // @return: KE_OK:    Access is granted.
 // @return: KE_ACCES: They don't...
-extern __crit kerrno_t
+extern __crit __nonnull((1)) kerrno_t
 kshm_devaccess(struct ktask *__restrict caller,
                __pagealigned __kernel void const *base_address,
                __size_t pages);
@@ -887,9 +928,9 @@ kshm_devaccess(struct ktask *__restrict caller,
 // @return: reqid:     Successfully reserved the given index.
 // @return: KSEG_NULL: Failed to allocate a new segment (no-memory/too-many-segments)
 //                    [kldt_allocsegat] The given ID is already in use.
-extern __nomp __crit __wunused __nonnull((1,2)) ksegid_t kshm_ldtalloc(struct kshm *__restrict self, struct ksegment const *__restrict seg);
-extern __nomp __crit __wunused __nonnull((1,3)) ksegid_t kshm_ldtallocat(struct kshm *__restrict self, ksegid_t reqid, struct ksegment const *__restrict seg);
-extern __nomp __crit           __nonnull((1)) void kshm_ldtfree(struct kshm *__restrict self, ksegid_t id);
+extern __crit __nomp __wunused __nonnull((1,2)) ksegid_t kshm_ldtalloc(struct kshm *__restrict self, struct ksegment const *__restrict seg);
+extern __crit __nomp __wunused __nonnull((1,3)) ksegid_t kshm_ldtallocat(struct kshm *__restrict self, ksegid_t reqid, struct ksegment const *__restrict seg);
+extern __crit __nomp           __nonnull((1)) void kshm_ldtfree(struct kshm *__restrict self, ksegid_t id);
 
 //////////////////////////////////////////////////////////////////////////
 // Get/Set the segment data associated with a given segment ID.
@@ -899,15 +940,16 @@ extern __nomp __nonnull((1,3)) void kshm_ldtset(struct kshm *__restrict self, ks
 
 
 //////////////////////////////////////////////////////////////////////////
-// Copy memory to/from/in userspace.
+// Copy memory to/from/in user space.
+// NOTE: These functions are simple wrappers around 'kshm_translateuser'.
 // @param: dst:   The (potentially virtual) destination address.
 // @param: src:   The (potentially virtual) source address.
 // @param: bytes: The (max) amount of bytes to transfer.
 // @return: 0 :   Success transferred all specified memory.
 // @return: * :   Amount of bytes _NOT_ transferred.
-extern __nomp __crit __wunused __nonnull((1)) __size_t kshm_copyinuser(struct kshm const *self, __user void *dst, __user void const *src, __size_t bytes);
-extern __nomp __crit __wunused __nonnull((1,3)) __size_t kshm_copytouser(struct kshm const *self, __user void *dst, __kernel void const *src, __size_t bytes);
-extern __nomp __crit __wunused __nonnull((1,2)) __size_t kshm_copyfromuser(struct kshm const *self, __kernel void *dst, __user void const *src, __size_t bytes);
+extern __crit __nomp __wunused __nonnull((1))   __size_t kshm_copyinuser(struct kshm const *self, __user void *dst, __user void const *src, __size_t bytes);
+extern __crit __nomp __wunused __nonnull((1,3)) __size_t kshm_copytouser(struct kshm const *self, __user void *dst, __kernel void const *src, __size_t bytes);
+extern __crit __nomp __wunused __nonnull((1,2)) __size_t kshm_copyfromuser(struct kshm const *self, __kernel void *dst, __user void const *src, __size_t bytes);
 
 #ifdef __INTELLISENSE__
 //////////////////////////////////////////////////////////////////////////
@@ -928,16 +970,16 @@ extern __nomp __crit __wunused __nonnull((1,2)) __size_t kshm_copyfromuser(struc
 //                       to the user, NULL is returned and '*rwbytes' is set to ZERO(0).
 // @return: * :       The physical counterpart to the given virtual address.
 // @return: NULL :    '*rwbytes' was set to ZERO(0) because the given pointer isn't mapped.
-extern __nomp __crit __wunused __nonnull((1,4)) __kernel void *
-kshm_translateuser(struct kshm const *self, __user void const *addr,
-                   __size_t maxbytes, __size_t *rwbytes, int writeable);
+extern __crit __nomp __wunused __nonnull((1,4)) __kernel void *
+kshm_translateuser(struct kshm const *__restrict self, __user void const *addr,
+                   __size_t maxbytes, __size_t *__restrict rwbytes, int writeable);
 #else
 #define kshm_translateuser(self,addr,maxbytes,rwbytes,writeable) \
  (*(rwbytes) = (maxbytes),__kshm_translateuser_impl(self,addr,rwbytes,writeable))
 #endif
-extern __nomp __crit __wunused __nonnull((1,3)) __kernel void *
-__kshm_translateuser_impl(struct kshm const *self, __user void const *addr,
-                          __size_t *rwbytes, int writeable);
+extern __crit __nomp __wunused __nonnull((1,3)) __kernel void *
+__kshm_translateuser_impl(struct kshm const *__restrict self, __user void const *addr,
+                          __size_t *__restrict rwbytes, int writeable);
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -994,10 +1036,27 @@ kshm_mapfullregion(struct kshm *__restrict self,
                    __pagealigned __user void *address,
                    struct kshmregion *__restrict region) {
  kassert_kshmregion(region);
- return kshm_mapregion(self,address,region,0,region->sre_chunk.sc_pages);
+ return kshm_mapregion(self,address,region,
+                       0,region->sre_chunk.sc_pages);
+}
+__local __crit __nomp kerrno_t
+kshm_mapfullregion_inherited(struct kshm *__restrict self,
+                             __pagealigned __user void *address,
+                             struct kshmregion *__restrict region) {
+ kassert_kshmregion(region);
+ return kshm_mapregion_inherited(self,address,region,
+                                 0,region->sre_chunk.sc_pages);
+}
+__local __crit __nomp kerrno_t
+kshm_mapfullautomatic(struct kshm *__restrict self,
+                      /*out*/__pagealigned __user void **__restrict user_address,
+                      struct kshmregion *__restrict region, __pagealigned __user void *hint) {
+ kassert_kshmregion(region);
+ return kshm_mapautomatic(self,user_address,region,hint,
+                          0,region->sre_chunk.sc_pages);
 }
 __local __wunused struct kshmbranch *
-kshmbranch_locate(struct kshmbranch *root, __uintptr_t addr) {
+kshmbranch_locate(struct kshmbranch *__restrict root, __uintptr_t addr) {
  /* addr_semi is the center point splitting the max
   * ranges of the underlying sb_min/sb_max branches. */
  __uintptr_t addr_semi = KSHMBRANCH_ADDRSEMI_INIT;

@@ -35,6 +35,7 @@
 #include <traceback.h>
 #include <kos/kernel/serial.h>
 #include <kos/kernel/spinlock.h>
+#include <kos/kernel/multiboot.h>
 
 #if defined(__i386__) || defined(__x86_64__)
 #include <kos/kernel/arch/x86/realmode.h>
@@ -43,6 +44,15 @@
 __DECL_BEGIN
 
 __STATIC_ASSERT(sizeof(struct kpageframe) == PAGESIZE);
+
+static struct kspinlock kpagealloc_lockno = KSPINLOCK_INIT;
+static struct kpageframe *first_free_page = KPAGEFRAME_INVPTR;
+#if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
+static size_t total_allocated_pages = 0; /*< Total amount of allocated pages. */
+#endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
+#define kpagealloc_lock()   kspinlock_lock(&kpagealloc_lockno)
+#define kpagealloc_unlock() kspinlock_unlock(&kpagealloc_lockno)
+
 
 void raminfo_addregion(__u64 start, __u64 size) {
  __u64 end; uintptr_t native_start,used_start;
@@ -179,6 +189,14 @@ nocmdline:
   cmdline_page_c = 0;
   cmdline_length = 0;
  }
+#if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
+ /* Reset after we just rolled it over when
+  * technically freeing a whole bunch of stuff...
+  * NOTE: We set this to 'cmdline_page_c', because as far
+  *       as the pageframe-allocator is concerned, this is
+  *       how many pages we currently have allocated. */
+ total_allocated_pages = cmdline_page_c;
+#endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
  kernel_initialize_dlmalloc();
  // Dynamic memory (including the kernel heap) is now initialized!
  // NOTE: The pages containing our cmdline are preserved
@@ -202,10 +220,7 @@ nocmdline:
 }
 
 
-static struct kspinlock kpagealloc_lockno = KSPINLOCK_INIT;
-static struct kpageframe *first_free_page = KPAGEFRAME_INVPTR;
-#define kpagealloc_lock()   kspinlock_lock(&kpagealloc_lockno)
-#define kpagealloc_unlock() kspinlock_unlock(&kpagealloc_lockno)
+
 
 __crit __wunused __malloccall __pagealigned struct kpageframe *
 kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, size_t n_pages) {
@@ -248,6 +263,9 @@ kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, size_t n_p
     iter->pff_next = split;
     iter->pff_size = new_iter_size;
    }
+#if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
+   total_allocated_pages += n_pages;
+#endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
    kpagealloc_unlock();
    return start;
   }
@@ -258,26 +276,28 @@ kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, size_t n_p
 }
 
 
-__crit void kpageframe_free(__pagealigned struct kpageframe *__restrict start, size_t n) {
+__crit void
+kpageframe_free(__kernel __pagealigned struct kpageframe *__restrict start,
+                size_t n_pages) {
  struct kpageframe *iter,*region_end;
 #ifdef KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE
- if (!n) return;
+ if (!n_pages) return;
 #else
- assertf(n,"Cannot free ZERO pages!");
+ assertf(n_pages,"Cannot free ZERO pages!");
 #endif
  assertf(_isaligned((uintptr_t)start,PAGEALIGN),
          "Unaligned page frame address %p",start);
  assertf(start != NULL,"NULL is special and cannot be mapped as free memory");
- region_end = start+n;
- k_syslogf(KLOG_TRACE,"Marking pages as free: %p (%Iu pages)\n",start,n);
- assertf(start+n > start,
+ region_end = start+n_pages;
+ k_syslogf(KLOG_TRACE,"Marking pages as free: %p (%Iu pages)\n",start,n_pages);
+ assertf(start+n_pages > start,
          "Overflow in the given free region: start @%p; end @%p",
-         start,start+n);
+         start,start+n_pages);
  kpagealloc_lock();
  if __unlikely(first_free_page == KPAGEFRAME_INVPTR) {
   /* Special case: First free region. */
   first_free_page = start;
-  start->pff_size = n;
+  start->pff_size = n_pages;
   start->pff_prev = KPAGEFRAME_INVPTR;
   start->pff_next = KPAGEFRAME_INVPTR;
   goto end;
@@ -307,13 +327,13 @@ __crit void kpageframe_free(__pagealigned struct kpageframe *__restrict start, s
    else first_free_page = start; /* First free region */
    /* Update the size of the now merged region.
     * 'start' is the new list entry and 'iter' lies directly behind. */
-   start->pff_size = n+iter->pff_size;
+   start->pff_size = n_pages+iter->pff_size;
    break;
   }
   if (iter+iter->pff_size == start) {
    /* The given region starts where 'iter' ends
     * >> Very simple case: Only need to update the size of 'iter'. */
-   iter->pff_size += n;
+   iter->pff_size += n_pages;
    /* Check for special case: through expanding 'iter', it now
     * borders against the next memory region, essentially allowing
     * us to merge 'iter' with 'iter->pff_next'. - Do so! */
@@ -332,7 +352,7 @@ __crit void kpageframe_free(__pagealigned struct kpageframe *__restrict start, s
   /* Check for case: Must insert new region chunk before 'iter'. */
   if (region_end < iter) {
    /* Insert 'start' before 'iter'. */
-   start->pff_size = n;
+   start->pff_size = n_pages;
    if ((start->pff_prev = iter->pff_prev) != KPAGEFRAME_INVPTR) start->pff_prev->pff_next = start;
    else first_free_page = start; /* Prepend before all known regions. */
    (start->pff_next = iter)->pff_prev = start;
@@ -346,13 +366,16 @@ __crit void kpageframe_free(__pagealigned struct kpageframe *__restrict start, s
            "but %p lies below known end %p",start,iter+iter->pff_size);
    (iter->pff_next = start)->pff_prev = iter;
    start->pff_next = KPAGEFRAME_INVPTR;
-   start->pff_size = n;
+   start->pff_size = n_pages;
    break;
   }
   /* Continue searching. */
   iter = iter->pff_next;
  }
 end:
+#if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
+ total_allocated_pages -= n_pages;
+#endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
  kpagealloc_unlock();
 }
 
@@ -439,14 +462,20 @@ void kpageframe_getinfo(struct kpageframeinfo *__restrict info) {
   info->pfi_freeregions = 0;
   info->pfi_freepages = 0;
  }
+#if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
+ info->pfi_usedpages = total_allocated_pages;
+#endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
  kpagealloc_unlock();
- info->pfi_freebytes = info->pfi_freepages*PAGESIZE;
 }
 
 void kpageframe_printphysmem(void) {
  struct kpageframe *iter;
  kpagealloc_lock();
+#if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
+ k_syslogf(KLOG_DEBUG,"+++ Physical memory layout (%Iu pages in used)\n",total_allocated_pages);
+#else /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
  k_syslogf(KLOG_DEBUG,"+++ Physical memory layout\n");
+#endif /* !KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
  iter = first_free_page;
  while (iter != KPAGEFRAME_INVPTR) {
   assert(iter != iter->pff_next);

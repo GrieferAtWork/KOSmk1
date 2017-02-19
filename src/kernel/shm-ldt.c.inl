@@ -169,7 +169,7 @@ static kerrno_t kshm_ldtsetlimit(struct kshm *self, __u16 newlimit) {
  return KE_OK;
 }
 
-__nomp __crit ksegid_t
+__crit __nomp ksegid_t
 kshm_ldtalloc(struct kshm *self, struct ksegment const *seg) {
  struct ksegment *iter,*begin;
  ksegid_t result;
@@ -199,7 +199,7 @@ end:
  return KSEG_TOLDT(result);
 }
 
-__nomp __crit ksegid_t
+__crit __nomp ksegid_t
 kshm_ldtallocat(struct kshm *self, ksegid_t reqid,
                 struct ksegment const *seg) {
  struct ksegment *result_seg;
@@ -224,7 +224,7 @@ kshm_ldtallocat(struct kshm *self, ksegid_t reqid,
  memcpy(result_seg,seg,sizeof(struct ksegment));
  return KSEG_TOLDT(reqid);
 }
-__nomp __crit void
+__crit __nomp void
 kshm_ldtfree(struct kshm *self, ksegid_t id) {
  struct ksegment *iter,*begin,*end;
  kassert_kshm(self);
@@ -246,7 +246,7 @@ kshm_ldtfree(struct kshm *self, ksegid_t id) {
  }
 }
 
-__nomp __crit void
+__crit __nomp void
 kshm_ldtget(struct kshm const *self,
             ksegid_t id, struct ksegment *seg) {
  kassert_kshm(self);
@@ -256,7 +256,7 @@ kshm_ldtget(struct kshm const *self,
  assertf(id < self->sm_ldt.ldt_limit,"The given ID %I16x is out-of-bounds",id);
  memcpy(seg,SEGAT(id),sizeof(struct ksegment));
 }
-__nomp __crit void
+__crit __nomp void
 kshm_ldtset(struct kshm *self, ksegid_t id,
             struct ksegment const *seg) {
  kassert_kshm(self);

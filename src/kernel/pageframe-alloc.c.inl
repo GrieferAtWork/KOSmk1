@@ -82,6 +82,9 @@ take_iter:
    else first_free_page = split; // First free region
    split->pff_size = iter->pff_size-n_pages;
 enditer:
+#if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
+   total_allocated_pages += n_pages;
+#endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
    kpagealloc_unlock();
    return iter;
   }
