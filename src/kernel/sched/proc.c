@@ -33,12 +33,16 @@
 #include <kos/kernel/proc.h>
 #include <malloc.h>
 #include <stddef.h>
+#include <kos/syslog.h>
 
 __DECL_BEGIN
 
 __STATIC_ASSERT(offsetof(struct kproc,p_shm)     == KPROC_OFFSETOF_SHM);
 __STATIC_ASSERT(offsetof(struct kproc,p_regs)    == KPROC_OFFSETOF_REGS);
 __STATIC_ASSERT(offsetof(struct kproc,p_modules) == KPROC_OFFSETOF_MODULES);
+__STATIC_ASSERT(offsetof(struct kproc,p_shm.sm_ldt.ldt_gdtid) ==
+               (KPROC_OFFSETOF_SHM+KSHM_OFFSETOF_LDT+KLDT_OFFSETOF_GDTID));
+
 
 __local void kprocsand_quit(struct kprocsand *__restrict self) {
  struct ktask *oldtask;
@@ -98,9 +102,9 @@ static kerrno_t kproc_initregs(struct kproc *self) {
  static struct ksegment const defseg_cs = KSEGMENT_INIT(0,SEG_LIMIT_MAX,SEG_CODE_PL3);
  static struct ksegment const defseg_ds = KSEGMENT_INIT(0,SEG_LIMIT_MAX,SEG_DATA_PL3);
  /* TODO: Using this, we can restrict execute access within the process. */
- /* TODO: The LDT vector must be paged if we want to use it in ring-#3! */
  if __unlikely((self->p_regs.pr_cs = kshm_ldtalloc(&self->p_shm,&defseg_cs)) == KSEG_NULL) return KE_NOMEM;
  if __unlikely((self->p_regs.pr_ds = kshm_ldtalloc(&self->p_shm,&defseg_ds)) == KSEG_NULL) return KE_NOMEM;
+ k_syslogf(KLOG_DEBUG,"Initialized LDT at GDT offset %#I16x\n",self->p_shm.sm_ldt.ldt_gdtid);
  return KE_OK;
 }
 
@@ -116,12 +120,12 @@ __crit __ref struct kproc *kproc_newroot(void) {
  kobject_init(&result->p_fdman,KOBJECT_MAGIC_FDMAN);
  kmmutex_init(&result->p_lock);
  kprocmodules_init(&result->p_modules);
- result->p_refcnt            = 1;
- result->p_fdman.fdm_cnt     = 0;
- result->p_fdman.fdm_max     = KFDMAN_FDMAX_TECHNICAL_MAXIMUM;
- result->p_fdman.fdm_fre     = 0;
- result->p_fdman.fdm_fda     = 0;
- result->p_fdman.fdm_fdv     = NULL;
+ result->p_refcnt        = 1;
+ result->p_fdman.fdm_cnt = 0;
+ result->p_fdman.fdm_max = KFDMAN_FDMAX_TECHNICAL_MAXIMUM;
+ result->p_fdman.fdm_fre = 0;
+ result->p_fdman.fdm_fda = 0;
+ result->p_fdman.fdm_fdv = NULL;
  if __unlikely(KE_ISERR(kproclist_addproc(result))) goto decref_result;
  result->p_fdman.fdm_root.fd_file = (struct kfile *)kdirfile_newroot();
  kprocenv_initroot(&result->p_environ);

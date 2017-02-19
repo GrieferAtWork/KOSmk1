@@ -125,12 +125,6 @@ GLOBAL_FUNCTION(ktask_switchimpl):
 	movI %eax, %esp
 	/* We're now in the kernel-space ESP of the new task */
 
-	pushI %ebx
-	pushI %ecx
-	call _S(ktask_decref_f)
-	popI %ecx
-	popI %ebx
-
 	/* Switch the LDT table if the new task's differs from the old. */
 	movI KTASK_OFFSETOF_PROC(%ebx), %eax
 	movI KTASK_OFFSETOF_PROC(%ecx), %edx
@@ -138,12 +132,20 @@ GLOBAL_FUNCTION(ktask_switchimpl):
 	jz .skip_ldt
 
 	/* Different processes -> Load LDT from 'struct kproc *%eax' */
-	//lldt (KPROC_OFFSETOF_SHM  \
-	//    + KSHM_OFFSETOF_LDT   \
-	//    + KLDT_OFFSETOF_GDTID \
-	//)(%eax)
+	lldt (KPROC_OFFSETOF_SHM  \
+	    + KSHM_OFFSETOF_LDT   \
+	    + KLDT_OFFSETOF_GDTID \
+	)(%eax)
 
 .skip_ldt:
+
+	pushI %ebx
+	pushI %ecx
+	call _S(ktask_decref_f)
+	addI $PS, %esp
+//	popI %ecx
+	popI %ebx
+
 	/* Update the ESP0 in the cpu's TSS */
 	pushI %ebx
 	movI (KTASK_OFFSETOF_ESP0)(%ebx), %edx

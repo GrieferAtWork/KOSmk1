@@ -28,11 +28,13 @@
 #include <kos/compiler.h>
 #include <kos/config.h>
 
+/* TODO: These should default to 64-bit, but assembly offsets
+ *      currently break (most notable: 'lldt' in 'ktask_asm.S'). */
 #ifndef _FILE_OFFSET_BITS
-#define _FILE_OFFSET_BITS 64
+#define _FILE_OFFSET_BITS 32
 #endif
 #ifndef _TIME_T_BITS
-#define _TIME_T_BITS 64
+#define _TIME_T_BITS 32
 #endif
 
 #define __HAVE_REENTRANT 1

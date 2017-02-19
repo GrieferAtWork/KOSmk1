@@ -58,6 +58,7 @@ __DECL_BEGIN
 /* Pick some random members to assert our contant offsets of. */
 __STATIC_ASSERT(offsetof(struct ktask,t_cpu)       == KTASK_OFFSETOF_CPU);
 __STATIC_ASSERT(offsetof(struct ktask,t_abstime)   == KTASK_OFFSETOF_ABSTIME);
+__STATIC_ASSERT(offsetof(struct ktask,t_suspended) == KTASK_OFFSETOF_SUSPENDED);
 __STATIC_ASSERT(offsetof(struct ktask,t_sigval)    == KTASK_OFFSETOF_SIGVAL);
 __STATIC_ASSERT(offsetof(struct ktask,t_joinsig)   == KTASK_OFFSETOF_JOINSIG);
 __STATIC_ASSERT(offsetof(struct ktask,t_proc)      == KTASK_OFFSETOF_PROC);
@@ -935,6 +936,7 @@ __noinline void ktask_switchdecref(struct ktask *__restrict newtask,
  kassert_ktask(oldtask);
  assert(!karch_irq_enabled());
  assert(kcpu_self()->c_current == newtask);
+ kassert_kproc(oldtask->t_proc);
  kassert_kproc(newtask->t_proc);
  KTASK_ONSWITCH("YIELD",oldtask,newtask);
 #if 0
