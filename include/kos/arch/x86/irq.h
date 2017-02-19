@@ -59,18 +59,19 @@ __DECL_BEGIN
 #define KARCH_X64_IRQ_UD 6  /*< Invalid Opcode. */
 #define KARCH_X64_IRQ_NM 7  /*< Device Not Available. */
 #define KARCH_X64_IRQ_DF 8  /*< Double Fault. */
-#define KARCH_X64_IRQ_TS 11 /*< Invalid TSS. */
-#define KARCH_X64_IRQ_NP 12 /*< Segment Not Present. */
-#define KARCH_X64_IRQ_SS 13 /*< Stack-Segment Fault. */
-#define KARCH_X64_IRQ_GP 14 /*< General Protection Fault. */
-#define KARCH_X64_IRQ_PF 15 /*< Page Fault. */
-#define KARCH_X64_IRQ_MF 17 /*< x87 Floating-Point Exception. */
-#define KARCH_X64_IRQ_AC 18 /*< Alignment Check. */
-#define KARCH_X64_IRQ_MC 19 /*< Machine Check. */
-#define KARCH_X64_IRQ_XM 20 /*< SIMD Floating-Point Exception. */
+#define KARCH_X64_IRQ_TS 10 /*< Invalid TSS. */
+#define KARCH_X64_IRQ_NP 11 /*< Segment Not Present. */
+#define KARCH_X64_IRQ_SS 12 /*< Stack-Segment Fault. */
+#define KARCH_X64_IRQ_GP 13 /*< General Protection Fault. */
+#define KARCH_X64_IRQ_PF 14 /*< Page Fault. */
+#define KARCH_X64_IRQ_MF 16 /*< x87 Floating-Point Exception. */
+#define KARCH_X64_IRQ_AC 17 /*< Alignment Check. */
+#define KARCH_X64_IRQ_MC 18 /*< Machine Check. */
+#define KARCH_X64_IRQ_XM 19 /*< SIMD Floating-Point Exception. */
 #define KARCH_X64_IRQ_XF KARCH_X64_IRQ_XM
-#define KARCH_X64_IRQ_VE 21 /*< Virtualization Exception. */
-#define KARCH_X64_IRQ_SX 31 /*< Security Exception. */
+#define KARCH_X64_IRQ_VE 20 /*< Virtualization Exception. */
+#define KARCH_X64_IRQ_SX 30 /*< Security Exception. */
+
 
 __DECL_END
 

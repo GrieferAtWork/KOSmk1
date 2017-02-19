@@ -191,22 +191,19 @@ kirq_handler_t kirq_sethandler(kirq_t signum, kirq_handler_t new_handler) {
  return katomic_xch(interrupt_handlers[signum],new_handler);
 }
 
-static int print_error(char const *__restrict data,
-                       size_t maxchars,
-                       void *__unused(closure)) {
+static __attribute_unused int
+print_error(char const *__restrict data,
+            size_t maxchars,
+            void *__unused(closure)) {
  tty_printn(data,maxchars);
  serial_printn(SERIAL_01,data,maxchars);
  return 0;
 }
 
 
-void __kirq_default_handler(struct kirq_registers *__unused(regs)) {}
-void x86_interrupt_handler(struct kirq_registers *regs) {
- kirq_handler_t handler;
+void __kirq_default_handler(struct kirq_registers *regs) {
  //assert(ktask_self() != NULL);
  //printf("INTERADDR = %p\n",regs->esp);
- assertf(regs->regs.intno < KIRQ_SIGNAL_COUNT,
-         "Invalid signal: %u|%u",regs->regs.intno,regs->regs.ecode);
  if (regs->regs.intno < 32) {
   struct kirq_siginfo const *info;
   struct ktask *caller = ktask_self();
@@ -239,8 +236,6 @@ void x86_interrupt_handler(struct kirq_registers *regs) {
 #endif
   {
    struct kpagedir *pd = NULL;
-   void *physical_eip;
-   size_t disasm_size = 120;
    if (caller && caller->t_proc) {
     if ((pd = caller->t_proc->p_shm.sm_pd) != NULL) {
      kpagedir_print(pd);
@@ -248,14 +243,26 @@ void x86_interrupt_handler(struct kirq_registers *regs) {
      printf("INVALID PAGEDIRECTORY (NULL POINTER)\n");
     }
    }
-   physical_eip = (void *)regs->regs.eip;
-   if (pd) physical_eip = kpagedir_translate(pd,physical_eip);
-   disasm_x86((void *)((uintptr_t)physical_eip-(disasm_size/2)),
-              disasm_size+1,&print_error,NULL,DISASM_FLAG_ADDR);
+#if 0
+   {
+    void *physical_eip;
+    size_t disasm_size = 120;
+    physical_eip = (void *)regs->regs.eip;
+    if (pd) physical_eip = kpagedir_translate(pd,physical_eip);
+    disasm_x86((void *)((uintptr_t)physical_eip-(disasm_size/2)),
+               disasm_size+1,&print_error,NULL,DISASM_FLAG_ADDR);
+   }
+#endif
   }
 #undef abort
   abort();
  }
+}
+
+void x86_interrupt_handler(struct kirq_registers *regs) {
+ kirq_handler_t handler;
+ assertf(regs->regs.intno < KIRQ_SIGNAL_COUNT,
+         "Invalid signal: %u|%u",regs->regs.intno,regs->regs.ecode);
  handler = katomic_load(interrupt_handlers[regs->regs.intno]);
 #if 0
  printf("Calling handler %u (%u) %p\n",regs->regs.intno,

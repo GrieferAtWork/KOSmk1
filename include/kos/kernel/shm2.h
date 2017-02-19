@@ -37,6 +37,7 @@
 #include <kos/kernel/paging.h>
 #include <strings.h>
 #include <math.h>
+#include <stdio.h>
 #if KCONFIG_USE_SHM2
 
 // Shared memory layout
@@ -424,18 +425,19 @@ union{
  ((self)->sb_region->sre_branches == 1 && (self)->sb_rstart == 0)
 #define kshmbranch_canexpand_max(self) \
  ((self)->sb_region->sre_branches == 1 && \
-  (self)->sb_rstart+(self)->sb_rpages == (self)->sb_region->sre_chunk.sc_pages-1)
+  (self)->sb_rstart+(self)->sb_rpages == \
+  (self)->sb_region->sre_chunk.sc_pages)
 
 #define KSHMBRANCH_ADDRSEMI_INIT       ((((__uintptr_t)-1)/2)+1)
 #define KSHMBRANCH_ADDRLEVEL_INIT      ((__SIZEOF_POINTER__*8)-1)
-#define KSHMBRANCH_MAPMIN(semi,level)  ((semi)-(((__uintptr_t)1 << (level))))
-#define KSHMBRANCH_MAPMAX(semi,level)  ((semi)+(((__uintptr_t)1 << (level))-1))
+#define KSHMBRANCH_MAPMIN(semi,level)  ((semi)&~(((__uintptr_t)1 << (level))))
+#define KSHMBRANCH_MAPMAX(semi,level)  ((semi)| (((__uintptr_t)1 << (level))-1))
 #define KSHMBRANCH_WALKMIN(semi,level) ((semi)  = (((semi)&~((__uintptr_t)1 << (level)))|((__uintptr_t)1 << ((level)-1))),--(level)) /*< unset level'th bit; set level'th-1 bit. */
 #define KSHMBRANCH_WALKMAX(semi,level) (--(level),(semi) |= ((__uintptr_t)1 << (level)))                                             /*< set level'th-1 bit. */
 #define KSHMBRANCH_SEMILEVEL(semi)     (ffs(semi)-1) /*< Get the current level associated with a given semi-address. */
 
 
-extern __crit __nomp __nonnull((1,2)) kerrno_t kshmbranch_insert(struct kshmbranch **__restrict proot, struct kshmbranch *__restrict newleaf);
+extern __crit __nomp __nonnull((1,2)) kerrno_t kshmbranch_insert(struct kshmbranch **__restrict proot, struct kshmbranch *__restrict newleaf, __uintptr_t addr_semi, unsigned int addr_level);
 extern __crit __nomp __nonnull((1)) struct kshmbranch *kshmbranch_remove(struct kshmbranch **__restrict proot, __uintptr_t addr);
 __local __wunused struct kshmbranch *kshmbranch_locate(struct kshmbranch *root, __uintptr_t addr);
 
@@ -611,7 +613,7 @@ kshmmap_remove(struct kshmmap *__restrict self,
 __local struct kshmbranch *
 kshmmap_locate(struct kshmmap const *self, __uintptr_t addr);
 #else
-#define kshmmap_insert(self,newleaf) kshmbranch_insert(&(self)->m_root,newleaf)
+#define kshmmap_insert(self,newleaf) kshmbranch_insert(&(self)->m_root,newleaf,KSHMBRANCH_ADDRSEMI_INIT,KSHMBRANCH_ADDRLEVEL_INIT)
 #define kshmmap_remove(self,addr)    kshmbranch_remove(&(self)->m_root,addr)
 #define kshmmap_locate(self,addr)    kshmbranch_locate((self)->m_root,addr)
 #endif
@@ -1007,8 +1009,12 @@ kshmbranch_locate(struct kshmbranch *root, __uintptr_t addr) {
    __uintptr_t addr_min = KSHMBRANCH_MAPMIN(addr_semi,addr_level);
    __uintptr_t addr_max = KSHMBRANCH_MAPMAX(addr_semi,addr_level);
    assertf(root->sb_map_min <= root->sb_map_max,"Branch has invalid min/max configuration (min(%p) > max(%p))",root->sb_map_min,root->sb_map_max);
-   assertf(root->sb_map_min >= addr_min,"Unexpected branch min address (%p < %p)",root->sb_min,addr_min);
-   assertf(root->sb_map_max <= addr_max,"Unexpected branch max address (%p < %p)",root->sb_max,addr_max);
+   assertf(root->sb_map_min >= addr_min,
+           "Unexpected branch min address (%p < %p; max: %p; looking for %p; semi %p; level %u)",
+           root->sb_map_min,addr_min,root->sb_map_max,addr,addr_semi,addr_level);
+   assertf(root->sb_map_max <= addr_max,
+           "Unexpected branch max address (%p > %p; min: %p; looking for %p; semi %p; level %u)",
+           root->sb_map_max,addr_max,root->sb_map_min,addr,addr_semi,addr_level);
   }
 #endif
   /* Check if the given address lies within this branch. */
@@ -1028,8 +1034,8 @@ kshmbranch_locate(struct kshmbranch *root, __uintptr_t addr) {
  return root;
 }
 __local __wunused struct kshmbranch **
-kshmbranch_plocate(struct kshmbranch **__restrict proot, __uintptr_t addr,
-                   __uintptr_t *result_semi) {
+kshmbranch_plocate(struct kshmbranch **__restrict proot,
+                   __uintptr_t addr, __uintptr_t *result_semi) {
  struct kshmbranch *root;
  /* addr_semi is the center point splitting the max
   * ranges of the underlying sb_min/sb_max branches. */
@@ -1037,13 +1043,18 @@ kshmbranch_plocate(struct kshmbranch **__restrict proot, __uintptr_t addr,
  unsigned int addr_level = KSHMBRANCH_ADDRLEVEL_INIT;
  while ((kassertobj(proot),(root = *proot) != NULL)) {
   kassertobj(root);
+  kassert_kshmregion(root->sb_region);
 #ifdef __DEBUG__
   { /* Assert that the current branch has a valid min/max address range. */
    __uintptr_t addr_min = KSHMBRANCH_MAPMIN(addr_semi,addr_level);
    __uintptr_t addr_max = KSHMBRANCH_MAPMAX(addr_semi,addr_level);
    assertf(root->sb_map_min <= root->sb_map_max,"Branch has invalid min/max configuration (min(%p) > max(%p))",root->sb_map_min,root->sb_map_max);
-   assertf(root->sb_map_min >= addr_min,"Unexpected branch min address (%p < %p)",root->sb_min,addr_min);
-   assertf(root->sb_map_max <= addr_max,"Unexpected branch max address (%p < %p)",root->sb_max,addr_max);
+   assertf(root->sb_map_min >= addr_min,
+           "Unexpected branch min address (%p < %p; max: %p; looking for %p; semi %p; level %u)",
+           root->sb_map_min,addr_min,root->sb_map_max,addr,addr_semi,addr_level);
+   assertf(root->sb_map_max <= addr_max,
+           "Unexpected branch max address (%p > %p; min: %p; looking for %p; semi %p; level %u)",
+           root->sb_map_max,addr_max,root->sb_map_min,addr,addr_semi,addr_level);
   }
 #endif
   /* Check if the given address lies within this branch. */
@@ -1063,6 +1074,7 @@ kshmbranch_plocate(struct kshmbranch **__restrict proot, __uintptr_t addr,
    proot = &root->sb_max;
   }
  }
+ /*printf("Nothing found for %p at %p %u\n",addr,addr_semi,addr_level);*/
  return NULL;
 }
 #endif /* !__ASSEMBLY__ */

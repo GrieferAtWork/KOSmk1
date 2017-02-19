@@ -172,7 +172,7 @@ kerrno_t kpagedir_mapkernel(struct kpagedir *self, kpageflag_t flags) {
 #define KPAGEDIR_FOREACHADDR(self,titer) \
  ((((titer)-x86_pde_getpte(diter))+(diter-(self)->d_entries)*X86_PTE4PDE) << 12)
 
-#define KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,on_nonpresent)\
+#define KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,on_nonpresent,...)\
  x86_pde *diter,*dend,*dbegin; x86_pte *titer,*tend;\
  kassertobj(self);\
  assert(isaligned((uintptr_t)virt,PAGEALIGN));\
@@ -195,6 +195,7 @@ kerrno_t kpagedir_mapkernel(struct kpagedir *self, kpageflag_t flags) {
     tend = titer+X86_PTE4PDE;\
     if (diter == dbegin) titer += X86_VPTR_GET_PTID(virt);\
    }\
+   {__VA_ARGS__;}\
    for (; titer != tend; ++titer) {
 #define KPAGEDIR_FOREACHEND }}}
 
@@ -242,7 +243,9 @@ kpagedir_setflags(struct kpagedir *self, __virtualaddr void const *virt,
  mask  |= X86_PTE_FLAG_PRESENT;
  flags |= X86_PTE_FLAG_PRESENT;
 #endif
- KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,) {
+ KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,,{
+  diter->u |= X86_PDE_FLAG_USER|X86_PDE_FLAG_READ_WRITE;
+ }) {
   titer->u = (titer->u&mask)|flags;
   ++result;
  } KPAGEDIR_FOREACHEND;
@@ -428,9 +431,9 @@ next_pte:
 static int kpagedir_print_callback(__virtualaddr void *vbegin,
                                    __physicaladdr void *pbegin,
                                    size_t pagecount, kpageflag_t flags, void *closure) {
- return printf("MAP %#.8Ix bytes (%#.8Ix pages) (%cR%c) V[%.8p ... %.8p] --> P[%.8p ... %.8p]\n"
+ return printf("MAP %#.8Ix bytes (%#.8Ix pages) (%c%c) V[%.8p ... %.8p] --> P[%.8p ... %.8p]\n"
                ,pagecount*PAGESIZE,pagecount
-               ,flags&PAGEDIR_FLAG_USER ? 'U' : '-'
+               ,flags&PAGEDIR_FLAG_USER ? 'R' : '-'
                ,flags&PAGEDIR_FLAG_READ_WRITE ? 'W' : '-'
                ,vbegin,(uintptr_t)vbegin+pagecount*PAGESIZE
                ,pbegin,(uintptr_t)pbegin+pagecount*PAGESIZE);

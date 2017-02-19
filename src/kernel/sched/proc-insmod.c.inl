@@ -41,9 +41,11 @@ kproc_loadmodsections(struct kproc *__restrict self,
                       struct kshlib *__restrict module,
                       __pagealigned __user void *__restrict base) {
  struct kshlibsection *iter,*end; kerrno_t error;
+#if !KCONFIG_USE_SHM2
 #if !KCONFIG_HAVE_SHM_COPY_ON_WRITE
  struct kshmtab *usedtab;
 #endif
+#endif /* !KCONFIG_USE_SHM2 */
  KTASK_CRIT_MARK
  end = (iter = module->sh_data.ed_secv)+module->sh_data.ed_secc;
  for (; iter != end; ++iter) {

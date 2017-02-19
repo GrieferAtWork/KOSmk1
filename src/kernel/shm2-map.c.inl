@@ -31,12 +31,100 @@
 
 __DECL_BEGIN
 
+static __attribute_unused void
+print_branch(struct kshmbranch *__restrict branch,
+             uintptr_t addr_semi, unsigned int level) {
+ unsigned int new_level,i; uintptr_t new_semi;
+ for (i = 31; i > level; --i) printf("%s",(addr_semi&(1 << i)) ? "+" : "-");
+ for (i = 0; i < level; ++i) printf(" ");
+ printf("leaf %p .. %p at %p .. %p semi %p, level %u\n",
+        branch->sb_map_min,branch->sb_map_max,
+        KSHMBRANCH_MAPMIN(addr_semi,level),
+        KSHMBRANCH_MAPMAX(addr_semi,level),
+        addr_semi,level);
+ assert(branch->sb_map_min >= KSHMBRANCH_MAPMIN(addr_semi,level));
+ assert(branch->sb_map_max <= KSHMBRANCH_MAPMAX(addr_semi,level));
+ if (branch->sb_min) {
+  new_semi = addr_semi,new_level = level;
+  KSHMBRANCH_WALKMIN(new_semi,new_level);
+  print_branch(branch->sb_min,new_semi,new_level);
+ }
+ if (branch->sb_max) {
+  new_semi = addr_semi,new_level = level;
+  KSHMBRANCH_WALKMAX(new_semi,new_level);
+  print_branch(branch->sb_max,new_semi,new_level);
+ }
+}
+
+static void
+reinsert_recursive(struct kshmbranch **__restrict pbranch,
+                   struct kshmbranch *__restrict newleaf,
+                   uintptr_t addr_semi, unsigned int level) {
+#if 0
+ printf("recursive_insert leaf %p .. %p at %p .. %p semi %p, level %u\n",
+        newleaf->sb_map_min,newleaf->sb_map_max,
+        KSHMBRANCH_MAPMIN(addr_semi,level),
+        KSHMBRANCH_MAPMAX(addr_semi,level),
+        addr_semi,level);
+#endif
+ if (newleaf->sb_min) reinsert_recursive(pbranch,newleaf->sb_min,addr_semi,level);
+ if (newleaf->sb_max) reinsert_recursive(pbranch,newleaf->sb_max,addr_semi,level);
+ asserte(kshmbranch_insert(pbranch,newleaf,addr_semi,level) == KE_OK);
+}
+
+
+/* Override a given branch with a new node.
+ * This is a pretty complicated process, because any branch of the old
+ * branch's min->[max...] and max->[min...] chain must be rebuild. */
+static void
+override_branch(struct kshmbranch **__restrict pbranch,
+                struct kshmbranch *__restrict newleaf,
+                uintptr_t addr_semi, unsigned int level) {
+#if 0
+ struct kshmbranch *iter,**app_min,**app_max;
+ uintptr_t newleaf_min;
+ app_min     = &newleaf->sb_min;
+ app_max     = &newleaf->sb_max;
+ newleaf_min = newleaf->sb_map_min;
+ iter        = *pbranch,*pbranch = newleaf;
+ while (iter) {
+  assertf(iter->sb_map_max < newleaf_min ||
+          iter->sb_map_min > newleaf->sb_map_max,
+          "newleaf is overlapping with an existing branch");
+  if (iter->sb_map_max < addr_semi) {
+   /* Branch is located below the new leaf.
+    * (append to min-chain & continue searching towards max) */
+   *app_min = iter;
+   app_min  = &iter->sb_max;
+   iter     = iter->sb_max;
+   KSHMBRANCH_WALKMAX(addr_semi,level);
+  } else {
+   assert(iter->sb_map_min > addr_semi);
+   /* Branch is located above the new leaf.
+    * (append to max-chain & continue searching towards min) */
+   *app_max = iter;
+   app_max  = &iter->sb_min;
+   iter     = iter->sb_min;
+   KSHMBRANCH_WALKMIN(addr_semi,level);
+  }
+ }
+ /* Terminate the append-chains. */
+ *app_min = NULL;
+ *app_max = NULL;
+#else
+ struct kshmbranch *iter;
+ iter = *pbranch,*pbranch = newleaf;
+ newleaf->sb_min = NULL;
+ newleaf->sb_max = NULL;
+ reinsert_recursive(pbranch,iter,addr_semi,level);
+#endif
+}
+
 __crit __nomp kerrno_t
 kshmbranch_insert(struct kshmbranch **__restrict pcurr,
-                  struct kshmbranch *__restrict newleaf) {
+                  struct kshmbranch *__restrict newleaf,
+                  uintptr_t addr_semi, unsigned int addr_level) {
  struct kshmbranch *iter;
- uintptr_t    addr_semi  = KSHMBRANCH_ADDRSEMI_INIT;
- unsigned int addr_level = KSHMBRANCH_ADDRLEVEL_INIT;
  uintptr_t newleaf_min,newleaf_max;
  kassertobj(pcurr);
  kassertobj(newleaf);
@@ -55,6 +143,9 @@ again:
   newleaf->sb_min = NULL;
   newleaf->sb_max = NULL;
   *pcurr = newleaf;
+got_it:
+  assert(newleaf_min >= KSHMBRANCH_MAPMIN(addr_semi,addr_level));
+  assert(newleaf_max <= KSHMBRANCH_MAPMAX(addr_semi,addr_level));
   return KE_OK;
  }
  /* Special case: Check if the given branch overlaps with our current. */
@@ -70,17 +161,8 @@ again:
   assertf(iter->sb_map_max <= addr_semi ||
           iter->sb_map_min >= addr_semi,
           "But that would mean we are overlapping...");
-  if (iter->sb_map_max <= addr_semi) {
-   /* Old leave must be stored within the min-branch. */
-   newleaf->sb_min = iter;
-   newleaf->sb_max = NULL;
-  } else {
-   /* Old leave must be stored within the max-branch. */
-   newleaf->sb_max = iter;
-   newleaf->sb_min = NULL;
-  }
-  *pcurr = newleaf;
-  return KE_OK;
+  override_branch(pcurr,newleaf,addr_semi,addr_level);
+  goto got_it;
  }
  /* We are not a perfect fit for this leaf because
   * we're not covering its addr_semi.
@@ -92,7 +174,8 @@ again:
   pcurr = &iter->sb_min;
  } else {
   /* We are located above. */
-  assert(newleaf_min > addr_semi);
+  assertf(newleaf_min > addr_semi
+         ,"We checked above if we're covering the semi!");
   KSHMBRANCH_WALKMAX(addr_semi,addr_level);
   pcurr = &iter->sb_max;
  }
