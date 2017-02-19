@@ -36,12 +36,13 @@
 #include <stdint.h>
 #include <kos/syslog.h>
 
+#if KCONFIG_USE_SHM2
 __DECL_BEGIN
 
 
-static kerrno_t kshm2_initldt(struct kshm2 *self, __u16 size_hint);
-static kerrno_t kshm2_initldtcopy(struct kshm2 *self, struct kshm2 *right);
-static void kshm2_quitldt(struct kshm2 *self);
+static kerrno_t kshm_initldt(struct kshm *__restrict self, __u16 size_hint);
+static kerrno_t kshm_initldtcopy(struct kshm *__restrict self, struct kshm *__restrict right);
+static void kshm_quitldt(struct kshm *__restrict self);
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -191,8 +192,9 @@ void kshmchunk_copypages(struct kshmchunk const *self,
          first_page+page_count,self->sc_pages);
  if __likely(self->sc_partc == 1) {
   /* Optimize most likely case. */
-  memcpy(buf,self->sc_partv[0].sp_frame+first_page,
-         page_count*PAGESIZE);
+  kpageframe_memcpy((struct kpageframe *)buf,
+                    self->sc_partv[0].sp_frame+first_page,
+                    page_count);
   return;
  }
  iter = self->sc_partv;
@@ -204,7 +206,9 @@ void kshmchunk_copypages(struct kshmchunk const *self,
   assert(page_position < copy_end);
   assert(iter < self->sc_partv+self->sc_partc);
   copy_max = min(copy_end-page_position,iter->sp_pages);
-  memcpy(buf,iter->sp_frame,copy_max*PAGESIZE);
+  kpageframe_memcpy((struct kpageframe *)buf,
+                    iter->sp_frame,copy_max);
+  *(uintptr_t *)&buf += copy_max*PAGESIZE;
  }
 }
 
@@ -252,6 +256,59 @@ overflow:
  if (iter-- != cls_min) kshmregion_decref(self,cls_min,iter);
  return KE_OVERFLOW;
 }
+
+
+//////////////////////////////////////////////////////////////////////////
+// Free all parts associated with the given cluster.
+static __crit void
+kshmregion_freecluster(struct kshmregion *__restrict self,
+                       struct kshmcluster *cluster) {
+ struct kshmpart *iter;
+ kshmregion_page_t cluster_start;
+ kshmregion_page_t cluster_delete = KSHM_CLUSTERSIZE;
+ size_t max_pages;
+ kassert_kshmregion(self);
+ kassertobj(cluster);
+ assert(cluster >= self->sre_clusterv &&
+        cluster <  self->sre_clusterv+self->sre_clusterc);
+ cluster_start = (cluster-self->sre_clusterv)*KSHM_CLUSTERSIZE;
+ iter = cluster->sc_part;
+ assert(cluster_start >= iter->sp_start &&
+        cluster_start < iter->sp_start+iter->sp_pages);
+ /* Delete all frames associated with this cluster. */
+ for (;;) {
+  assert(iter >= self->sre_chunk.sc_partv &&
+         iter <  self->sre_chunk.sc_partv+
+                 self->sre_chunk.sc_partc);
+  max_pages = min(cluster_delete,iter->sp_pages-cluster_start);
+#ifdef __DEBUG__
+  assert(iter->sp_frame != NULL);
+#endif
+  kpageframe_free(iter->sp_frame+cluster_start,max_pages);
+#ifdef __DEBUG__
+  iter->sp_frame = NULL;
+#endif
+  {
+#ifdef __DEBUG__
+   size_t refcnt = katomic_decfetch(self->sre_clustera);
+   assert(refcnt != (size_t)-1);
+   if (!refcnt)
+#else
+   if (!katomic_decfetch(self->sre_clustera))
+#endif
+   {
+    assert(cluster_delete == max_pages);
+    free(self->sre_chunk.sc_partv);
+    free(self);
+    return;
+   }
+  }
+  if ((cluster_delete -= max_pages) == 0) break;
+  cluster_start = 0;
+  ++iter;
+ }
+}
+
 __crit void
 kshmregion_decref(struct kshmregion *__restrict self,
                   struct kshmcluster *cls_min,
@@ -273,47 +330,7 @@ kshmregion_decref(struct kshmregion *__restrict self,
 #endif
   {
    /* Last reference was removed. */
-   struct kshmpart *iter;
-   kshmregion_page_t cluster_start;
-   kshmregion_page_t cluster_delete = KSHM_CLUSTERSIZE;
-   size_t max_pages;
-   cluster_start = (cls_min-self->sre_clusterv)*KSHM_CLUSTERSIZE;
-   iter = cls_min->sc_part;
-   assert(cluster_start >= iter->sp_start &&
-          cluster_start < iter->sp_start+iter->sp_pages);
-   /* Delete all frames associated with this cluster. */
-   for (;;) {
-    assert(iter >= self->sre_chunk.sc_partv &&
-           iter <  self->sre_chunk.sc_partv+
-                   self->sre_chunk.sc_partc);
-    max_pages = min(cluster_delete,iter->sp_pages-cluster_start);
-#ifdef __DEBUG__
-    assert(iter->sp_frame != NULL);
-#endif
-    kpageframe_free(iter->sp_frame+cluster_start,max_pages);
-#ifdef __DEBUG__
-    iter->sp_frame = NULL;
-#endif
-    {
-#ifdef __DEBUG__
-     size_t refcnt = katomic_decfetch(self->sre_clustera);
-     assert(refcnt != (size_t)-1);
-     if (!refcnt)
-#else
-     if (!katomic_decfetch(self->sre_clustera))
-#endif
-     {
-      assert(cluster_delete == max_pages);
-      assert(cls_min == cls_max);
-      free(self->sre_chunk.sc_partv);
-      free(self);
-      return;
-     }
-    }
-    if ((cluster_delete -= max_pages) == 0) break;
-    cluster_start = 0;
-    ++iter;
-   }
+   kshmregion_freecluster(self,cls_min);
   }
  } while (cls_min++ != cls_max);
 }
@@ -335,6 +352,7 @@ kshmregion_raw_alloc(size_t clusters, kshm_flag_t flags) {
  __ref struct kshmregion *result;
  result = (__ref struct kshmregion *)malloc(SIZEOF_KSHMREGION(clusters));
  if __unlikely(!result) return NULL;
+ kobject_init(result,KOBJECT_MAGIC_SHMREGION);
  result->sre_branches = 0;
  result->sre_clustera = clusters;
  result->sre_clusterc = clusters;
@@ -453,6 +471,21 @@ __local void kshmchunk_builder_finish(struct kshmchunk *self) {
   start          += iter->sp_pages;
  } while (++iter != end);
 }
+__local int
+kshmchunk_builder_inheritscluster(struct kshmchunk *self,
+                                  struct kshmcluster const *cluster) {
+ struct kshmpart *iter,*end;
+ struct kpageframe *frameaddr;
+ kassertobj(self);
+ kassertobj(cluster);
+ kassertobj(cluster->sc_part);
+ end = (iter = self->sc_partv)+self->sc_partc;
+ frameaddr = cluster->sc_part->sp_frame;
+ for (; iter != end; ++iter) {
+  if (!iter->sc_owned && iter->sp_frame == frameaddr) return 1;
+ }
+ return 0;
+}
 __local kerrno_t
 kshmchunk_builder_addpart(struct kshmchunk *self,
                           __pagealigned struct kpageframe *start,
@@ -482,26 +515,86 @@ kshmchunk_builder_addpart(struct kshmchunk *self,
 
 
 static kerrno_t
-kshmchunk_builder_copyable_clusters(struct kshmchunk *self,
-                                    struct kshmregion const *original_region,
-                                    struct kshmcluster const *first_cluster,
-                                    size_t cluster_count) {
+kshmchunk_builder_copy_clusters(struct kshmchunk *self,
+                                struct kshmregion const *original_region,
+                                struct kshmcluster const *first_cluster,
+                                size_t cluster_count) {
+ struct kshmpart *iter;
+ struct kpageframe *framecopy;
+ kshmregion_page_t cluster_start;
+ kshmregion_page_t cluster_pages = cluster_count*KSHM_CLUSTERSIZE;
+ size_t max_pages; kerrno_t error;
  kassertobj(self);
  kassert_kshmregion(original_region);
  kassertmem(first_cluster,cluster_count*sizeof(struct kshmcluster));
- /* TODO: Append (owned) copies of parts in the given vector of clusters. */
- return KE_NOSYS;
+ /* Append (owned) copies of parts in the given vector of clusters. */
+ assert(first_cluster               >= original_region->sre_clusterv &&
+        first_cluster+cluster_count <= original_region->sre_clusterv+original_region->sre_clusterc);
+ cluster_start = (first_cluster-original_region->sre_clusterv)*KSHM_CLUSTERSIZE;
+ iter          =  first_cluster->sc_part;
+ assert(cluster_start >= iter->sp_start &&
+        cluster_start <  iter->sp_start+iter->sp_pages);
+ /* Copy all frames associated with these clusters. */
+ for (;;) {
+  assert(iter >= original_region->sre_chunk.sc_partv &&
+         iter <  original_region->sre_chunk.sc_partv+
+                 original_region->sre_chunk.sc_partc);
+  max_pages = min(cluster_pages,iter->sp_pages-cluster_start);
+#ifdef __DEBUG__
+  assert(iter->sp_frame != NULL);
+#endif
+  /* todo: Try to undo scattering of pageframes.
+   *     - While unlikely to succeed, we should try to merge multiple parts here... */
+  framecopy = kpageframe_alloc(max_pages);
+  if __unlikely(framecopy == KPAGEFRAME_INVPTR) return KE_NOMEM;
+  kpageframe_memcpy(framecopy,iter->sp_frame+cluster_start,max_pages);
+  error = kshmchunk_builder_addpart(self,framecopy,max_pages,1);
+  if __unlikely(KE_ISERR(error)) {
+   kpageframe_free(framecopy,max_pages);
+   return error;
+  }
+  if ((cluster_pages -= max_pages) == 0) break;
+  cluster_start = 0;
+  ++iter;
+ }
+ return KE_OK;
 }
+
 static kerrno_t
 kshmchunk_builder_inherit_clusters(struct kshmchunk *self,
                                    struct kshmregion const *original_region,
                                    struct kshmcluster const *first_cluster,
                                    size_t cluster_count) {
+ struct kshmpart *iter;
+ kshmregion_page_t cluster_start;
+ kshmregion_page_t cluster_pages = cluster_count*KSHM_CLUSTERSIZE;
+ size_t max_pages; kerrno_t error;
  kassertobj(self);
  kassert_kshmregion(original_region);
  kassertmem(first_cluster,cluster_count*sizeof(struct kshmcluster));
- /* TODO: Append the parts of all given clusters. */
- return KE_NOSYS;
+ /* Append the parts of all given clusters. */
+ assert(first_cluster               >= original_region->sre_clusterv &&
+        first_cluster+cluster_count <= original_region->sre_clusterv+original_region->sre_clusterc);
+ cluster_start = (first_cluster-original_region->sre_clusterv)*KSHM_CLUSTERSIZE;
+ iter          =  first_cluster->sc_part;
+ assert(cluster_start >= iter->sp_start &&
+        cluster_start <  iter->sp_start+iter->sp_pages);
+ /* Inherit all frames associated with these clusters. */
+ for (;;) {
+  assert(iter >= original_region->sre_chunk.sc_partv &&
+         iter <  original_region->sre_chunk.sc_partv+
+                 original_region->sre_chunk.sc_partc);
+  max_pages = min(cluster_pages,iter->sp_pages-cluster_start);
+#ifdef __DEBUG__
+  assert(iter->sp_frame != NULL);
+#endif
+  error = kshmchunk_builder_addpart(self,iter->sp_frame+cluster_start,max_pages,0);
+  if __unlikely(KE_ISERR(error)) return error;
+  if ((cluster_pages -= max_pages) == 0) break;
+  cluster_start = 0;
+  ++iter;
+ }
+ return KE_OK;
 }
 
 
@@ -542,9 +635,10 @@ kshmregion_extractpart(struct kshmregion *self,
   */
  /* NOTE: This function does a few hacky things:
   *        - It uses the chunk-builder, meaning that 'sre_chunk.sc_pages'
-  *          is re-interpreted as a allocated-vector-size member.
+  *          is re-interpreted as a allocated-vector-size member,
+  *          as well as 'sre_chunk.sc_partv[*].sp_start' being used
+  *          to track which parts were inherited from the original region.
   */
-
  dest = result->sre_clusterv;
  first_inheritable_cluster = NULL;
  first_copyable_cluster    = NULL;
@@ -556,9 +650,9 @@ kshmregion_extractpart(struct kshmregion *self,
 flush_copyable_clusters:
     partial_count = (size_t)(iter-first_inheritable_cluster);
     /* Add the parts of all copyable clusters. */
-    error = kshmchunk_builder_copyable_clusters(&result->sre_chunk,self,
-                                                first_copyable_cluster,
-                                                partial_count);
+    error = kshmchunk_builder_copy_clusters(&result->sre_chunk,self,
+                                            first_copyable_cluster,
+                                            partial_count);
     if __unlikely(KE_ISERR(error)) goto err_r;
     first_copyable_cluster = NULL;
     dest += partial_count;
@@ -594,29 +688,39 @@ flush_inheritable_clusters:
  }
  /* Must go through all chunks we've (potentially)
   * extracted again and remove one reference from each.
-  * This must be does one we've reached the point of noexcept
+  * This must be done once we've reached the point of noexcept
   * because decref'ing reference counter greater than ONE(1)
   * could have the potential of another process doing the same,
-  * leaving the chunk to actually be deallocated before we
-  * are able to recover by incrementing the counter again.
+  * leaving the chunk to actually be deallocated before we are
+  * able to recover by incrementing the counter again on error.
   * >> Some counters actually dropping to ZERO(0) during this
-  *    process is also intended, as those are the clusters
-  *    we've managed to inherit.
+  *    process is also intended, as those are the clusters we've
+  *    managed to inherit (which is why we don't free them here).
   * NOTE: We can rely on the fact that all clusters that only
   *       had ONE(1) reference (aka. those we've inherited) will
   *       still only have one reference, simply because that's
   *       what this reference counter is meant to represent:
   *       How many users of the cluster there are.
   *    >> Since we were the only user, and we _most_definitely_
-  *       didn't just grant someone else access to that chunk,
-  *       there should be no (allowed) way the counter could
+  *       didn't just grant someone else access to that cluster,
+  *       there should be no (legal) way the counter could
   *       have increased in the mean time.
   */
  for (iter = cls_min;;) {
   kshmrefcnt_t refcnt = katomic_decfetch(iter->sc_refcnt);
   assert(refcnt != (kshmrefcnt_t)-1);
   if (!refcnt) {
-   size_t new_alloc = katomic_decfetch(self->sre_clustera);
+   size_t new_alloc;
+   /* Some other process may have dropped his reference
+    * to some cluster, reducing it to ONE(1) after we've
+    * decided not to inherit it.
+    * >> We must go through our list of parts to free
+    *    any zero-reference clusters that we didn't inherit.
+    */
+   if __unlikely(!kshmchunk_builder_inheritscluster(&result->sre_chunk,iter)) {
+    kshmregion_freecluster(self,iter);
+   }
+   new_alloc = katomic_decfetch(self->sre_clustera);
    assert(new_alloc != (size_t)-1);
    if (!new_alloc) {
     /* Last cluster has been decref'ed -> Must free the region controller. */
@@ -640,14 +744,16 @@ err_r:
 }
 
 
-struct kpageframe *
-kshmregion_getphysaddr(struct kshmregion *__restrict self,
+__kernel struct kpageframe *
+kshmregion_getphyspage(struct kshmregion *__restrict self,
                        kshmregion_page_t page_index,
                        size_t *__restrict max_pages) {
  struct kshmpart *part;
  kassert_kshmregion(self);
  kassertobj(max_pages);
- assert(page_index < self->sre_chunk.sc_pages);
+ assertf(page_index < self->sre_chunk.sc_pages,
+         "The given page index is out-of-bounds (%Iu >= %Iu)",
+         page_index,self->sre_chunk.sc_pages);
  part = kshmregion_getcluster(self,page_index)->sc_part;
  assert(page_index >= part->sp_start);
  page_index -= part->sp_start;
@@ -659,6 +765,38 @@ kshmregion_getphysaddr(struct kshmregion *__restrict self,
  }
  *max_pages = part->sp_pages-page_index;
  return part->sp_frame+page_index;
+}
+
+__kernel void *
+kshmregion_getphysaddr(struct kshmregion *__restrict self,
+                       kshmregion_addr_t address_offset,
+                       size_t *__restrict max_bytes) {
+ struct kpageframe *frame;
+ kshmregion_addr_t page_address;
+ size_t max_pages;
+ kassert_kshmregion(self);
+ assertf(address_offset < self->sre_chunk.sc_pages*PAGESIZE,
+         "The given address offset is out-of-bounds (%Iu >= %Iu)",
+         address_offset,self->sre_chunk.sc_pages*PAGESIZE);
+ page_address = alignd(address_offset,PAGEALIGN);
+ frame = kshmregion_getphyspage(self,page_address/PAGESIZE,&max_pages);
+ assert(frame);
+ address_offset -= page_address;
+ assert(max_pages);
+ assert(address_offset < PAGESIZE);
+ *max_bytes = (max_pages*PAGESIZE)-address_offset;
+ assert(*max_bytes);
+ return (void *)((uintptr_t)frame+address_offset);
+}
+
+__kernel void *
+kshmregion_getphysaddr_s(struct kshmregion *__restrict self,
+                         kshmregion_addr_t address_offset,
+                         size_t *__restrict max_bytes) {
+ kassert_kshmregion(self);
+ if __unlikely(address_offset >= self->sre_chunk.sc_pages*PAGESIZE)
+ { *max_bytes = 0; return NULL; }
+ return kshmregion_getphysaddr(self,address_offset,max_bytes);
 }
 
 
@@ -703,7 +841,7 @@ kshmbranch_remap(struct kshmbranch const *self,
   for (;;) {
    assert(iter != clusters_start+region->sre_clusterc);
    assert(part_offset < KSHM_CLUSTERSIZE);
-   phys_addr = kshmregion_getphysaddr(region,
+   phys_addr = kshmregion_getphyspage(region,
                                     ((iter-clusters_start)*KSHM_CLUSTERSIZE)+part_offset,
                                       &map_pages);
    assert(phys_addr);
@@ -1105,16 +1243,16 @@ __crit void kshmmap_quit(struct kshmmap *self) {
 
 
 //////////////////////////////////////////////////////////////////////////
-// ===== kshm2
+// ===== kshm
 __crit __nomp kerrno_t
-kshm2_init(struct kshm2 *self, __u16 ldt_size_hint) {
+kshm_init(struct kshm *self, __u16 ldt_size_hint) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassertobj(self);
- kobject_init(self,KOBJECT_MAGIC_SHM2);
+ kobject_init(self,KOBJECT_MAGIC_SHM);
  if __unlikely((self->s_pd = kpagedir_new()) == NULL) return KE_NOMEM;
  if __unlikely(KE_ISERR(error = kpagedir_mapkernel(self->s_pd,0))) goto err_pd;
- if __unlikely(KE_ISERR(error = kshm2_initldt(self,ldt_size_hint))) goto err_pd;
+ if __unlikely(KE_ISERR(error = kshm_initldt(self,ldt_size_hint))) goto err_pd;
  kshmmap_init(&self->s_map);
  return KE_OK;
 err_pd:
@@ -1123,11 +1261,11 @@ err_pd:
 }
 
 __crit __nomp void
-kshm2_quit(struct kshm2 *self) {
+kshm_quit(struct kshm *self) {
  KTASK_CRIT_MARK
- kassert_kshm2(self);
+ kassert_kshm(self);
  kshmmap_quit(&self->s_map);
- kshm2_quitldt(self);
+ kshm_quitldt(self);
  kpagedir_delete(self->s_pd);
 }
 
@@ -1136,14 +1274,14 @@ kshm2_quit(struct kshm2 *self) {
 
 
 __crit __nomp kerrno_t
-kshm2_initfork(struct kshm2 *self, struct kshm2 *right) {
+kshm_initfork(struct kshm *self, struct kshm *right) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassertobj(self);
- kobject_init(self,KOBJECT_MAGIC_SHM2);
+ kobject_init(self,KOBJECT_MAGIC_SHM);
  if __unlikely((self->s_pd = kpagedir_new()) == NULL) return KE_NOMEM;
  if __unlikely(KE_ISERR(error = kpagedir_mapkernel(self->s_pd,0))) goto err_pd;
- if __unlikely(KE_ISERR(error = kshm2_initldtcopy(self,right))) goto err_pd;
+ if __unlikely(KE_ISERR(error = kshm_initldtcopy(self,right))) goto err_pd;
  /* Enable copy-on-write semantics for the original process. */
  kshmmap_init(&self->s_map);
  if (right->s_map.m_root) {
@@ -1152,18 +1290,18 @@ kshm2_initfork(struct kshm2 *self, struct kshm2 *right) {
  }
  return error;
 err_map: kshmmap_quit(&self->s_map);
-         kshm2_quitldt(self);
+         kshm_quitldt(self);
 err_pd:  kpagedir_delete(self->s_pd);
  return error;
 }
 
 
 __crit __nomp kerrno_t
-kshm2_mapregion_inherited(struct kshm2 *__restrict self,
-                          __pagealigned __user void *address,
-                          __ref struct kshmregion *__restrict region,
-                          kshmregion_page_t in_region_page_start,
-                          size_t in_region_page_count) {
+kshm_mapregion_inherited(struct kshm *__restrict self,
+                         __pagealigned __user void *address,
+                         __ref struct kshmregion *__restrict region,
+                         kshmregion_page_t in_region_page_start,
+                         size_t in_region_page_count) {
  struct kshmbranch *branch;
  kerrno_t error;
  KTASK_CRIT_MARK
@@ -1212,11 +1350,11 @@ err_branch:
 }
 
 __crit __nomp kerrno_t
-kshm2_mapregion(struct kshm2 *__restrict self,
-                __pagealigned __user void *address,
-                struct kshmregion *__restrict region,
-                kshmregion_page_t in_region_page_start,
-                size_t in_region_page_count) {
+kshm_mapregion(struct kshm *__restrict self,
+               __pagealigned __user void *address,
+               struct kshmregion *__restrict region,
+               kshmregion_page_t in_region_page_start,
+               size_t in_region_page_count) {
  kerrno_t error;
  struct kshmcluster *cls_min,*cls_max;
  KTASK_CRIT_MARK
@@ -1232,7 +1370,7 @@ kshm2_mapregion(struct kshm2 *__restrict self,
  error = kshmregion_incref(region,cls_min,cls_max);
  if __unlikely(KE_ISERR(error)) return error;
  /* Actually do the mapping. */
- error = kshm2_mapregion_inherited(self,address,region,in_region_page_start,in_region_page_count);
+ error = kshm_mapregion_inherited(self,address,region,in_region_page_start,in_region_page_count);
  if __likely(KE_ISOK(error)) return error;
  /* Must delete all previously created references. */
  kshmregion_decref(region,cls_min,cls_max);
@@ -1241,9 +1379,9 @@ kshm2_mapregion(struct kshm2 *__restrict self,
 
 
 __crit __nomp size_t
-kshm2_touch(struct kshm2 *self,
-            __pagealigned __user void *address,
-            size_t touch_pages) {
+kshm_touch(struct kshm *__restrict self,
+           __pagealigned __user void *address,
+           size_t touch_pages) {
  struct kshmbranch **pbranch,*branch,**pneighbor,**new_branch;
  struct kshmregion *region,*subregion;
  kerrno_t          error;
@@ -1252,7 +1390,7 @@ kshm2_touch(struct kshm2 *self,
  kshmregion_page_t max_page;
  int did_min_split,did_max_split;
  KTASK_CRIT_MARK
- kassert_kshm2(self);
+ kassert_kshm(self);
  assert(isaligned((uintptr_t)address,PAGEALIGN));
  assertf(touch_pages != 0,"Undefined behavior: 'touch_pages' is ZERO(0)");
  /* First step: Figure out the branch at the start address.
@@ -1489,10 +1627,10 @@ end_success:
 
 
 __crit __nomp size_t
-kshm2_unmap(struct kshm2 *self,
-            __pagealigned __user void *address,
-            size_t pages, kshmunmap_flag_t flags) {
- kassert_kshm2(self);
+kshm_unmap(struct kshm *__restrict self,
+           __pagealigned __user void *address,
+           size_t pages, kshmunmap_flag_t flags) {
+ kassert_kshm(self);
  if __unlikely(!pages || !self->s_map.m_root) return 0;
  return kshmbranch_unmap(&self->s_map.m_root,self->s_pd,
                         (uintptr_t)address,
@@ -1502,82 +1640,142 @@ kshm2_unmap(struct kshm2 *self,
                          flags);
 }
 
+__crit __nomp kerrno_t
+kshm_unmapregion(struct kshm *self,
+                 __pagealigned __user void *base_address,
+                 struct kshmregion *region) {
+ struct kshmbranch **pbranch,*branch;
+ kassert_kshm(self);
+ kassert_kshmregion(region);
+ assert(isaligned((uintptr_t)base_address,PAGEALIGN));
+ pbranch = kshmbranch_plocate(&self->s_map.m_root,
+                             (uintptr_t)base_address,NULL);
+ /* Make sure that there really is a branch mapped at the given address. */
+ if __unlikely(!pbranch) return KE_FAULT;
+ branch = *pbranch;
+ kassertobj(branch);
+ /* Make sure that the given address is really the base of that branch. */
+ if __unlikely(base_address != branch->sb_map) return KE_RANGE;
+ /* Finally, make sure that it is the given region, that is mapped here. */
+ if __unlikely(branch->sb_region != region) return KE_PERM;
+ /* OK! Time to delete this thing! */
+ asserte(kshmbranch_popone(pbranch) == branch);
+ kpagedir_unmap(self->s_pd,base_address,branch->sb_rpages);
+ /* Drop references from all affected clusters. */
+ kshmregion_decref(region,
+                   branch->sb_cluster_min,
+                   branch->sb_cluster_max);
+ /* Free the branch. */
+ free(branch);
+ return KE_OK;
+}
+
+
 
 
 __crit __nomp kerrno_t
-kshm2_mapautomatic(struct kshm2 *__restrict self,
-                   /*out*/__pagealigned __user void **__restrict user_address,
-                   struct kshmregion *__restrict region, __pagealigned __user void *hint,
-                   kshmregion_page_t in_region_page_start, size_t in_region_page_count) {
+kshm_mapautomatic(struct kshm *__restrict self,
+                  /*out*/__pagealigned __user void **__restrict user_address,
+                  struct kshmregion *__restrict region, __pagealigned __user void *hint,
+                  kshmregion_page_t in_region_page_start, size_t in_region_page_count) {
  kerrno_t error;
- kassert_kshm2(self);
+ kassert_kshm(self);
  kassertobj(user_address);
  kassert_kshmregion(region);
  KTASK_CRIT_MARK
  if __unlikely((*user_address = kpagedir_findfreerange(
                 self->s_pd,region->sre_chunk.sc_pages,hint
                )) == NULL) return KE_NOSPC;
- error = kshm2_mapregion_inherited(self,*user_address,region,
-                                   in_region_page_start,
-                                   in_region_page_count);
+ error = kshm_mapregion_inherited(self,*user_address,region,
+                                  in_region_page_start,
+                                  in_region_page_count);
  assertf(error != KE_EXISTS,"But we've just found this as an unused memory range...");
  return error;
 }
 __crit __nomp kerrno_t
-kshm2_mapram(struct kshm2 *__restrict self,
-             /*out*/__pagealigned __user void **__restrict user_address,
-             size_t pages, __pagealigned __user void *hint, kshm_flag_t flags) {
+kshm_mapram(struct kshm *__restrict self,
+            /*out*/__pagealigned __user void **__restrict user_address,
+            size_t pages, __pagealigned __user void *hint, kshm_flag_t flags) {
  struct kshmregion *region;
  kerrno_t error;
- kassert_kshm2(self);
- kassertobj(user_address);
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
  assert(pages != 0);
  region = kshmregion_newram(pages,flags);
  if __unlikely(!region) return KE_NOMEM;
- error = kshm2_mapautomatic(self,user_address,region,hint,
-                            0,region->sre_chunk.sc_pages);
+ error = kshm_mapautomatic(self,user_address,region,hint,
+                           0,region->sre_chunk.sc_pages);
  if __unlikely(KE_ISERR(error)) kshmregion_decref_full(region);
  return error;
 }
 __crit __nomp kerrno_t
-kshm2_mapram_linear(struct kshm2 *__restrict self,
-                    /*out*/__pagealigned __kernel void **__restrict kernel_address,
-                    /*out*/__pagealigned __user   void **__restrict user_address,
-                    size_t pages, __pagealigned __user void *hint, kshm_flag_t flags) {
+kshm_mapram_linear(struct kshm *__restrict self,
+                   /*out*/__pagealigned __kernel void **__restrict kernel_address,
+                   /*out*/__pagealigned __user   void **__restrict user_address,
+                   size_t pages, __pagealigned __user void *hint, kshm_flag_t flags) {
  struct kshmregion *region;
  kerrno_t error;
- kassert_kshm2(self);
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
  kassertobj(kernel_address);
- kassertobj(user_address);
  assert(pages != 0);
  region = kshmregion_newlinear(pages,flags);
  if __unlikely(!region) return KE_NOMEM;
  assert(region->sre_chunk.sc_partc == 1);
  *kernel_address = region->sre_chunk.sc_partv[0].sp_frame;
- error = kshm2_mapautomatic(self,user_address,region,hint,
-                            0,region->sre_chunk.sc_pages);
+ error = kshm_mapautomatic(self,user_address,region,hint,
+                           0,region->sre_chunk.sc_pages);
  if __unlikely(KE_ISERR(error)) kshmregion_decref_full(region);
  return error;
 }
 
 __crit __nomp kerrno_t
-kshm2_mapphys(struct kshm2 *__restrict self,
-                     __pagealigned __kernel void *__restrict phys_address,
-              /*out*/__pagealigned __user void **__restrict user_address,
-              __size_t pages, __pagealigned __user void *hint, kshm_flag_t flags) {
+kshm_mapphys(struct kshm *__restrict self,
+                    __pagealigned __kernel void *__restrict phys_address,
+             /*out*/__pagealigned __user void **__restrict user_address,
+             size_t pages, __pagealigned __user void *hint, kshm_flag_t flags) {
  struct kshmregion *region;
  kerrno_t error;
- kassert_kshm2(self);
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
  kassertobj(user_address);
  assert(pages != 0);
  region = kshmregion_newphys(phys_address,pages,flags);
  if __unlikely(!region) return KE_NOMEM;
  assert(region->sre_chunk.sc_partc             == 1);
  assert(region->sre_chunk.sc_partv[0].sp_frame == phys_address);
- error = kshm2_mapautomatic(self,user_address,region,hint,
-                            0,region->sre_chunk.sc_pages);
+ error = kshm_mapautomatic(self,user_address,region,hint,
+                           0,region->sre_chunk.sc_pages);
  if __unlikely(KE_ISERR(error)) kshmregion_decref_full(region);
  return error;
+}
+
+
+__crit kerrno_t
+kshm_devaccess(struct ktask *__restrict caller,
+               __pagealigned __kernel void const *base_address,
+               size_t pages) {
+ __pagealigned void *end_address;
+ assert(isaligned((uintptr_t)base_address,PAGEALIGN));
+ end_address = (void *)((uintptr_t)base_address+pages*PAGESIZE);
+ assert(!end_address || end_address >= base_address);
+#define WHITELIST(start,size) \
+ if ((uintptr_t)base_address >= alignd(start,PAGEALIGN) && \
+     (uintptr_t)end_address  <= align((start)+(size),PAGEALIGN)) return KE_OK;
+ kassert_ktask(caller);
+ /* If the caller has SETMEM access to the kernel-ZERO task,
+  * they obviously have access to all of its memory
+  * (which is the entirety of the real, physical memory). */
+ if (ktask_accesssm_ex(ktask_zero(),caller)) return KE_OK;
+
+#ifdef __x86__
+ /* Special region of memory: The X86 VGA terminal.
+  * TODO: We still shouldn't allow everyone access to this... */
+ WHITELIST(0xB8000,80*25*2);
+#endif
+
+ /* Deny access by default. */
+ return KE_ACCES;
 }
 
 
@@ -1585,13 +1783,13 @@ kshm2_mapphys(struct kshm2 *__restrict self,
 
 
 __nomp __crit __kernel void *
-__kshm2_translateuser_impl(struct kshm2 const *self, __user void const *addr,
-                           size_t *rwbytes, int writeable) {
+__kshm_translateuser_impl(struct kshm const *self, __user void const *addr,
+                          size_t *rwbytes, int writeable) {
  __kernel void *result;
  uintptr_t address_page;
  size_t page_count,rw_request;
  KTASK_CRIT_MARK
- kassert_kshm2(self);
+ kassert_kshm(self);
  kassertobj(rwbytes);
  /* Try the page directory first. */
 again:
@@ -1614,7 +1812,7 @@ again:
   * NOTE: The function itself will round up the pointer to
   *       cluster-borders, but we can easily notice when it
   *       touched something by checking the return value. */
- if __unlikely(!kshm2_touch((struct kshm2 *)self,(void *)address_page,page_count)) return NULL;
+ if __unlikely(!kshm_touch((struct kshm *)self,(void *)address_page,page_count)) return NULL;
  /* Something was touched -> Try to translate the pointer again! */
  goto again;
 }
@@ -1622,11 +1820,11 @@ again:
 
 
 __nomp __crit size_t
-kshm2_copyinuser(struct kshm2 const *self, __user void *dst,
-                 __user void const *src, size_t bytes) {
+kshm_copyinuser(struct kshm const *self, __user void *dst,
+                __user void const *src, size_t bytes) {
  size_t max_dst,max_src; __kernel void *kdst,*ksrc;
- while ((kdst = kshm2_translateuser(self,dst,bytes,&max_dst,1)) != NULL &&
-        (ksrc = kshm2_translateuser(self,src,max_dst,&max_src,0)) != NULL) {
+ while ((kdst = kshm_translateuser(self,dst,bytes,&max_dst,1)) != NULL &&
+        (ksrc = kshm_translateuser(self,src,max_dst,&max_src,0)) != NULL) {
   memcpy(kdst,src,max_src);
   if ((bytes -= max_src) == 0) break;
   *(uintptr_t *)&src += max_src;
@@ -1635,10 +1833,11 @@ kshm2_copyinuser(struct kshm2 const *self, __user void *dst,
  return bytes;
 }
 __nomp __crit size_t
-kshm2_copytouser(struct kshm2 const *self, __user void *dst,
-                 __kernel void const *src, size_t bytes) {
+kshm_copytouser(struct kshm const *self, __user void *dst,
+                __kernel void const *src, size_t bytes) {
  size_t copy_max; __kernel void *kdst;
- while ((kdst = kshm2_translateuser(self,dst,bytes,&copy_max,1)) != NULL) {
+ while ((kdst = kshm_translateuser(self,dst,bytes,&copy_max,1)) != NULL) {
+  assert(copy_max <= bytes);
   memcpy(kdst,src,copy_max);
   if ((bytes -= copy_max) == 0) break;
   *(uintptr_t *)&src += copy_max;
@@ -1647,10 +1846,11 @@ kshm2_copytouser(struct kshm2 const *self, __user void *dst,
  return bytes;
 }
 __nomp __crit size_t
-kshm2_copyfromuser(struct kshm2 const *self, __kernel void *dst,
-                   __user void const *src, size_t bytes) {
+kshm_copyfromuser(struct kshm const *self, __kernel void *dst,
+                  __user void const *src, size_t bytes) {
  size_t copy_max; __kernel void *ksrc;
- while ((ksrc = kshm2_translateuser(self,src,bytes,&copy_max,0)) != NULL) {
+ while ((ksrc = kshm_translateuser(self,src,bytes,&copy_max,0)) != NULL) {
+  assert(copy_max <= bytes);
   memcpy(dst,ksrc,copy_max);
   if ((bytes -= copy_max) == 0) break;
   *(uintptr_t *)&src += copy_max;
@@ -1678,8 +1878,8 @@ void kshm_pf_handler(struct kirq_registers *__restrict regs) {
          "Should have been detected by kernel-task detection");
  /* Acquire the SHM-lock to ensure that nothing gets in our way... */
  if __unlikely(KE_ISERR(kproc_lock(caller_process,KPROC_LOCK_SHM))) goto def_handler;
- touched_pages = kshm2_touch((struct kshm2 *)&caller_process->p_shm, // TODO: Remove this cast one that's actually the type.
-                            (__user void *)alignd((uintptr_t)caller_process,PAGEALIGN),1);
+ touched_pages = kshm_touch(&caller_process->p_shm,
+                           (__user void *)alignd((uintptr_t)caller_process,PAGEALIGN),1);
  kproc_unlock(caller_process,KPROC_LOCK_SHM);
 
  /* If nothing was touched, call the default handler. */
@@ -1706,6 +1906,6 @@ __DECL_END
 #include "shm2-map.c.inl"
 #include "shm2-ldt.c.inl"
 #endif
-
+#endif /* KCONFIG_USE_SHM2 */
 
 #endif /* !__KOS_KERNEL_SHM_C__ */

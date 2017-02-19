@@ -138,10 +138,10 @@ GLOBAL_FUNCTION(ktask_switchimpl):
 	jz .skip_ldt
 
 	/* Different processes -> Load LDT from 'struct kproc *%eax' */
-	lldt (KPROC_OFFSETOF_SHM  \
-	    + KSHM_OFFSETOF_LDT	  \
-	    + KLDT_OFFSETOF_GDTID \
-	)(%eax)
+	//lldt (KPROC_OFFSETOF_SHM  \
+	//    + KSHM_OFFSETOF_LDT   \
+	//    + KLDT_OFFSETOF_GDTID \
+	//)(%eax)
 
 .skip_ldt:
 	/* Update the ESP0 in the cpu's TSS */
@@ -155,6 +155,7 @@ GLOBAL_FUNCTION(ktask_switchimpl):
 	/* Switch to the user-space ESP and set the task's Page directory */
 	movI (KTASK_OFFSETOF_PD)(%ebx), %eax
 	movI (KTASK_OFFSETOF_ESP)(%ebx), %ecx
+
 	movI %eax, %cr3
 	movI %ecx, %esp
 

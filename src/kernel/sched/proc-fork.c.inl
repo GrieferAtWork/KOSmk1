@@ -185,10 +185,21 @@ ktask_copy4fork(struct ktask *__restrict self,
  // >> That is good! So now lets manually allocate a new stack
  kstacksize = ktask_getkstacksize(self);
  // Map linear memory for the kernel stack
+#if KCONFIG_USE_SHM2
+ if __unlikely(KE_ISERR(
+  kshm_mapram_linear(&proc->p_shm,
+                     &result->t_kstack,
+                     &result->t_kstackvp,kstacksize,
+                     KPAGEDIR_MAPANY_HINT_KSTACK,
+                     KSHMREGION_FLAG_LOSEONFORK|
+                     KSHMREGION_FLAG_RESTRICTED
+  ))) goto err_tls;
+#else
  result->t_kstackvp = kshm_mmap_linear(&proc->p_shm,KPAGEDIR_MAPANY_HINT_KSTACK,kstacksize,
                                        PROT_READ|PROT_WRITE|KSHMTAB_FLAG_K,MAP_PRIVATE,
                                        &result->t_kstack);
  if __unlikely(result->t_kstackvp == MAP_FAIL) goto err_tls;
+#endif
  result->t_kstackend  = (__kernel void *)((uintptr_t)result->t_kstack+kstacksize);
  // Make sure the linear memory was allocated correctly
  assert(kstacksize == ktask_getkstacksize(result));

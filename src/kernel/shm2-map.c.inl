@@ -45,11 +45,11 @@ kshmbranch_insert(struct kshmbranch **__restrict pcurr,
 again:
  /* Make sure that the given entry can truly be inserted somewhere within this branch. */
  assertf(newleaf_min >= KSHMBRANCH_MAPMIN(addr_semi,addr_level),
-         "The given leaf cannot be inserted within this branch (%p < %p)",
-         newleaf_min,KSHMBRANCH_MAPMIN(addr_semi,addr_level));
+         "The given leaf cannot be inserted within this branch (%p < %p) (addr_semi %p; level %u)",
+         newleaf_min,KSHMBRANCH_MAPMIN(addr_semi,addr_level),addr_semi,addr_level);
  assertf(newleaf_max <= KSHMBRANCH_MAPMAX(addr_semi,addr_level),
-         "The given leaf cannot be inserted within this branch (%p > %p)",
-         newleaf_max,KSHMBRANCH_MAPMAX(addr_semi,addr_level));
+         "The given leaf cannot be inserted within this branch (%p > %p) (addr_semi %p; level %u)",
+         newleaf_max,KSHMBRANCH_MAPMAX(addr_semi,addr_level),addr_semi,addr_level);
  if ((iter = *pcurr) == NULL) {
   /* Simple case: First leaf. */
   newleaf->sb_min = NULL;

@@ -224,10 +224,14 @@ __STATIC_ASSERT(sizeof(struct ksegment) == 8);
 #define KSEG_KERNEL_DATA_16 KSEG(4) /*< [0x20] Ring #0 16-bit data segment. */
 #define KSEG_KERNELLDT      KSEG(5) /*< [0x28] Symbolic kernel LDT (Usually empty). */
 #define KSEG_CPU0TSS        KSEG(6) /*< [0x30] kcpu_zero()-tss segment. */
-//#define KSEG_USER_CODE    KSEG(7) /*< [0x38] Ring #3 code segment. */
-//#define KSEG_USER_DATA    KSEG(8) /*< [0x40] Ring #3 data segment. */
+#define KSEG_USER_CODE      KSEG(7) /*< [0x38] Ring #3 code segment. */         
+#define KSEG_USER_DATA      KSEG(8) /*< [0x40] Ring #3 data segment. */
 
+#ifdef KSEG_USER_DATA
+#define KSEG_BUILTIN          9
+#else
 #define KSEG_BUILTIN          7
+#endif
 #define KSEG_MAX              0xffff
 #define KSEG_ISBUILTIN(seg) ((seg) >= KSEG(KSEG_BUILTIN))
 

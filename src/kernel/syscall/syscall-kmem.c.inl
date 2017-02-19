@@ -53,6 +53,34 @@ SYSCALL(sys_kmem_map) {
        int   ,K(fd),
        __u64 ,K(offset));
 #endif
+#if KCONFIG_USE_SHM2
+ struct kproc *procself = kproc_self();
+ __ref struct kshmregion *region; size_t pages; kerrno_t error;
+ (void)fd,(void)offset; /* TODO? */
+ /* Fix the given hint. */
+ if (!hint) hint = KPAGEDIR_MAPANY_HINT_UHEAP;
+ else hint = (void *)alignd((uintptr_t)hint,PAGEALIGN);
+ prot &= (KSHMREGION_FLAG_EXEC|KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE); /*< Don't reveil the hidden flags. */
+ /* Calculate the min amount of pages. */
+ pages = ceildiv(length,PAGESIZE);
+ /* Make sure we're always allocating something. */
+ if __unlikely(!pages) pages = 1;
+ if (flags&MAP_SHARED) prot |= KSHMREGION_FLAG_SHARED;
+ KTASK_CRIT_BEGIN_FIRST
+ if (!(flags&MAP_FIXED)) {
+  /* For non-fixed mappings, find a suitable free range. */
+  hint = kpagedir_findfreerange(procself->p_shm.s_pd,pages,hint);
+  if __unlikely(!hint) goto err;
+ }
+ region = kshmregion_newram(pages,prot);
+ if __unlikely(!region) goto err;
+ error = kshm_mapregion_inherited(&procself->p_shm,hint,region,0,
+                                  region->sre_chunk.sc_pages);
+ if __unlikely(KE_ISERR(error)) { kshmregion_decref_full(region); goto err; }
+end: KTASK_CRIT_END
+ RETURN(hint);
+err: hint = (void *)(uintptr_t)-1; goto end; 
+#else
  void *result; struct kfile *fp;
  struct kproc *procself = kproc_self();
  if (!hint) hint = KPAGEDIR_MAPANY_HINT_UHEAP;
@@ -64,6 +92,7 @@ SYSCALL(sys_kmem_map) {
  if (fp) kfile_decref(fp);
  KTASK_CRIT_END
  RETURN(result);
+#endif
 }
 
 /*< _syscall5(kerrno_t,kmem_mapdev,void **,hint_and_result,__size_t,length,int,prot,int,flags,void *,physptr); */
@@ -73,6 +102,51 @@ SYSCALL(sys_kmem_mapdev) {
        int     ,K(prot),
        int     ,K(flags),
        void   *,K(physptr));
+#if KCONFIG_USE_SHM2
+ void *hint,*aligned_physptr;
+ size_t alignment_offset;
+ struct ktask *caller = ktask_self();
+ struct kproc *procself = ktask_getproc(caller);
+ __ref struct kshmregion *region; size_t pages; kerrno_t error;
+ /* Fix the given hint. */
+ aligned_physptr  = (void *)alignd((uintptr_t)physptr,PAGEALIGN);
+ alignment_offset = ((uintptr_t)physptr-(uintptr_t)aligned_physptr);
+ length          += alignment_offset;
+ prot            &= (KSHMREGION_FLAG_EXEC|KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE); /*< Don't reveil the hidden flags. */
+ if __unlikely(u_get(hint_and_result,hint)) RETURN(KE_FAULT);
+ if (flags&MAP_FIXED) {
+  void *aligned_hint;
+  aligned_hint   = (void *)alignd((uintptr_t)hint,PAGEALIGN);
+  if (((uintptr_t)aligned_hint-(uintptr_t)hint) != alignment_offset
+      ) RETURN(KE_INVAL); /*< Impossible alignment requirements. */
+  hint = aligned_hint;
+ }
+ /* Calculate the min amount of pages. */
+ pages = ceildiv(length,PAGESIZE);
+ /* Make sure we're always allocating something. */
+ if __unlikely(!pages) pages = 1;
+ if (flags&MAP_SHARED) prot |= KSHMREGION_FLAG_SHARED;
+ /* Make sure that the specifed area of physical memory doesn't overflow. */
+ if __unlikely(((uintptr_t)aligned_physptr+pages*PAGESIZE) <=
+                (uintptr_t)aligned_physptr) RETURN(KE_OVERFLOW);
+ KTASK_CRIT_BEGIN_FIRST
+ /* Check if the calling process has access to this physical  */
+ error = kshm_devaccess(caller,aligned_physptr,pages);
+ if __unlikely(KE_ISERR(error)) goto end;
+ if (!(flags&MAP_FIXED)) {
+  /* For non-fixed mappings, find a suitable free range. */
+  hint = kpagedir_findfreerange(procself->p_shm.s_pd,pages,hint);
+  if __unlikely(!hint) { error = KE_NOSPC; goto end; }
+ }
+ region = kshmregion_newphys(aligned_physptr,pages,prot);
+ if __unlikely(!region) { error = KE_NOMEM; goto end; }
+ /* Map the new region of memory within the calling process. */
+ error = kshm_mapregion_inherited(&procself->p_shm,hint,region,0,
+                                  region->sre_chunk.sc_pages);
+ if __unlikely(KE_ISERR(error)) kshmregion_decref_full(region);
+end: KTASK_CRIT_END
+ RETURN(error);
+#else
  void *result; kerrno_t error;
  struct kproc *procself = kproc_self();
  if __unlikely(u_get(hint_and_result,result)) RETURN(KE_FAULT);
@@ -87,6 +161,7 @@ SYSCALL(sys_kmem_mapdev) {
  }
  KTASK_CRIT_END
  RETURN(error);
+#endif
 }
 
 

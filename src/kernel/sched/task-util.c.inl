@@ -465,8 +465,16 @@ void ktask_setupuser(struct ktask *self, __user void *useresp, __user void *eip)
  regs.base.gs     =
 #endif
  regs.base.ds     =
+#ifdef KSEG_USER_DATA
+ regs.ss          = KSEG_USER_DATA|3;
+#else
  regs.ss          = self->t_proc->p_regs.pr_ds|3;
+#endif
+#ifdef KSEG_USER_CODE
+ regs.base.cs     = KSEG_USER_CODE|3;
+#else
  regs.base.cs     = self->t_proc->p_regs.pr_cs|3;
+#endif
  regs.base.eip    = (uintptr_t)eip;
  regs.useresp     = (uintptr_t)useresp;
  regs.base.eflags = KARCH_X86_EFLAGS_IF;

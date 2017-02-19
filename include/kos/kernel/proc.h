@@ -804,6 +804,7 @@ extern void kernel_finalize_process(void);
 #endif /* __MAIN_C__ */
 
 #ifndef __INTELLISENSE__
+#if !KCONFIG_USE_SHM2
 #define kshm_kernel() (&kproc_kernel()->p_shm)
 __local __nonnull((1,3)) __size_t
 __kshm_memcpy_k2u_fast(struct kshm const *__restrict self, __user void *dst,
@@ -840,6 +841,7 @@ __kshm_translate_u_fast(struct kshm const *__restrict self, __user void const *a
 #define kshm_memcpy_u2u  __kshm_memcpy_u2u_fast
 #define kshm_translate_1 __kshm_translate_1_fast
 #define kshm_translate_u __kshm_translate_u_fast
+#endif /* !KCONFIG_USE_SHM2 */
 #endif
 
 #ifndef __INTELLISENSE__

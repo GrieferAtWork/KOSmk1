@@ -34,6 +34,7 @@
 #include <kos/kernel/object.h>
 #include <kos/kernel/paging.h>
 #include <kos/kernel/types.h>
+#include <kos/kernel/shm.h>
 
 __DECL_BEGIN
 

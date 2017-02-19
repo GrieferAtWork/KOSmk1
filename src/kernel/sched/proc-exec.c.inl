@@ -42,6 +42,7 @@ __local void kproc_delmods(struct kproc *self) {
  }
 }
 
+#if !KCONFIG_USE_SHM2
 __local void kshm_delusertabs(struct kshm *self, __user void *keeper_stack) {
  struct kshmtabentry *entry; size_t i;
  for (i = 0; i < self->sm_tabc;) {
@@ -57,6 +58,7 @@ __local void kshm_delusertabs(struct kshm *self, __user void *keeper_stack) {
   }
  }
 }
+#endif
 
 #ifdef __DEBUG__
 #define CLOSE_IF_CLOEXEC(x) \
@@ -167,9 +169,17 @@ kproc_exec(struct kshlib *__restrict exec_main,
  //    have to worry about failing to allocate a new one below.
  // >> This also gives user-level code more control by allowing them
  //    to specify a custom stack to be used for exec-ed processes.
+#if KCONFIG_USE_SHM2
+ kshm_unmap(&self->p_shm,NULL,((size_t)caller_thread->t_ustackvp)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
+ kshm_unmap(&self->p_shm,
+            (void *)((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz),
+            ((uintptr_t)0-((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz))/PAGESIZE,
+            KSHMUNMAP_FLAG_NONE);
+#else
  kshm_delusertabs(&self->p_shm,
                  (caller_thread->t_flags&KTASK_FLAG_OWNSUSTACK)
                   ? caller_thread->t_ustackvp : NULL);
+#endif
 
  // Clear TLS Variables (I don't know if we really need to do this, but it feels right...)
  ktlsman_clear(&self->p_tlsman);

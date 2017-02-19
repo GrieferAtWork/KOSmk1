@@ -31,6 +31,7 @@
 #include <math.h>
 #include <malloc.h>
 #include <kos/mod.h>
+#include <kos/kernel/shm2.h>
 
 __DECL_BEGIN
 
@@ -39,14 +40,22 @@ __local __crit kerrno_t
 kproc_loadmodsections(struct kproc *__restrict self,
                       struct kshlib *__restrict module,
                       __pagealigned __user void *__restrict base) {
- struct kshmtab *usedtab;
  struct kshlibsection *iter,*end; kerrno_t error;
+#if !KCONFIG_HAVE_SHM_COPY_ON_WRITE
+ struct kshmtab *usedtab;
+#endif
  KTASK_CRIT_MARK
  end = (iter = module->sh_data.ed_secv)+module->sh_data.ed_secc;
  for (; iter != end; ++iter) {
+#if KCONFIG_USE_SHM2
+  error = kshm_mapfullregion(&self->p_shm,
+                            (void *)((uintptr_t)base+iter->sls_albase),
+                             iter->sls_tab);
+  if __unlikely(KE_ISERR(error)) goto err_seciter;
+#else /* KCONFIG_USE_SHM2 */
 #if !KCONFIG_HAVE_SHM_COPY_ON_WRITE
-  // Without copy-on-write, we need to
-  // create hard copies of writable tabs.
+  /* Without copy-on-write, we need to
+   * create hard copies of writable tabs. */
   if (iter->sls_tab->mt_flags&KSHMTAB_FLAG_W) {
    usedtab = kshmtab_copy(iter->sls_tab);
    error = usedtab ? KE_OK : KE_NOMEM;
@@ -57,10 +66,13 @@ kproc_loadmodsections(struct kproc *__restrict self,
   error = kshm_instab_inherited(&self->p_shm,usedtab,MAP_FIXED|MAP_PRIVATE,
                                (void *)((uintptr_t)base+iter->sls_albase),NULL);
   if __unlikely(KE_ISERR(error)) goto err_usedtab;
+#endif /* !KCONFIG_USE_SHM2 */
  }
  return KE_OK;
+#if !KCONFIG_USE_SHM2
 err_usedtab:
  kshmtab_decref(usedtab);
+#endif
 err_seciter:
  // Unmap all already mapped sections
  while (iter-- != module->sh_data.ed_secv) {
@@ -92,6 +104,11 @@ kproc_unloadmodsections(struct kproc *__restrict self,
               (seciter->sls_base-seciter->sls_albase)+
               (seciter->sls_tab->mt_pages*PAGESIZE),0);
   } else {
+#if KCONFIG_USE_SHM2
+   kshm_unmapregion(&self->p_shm,
+                   (void *)((uintptr_t)base+seciter->sls_albase),
+                    seciter->sls_tab);
+#else
    struct kshmtabentry *addrentry;
    addrentry = kshm_getentry(&self->p_shm,(void *)((uintptr_t)base+seciter->sls_albase));
    // Make sure the SHM entry is still mapped, and also to
@@ -103,6 +120,7 @@ kproc_unloadmodsections(struct kproc *__restrict self,
     // ('kshm_delslot' doesn't drop that reference for us...)
     kshmtab_decref(seciter->sls_tab);
    }
+#endif
   }
  }
 }

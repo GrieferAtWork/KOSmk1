@@ -399,10 +399,19 @@ kpageframe_realloc(__pagealigned struct kpageframe *old_start,
  result = kpageframe_alloc(new_pages);
  if __unlikely(result != (struct kpageframe *)KPAGEFRAME_INVPTR) {
   /* Pfew... */
-  memcpy(result,old_start,old_pages);
+  kpageframe_memcpy(result,old_start,old_pages);
   kpageframe_free(old_start,old_pages);
  }
  return result;
+}
+
+
+void
+kpageframe_memcpy(__pagealigned struct kpageframe *__restrict dst,
+                  __pagealigned struct kpageframe const *__restrict src,
+                  size_t n_pages) {
+ /* TODO: 'rep movsl' (copy 4 bytes at a time). */
+ memcpy(dst,src,n_pages*PAGESIZE);
 }
 
 

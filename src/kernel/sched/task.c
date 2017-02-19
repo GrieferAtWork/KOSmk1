@@ -343,9 +343,16 @@ ktask_newuser(struct ktask *__restrict parent, struct kproc *__restrict ctx,
  kassertobj(useresp);
  assertf(kproc_islocked(ctx,KPROC_LOCK_SHM),
          "The caller must lock the pagedir of the associated task context!");
+#if KCONFIG_USE_SHM2
+ if __unlikely(KE_ISERR(kshm_mapram(&ctx->p_shm,&userstack,ceildiv(ustacksize,PAGESIZE),
+                                    KPAGEDIR_MAPANY_HINT_USTACK,
+                                    KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE
+               ))) return NULL;
+#else
  userstack = kshm_mmapram(&ctx->p_shm,KPAGEDIR_MAPANY_HINT_USTACK,ustacksize,
                           PROT_READ|PROT_WRITE,MAP_PRIVATE);
  if __unlikely(userstack == MAP_FAIL) return NULL;
+#endif
  result = ktask_newuserex(parent,ctx,userstack,ustacksize,kstacksize,
                           KTASK_FLAG_USERTASK|KTASK_FLAG_OWNSUSTACK);
  if __unlikely(!result) kshm_munmap(&ctx->p_shm,userstack,ustacksize,0);
@@ -373,10 +380,20 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict ctx,
  if __unlikely((result = omalloc(struct ktask)) == NULL) goto err_ctx;
  kobject_init(result,KOBJECT_MAGIC_TASK);
  // Allocate and map a linear kernel stack for user tasks
+#if KCONFIG_USE_SHM2
+ if __unlikely(KE_ISERR(kshm_mapram_linear(&ctx->p_shm,
+                                           &result->t_kstack,
+                                           &result->t_kstackvp,
+                                           ceildiv(kstacksize,PAGESIZE),
+                                           KPAGEDIR_MAPANY_HINT_KSTACK,
+                                           KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE
+               ))) goto err_r;
+#else
  result->t_kstackvp = kshm_mmap_linear(&ctx->p_shm,KPAGEDIR_MAPANY_HINT_KSTACK,kstacksize,
                                        PROT_READ|PROT_WRITE|KSHMTAB_FLAG_K,MAP_PRIVATE,
                                        &result->t_kstack);
  if __unlikely(result->t_kstackvp == MAP_FAIL) goto err_r;
+#endif
  result->t_flags       = flags;
  result->t_ustackvp    = ustackaddr;
  result->t_ustacksz    = ustacksize;

@@ -36,6 +36,7 @@
 #include <kos/kernel/task.h>
 #include <kos/kernel/proc.h>
 
+#if !KCONFIG_USE_SHM2
 __DECL_BEGIN
 
 kpageflag_t kshmtab_getpageflags(struct kshmtab const *__restrict self) {
@@ -850,6 +851,7 @@ __DECL_END
 #ifndef __INTELLISENSE__
 #include "shm-ldt.c.inl"
 #endif
+#endif /* !KCONFIG_USE_SHM2 */
 #endif /* __KERNEL__ */
 
 #endif /* !__KOS_KERNEL_SHM_C__ */

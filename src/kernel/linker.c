@@ -312,6 +312,16 @@ set_section_count:
                        ,(header->p_flags&PF_W) ? 'W' : '-'
                        ,(header->p_flags&PF_X) ? 'X' : '-'
                        ,(uintptr_t)header->p_align);
+#if KCONFIG_USE_SHM2
+   section_tab = kshmregion_newram(ceildiv(memsize,PAGESIZE),
+                                   ((header->p_flags&PF_X) ? KSHMREGION_FLAG_EXEC : 0)|
+#if 1 /* For debugging only. */
+                                   KSHMREGION_FLAG_WRITE|
+#else
+                                   ((header->p_flags&PF_W) ? KSHMREGION_FLAG_WRITE : 0)|
+#endif
+                                   ((header->p_flags&PF_R) ? KSHMREGION_FLAG_READ : 0));
+#else
    section_tab = kshmtab_newram(ceildiv(memsize,PAGESIZE),
                                ((header->p_flags&PF_X) ? PROT_EXEC  : 0)|
 #if 1 // TODO: Without this we get #PFs (Why?)
@@ -320,6 +330,7 @@ set_section_count:
                                ((header->p_flags&PF_W) ? PROT_WRITE : KSHMTAB_FLAG_S)|
 #endif
                                ((header->p_flags&PF_R) ? PROT_READ  : 0));
+#endif
    if __unlikely(!section_tab) {
     error = KE_NOMEM;
 err_seciter:
@@ -1058,25 +1069,6 @@ kshlib_spawn(struct kshlib const *__restrict self,
 }
 
 
-struct kshmtab __omni_tab = {
- KOBJECT_INIT(KOBJECT_MAGIC_SHMTAB)
- /* mt_refcnt        */0xffff,
- /* mt_flags         */KSHMTAB_FLAG_R|KSHMTAB_FLAG_W|KSHMTAB_FLAG_X|KSHMTAB_FLAG_S|KSHMTAB_FLAG_K,
- /* mt_pages         */((size_t)-1)/PAGESIZE,
- /* mt_scatter          */{{
- /* mt_scatter.ts_addr  */NULL,
- /* mt_scatter.ts_pages */((size_t)-1)/PAGESIZE,
- /* mt_scatter.ts_next  */NULL}}
-};
-struct kshlibsection __omni_sections[] = {{
- /* sls_tab      */&__omni_tab,
- /* sls_albase   */0,
- /* sls_base     */0,
- /* sls_size     */(size_t)-1,
- /* sls_filebase */0,
- /* sls_filesize */(size_t)-1,
-}};
-
 static struct kinode *
 get_root_inode(struct kfile *__restrict __unused(self)) {
  return kdirent_getnode(kfs_getroot());
@@ -1111,8 +1103,8 @@ struct kshlib __kshlib_kernel = {
  /* sh_privatesym                    */KSYMTABLE_INIT, /*< TODO: Add all kernel symbols to this for debugging information. */
  /* sh_deps                          */KSHLIBLIST_INIT,
  /* sh_data                          */{
- /* sh_data.ed_secc                  */__compiler_ARRAYSIZE(__omni_sections),
- /* sh_data.ed_secv                  */__omni_sections},
+ /* sh_data.ed_secc                  */0,
+ /* sh_data.ed_secv                  */NULL},
  /* sh_reloc                         */{
  /* sh_reloc.r_vecc                  */0,
  /* sh_reloc.r_vecv                  */NULL,

@@ -28,10 +28,10 @@
 
 __DECL_BEGIN
 
-#define PROT_NONE   0x00 /*< Data cannot be accessed. */
-#define PROT_EXEC   0x01 /*< Data can be executed. */
-#define PROT_WRITE  0x02 /*< Data can be written. */
-#define PROT_READ   0x04 /*< Data can be read. */
+#define PROT_NONE     0x00 /*< Data cannot be accessed. */
+#define PROT_EXEC     0x01 /*< [== KSHMREGION_FLAG_EXEC] Data can be executed. */
+#define PROT_WRITE    0x02 /*< [== KSHMREGION_FLAG_WRITE] Data can be written. */
+#define PROT_READ     0x04 /*< [== KSHMREGION_FLAG_READ] Data can be read. */
 
 #define MAP_PRIVATE   0x00 /*< Changes are private. */
 #define MAP_SHARED    0x01 /*< Changes are shared. */

@@ -85,6 +85,17 @@ extern __crit __nonnull((1)) void
 kpageframe_free(__pagealigned struct kpageframe *__restrict start, __size_t n_pages);
 
 //////////////////////////////////////////////////////////////////////////
+// Perform a memcpy of all memory from 'src' to 'dst',
+// copying 'n_pages' full pages of memory.
+// NOTE: Using arch-specific optimizations, this function
+//       may be faster than using regular memcpy().
+// WARNING: Similar to memcpy, the given dst and src may not overlap!
+extern void
+kpageframe_memcpy(__pagealigned struct kpageframe *__restrict dst,
+                  __pagealigned struct kpageframe const *__restrict src,
+                  __size_t n_pages);
+
+//////////////////////////////////////////////////////////////////////////
 // Try to reallocate memory in-place, that is allocate additional
 // pages of memory directly after 'old_start' using 'kpageframe_allocat'.
 // If memory in question is already in use, or not mapped, return 'KPAGEFRAME_INVPTR'.

@@ -25,6 +25,7 @@
 
 #include <kos/config.h>
 #ifdef __KERNEL__
+#if !KCONFIG_USE_SHM2
 #include <sys/mman.h>
 #include <kos/compiler.h>
 #include <kos/types.h>
@@ -95,9 +96,6 @@ kshmtabscatter_copybytes(struct kshmtabscatter const *__restrict dst,
 #define KSHMTAB_FLAG_S       0x0008     /*< The tab can be shared between processes. */
 #define KSHMTAB_FLAG_K       0x0010     /*< The tab can only be accessed by the kernel (Usually means this is a kernel stack). */
 #define KSHMTAB_FLAG_D       0x0020     /*< The tab references device memory that should not be freed. */
-#define KSHMTAB_KIND_LINEAR  0x0000     /*< Memory tab of linearly allocated memory. */
-#define KSHMTAB_KIND_SCATTER 0x1000     /*< Memory tab of scattered memory (acts as a set of linear chunks). */
-//#define KSHMTAB_KIND_FILE    0x2000     /*< Memory tab of file-mapped memory. */
 
 #ifndef __ASSEMBLY__
 typedef __u16 kshmtab_refcnt_t;
@@ -401,6 +399,9 @@ __DECL_END
 #include <kos/kernel/proc.h>
 #endif
 #endif
+#else /* !KCONFIG_USE_SHM2 */
+#include <kos/kernel/shm2.h>
+#endif /* KCONFIG_USE_SHM2 */
 
 #endif /* __KERNEL__ */
 

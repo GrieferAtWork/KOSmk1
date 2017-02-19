@@ -29,10 +29,10 @@
 #include <kos/config.h>
 
 #ifndef _FILE_OFFSET_BITS
-#define _FILE_OFFSET_BITS 32
+#define _FILE_OFFSET_BITS 64
 #endif
 #ifndef _TIME_T_BITS
-#define _TIME_T_BITS 32
+#define _TIME_T_BITS 64
 #endif
 
 #define __HAVE_REENTRANT 1

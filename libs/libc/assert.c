@@ -124,6 +124,7 @@ void __assertion_failedf(__LIBC_DEBUG_PARAMS_ char const *expr,
 #ifdef __DEBUG__
  _printtracebackex_d(skip+1);
 #endif
+ for (;;) {}
 #ifdef __KERNEL__
  {
   struct ktask *task = ktask_self();
