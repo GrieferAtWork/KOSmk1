@@ -37,7 +37,7 @@ SYSCALL(sys_ktime_getnow) {
  struct timespec tmnow;
  kerrno_t error = ktime_getnow(&tmnow);
  if (__likely(KE_ISOK(error)) && 
-     __unlikely(u_setl(ptm,tmnow))
+     __unlikely(copy_to_user(ptm,&tmnow,sizeof(tmnow)))
      ) error = KE_FAULT;
  RETURN(error);
 }
@@ -48,7 +48,7 @@ SYSCALL(sys_ktime_setnow) {
  kerrno_t error;
  struct timespec tmnow;
  KTASK_CRIT_BEGIN_FIRST
- if __unlikely(u_get(ptm,tmnow)) error = KE_FAULT;
+ if __unlikely(copy_from_user(&tmnow,ptm,sizeof(tmnow))) error = KE_FAULT;
  else error = ktime_setnow(&tmnow);
  KTASK_CRIT_END
  RETURN(error);
@@ -58,7 +58,7 @@ SYSCALL(sys_ktime_setnow) {
 SYSCALL(sys_ktime_getcpu) {
  LOAD1(struct timespec *,K(ptm));
  struct timespec tmnow; ktime_getcpu(&tmnow);
- if __unlikely(u_setl(ptm,tmnow)) RETURN(KE_FAULT);
+ if __unlikely(copy_to_user(ptm,&tmnow,sizeof(tmnow))) RETURN(KE_FAULT);
  RETURN(KE_OK);
 }
 

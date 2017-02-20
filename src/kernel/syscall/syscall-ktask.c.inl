@@ -73,7 +73,7 @@ SYSCALL(sys_ktask_getalarm) {
  error = ktask_getalarm(task,&res_abstime);
  ktask_decref(task);
  if (__likely(KE_ISOK(error)) &&
-     __unlikely(u_setl(abstime,res_abstime))
+     __unlikely(copy_to_user(abstime,&res_abstime,sizeof(res_abstime)))
      ) error = KE_FAULT;
 end:
  KTASK_CRIT_END
@@ -496,7 +496,9 @@ err_pdlock:
   }
   error = ktask_join(entry.fd_task,&exitcode);
   ktask_decref(entry.fd_task);
-  if (KE_ISOK(error) && arg && u_setl(arg,exitcode)) error = KE_FAULT;
+  if (KE_ISOK(error) && arg &&
+      copy_to_user(arg,&exitcode,sizeof(exitcode))
+      ) error = KE_FAULT;
   goto end;
  }
  entry.fd_type = KFDTYPE_TASK;
@@ -589,7 +591,9 @@ err_pdlock:
   }
   error = ktask_join(entry.fd_task,&exitcode);
   ktask_decref(entry.fd_task);
-  if (KE_ISOK(error) && arg && u_setl(arg,exitcode)) error = KE_FAULT;
+  if (KE_ISOK(error) && arg &&
+      copy_to_user(arg,&exitcode,sizeof(exitcode))
+      ) error = KE_FAULT;
   goto end;
  }
  entry.fd_type = KFDTYPE_TASK;
@@ -676,10 +680,14 @@ SYSCALL(sys_ktask_exec) {
  kerrno_t error; struct kshlib *lib; char *given_path;
  char const *default_argv[1];
  KTASK_CRIT_BEGIN_FIRST
- given_path = u_strndup_c(path,pathmax);
+ /* TODO: Don't use strndup here. */
+ given_path = user_strndup(path,pathmax);
  if __unlikely(!given_path) { error = KE_NOMEM; goto end; }
  if (uargs) {
-  if (u_get(uargs,args)) { error = KE_FAULT; goto end_path2; }
+  if __unlikely(copy_from_user(&args,uargs,sizeof(args))) {
+   error = KE_FAULT;
+   goto end_path2;
+  }
  } else {
   default_argv[0] = given_path;
   args.ea_argc    = 1;
@@ -715,7 +723,7 @@ SYSCALL(sys_ktask_fexec) {
  fp = kproc_getfdfile(kproc_self(),fd);
  if __unlikely(!fp) { error = KE_BADF; goto end; }
  if (uargs) {
-  if (u_get(uargs,args)) {
+  if __unlikely(copy_from_user(&args,uargs,sizeof(args))) {
    error = KE_FAULT;
 end_fp:
    kfile_decref(fp);

@@ -340,25 +340,24 @@ static __crit kerrno_t
 enumenv_callback(char const *name, size_t name_size,
                  char const *value, size_t value_size,
                  struct enumenv_data *data) {
+ static char const text[2] = {'=','\0'};
  KTASK_CRIT_MARK
  char *buf; size_t bufsize,copysize;
  if (data->iter >= data->end) goto end;
  buf = data->iter;
  bufsize = (size_t)(data->end-buf);
  copysize = min(bufsize,name_size);
- if __unlikely(u_setmem(buf,name,copysize)) return KE_FAULT;
- bufsize -= copysize;
- buf += copysize;
+ if __unlikely(copy_to_user(buf,name,copysize)) return KE_FAULT;
+ bufsize -= copysize,buf += copysize;
  if __likely(bufsize) {
-  if __unlikely(u_setT(buf,char,'=')) return KE_FAULT;
+  if __unlikely(copy_to_user(buf,text,sizeof(char))) return KE_FAULT;
   ++buf,--bufsize;
  }
  copysize = min(bufsize,value_size);
- if __unlikely(u_setmem(buf,value,copysize)) return KE_FAULT;
- bufsize -= copysize;
- buf += copysize;
+ if __unlikely(copy_to_user(buf,value,copysize)) return KE_FAULT;
+ bufsize -= copysize,buf += copysize;
  if __likely(bufsize) {
-  if __unlikely(u_setT(buf,char,'\0')) return KE_FAULT;
+  if __unlikely(copy_to_user(buf,text+1,sizeof(char))) return KE_FAULT;
   ++buf,--bufsize;
  }
 end:
@@ -394,10 +393,11 @@ SYSCALL(sys_kproc_enumenv) {
  KTASK_CRIT_END
 done:
  if __likely(KE_ISOK(error) && data.iter < data.end) {
-  if __unlikely(u_setT(data.iter,char,'\0')) error = KE_FAULT;
+  if __unlikely(copy_to_user(data.iter,"\0",sizeof(char))) error = KE_FAULT;
  }
  if (reqsize && KE_ISOK(error)) {
-  if __unlikely(u_setT(reqsize,size_t,(data.iter-buf)+1)) error = KE_FAULT;
+  size_t sz = (size_t)((data.iter-buf)+1);
+  if __unlikely(copy_to_user(reqsize,&sz,sizeof(sz))) error = KE_FAULT;
  }
  RETURN(error);
 }
@@ -412,7 +412,7 @@ enumcmd_callback(char const *arg, struct enumcmd_data *data) {
  if (data->iter >= data->end) goto end;
  bufsize = (size_t)((data->end-data->iter)*sizeof(char));
  bufsize = min(bufsize,(argsize+1)*sizeof(char));
- if __unlikely(u_setmem(data->iter,arg,bufsize)) return KE_FAULT;
+ if __unlikely(copy_to_user(data->iter,arg,bufsize)) return KE_FAULT;
 end:
  data->iter += argsize+1;
  return KE_OK;
@@ -447,10 +447,11 @@ SYSCALL(sys_kproc_getcmd) {
  KTASK_CRIT_END
 done:
  if __likely(KE_ISOK(error) && data.iter < data.end) {
-  if __unlikely(u_setT(data.iter,char,'\0')) error = KE_FAULT;
+  if __unlikely(copy_to_user(data.iter,"\0",sizeof(char))) error = KE_FAULT;
  }
  if (reqsize && KE_ISOK(error)) {
-  if __unlikely(u_setT(reqsize,size_t,(data.iter-buf)+1)) error = KE_FAULT;
+  size_t sz = (size_t)((data.iter-buf)+1);
+  if __unlikely(copy_to_user(reqsize,&sz,sizeof(sz))) error = KE_FAULT;
  }
  RETURN(error);
 }

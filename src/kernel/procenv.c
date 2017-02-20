@@ -373,18 +373,18 @@ kprocenv_setargv_cu(struct kprocenv *__restrict self, size_t max_argc,
  for (; max_argc; --max_argc,++curr_argc,++argv) {
   __user char const *user_arg;
   size_t user_maxlen;
-  if (u_get(argv,user_arg) != 0) goto err_argiter_fault;
+  if __unlikely(copy_from_user(&user_arg,argv,sizeof(user_arg))) goto err_argiter_fault;
   if __unlikely(!user_arg) break; /*< Terminate on NULL-argument. */
   if (arglen_src) {
-   if (u_get(arglen_src,user_maxlen) != 0) goto err_argiter_fault;
+   if __unlikely(copy_from_user(&user_maxlen,arglen_src,sizeof(user_maxlen))) goto err_argiter_fault;
    ++arglen_src;
   } else user_maxlen = (size_t)-1;
-  arglen = u_strnlen(user_arg,user_maxlen)*sizeof(char);
+  arglen  = user_strnlen(user_arg,user_maxlen)*sizeof(char);
   newmem += arglen+sizeof(char);
   if __unlikely(newmem+sizeof(char *) >= self->pe_memmax) goto err_argiter_acces;
   arg = (char *)malloc(newmem+sizeof(char));
   if __unlikely(!arg) goto err_argiter_nomem;
-  if __unlikely(u_getmem(user_arg,arg,arglen) != 0) { free(arg); goto err_argiter_fault; }
+  if __unlikely(copy_from_user(arg,user_arg,arglen)) { free(arg); goto err_argiter_fault; }
   arg[arglen] = '\0';
   //printf("ARG: %s\n",arg);
   if (curr_argc == curr_arga) {

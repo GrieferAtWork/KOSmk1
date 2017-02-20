@@ -62,7 +62,7 @@ SYSCALL(sys_kmem_map) {
  /* Fix the given hint. */
  if (!hint) hint = KPAGEDIR_MAPANY_HINT_UHEAP;
  else hint = (void *)alignd((uintptr_t)hint,PAGEALIGN);
- prot &= (KSHMREGION_FLAG_EXEC|KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE); /*< Don't reveil the hidden flags. */
+ prot &= (KSHMREGION_FLAG_EXEC|KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE); /*< Don't reveal the hidden flags. */
  if (flags&MAP_SHARED) prot |= KSHMREGION_FLAG_SHARED;
  if (flags&_MAP_LOOSE) prot |= KSHMREGION_FLAG_LOSEONFORK;
  /* Calculate the min amount of pages. */
@@ -93,7 +93,7 @@ err_unlock:
  struct kproc *procself = kproc_self();
  if (!hint) hint = KPAGEDIR_MAPANY_HINT_UHEAP;
  else hint = (void *)alignd((uintptr_t)hint,PAGEALIGN);
- prot &= (PROT_READ|PROT_WRITE|PROT_EXEC); /*< Don't reveil the hidden flags. */
+ prot &= (PROT_READ|PROT_WRITE|PROT_EXEC); /*< Don't reveal the hidden flags. */
  KTASK_CRIT_BEGIN_FIRST
  fp = (flags&MAP_ANONYMOUS) ? NULL : kproc_getfdfile(procself,fd);
  result = kshm_mmap(&procself->p_shm,hint,length,prot,flags,fp,offset);
@@ -120,10 +120,10 @@ SYSCALL(sys_kmem_mapdev) {
  aligned_physptr  = (void *)alignd((uintptr_t)physptr,PAGEALIGN);
  alignment_offset = ((uintptr_t)physptr-(uintptr_t)aligned_physptr);
  length          += alignment_offset;
- prot            &= (KSHMREGION_FLAG_EXEC|KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE); /*< Don't reveil the hidden flags. */
+ prot            &= (KSHMREGION_FLAG_EXEC|KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE); /*< Don't reveal the hidden flags. */
  if (flags&MAP_SHARED) prot |= KSHMREGION_FLAG_SHARED;
  if (flags&_MAP_LOOSE) prot |= KSHMREGION_FLAG_LOSEONFORK;
- if __unlikely(u_get(hint_and_result,hint)) RETURN(KE_FAULT);
+ if __unlikely(copy_from_user(&hint,hint_and_result,sizeof(hint))) RETURN(KE_FAULT);
  if (flags&MAP_FIXED) {
   void *aligned_hint;
   aligned_hint    = (void *)alignd((uintptr_t)hint,PAGEALIGN);
@@ -174,13 +174,14 @@ end: KTASK_CRIT_END
 #else
  void *result; kerrno_t error;
  struct kproc *procself = kproc_self();
- if __unlikely(u_get(hint_and_result,result)) RETURN(KE_FAULT);
+ if __unlikely(copy_from_user(&result,hint_and_result,sizeof(result))) RETURN(KE_FAULT);
  if (!result) result = KPAGEDIR_MAPANY_HINT_UDEV;
  else result = (void *)alignd((uintptr_t)result,PAGEALIGN);
- prot &= (PROT_READ|PROT_WRITE|PROT_EXEC); /*< Don't reveil the hidden flags. */
+ prot &= (PROT_READ|PROT_WRITE|PROT_EXEC); /*< Don't reveal the hidden flags. */
  KTASK_CRIT_BEGIN_FIRST
  error = kshm_mmapdev(&procself->p_shm,&result,length,prot,flags,physptr);
- if (__likely(KE_ISOK(error)) && __unlikely(u_set(hint_and_result,result))) {
+ if (__likely(KE_ISOK(error)) &&
+     __unlikely(copy_to_user(hint_and_result,&result,sizeof(result)))) {
   kshm_munmap(&procself->p_shm,result,length,0);
   error = KE_FAULT;
  }
@@ -199,8 +200,19 @@ SYSCALL(sys_kmem_unmap) {
  KTASK_CRIT_BEGIN_FIRST
  error = kproc_lock(procself,KPROC_LOCK_SHM);
  if __unlikely(KE_ISERR(error)) goto end;
- /* Don't allow unmapping the kernel pages. */
+ /* REMINDER: Don't allow unmapping of kernel SHM branches. */
+#if KCONFIG_HAVE_SHM2
+ {
+  uintptr_t aligned_start = alignd((uintptr_t)addr,PAGEALIGN);
+  uintptr_t aligned_length = length+((uintptr_t)addr-aligned_start);
+  error = kshm_unmap(&procself->p_shm,
+                    (__user void *)aligned_start,
+                     ceildiv(aligned_length,PAGESIZE),
+                     KSHMUNMAP_FLAG_NONE);
+ }
+#else
  error = kshm_munmap(&procself->p_shm,addr,length,0);
+#endif
  kproc_unlock(procself,KPROC_LOCK_SHM);
 end:
  KTASK_CRIT_END

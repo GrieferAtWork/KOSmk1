@@ -32,37 +32,73 @@
 __DECL_BEGIN
 
 __crit size_t
-u_getmem_c(__user void const *addr,
-           __kernel void *__restrict buf,
-           size_t bufsize) {
- size_t result; struct kproc *proc;
- struct ktask *caller = ktask_self();
+__copy_from_user_c(__kernel void *__restrict dst,
+                   __user void const *src,
+                   size_t bytes) {
+ size_t result;
+ struct kproc *proc = kproc_self();
  KTASK_CRIT_MARK
- //if (caller->t_currpd == kpagedir_kernel()) { memcpy(buf,addr,bufsize); return 0; }
- proc = ktask_getproc(caller);
  if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) return 0;
- result = kshm_memcpy_u2k(&proc->p_shm,buf,addr,bufsize)-bufsize;
+ result = kshm_copyfromuser(&proc->p_shm,dst,src,bytes);
  kproc_unlock(proc,KPROC_LOCK_SHM);
  return result;
 }
 __crit size_t
-u_setmem_c(__user void *addr,
-           __kernel void const *__restrict buf,
-           size_t bufsize) {
- size_t result; struct kproc *caller = kproc_self();
+__copy_to_user_c(__user void *dst,
+                 __kernel void const *__restrict src,
+                 size_t bytes) {
+ size_t result;
+ struct kproc *caller = kproc_self();
  KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return 0;
- result = kshm_memcpy_k2u(&caller->p_shm,addr,buf,bufsize)-bufsize;
+ result = kshm_copytouser(&caller->p_shm,dst,src,bytes);
  kproc_unlock(caller,KPROC_LOCK_SHM);
  return result;
 }
-__crit __kernel char *u_strndup_c(__user char const *s, size_t maxchars) {
+__crit size_t
+__copy_in_user_c(__user void *dst,
+                 __user void const *__restrict src,
+                 size_t bytes) {
+ size_t result;
+ struct kproc *caller = kproc_self();
+ KTASK_CRIT_MARK
+ if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return 0;
+ result = kshm_copyinuser(&caller->p_shm,dst,src,bytes);
+ kproc_unlock(caller,KPROC_LOCK_SHM);
+ return result;
+}
+
+
+
+__crit __user void *
+__user_memchr_c(__user void const *p, int needle, size_t bytes) {
+ size_t bytes_max; __kernel void *kp;
+ __user void *result = NULL,*iter = (void *)p;
+ struct kproc *caller = kproc_self();
+ KTASK_CRIT_MARK
+ if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return NULL;
+ while ((kp = kshm_translateuser(&caller->p_shm,iter,bytes,&bytes_max,0)) != NULL) {
+  assert(bytes_max <= bytes);
+  if ((result = memchr(kp,needle,bytes_max)) != NULL) {
+   /* Convert the kernel-pointer into a user-pointer. */
+   result = (__user void *)((uintptr_t)p+((uintptr_t)result-(uintptr_t)kp));
+   break;
+  }
+  if ((bytes -= bytes_max) == 0) break;
+  *(uintptr_t *)&iter += bytes_max;
+ }
+ kproc_unlock(caller,KPROC_LOCK_SHM);
+ return result;
+}
+
+__crit __kernel char *
+__user_strndup_c(__user char const *s, size_t maxchars) {
  size_t bufsize; char *result;
  KTASK_CRIT_MARK
- bufsize = u_strnlen(s,maxchars);
+ bufsize = user_strnlen(s,maxchars);
  result = (char *)malloc((bufsize+1)*sizeof(char));
  if __unlikely(!result) return NULL;
- asserte(u_getmem(s,result,bufsize) == 0);
+ bufsize -= copy_from_user(result,s,bufsize);
  result[bufsize] = '\0';
 #if 0
  {
@@ -83,7 +119,7 @@ __crit __kernel char *u_strndup_c(__user char const *s, size_t maxchars) {
 #define OPERATION_BUFFERSIZE  64
 
 
-__crit size_t u_strlen_c(__user char const *s) {
+__crit size_t __user_strlen_c(__user char const *s) {
  struct kproc *caller = kproc_self();
  size_t result = 0,partmaxsize,partsize; char *addr;
  KTASK_CRIT_MARK
@@ -100,7 +136,7 @@ __crit size_t u_strlen_c(__user char const *s) {
  kproc_unlock(caller,KPROC_LOCK_SHM);
  return result;
 }
-__crit size_t u_strnlen_c(__user char const *s, size_t maxchars) {
+__crit size_t __user_strnlen_c(__user char const *s, size_t maxchars) {
  struct kproc *caller = kproc_self();
  size_t result = 0,partmaxsize,partsize; char *addr;
  KTASK_CRIT_MARK

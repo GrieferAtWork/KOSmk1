@@ -507,9 +507,8 @@ void kernel_initialize_paging(void) {
  __u32 cr0; __asm_volatile__("movl %%cr0, %0" : "=r" (cr0));
  cr0 |= WP; __asm_volatile__("movl %0, %%cr0" : : "r" (cr0));
 }
+
 #else
-// TODO: The kernel page table should be allocated dynamically
-//    >> That way, we can reduce the static size of the kernel _A_ _LOT_
 static x86_pte __attribute__((__aligned__(PAGEALIGN))) __kernel_pagetables[X86_PDE4DIC*X86_PTE4PDE];
 __attribute__((__aligned__(4096))) struct kpagedir __kpagedir_kernel;
 
@@ -569,10 +568,7 @@ void kernel_make_ro_immutable(void) {
 void kernel_initialize_paging(void) {
  mmu_init_pt();
  mmu_init_pd();
- //kernel_make_ro_immutable();
- // TODO: When initializing RAM, make anything that isn't
- //       part of it, or the kernel non-present!
- // TODO: Allocate kernel page tables dynamically (save a lot of mem that may...)
+ kernel_make_ro_immutable();
  kpagedir_makecurrent(kpagedir_kernel());
  __arch_enablepaging();
 #define WP (1 << 16)

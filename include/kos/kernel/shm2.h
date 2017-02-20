@@ -135,7 +135,7 @@ typedef __u32 kshmrefcnt_t;
 #define KSHMREGION_FLAG_RESTRICTED 0x0020 /*< This region of memory is restricted, meaning that the user cannot use 'munmap()' to delete it. (NOTE: Superceided by 'KSHMREGION_FLAG_LOSEONFORK'). */
 #define KSHMREGION_FLAG_NOFREE     0x0040 /*< Don't free memory from this chunk when the reference counter hits ZERO(0). - Used for 1-1 physical/device memory mappings. */
 #define KSHMREGION_FLAG_NOCOPY     0x0080 /*< Don't hard-copy memory from this chunk, but alias it when set in 'right->mt_flags' in 'kshmchunk_hardcopy'. */
-//#define KSHMREGION_FLAG_ZERO       0x0100 /*< TODO: Symbolic region of potentially infinite size; fill-on-read; filled only with zeros (useful for bss sections). */
+//#define KSHMREGION_FLAG_ZERO     0x0100 /*< TODO: Symbolic region of potentially infinite size; fill-on-read; filled only with zeros (useful for bss sections). */
 
 #define KSHM_FLAG_SIZEOF  2
 #ifndef __ASSEMBLY__

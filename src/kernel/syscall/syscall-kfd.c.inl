@@ -338,6 +338,7 @@ SYSCALL(sys_kfd_readlink) {
  struct kfdentry entry; kerrno_t error;
  __ref struct kinode *filenode;
  struct kdirentname link_name;
+ size_t link_req;
  KTASK_CRIT_BEGIN_FIRST
  if __unlikely(KE_ISERR(error = kproc_getfd(caller,fd,&entry))) goto end;
  if __unlikely(entry.fd_type != KFDTYPE_FILE) { error = KE_NOFILE; kfdentry_quit(&entry); goto end; }
@@ -347,13 +348,16 @@ SYSCALL(sys_kfd_readlink) {
  error = kinode_readlink(filenode,&link_name);
  kinode_decref(filenode);
  if __unlikely(KE_ISERR(error)) goto end;
- if (reqsize && u_set(reqsize,(link_name.dn_size+1)*sizeof(char))) goto err_fault;
+ link_req = (link_name.dn_size+1)*sizeof(char);
+ if (reqsize && copy_to_user(reqsize,&link_req,sizeof(link_req))) goto err_fault;
  if (link_name.dn_name[link_name.dn_size] == '\0') {
-  if (u_setmem(buf,link_name.dn_name,min(bufsize,(link_name.dn_size+1)*sizeof(char)))) goto err_fault;
+  if (copy_to_user(buf,link_name.dn_name,min(bufsize,link_req))) goto err_fault;
  } else {
   size_t link_size = link_name.dn_size*sizeof(char);
-  if (u_setmem(buf,link_name.dn_name,min(bufsize,link_size))) goto err_fault;
-  if (link_size < bufsize && u_setT((void *)((uintptr_t)buf+link_size),char,'\0')) goto err_fault;
+  if (copy_to_user(buf,link_name.dn_name,min(bufsize,link_size))) goto err_fault;
+  if (link_size < bufsize &&
+      copy_to_user((void *)((uintptr_t)buf+link_size),
+                   "\0",sizeof(char))) goto err_fault;
  }
 end_name: kdirentname_quit(&link_name);
 end: KTASK_CRIT_END
@@ -437,8 +441,8 @@ SYSCALL(sys_kfd_openpty) {
  fd_master.fd_attr = KFD_ATTR(KFDTYPE_FILE,KFD_FLAG_NONE);
  fd_slave.fd_attr = KFD_ATTR(KFDTYPE_FILE,KFD_FLAG_NONE);
  KTASK_CRIT_BEGIN_FIRST
- if (termp && u_get(termp,ios)) RETURN(KE_FAULT);
- if (winp && u_get(winp,size)) RETURN(KE_FAULT);
+ if (termp && copy_from_user(&ios,termp,sizeof(ios))) RETURN(KE_FAULT);
+ if (winp && copy_from_user(&size,winp,sizeof(size))) RETURN(KE_FAULT);
  /* Create the actual filesystem-compatible PTY device. */
  fs_pty = kfspty_new(termp ? &ios : NULL,winp ? &size : NULL);
  if __unlikely(!fs_pty) goto err_nomem;
@@ -455,10 +459,10 @@ SYSCALL(sys_kfd_openpty) {
  /* Register the Master and Slave files as valid descriptors in the calling process. */
  error = kproc_insfd_inherited(proc_self,&fno_slave,&fd_slave);
  if __unlikely(KE_ISERR(error)) goto err4;
- if __unlikely(u_set(aslave,fno_slave)) { error = KE_FAULT; goto err3; }
+ if __unlikely(copy_to_user(aslave,&fno_slave,sizeof(fno_slave))) { error = KE_FAULT; goto err3; }
  error = kproc_insfd_inherited(proc_self,&fno_master,&fd_master);
  if __unlikely(KE_ISERR(error)) goto err3;
- if __unlikely(u_set(amaster,fno_master)) error = KE_FAULT;
+ if __unlikely(copy_to_user(amaster,&fno_master,sizeof(fno_master))) error = KE_FAULT;
  /* Do some finalizing cleanup... */
 end_fspty: kinode_decref((struct kinode *)fs_pty);
 end:

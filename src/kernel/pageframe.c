@@ -123,7 +123,6 @@ static void x64_reserve_realmode_bootstrap(void) {
 
 
 void kernel_initialize_raminfo(void) {
- extern int kernel_initialize_dlmalloc(void);
  memory_map_t *iter,*end;
  size_t cmdline_length;
  char  *cmdline_addr;
@@ -195,7 +194,10 @@ nocmdline:
   *       how many pages we currently have allocated. */
  total_allocated_pages = cmdline_page_c;
 #endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
- kernel_initialize_dlmalloc();
+ {
+  extern int kernel_initialize_dlmalloc(void);
+  kernel_initialize_dlmalloc();
+ }
  // Dynamic memory (including the kernel heap) is now initialized!
  // NOTE: The pages containing our cmdline are preserved
  assert((cmdline_addr != NULL) == (cmdline_page_v != NULL));

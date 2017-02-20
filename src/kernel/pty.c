@@ -133,7 +133,7 @@ kerrno_t kpty_ioctl(struct kpty *self, kattr_t cmd, __user void *arg) {
 
   case TIOCGWINSZ:
    if __likely(KE_ISOK(error = krwlock_beginread(&self->ty_lock))) {
-    error = u_setl(arg,self->ty_size) ? KE_FAULT : KE_OK;
+    error = copy_to_user(arg,&self->ty_size,sizeof(self->ty_size)) ? KE_FAULT : KE_OK;
     krwlock_endread(&self->ty_lock);
    }
    break;
@@ -141,7 +141,7 @@ kerrno_t kpty_ioctl(struct kpty *self, kattr_t cmd, __user void *arg) {
   {
    struct winsize new_winsize;
   case TIOCSWINSZ:
-   if __unlikely(u_get(arg,new_winsize)) goto err_fault;
+   if __unlikely(copy_from_user(&new_winsize,arg,sizeof(new_winsize))) goto err_fault;
    if __likely(KE_ISOK(error = krwlock_beginwrite(&self->ty_lock))) {
     memcpy(&self->ty_size,&new_winsize,sizeof(struct winsize));
     // TODO: Send SIGWINCH to ty_fproc
@@ -152,7 +152,7 @@ kerrno_t kpty_ioctl(struct kpty *self, kattr_t cmd, __user void *arg) {
 
   case TCGETS:
    if __likely(KE_ISOK(error = krwlock_beginread(&self->ty_lock))) {
-    error = u_setl(arg,self->ty_ios) ? KE_FAULT : KE_OK;
+    error = copy_to_user(arg,&self->ty_ios,sizeof(self->ty_ios)) ? KE_FAULT : KE_OK;
     krwlock_endread(&self->ty_lock);
    }
    break;
@@ -162,7 +162,7 @@ kerrno_t kpty_ioctl(struct kpty *self, kattr_t cmd, __user void *arg) {
   case TCSETS:
   case TCSETSW:
   case TCSETSF:
-   if __unlikely(u_get(arg,new_ios)) goto err_fault;
+   if __unlikely(copy_from_user(&new_ios,arg,sizeof(new_ios))) goto err_fault;
    if __likely(KE_ISOK(error = krwlock_beginwrite(&self->ty_lock))) {
     if (!(new_ios.c_lflag & ICANON) && (self->ty_ios.c_lflag & ICANON)) {
      /* When switching out of line-buffered mode, first dump the canon. */
@@ -180,7 +180,7 @@ end_setios:
    pid_t pid;
    struct kproc *newproc,*oldproc;
   case TIOCSPGRP:
-   if __unlikely(u_get(arg,pid)) goto err_fault;
+   if __unlikely(copy_from_user(&pid,arg,sizeof(pid))) goto err_fault;
    newproc = (struct kproc *)kproclist_getproc(pid);
    // NOTE: To not undermine the idea of the GETPROP/VISIBILITY barrier,
    //       we don't differentiate between invisible and invalid PIDs.
@@ -201,7 +201,7 @@ end_setios:
    if __likely(KE_ISOK(error = krwlock_beginread(&self->ty_lock))) {
     respid = self->ty_fproc ? self->ty_fproc->p_pid : PID_MAX;
     krwlock_endread(&self->ty_lock);
-    if __unlikely(u_setl(arg,respid)) error = KE_FAULT;
+    if __unlikely(copy_to_user(arg,&respid,sizeof(respid))) error = KE_FAULT;
    }
    break;
   }
@@ -213,9 +213,7 @@ end_setios:
 end:
  KTASK_CRIT_END
  return error;
-err_fault:
- error = KE_FAULT;
- goto end;
+err_fault: error = KE_FAULT; goto end;
 }
 
 __local kerrno_t
@@ -629,7 +627,7 @@ kfspty_insnod(struct kfspty *self,
  master_name_size = (size_t)sprintf(master_name,"/dev/tty%I32u",resnum);
  slave_name_size  = (size_t)sprintf(slave_name,"/dev/ttyS%I32u",resnum);
  if (master_name_buf &&
-     u_setmem(master_name_buf,master_name,master_name_size)
+     copy_to_user(master_name_buf,master_name,master_name_size)
      ) { error = KE_FAULT; goto err_root; }
  /* Actually Insert the nodes! */
  error = kdirent_insnodat(&env,master_name,master_name_size,

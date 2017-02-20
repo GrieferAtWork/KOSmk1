@@ -25,13 +25,13 @@
 
 #include <kos/config.h>
 #ifdef __KERNEL__
+#include <kos/kernel/features.h>
 #if !KCONFIG_HAVE_SHM2
 #include <sys/mman.h>
 #include <kos/compiler.h>
 #include <kos/types.h>
 #include <kos/kernel/gdt.h>
 #include <kos/errno.h>
-#include <kos/kernel/features.h>
 #include <kos/kernel/object.h>
 #include <kos/kernel/paging.h>
 

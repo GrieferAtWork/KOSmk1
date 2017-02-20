@@ -78,8 +78,13 @@ err_usedtab:
 err_seciter:
  // Unmap all already mapped sections
  while (iter-- != module->sh_data.ed_secv) {
+#if KCONFIG_HAVE_SHM2
+  kshm_unmap(&self->p_shm,(void *)((uintptr_t)base+iter->sls_albase),
+             iter->sls_tab->mt_pages,KSHMUNMAP_FLAG_NONE);
+#else /* KCONFIG_HAVE_SHM2 */
   kshm_munmap(&self->p_shm,(void *)((uintptr_t)base+iter->sls_albase),
               iter->sls_tab->mt_pages*PAGESIZE,0);
+#endif /* !KCONFIG_HAVE_SHM2 */
  }
  return error;
 }
@@ -102,9 +107,17 @@ kproc_unloadmodsections(struct kproc *__restrict self,
   if (seciter->sls_tab->mt_flags&KSHMTAB_FLAG_W) {
    // Force unmap writable sections (Due to copy-on-write,
    // they may have been re-mapped. - An operation we can't track)
+#if KCONFIG_HAVE_SHM2
+   kshm_unmap(&self->p_shm,
+             (void *)((uintptr_t)base+seciter->sls_albase),
+             (seciter->sls_base-seciter->sls_albase)+
+             (seciter->sls_tab->mt_pages),
+              KSHMUNMAP_FLAG_NONE);
+#else
    kshm_munmap(&self->p_shm,(void *)((uintptr_t)base+seciter->sls_albase),
               (seciter->sls_base-seciter->sls_albase)+
               (seciter->sls_tab->mt_pages*PAGESIZE),0);
+#endif
   } else {
 #if KCONFIG_HAVE_SHM2
    kshm_unmapregion(&self->p_shm,

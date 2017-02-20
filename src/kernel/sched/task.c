@@ -356,7 +356,11 @@ ktask_newuser(struct ktask *__restrict parent, struct kproc *__restrict ctx,
 #endif
  result = ktask_newuserex(parent,ctx,userstack,ustacksize,kstacksize,
                           KTASK_FLAG_USERTASK|KTASK_FLAG_OWNSUSTACK);
+#if KCONFIG_HAVE_SHM2
+ if __unlikely(!result) kshm_unmap(&ctx->p_shm,userstack,ceildiv(ustacksize,PAGESIZE),0);
+#else
  if __unlikely(!result) kshm_munmap(&ctx->p_shm,userstack,ustacksize,0);
+#endif
  else *useresp = (__user void *)((uintptr_t)userstack+ustacksize);
  return result;
 }
@@ -443,7 +447,13 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  if __unlikely(result->t_parid == (size_t)-1) goto err_ctx2;
  return result;
 err_ctx2: kproc_deltask(proc,result);
+#if KCONFIG_HAVE_SHM2
+err_map:  kshm_unmap(&proc->p_shm,result->t_kstackvp,
+                     ceildiv(ktask_getkstacksize(result),PAGESIZE),
+                     KSHMUNMAP_FLAG_RESTRICTED);
+#else
 err_map:  kshm_munmap(&proc->p_shm,result->t_kstackvp,ktask_getkstacksize(result),1);
+#endif
 err_r:    free(result);
 err_ctx:  kproc_decref(proc);
 err_par:  ktask_decref(parent);
@@ -792,14 +802,26 @@ __local __crit void ktask_releasedata(struct ktask *__restrict self) {
     assert(isaligned((uintptr_t)self->t_kstack,PAGEALIGN));
     if __likely(KE_ISOK(lockerror)) {
      assert(self->t_kstack == kpagedir_translate(self->t_proc->p_shm.sm_pd,self->t_kstackvp));
+#if KCONFIG_HAVE_SHM2
+     kshm_unmap(&self->t_proc->p_shm,self->t_kstackvp,
+                ceildiv(ktask_getkstacksize(self),PAGESIZE),
+                KSHMUNMAP_FLAG_RESTRICTED);
+#else
      kshm_munmap(&self->t_proc->p_shm,self->t_kstackvp,ktask_getkstacksize(self),1);
+#endif
     }
     self->t_kstackvp = self->t_kstack = self->t_kstackend = NULL;
    }
    // Unmap the user stack of the tasks
    if (self->t_ustackvp && self->t_flags&KTASK_FLAG_OWNSUSTACK) {
     if __likely(KE_ISOK(lockerror)) {
+#if KCONFIG_HAVE_SHM2
+     kshm_unmap(&self->t_proc->p_shm,self->t_ustackvp,
+                ceildiv(self->t_ustacksz,PAGESIZE),
+                KSHMUNMAP_FLAG_RESTRICTED);
+#else
      kshm_munmap(&self->t_proc->p_shm,self->t_ustackvp,self->t_ustacksz,0);
+#endif
     }
 #ifdef __DEBUG__
     self->t_flags &= ~(KTASK_FLAG_OWNSUSTACK);

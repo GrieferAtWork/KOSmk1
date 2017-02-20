@@ -45,7 +45,7 @@ SYSCALL(sys_kmod_open) {
  error = kproc_insmod(proc_self,lib,&resid);
  kshlib_decref(lib);
  if (__likely(KE_ISOK(error)) &&
-     __unlikely(u_setl(modid,resid))) {
+     __unlikely(copy_to_user(modid,&resid,sizeof(resid)))) {
   kproc_delmod(proc_self,resid);
   error = KE_FAULT;
  }
@@ -71,7 +71,7 @@ SYSCALL(sys_kmod_fopen) {
  error = kproc_insmod(proc_self,lib,&resid);
  kshlib_decref(lib);
  if (__likely(KE_ISOK(error)) &&
-     __unlikely(u_setl(modid,resid))) {
+     __unlikely(copy_to_user(modid,&resid,sizeof(resid)))) {
   kproc_delmod(proc_self,resid);
   error = KE_FAULT;
  }

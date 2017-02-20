@@ -267,7 +267,13 @@ err_parid:
  ktask_lock(self,KTASK_LOCK_CHILDREN);
  asserte(ktasklist_erase(&self->t_children,result->t_parid) == result);
  ktask_unlock(self,KTASK_LOCK_CHILDREN);
+#if KCONFIG_HAVE_SHM2
+err_kstack:  kshm_unmap(&proc->p_shm,result->t_kstackvp,
+                        ceildiv(kstacksize,PAGESIZE),
+                        KSHMUNMAP_FLAG_RESTRICTED);
+#else
 err_kstack:  kshm_munmap(&proc->p_shm,result->t_kstackvp,kstacksize,1);
+#endif
 err_tls:     ktlspt_quit(&result->t_tls);
 err_free:    free(result);
 err_procref: kproc_decref(proc);
