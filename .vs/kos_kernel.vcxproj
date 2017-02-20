@@ -51,6 +51,7 @@
     <ClInclude Include="..\include\kos\kernel\once.h" />
     <ClInclude Include="..\include\kos\kernel\pageframe.h" />
     <ClInclude Include="..\include\kos\kernel\paging.h" />
+    <ClInclude Include="..\include\kos\kernel\panic.h" />
     <ClInclude Include="..\include\kos\kernel\pipe.h" />
     <ClInclude Include="..\include\kos\kernel\proc.h" />
     <ClInclude Include="..\include\kos\kernel\procenv.h" />

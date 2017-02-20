@@ -38,7 +38,7 @@ kerrno_t kpagedir_map
  size_t pages, kpageflag_t flags) {
  x86_pde *pde; x86_pte *begin,*iter,*end; size_t pdenusing;
  kassertobj(self);
- assertf(self != kpagedir_kernel(),"Can't re-map the kernel page directory");
+ //assertf(self != kpagedir_kernel(),"Can't re-map the kernel page directory");
  assertf(isaligned((uintptr_t)phys,PAGEALIGN),"Physical address %p is not page aligned",phys);
  assertf(isaligned((uintptr_t)virt,PAGEALIGN),"Virtual address %p is not page aligned",virt);
  assertf((uintptr_t)phys+pages*PAGESIZE >= (uintptr_t)phys,"Address overflow");

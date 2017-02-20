@@ -42,7 +42,7 @@ __local void kproc_delmods(struct kproc *self) {
  }
 }
 
-#if !KCONFIG_USE_SHM2
+#if !KCONFIG_HAVE_SHM2
 __local void kshm_delusertabs(struct kshm *self, __user void *keeper_stack) {
  struct kshmtabentry *entry; size_t i;
  for (i = 0; i < self->sm_tabc;) {
@@ -169,7 +169,7 @@ kproc_exec(struct kshlib *__restrict exec_main,
  //    have to worry about failing to allocate a new one below.
  // >> This also gives user-level code more control by allowing them
  //    to specify a custom stack to be used for exec-ed processes.
-#if KCONFIG_USE_SHM2
+#if KCONFIG_HAVE_SHM2
  kshm_unmap(&self->p_shm,NULL,((size_t)caller_thread->t_ustackvp)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
  kshm_unmap(&self->p_shm,
             (void *)((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz),

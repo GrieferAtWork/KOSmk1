@@ -68,9 +68,9 @@ __STATIC_ASSERT(offsetof(struct ktask,t_ustacksz)  == KTASK_OFFSETOF_USTACKSZ);
 __STATIC_ASSERT(offsetof(struct ktask,t_kstackvp)  == KTASK_OFFSETOF_KSTACKVP);
 __STATIC_ASSERT(offsetof(struct ktask,t_kstackend) == KTASK_OFFSETOF_KSTACKEND);
 __STATIC_ASSERT(offsetof(struct ktask,t_tls)       == KTASK_OFFSETOF_TLS);
-#if KTASK_HAVE_STATS
+#if KCONFIG_HAVE_TASK_STATS
 __STATIC_ASSERT(offsetof(struct ktask,t_stats)     == KTASK_OFFSETOF_STAT);
-#endif /* KTASK_HAVE_STATS */
+#endif /* KCONFIG_HAVE_TASK_STATS */
 
 
 extern struct kcpu  __kcpu_zero;
@@ -97,11 +97,11 @@ struct ktask __ktask_zero = {
  /* t_locks       */0,
  /* t_state       */KTASK_STATE_RUNNING,
  /* t_newstate    */KTASK_STATE_RUNNING,
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
  /* t_flags       */KTASK_FLAG_CRITICAL,
-#else /* KTASK_HAVE_CRITICAL_TASK */
+#else /* KCONFIG_HAVE_TASK_CRITICAL */
  /* t_flags       */KTASK_FLAG_NONE,
-#endif /* !KTASK_HAVE_CRITICAL_TASK */
+#endif /* !KCONFIG_HAVE_TASK_CRITICAL */
  /* t_exitcode    */NULL,
  /* t_cpu         */kcpu_zero(),
  /* t_prev        */ktask_zero(),
@@ -123,13 +123,13 @@ struct ktask __ktask_zero = {
  /* t_kstackvp    */stack_bottom,
  /* t_kstack      */stack_bottom,
  /* t_kstackend   */stack_top,
-#if KCONFIG_HAVE_TASKNAMES
- /* t_name        */(char *)KCONFIG_TASKZERO_NAME,
-#endif /* KCONFIG_HAVE_TASKNAMES */
+#if KCONFIG_HAVE_TASK_NAMES
+ /* t_name        */(char *)KCONFIG_TASKNAME_KERNEL,
+#endif /* KCONFIG_HAVE_TASK_NAMES */
  /* t_tls         */KTLSPT_INIT,
-#if KTASK_HAVE_STATS
+#if KCONFIG_HAVE_TASK_STATS
  /* t_stats       */KTASKSTAT_INIT,
-#endif /* KTASK_HAVE_STATS */
+#endif /* KCONFIG_HAVE_TASK_STATS */
 };
 
 
@@ -182,44 +182,44 @@ int kcpu_global_onetask(void) {
  return result;
 }
 
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_QUANTUM)
+#if KCONFIG_HAVE_TASK_STATS_QUANTUM
 #define KTASK_ONENTERQUANTUM_NEEDTM 1
 #define KTASK_ONLEAVEQUANTUM_NEEDTM 1
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_SWITCHIN)
+#if KCONFIG_HAVE_TASK_STATS_SWITCHIN
 #define KTASK_ONENTERQUANTUM_TM(task,cpu,tmnow) (++(task)->t_stats.ts_irq_switchin,ktaskstat_on_enterquantum_tm(&(task)->t_stats,tmnow))
 #define KTASK_ONENTERQUANTUM(task,cpu)          (++(task)->t_stats.ts_irq_switchin,ktaskstat_on_enterquantum(&(task)->t_stats))
-#else /* KTASK_HAVE_STATS_SWITCHIN */
+#else /* KCONFIG_HAVE_TASK_STATS_SWITCHIN */
 #define KTASK_ONENTERQUANTUM_TM(task,cpu,tmnow) ktaskstat_on_enterquantum_tm(&(task)->t_stats,tmnow)
 #define KTASK_ONENTERQUANTUM(task,cpu)          ktaskstat_on_enterquantum(&(task)->t_stats)
-#endif /* !KTASK_HAVE_STATS_SWITCHIN */
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_SWITCHOUT)
+#endif /* !KCONFIG_HAVE_TASK_STATS_SWITCHIN */
+#if KCONFIG_HAVE_TASK_STATS_SWITCHOUT
 #define KTASK_ONLEAVEQUANTUM_TM(task,cpu,tmnow) (++(task)->t_stats.ts_irq_switchout,ktaskstat_on_leavequantum_tm(&(task)->t_stats,tmnow))
 #define KTASK_ONLEAVEQUANTUM(task,cpu)          (++(task)->t_stats.ts_irq_switchout,ktaskstat_on_leavequantum(&(task)->t_stats))
-#else /* KTASK_HAVE_STATS_SWITCHOUT */
+#else /* KCONFIG_HAVE_TASK_STATS_SWITCHOUT */
 #define KTASK_ONLEAVEQUANTUM_TM(task,cpu,tmnow) ktaskstat_on_leavequantum_tm(&(task)->t_stats,tmnow)
 #define KTASK_ONLEAVEQUANTUM(task,cpu)          ktaskstat_on_leavequantum(&(task)->t_stats)
-#endif /* !KTASK_HAVE_STATS_SWITCHOUT */
-#else /* KTASK_HAVE_STATS_QUANTUM */
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_SWITCHIN)
+#endif /* !KCONFIG_HAVE_TASK_STATS_SWITCHOUT */
+#else /* KCONFIG_HAVE_TASK_STATS_QUANTUM */
+#if KCONFIG_HAVE_TASK_STATS_SWITCHIN
 #define KTASK_ONENTERQUANTUM_TM(task,cpu,tmnow) (++(task)->t_stats.ts_irq_switchin,++(task)->t_stats.ts_version)
 #define KTASK_ONENTERQUANTUM(task,cpu)          (++(task)->t_stats.ts_irq_switchin,++(task)->t_stats.ts_version)
-#endif /* KTASK_HAVE_STATS_SWITCHIN */
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_SWITCHOUT)
+#endif /* KCONFIG_HAVE_TASK_STATS_SWITCHIN */
+#if KCONFIG_HAVE_TASK_STATS_SWITCHOUT
 #define KTASK_ONLEAVEQUANTUM_TM(task,cpu,tmnow) (++(task)->t_stats.ts_irq_switchout,++(task)->t_stats.ts_version)
 #define KTASK_ONLEAVEQUANTUM(task,cpu)          (++(task)->t_stats.ts_irq_switchout,++(task)->t_stats.ts_version)
-#endif /* KTASK_HAVE_STATS_SWITCHOUT */
-#endif /* !KTASK_HAVE_STATS_QUANTUM */
+#endif /* KCONFIG_HAVE_TASK_STATS_SWITCHOUT */
+#endif /* !KCONFIG_HAVE_TASK_STATS_QUANTUM */
 
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_NOSCHED)
+#if KCONFIG_HAVE_TASK_STATS_NOSCHED
 #define KTASK_ONRESCHEDULE_NEEDTM 1
 #define KTASK_ONUNSCHEDULE_NEEDTM 1
 #define KTASK_ONRESCHEDULE_TM(task,cpu,tmnow)   ktaskstat_on_reschedule_tm(&(task)->t_stats,tmnow)
 #define KTASK_ONUNSCHEDULE_TM(task,cpu,tmnow)   ktaskstat_on_unschedule_tm(&(task)->t_stats,tmnow)
 #define KTASK_ONRESCHEDULE(task,cpu)            ktaskstat_on_reschedule(&(task)->t_stats)
 #define KTASK_ONUNSCHEDULE(task,cpu)            ktaskstat_on_unschedule(&(task)->t_stats)
-#endif /* KTASK_HAVE_STATS_NOSCHED */
+#endif /* KCONFIG_HAVE_TASK_STATS_NOSCHED */
 
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_SLEEP)
+#if KCONFIG_HAVE_TASK_STATS_SLEEP
 #define KTASK_ONENTERSLEEP_NEEDTM 1
 #define KTASK_ONLEAVESLEEP_NEEDTM 1
 #define KTASK_ONENTERSLEEP_TM(task,cpu,tmnow)   ktaskstat_on_entersleep_tm(&(task)->t_stats,tmnow)
@@ -306,14 +306,14 @@ ktask_newkernel(struct ktask *__restrict parent,
  result->t_sigval      = NULL;
  ktasklist_init(&result->t_children);
  ktlspt_init(&result->t_tls);
-#if KTASK_HAVE_STATS
+#if KCONFIG_HAVE_TASK_STATS
  ktaskstat_init(&result->t_stats);
-#endif /* KTASK_HAVE_STATS */
+#endif /* KCONFIG_HAVE_TASK_STATS */
  ksignal_init(&result->t_joinsig);
  ktasksig_init(&result->t_sigchain,result);
-#if KCONFIG_HAVE_TASKNAMES
+#if KCONFIG_HAVE_TASK_NAMES
  result->t_name = NULL;
-#endif /* KCONFIG_HAVE_TASKNAMES */
+#endif /* KCONFIG_HAVE_TASK_NAMES */
  // Initialize the task's TID and setup its parent hooks
  if __unlikely(KE_ISERR(kproc_addtask(proc,result))) goto err_map;
  ktask_lock(parent,KTASK_LOCK_CHILDREN);
@@ -344,7 +344,7 @@ ktask_newuser(struct ktask *__restrict parent, struct kproc *__restrict ctx,
  kassertobj(useresp);
  assertf(kproc_islocked(ctx,KPROC_LOCK_SHM),
          "The caller must lock the pagedir of the associated task context!");
-#if KCONFIG_USE_SHM2
+#if KCONFIG_HAVE_SHM2
  if __unlikely(KE_ISERR(kshm_mapram(&ctx->p_shm,&userstack,ceildiv(ustacksize,PAGESIZE),
                                     KPAGEDIR_MAPANY_HINT_USTACK,
                                     KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE
@@ -381,7 +381,7 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  if __unlikely((result = omalloc(struct ktask)) == NULL) goto err_ctx;
  kobject_init(result,KOBJECT_MAGIC_TASK);
  // Allocate and map a linear kernel stack for user tasks
-#if KCONFIG_USE_SHM2
+#if KCONFIG_HAVE_SHM2
  k_syslogf(KLOG_DEBUG,"[TASK] Mapping Linear RAM for kernel stack of user-thread...\n");
  if __unlikely(KE_ISERR(kshm_mapram_linear(&proc->p_shm,
                                            &result->t_kstack,
@@ -422,14 +422,14 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  result->t_sigval      = NULL;
  ktasklist_init(&result->t_children);
  ktlspt_init(&result->t_tls);
-#if KTASK_HAVE_STATS
+#if KCONFIG_HAVE_TASK_STATS
  ktaskstat_init(&result->t_stats);
-#endif /* KTASK_HAVE_STATS */
+#endif /* KCONFIG_HAVE_TASK_STATS */
  ksignal_init(&result->t_joinsig);
  ktasksig_init(&result->t_sigchain,result);
-#if KCONFIG_HAVE_TASKNAMES
+#if KCONFIG_HAVE_TASK_NAMES
  result->t_name = NULL;
-#endif /* KCONFIG_HAVE_TASKNAMES */
+#endif /* KCONFIG_HAVE_TASK_NAMES */
  // Initialize the task's TID and setup its parent hooks
  if __unlikely(KE_ISERR(kproc_addtask(proc,result))) goto err_map;
  ktask_lock(parent,KTASK_LOCK_CHILDREN);
@@ -533,10 +533,10 @@ extern void ktask_schedule(struct scheddata *state) {
         ,"Remote-CPU state-switches are not allowed when configured for single-core");
 #else
  if (!KTASK_STATE_ISACTIVE(prevtask->t_newstate)
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
  && (prevtask->t_newstate != KTASK_STATE_TERMINATED ||
     !(prevtask->t_flags&KTASK_FLAG_CRITICAL))
-#endif /* KTASK_HAVE_CRITICAL_TASK */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
      ) {
   // There must be at least one currently scheduled
   // task, which we are being called from.
@@ -548,10 +548,10 @@ extern void ktask_schedule(struct scheddata *state) {
           "modify the current task of a different CPU");
   // Since our prior check wasn't locked, check again
   if (KTASK_STATE_ISACTIVE(prevtask->t_newstate)
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
   || (prevtask->t_newstate == KTASK_STATE_TERMINATED &&
      (prevtask->t_flags&KTASK_FLAG_CRITICAL))
-#endif /* KTASK_HAVE_CRITICAL_TASK */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
       ) {
    ktask_unlock(prevtask,KTASK_LOCK_STATE);
    goto rotate_normal;
@@ -760,12 +760,12 @@ __crit void ktask_decref_f(struct ktask *__restrict self) {
  KTASK_CRIT_MARK
  kassert_ktask(self);
  if (katomic_load(self->t_state) == KTASK_STATE_TERMINATED) {
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
   assert(!(self->t_flags&KTASK_FLAG_CRITICAL));
-#endif /* KTASK_HAVE_CRITICAL_TASK */
-#if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
+#if KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
   assert(!(self->t_flags&KTASK_FLAG_NOINTR));
-#endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
   // Release no longer needed task data after switching away
   ktask_releasedata(self);
  }
@@ -847,7 +847,7 @@ __crit void ktask_destroy(struct ktask *__restrict self) {
   assert(self->t_state == KTASK_STATE_SUSPENDED);
   assert(self->t_suspended != 0);
   // This can happen if a suspended task is detached
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
   if (self->t_flags&KTASK_FLAG_CRITICAL) {
    struct ktask *caller = ktask_self();
    // NOTE: In any case, it's OK if a kernel task does this...
@@ -883,9 +883,9 @@ __crit void ktask_destroy(struct ktask *__restrict self) {
    self->t_refcnt    = 1;
    self->t_newstate  = KTASK_STATE_TERMINATED;
    self->t_exitcode  = NULL;
-#if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
+#if KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
    self->t_flags    |= KTASK_FLAG_WASINTR; 
-#endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
    // Re-schedule the task on our own CPU, thus ensuring an immediate task switch
    __evalexpr(ktask_reschedule_ex(self,NULL,KTASK_RESCHEDULE_HINT_CURRENT|
                                   KTASK_RESCHEDULE_HINTFLAG_UNDOSUSPEND|
@@ -895,17 +895,17 @@ __crit void ktask_destroy(struct ktask *__restrict self) {
    //    again in a moment, but for now, the day is saved...
    return;
   }
-#endif /* KTASK_HAVE_CRITICAL_TASK */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
   k_syslogf(KLOG_INFO,"Task %I32d:%Iu:%s was detached while suspended\n",
             self->t_proc->p_pid,self->t_tid,ktask_getname(self));
   ktask_onterminate(self);
  } else {
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
   assert(!(self->t_flags&KTASK_FLAG_CRITICAL));
-#endif /* KTASK_HAVE_CRITICAL_TASK */
-#if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
+#if KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
   assert(!(self->t_flags&KTASK_FLAG_NOINTR));
-#endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
  }
  ktask_releasedata(self);
  kproc_decref(self->t_proc);
@@ -916,7 +916,7 @@ __crit void ktask_destroy(struct ktask *__restrict self) {
  ktask_unlock(parent,KTASK_LOCK_CHILDREN);
  ktasklist_quit(&self->t_children);
  ktask_decref(parent);
-#if KCONFIG_HAVE_TASKNAMES
+#if KCONFIG_HAVE_TASK_NAMES
  free(self->t_name);
 #endif
  free(self);
@@ -1239,12 +1239,12 @@ __ktask_unschedule_nocpu(struct ktask *__restrict self, __u8 newstate, void *__r
    //  - Can't be KTASK_STATE_WAITINGTMO (Would have required a CPU)
    assert(self->t_state == KTASK_STATE_WAITING ||
           self->t_state == KTASK_STATE_SUSPENDED);
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
    assert(!(self->t_flags&KTASK_FLAG_CRITICAL));
-#endif /* KTASK_HAVE_CRITICAL_TASK */
-#if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
+#if KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
    assert(!(self->t_flags&KTASK_FLAG_NOINTR));
-#endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
    if (self->t_state == KTASK_STATE_WAITING) {
     // Unschedule signals
     ktask_unscheduleallsignals(self);
@@ -1439,7 +1439,7 @@ ktask_unschedule_ex(struct ktask *__restrict self, __u8 newstate, void *__restri
   error = KS_UNCHANGED;
   goto end;
  }
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
  // Check for special case: Terminating a critical task
  if __unlikely(newstate == KTASK_STATE_TERMINATED &&
               (self->t_flags&KTASK_FLAG_CRITICAL)) {
@@ -1455,7 +1455,7 @@ ktask_unschedule_ex(struct ktask *__restrict self, __u8 newstate, void *__restri
   // Set the task's new state to be terminated (also set the exit code)
   self->t_newstate = KTASK_STATE_TERMINATED;
   self->t_exitcode = arg;
-#if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
+#if KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
   if __likely(!(self->t_flags&KTASK_FLAG_NOINTR)) {
    if (self == ktask_self()) error = KE_INTR;
    else {
@@ -1500,12 +1500,12 @@ ktask_unschedule_ex(struct ktask *__restrict self, __u8 newstate, void *__restri
    self->t_flags |= KTASK_FLAG_WASINTR;
    error = KS_BLOCKING;
   }
-#else /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
+#else /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
   error = KS_BLOCKING;
-#endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
   goto end;
  }
-#endif /* KTASK_HAVE_CRITICAL_TASK */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
  // Check for special case: Unscheduling a waiting task
  if __unlikely(KTASK_STATE_ISWAITING(self->t_state)) {
   assert(self != ktask_self());
@@ -1555,14 +1555,14 @@ restart_cputask:
    if (cputask == cpuself)
 #endif /* !KCONFIG_HAVE_SINGLECORE */
    {
-#if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
+#if KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
     // Must check for an interrupt before starting
     if ((self->t_flags&(KTASK_FLAG_NOINTR|KTASK_FLAG_WASINTR)) == KTASK_FLAG_WASINTR) {
      self->t_flags &= ~(KTASK_FLAG_WASINTR);
      error = KE_INTR;
      goto end;
     }
-#endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
     /* Unschedule, then switch to a different task
      * WARNING: We're about to unschedule ourselves */
     cpuself->c_current = self->t_next;
@@ -1607,7 +1607,7 @@ restart_cputask:
     // The following call may not return if the new state was terminated
     ktask_selectcurr_anddecref_ni(self);
 #endif
-#if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
+#if KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
     ktask_lock(self,KTASK_LOCK_STATE);
     if ((self->t_flags&(KTASK_FLAG_NOINTR|KTASK_FLAG_WASINTR)) == KTASK_FLAG_WASINTR) {
      self->t_flags &= ~(KTASK_FLAG_WASINTR);
@@ -1620,7 +1620,7 @@ restart_cputask:
      }
     }
     ktask_unlock(self,KTASK_LOCK_STATE);
-#else /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
+#else /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
     if (newstate == KTASK_STATE_WAITINGTMO) {
      ktask_lock(self,KTASK_LOCK_STATE);
      // Check if the timed-out flag was set
@@ -1630,7 +1630,7 @@ restart_cputask:
      }
      ktask_unlock(self,KTASK_LOCK_STATE);
     }
-#endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
     goto break_end;
    }
 #ifndef KCONFIG_HAVE_SINGLECORE
@@ -1704,12 +1704,12 @@ ktask_unschedule_aftercrit(struct ktask *__restrict self) {
  assertf(self == ktask_self(),
          "ktask_unschedule_aftercrit() must be called with ktask_self()");
  NOIRQ_BEGINLOCK(ktask_trylock(self,KTASK_LOCK_STATE));
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
  assertf(self->t_flags&KTASK_FLAG_CRITICAL,
          "The 'KTASK_FLAG_CRITICAL' flag was not set. - You're not a critical task!");
  self->t_flags &= ~(KTASK_FLAG_CRITICAL);
  //_printtraceback_d();
-#endif /* KTASK_HAVE_CRITICAL_TASK */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
  switch (self->t_newstate) {
   case KTASK_STATE_RUNNING:
    // Nothing happened (most likely case)
@@ -1789,7 +1789,7 @@ ktask_reschedule_ex_impl(struct ktask *__restrict self, int hint)
             "How does that even work?");
     // Undo the suspended task state (switch to t_newstate)
     if (self->t_newstate == KTASK_STATE_RUNNING) break;
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
     if (self->t_newstate == KTASK_STATE_TERMINATED &&
        (self->t_flags&KTASK_FLAG_CRITICAL)) {
      // Special case: We can't terminate this task now. - It's critical.
@@ -1801,15 +1801,15 @@ ktask_reschedule_ex_impl(struct ktask *__restrict self, int hint)
      //    keep the 't_newstate' of terminated intact.
      goto do_resched_running;
     }
-#endif /* KTASK_HAVE_CRITICAL_TASK */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
     katomic_store(self->t_state,self->t_newstate);
     self->t_newstate = KTASK_STATE_RUNNING;
     error = KE_OK;
     switch (self->t_state) {
      case KTASK_STATE_TERMINATED:
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
       assert(!(self->t_flags&KTASK_FLAG_CRITICAL));
-#endif /* KTASK_HAVE_CRITICAL_TASK */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
       // Task was terminated while suspended
       self->t_newstate = KTASK_STATE_TERMINATED;
       ktask_onterminateother(self);
@@ -1854,9 +1854,9 @@ ktask_reschedule_ex_impl(struct ktask *__restrict self, int hint)
    //  #4: task2 sends signal1 <<-- This is us
    //  >> t_newstate == KTASK_STATE_TERMINATED
    //  >> t_state == KTASK_STATE_WAITING/KTASK_STATE_WAITINGTMO
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
 do_resched_running:
-#endif /* KTASK_HAVE_CRITICAL_TASK */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
    katomic_store(self->t_state,KTASK_STATE_RUNNING);
    goto do_resched;
    break;

@@ -55,7 +55,7 @@ SYSCALL(sys_kmem_map) {
        int   ,K(fd),
        __u64 ,K(offset));
 #endif
-#if KCONFIG_USE_SHM2
+#if KCONFIG_HAVE_SHM2
  struct kproc *procself = kproc_self();
  __ref struct kshmregion *region; size_t pages; kerrno_t error;
  (void)fd,(void)offset; /* TODO? */
@@ -110,7 +110,7 @@ SYSCALL(sys_kmem_mapdev) {
        int     ,K(prot),
        int     ,K(flags),
        void   *,K(physptr));
-#if KCONFIG_USE_SHM2
+#if KCONFIG_HAVE_SHM2
  void *hint,*aligned_physptr,*result;
  size_t alignment_offset;
  struct ktask *caller = ktask_self();

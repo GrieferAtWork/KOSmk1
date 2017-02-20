@@ -29,7 +29,7 @@
 #include <kos/kernel/features.h>
 #include <kos/kernel/signal.h>
 #include <kos/kernel/object.h>
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
 #include <traceback.h>
 #elif !defined(__INTELLISENSE__)
 #include <kos/kernel/signal_v.h>
@@ -97,7 +97,7 @@ __DECL_BEGIN
 
 struct timespec;
 
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
 struct dtraceback;
 struct kddist_debug_slot {
  struct ktask      *ds_task; /*< [1..1] Task registered to this slot.
@@ -106,7 +106,7 @@ struct kddist_debug_slot {
  struct dtraceback *ds_tb;   /*< [1..1] Traceback used for  */
 };
 struct kddist_debug {
- __un(KDDIST_USERBITS)     ddd_regc;  /*< Amount of registered users. */
+ __un(KCONFIG_DDIST_USERBITS)     ddd_regc;  /*< Amount of registered users. */
  struct kddist_debug_slot *ddd_regv;  /*< [0..ddd_regc][owned] Vector registered user tasks. */
 #define KDDIST_DEBUG_FLAG_NOMEM   0x1 /*< 'ddd_regv' may not be up-to-date due to a prior allocation failure. */
 #define KDDIST_DEBUG_FLAG_REGONLY 0x2 /*< [const] The ddist is configured not to allow unregistered tasks receiving data. */
@@ -136,13 +136,13 @@ struct kddist {
  struct ksignal        dd_sigpoll; /*< Signal send when data can be polled (NOTE: Data is transferred through this signal). */
  struct ksignal        dd_sigpost; /*< Signal send when all registered users are ready (NOTE: This just is a secondary signal). */
  // NOTE: When both signals must be locked, 'dd_sigpoll' must be locked first!
- __un(KDDIST_USERBITS) dd_ready;   /*< [lock(dd_sigpoll:KSIGNAL_LOCK_WAIT)] Amount of registered+ready users. */
-#if KDEBUG_HAVE_TRACKEDDDIST
+ __un(KCONFIG_DDIST_USERBITS) dd_ready;   /*< [lock(dd_sigpoll:KSIGNAL_LOCK_WAIT)] Amount of registered+ready users. */
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  struct kddist_debug   dd_debug;   /*< [lock(dd_sigpoll:KSIGNAL_LOCK_WAIT)] Debug information for tracking registered users. */
 #define dd_users       dd_debug.ddd_regc
 #else
 #define __KDDIST_DEBUG_INIT  ,0
- __un(KDDIST_USERBITS) dd_users;   /*< [lock(dd_sigpoll:KSIGNAL_LOCK_WAIT)] Amount of registered users. */
+ __un(KCONFIG_DDIST_USERBITS) dd_users;   /*< [lock(dd_sigpoll:KSIGNAL_LOCK_WAIT)] Amount of registered users. */
 #endif
 };
 
@@ -183,7 +183,7 @@ extern __nonnull((1)) kerrno_t kddist_reset(struct kddist *self);
             (void)0;\
  })
 #endif
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
 #define kddist_init_regonly(self) \
  __xblock({ struct kddist *const __ddroself = (self);\
             kddist_init(__ddroself);\
@@ -247,7 +247,7 @@ extern __crit __nonnull((1)) void kddist_deluser(struct kddist *self);
 extern __wunused __nonnull((1,2))   kerrno_t kddist_vrecv(struct kddist *__restrict self, void *__restrict buf);
 extern __wunused __nonnull((1,2,3)) kerrno_t kddist_vtimedrecv(struct kddist *__restrict self, struct timespec const *__restrict abstime, void *__restrict buf);
 extern __wunused __nonnull((1,2,3)) kerrno_t kddist_vtimeoutrecv(struct kddist *__restrict self, struct timespec const *__restrict timeout, void *__restrict buf);
-#if KDEBUG_HAVE_TRACKEDDDIST || defined(__INTELLISENSE__)
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST || defined(__INTELLISENSE__)
 extern __wunused __nonnull((1,2))   kerrno_t kddist_vrecv_unregistered(struct kddist *__restrict self, void *__restrict buf);
 extern __wunused __nonnull((1,2,3)) kerrno_t kddist_vtimedrecv_unregistered(struct kddist *__restrict self, struct timespec const *__restrict abstime, void *__restrict buf);
 extern __wunused __nonnull((1,2,3)) kerrno_t kddist_vtimeoutrecv_unregistered(struct kddist *__restrict self, struct timespec const *__restrict timeout, void *__restrict buf);
@@ -359,7 +359,7 @@ extern __crit __nonnull((1,2)) __ssize_t _kddist_timeoutbeginsend_c_maybeunlock(
 extern __crit __nonnull((1))   __ssize_t _kddist_asyncbeginsend_c_maybeunlock(struct kddist *__restrict self);
 
 
-#if KDEBUG_HAVE_TRACKEDDDIST || defined(__INTELLISENSE__)
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST || defined(__INTELLISENSE__)
 //////////////////////////////////////////////////////////////////////////
 // Commit a send operation previously started through a call to 'kddist_b*eginsend_c'
 // WARNING: The return value of this function may differ from 'n_tasks',

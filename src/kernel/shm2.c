@@ -36,7 +36,7 @@
 #include <stdint.h>
 #include <kos/syslog.h>
 
-#if KCONFIG_USE_SHM2
+#if KCONFIG_HAVE_SHM2
 __DECL_BEGIN
 
 
@@ -44,10 +44,6 @@ static kerrno_t kshm_initldt(struct kshm *__restrict self, __u16 size_hint);
 static kerrno_t kshm_initldtcopy(struct kshm *__restrict self, struct kshm *__restrict right);
 static void kshm_quitldt(struct kshm *__restrict self);
 
-
-void
-print_branch(struct kshmbranch *__restrict branch,
-             uintptr_t addr_semi, unsigned int level);
 
 
 
@@ -80,7 +76,6 @@ kshmchunk_initphys(struct kshmchunk *__restrict self,
                    __pagealigned __kernel void *addr,
                    size_t pages, kshm_flag_t flags) {
  assertf(pages != 0,"Cannot create an empty SHM chunk");
- kassertmem(addr,pages*PAGESIZE);
  kobject_init(self,KOBJECT_MAGIC_SHMCHUNK);
  self->sc_partv = (struct kshmpart *)malloc(1*sizeof(struct kshmpart));
  if __unlikely(!self->sc_partv) return KE_NOMEM;
@@ -1134,12 +1129,6 @@ done:
  return result;
 }
 
-
-static void
-override_branch(struct kshmbranch **__restrict pbranch,
-                struct kshmbranch *__restrict newleaf,
-                uintptr_t addr_semi, unsigned int level);
-
 __crit __nomp kerrno_t
 kshmbrach_putsplit(struct kshmbranch **__restrict pself,
                    struct kshmbranch ***pmin, uintptr_t *pmin_semi,
@@ -1281,7 +1270,7 @@ kshmbranch_fillfork(struct kshmbranch **__restrict proot, struct kpagedir *__res
  struct kshmbranch *newbranch;
  kshm_flag_t source_flags;
  kerrno_t error = KE_OK;
- kassertobj(pself);
+ kassertobj(proot);
  kassertobj(source);
  kassert_kshmregion(source->sb_region);
  source_flags = source->sb_region->sre_chunk.sc_flags;
@@ -1350,7 +1339,14 @@ ok:
 
 
 
-
+/* We must map the kernel as read-write to actually have access to it ourselves.
+ * NOTE: THIS DOES NOT AFFECT RING-#3 CODE BECAUSE 'PAGEDIR_FLAG_USER' ISN'T SET!
+ * >> The reason we still need to map it as writable is because during an IRQ
+ *    that happened while inside user-space, the page directory doesn't get
+ *    swapped immediately, causing us to enter kernel-space while still running
+ *    under the user's page directory.
+ *    Obviously we switch to 'kpagedir_kernel()' asap,
+ *    but before then, we do require write-access. */
 #define KERNEL_MAP_FLAGS  (PAGEDIR_FLAG_READ_WRITE)
 
 //////////////////////////////////////////////////////////////////////////
@@ -1378,7 +1374,7 @@ kshm_quit(struct kshm *__restrict self) {
  kassert_kshm(self);
  kshmmap_quit(&self->s_map);
  kshm_quitldt(self);
- k_syslogf(KLOG_DEBUG,"Deleting page directory at %p\n",self->s_pd);
+ k_syslogf(KLOG_DEBUG,"[SHM] Deleting page directory at %p\n",self->s_pd);
  kpagedir_delete(self->s_pd);
 }
 
@@ -1440,7 +1436,7 @@ kshm_mapregion_inherited(struct kshm *__restrict self,
   *       existing page directory mapping in case of KE_EXISTS. */
 #if 0
  printf("BEGIN Insert leaf %p .. %p\n",branch->sb_map_min,branch->sb_map_max);
- print_branch(self->s_map.m_root,
+ kshmbranch_print(self->s_map.m_root,
               KSHMBRANCH_ADDRSEMI_INIT,
               KSHMBRANCH_ADDRLEVEL_INIT);                                  
 #endif
@@ -1448,7 +1444,7 @@ kshm_mapregion_inherited(struct kshm *__restrict self,
  if __unlikely(KE_ISERR(error)) goto err_branch;
 #if 0
  printf("END Insert leaf %p .. %p\n",branch->sb_map_min,branch->sb_map_max);
- print_branch(self->s_map.m_root,
+ kshmbranch_print(self->s_map.m_root,
               KSHMBRANCH_ADDRSEMI_INIT,
               KSHMBRANCH_ADDRLEVEL_INIT);
 #endif
@@ -1537,7 +1533,7 @@ kshm_touch(struct kshm *__restrict self,
  pbranch = kshmbranch_plocate(&self->s_map.m_root,(uintptr_t)address,&addr_semi);
  /* Fail if no branch is mapped to the specified base address. */
  if __unlikely(!pbranch) {
-  k_syslogf(KLOG_ERROR,"[SHM] Failed to locate SHM branch at: %p\n",address);
+  k_syslogf(KLOG_DEBUG,"[SHM] Failed to locate SHM branch at: %p\n",address);
   return 0;
  }
  branch = *pbranch;
@@ -1800,13 +1796,8 @@ true_shared_access:;
 #undef CHECK_MIN_NEIGHBOR
 
 end_success:
- k_syslogf(KLOG_DEBUG,"[COW] Touched %Iu SHM pages near address %p\n",
+ k_syslogf(KLOG_TRACE,"[COW] Touched %Iu SHM pages near address %p\n",
           (max_page-min_page)+1,address);
- //print_branch(self->s_map.m_root,
- //             KSHMBRANCH_ADDRSEMI_INIT,
- //             KSHMBRANCH_ADDRLEVEL_INIT);
- //kpagedir_print(self->s_pd);
- //_printtraceback_d();
  /* Tell the caller how many pages we actually touched. */
  return (max_page-min_page)+1;
 }
@@ -1867,10 +1858,10 @@ kshm_mapautomatic(struct kshm *__restrict self,
                   struct kshmregion *__restrict region, __pagealigned __user void *hint,
                   kshmregion_page_t in_region_page_start, size_t in_region_page_count) {
  kerrno_t error;
+ KTASK_CRIT_MARK
  kassert_kshm(self);
  kassertobj(user_address);
  kassert_kshmregion(region);
- KTASK_CRIT_MARK
  if __unlikely((*user_address = kpagedir_findfreerange(
                 self->s_pd,region->sre_chunk.sc_pages,hint
                )) == NULL) return KE_NOSPC;
@@ -2082,8 +2073,6 @@ void kshm_pf_handler(struct kirq_registers *__restrict regs) {
          "Should have been detected by kernel-task detection");
  /* Acquire the SHM-lock to ensure that nothing gets in our way... */
  if __unlikely(KE_ISERR(kproc_lock(caller_process,KPROC_LOCK_SHM))) goto def_handler;
- //k_syslogf(KLOG_DEBUG,"[COW] Touching SHM pages at address %p on page fault\n",
- //          address_in_question);
  touched_pages = kshm_touch(&caller_process->p_shm,
                            (__user void *)alignd((uintptr_t)address_in_question,PAGEALIGN),1);
  assert(!touched_pages || kpagedir_ismappedex_b(caller_process->p_shm.s_pd,address_in_question,1,
@@ -2116,6 +2105,6 @@ __DECL_END
 #include "shm2-map.c.inl"
 #include "shm2-ldt.c.inl"
 #endif
-#endif /* KCONFIG_USE_SHM2 */
+#endif /* KCONFIG_HAVE_SHM2 */
 
 #endif /* !__KOS_KERNEL_SHM_C__ */

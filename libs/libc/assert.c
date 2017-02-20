@@ -133,10 +133,55 @@ void __assertion_failedf(__LIBC_DEBUG_PARAMS_ char const *expr,
   else ASSERT_PRINTF("NO PAGE DIRECTORY (task: %p, proc: %p, pd: %p)\n",task,proc,pd);
  }
  arch_hang();
+ __builtin_unreachable();
 #else
  abort();
 #endif
 }
+
+#ifdef __KERNEL__
+#ifdef KLOG_RAW
+#   define PANIC_PRINTF(...)           (k_syslogf(KLOG_RAW,__VA_ARGS__),tty_printf(__VA_ARGS__))
+#   define PANIC_VPRINTF(format,args) (k_vsyslogf(KLOG_RAW,format,args),tty_vprintf(format,args))
+#else
+#   define PANIC_PRINTF(...)           (serial_printf(SERIAL_01,__VA_ARGS__),tty_printf(__VA_ARGS__))
+#   define PANIC_VPRINTF(format,args) (serial_vprintf(SERIAL_01,format,args),tty_vprintf(format,args))
+#endif
+void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *fmt, ...) {
+ karch_irq_disable();
+#ifdef __x86__ // (Light) red screen!
+ tty_x86_setcolors(vga_entry_color(VGA_COLOR_WHITE,VGA_COLOR_LIGHT_RED));
+#endif
+ tty_clear();
+ PANIC_PRINTF("===================================================\n"
+              " --- PANIC ---\n");
+ if (__LIBC_DEBUG_FILE || __LIBC_DEBUG_FUNC) {
+  PANIC_PRINTF("    " KDEBUG_SOURCEPATH_PREFIX "%s(%d) : %s\n"
+              ,__LIBC_DEBUG_FILE,__LIBC_DEBUG_LINE,__LIBC_DEBUG_FUNC);
+ }
+ PANIC_PRINTF("===================================================\n");
+ if (fmt) {
+  va_list args;
+  va_start(args,fmt);
+  PANIC_VPRINTF(fmt,args);
+  va_end(args);
+  PANIC_PRINTF("\n");
+ }
+ PANIC_PRINTF("===================================================\n");
+#ifdef __DEBUG__
+ _printtracebackex_d(1);
+#endif
+ {
+  struct ktask *task = ktask_self();
+  struct kproc *proc = task ? ktask_getproc(task) : NULL;
+  struct kpagedir *pd = proc ? proc->p_shm.sm_pd : NULL;
+  if (pd) kpagedir_print(pd);
+  else ASSERT_PRINTF("NO PAGE DIRECTORY (task: %p, proc: %p, pd: %p)\n",task,proc,pd);
+ }
+ arch_hang();
+ __builtin_unreachable();
+}
+#endif
 
 
 #if UINT32_MAX == UINTPTR_MAX

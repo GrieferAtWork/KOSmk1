@@ -202,7 +202,7 @@ print_error(char const *__restrict data,
 }
 
 void
-print_branch(struct kshmbranch *__restrict branch,
+kshmbranch_print(struct kshmbranch *__restrict branch,
              uintptr_t addr_semi, unsigned int level);
 
 
@@ -246,7 +246,7 @@ void __kirq_default_handler(struct kirq_registers *regs) {
     if ((pd = caller->t_proc->p_shm.sm_pd) != NULL &&
         (kmem_validateob(pd) == KE_OK)) {
      kpagedir_print(pd);
-     print_branch(caller->t_proc->p_shm.s_map.m_root,
+     kshmbranch_print(caller->t_proc->p_shm.s_map.m_root,
                   KSHMBRANCH_ADDRSEMI_INIT,
                   KSHMBRANCH_ADDRLEVEL_INIT);
     } else {
@@ -341,7 +341,7 @@ struct kirq_siginfo const *kirq_getsiginfo(kirq_t signum) {
 void kirq_print_registers(struct kirq_registers const *regs) {
  printf("regs @ %p\n",regs);
  printf("ds      = % 8I32x"
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
                          " | es       = % 8I32x\n"
         "fs      = % 8I32x | gs       = % 8I32x"
 #endif
@@ -355,7 +355,7 @@ void kirq_print_registers(struct kirq_registers const *regs) {
         "eflags  = % 8I32x | userregs = % 8I32x\n"
         "usercr3 = % 8I32x\n"
        ,regs->regs.ds
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
        ,regs->regs.es
        ,regs->regs.fs
        ,regs->regs.gs

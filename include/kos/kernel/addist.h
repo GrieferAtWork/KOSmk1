@@ -68,7 +68,7 @@ struct dtraceback;
 
 struct kaddistticket {
  KOBJECT_HEAD
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  struct kaddist          *dt_dist;  /*< [1..1] Distributor associated with this ticket. */
  struct dtraceback       *dt_mk_tb; /*< [0..1][owned] Traceback to when this ticket was generated. */
  struct dtraceback       *dt_rd_tb; /*< [0..1][lock(:ad_nbdat:KSIGNAL_LOCK_WAIT)][owned] Traceback to when a ready ticket became ready. */
@@ -79,7 +79,7 @@ struct kaddistticket {
 };
 
 struct kasyncdata {
- __atomic __un(KDDIST_USERBITS) sd_pending; /*< [!0] Amount of tickets pending to receive this chunk (acts as a reference counter),
+ __atomic __un(KCONFIG_DDIST_USERBITS) sd_pending; /*< [!0] Amount of tickets pending to receive this chunk (acts as a reference counter),
                                                      but must not reach ZERO(0) if this isn't the first chunk (aka 'tc_prev' != NULL). */
  struct kasyncdata             *sd_prev;    /*< [0..1] Previous data chunk, or NULL if first. */
  struct kasyncdata             *sd_next;    /*< [0..1] Next data chunk, or NULL if last. */
@@ -88,9 +88,9 @@ struct kasyncdata {
 struct kaddist {
  KOBJECT_HEAD
  struct ksignal        ad_nbdat;    /*< Non-buffered data transfer signal. */
- __un(KDDIST_USERBITS) ad_ready;    /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][<=ad_known] Amount of ticket holders ready for unbuffered transfer of data
+ __un(KCONFIG_DDIST_USERBITS) ad_ready;    /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][<=ad_known] Amount of ticket holders ready for unbuffered transfer of data
                                         (equal to the linked list length in 'ad_tready', but due to race conditions may not be equal to the amount of scheduled tasks in 'ad_nbdat'). */
- __un(KDDIST_USERBITS) ad_known;    /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][>=ad_ready] Amount of known ticket holders. */
+ __un(KCONFIG_DDIST_USERBITS) ad_known;    /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][>=ad_ready] Amount of known ticket holders. */
  struct kaddistticket *ad_tiready;  /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][0..1] Linked list of tickets that are ready. */
  struct kaddistticket *ad_tnready;  /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][0..1] Linked list of tickets that are not ready. */
  __size_t              ad_chunksz;  /*< [const] Size of the raw data block in any given chunk. */

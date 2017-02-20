@@ -140,7 +140,7 @@ kerrno_t kfatfs_savefileheader(struct kfatfs *self, __u64 headpos,
 kerrno_t kfatfs_rmheaders(struct kfatfs *self, __u64 headpos, unsigned int count) {
  kfatsec_t headsec; void *secbuf; kerrno_t error;
  struct kfatfileheader *headbuf;
- kassertobj(self); kassertobj(header);
+ kassertobj(self);
  assert(count != 0);
  secbuf = alloca(self->f_secsize);
  /* TODO: This is a really bad way of doing this... */

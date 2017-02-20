@@ -312,7 +312,7 @@ set_section_count:
                        ,(header->p_flags&PF_W) ? 'W' : '-'
                        ,(header->p_flags&PF_X) ? 'X' : '-'
                        ,(uintptr_t)header->p_align);
-#if KCONFIG_USE_SHM2
+#if KCONFIG_HAVE_SHM2
    section_tab = kshmregion_newram(ceildiv(memsize,PAGESIZE),
                                    ((header->p_flags&PF_X) ? KSHMREGION_FLAG_EXEC : 0)|
 #if 1 /* For debugging only. */

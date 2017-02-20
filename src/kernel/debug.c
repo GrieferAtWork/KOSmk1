@@ -151,45 +151,6 @@ void debug_hexdump(void const *p, size_t s) {
 }
 #undef OUT
 
-
-
-struct knownramregion {
- uintptr_t begin;
- uintptr_t end;
-};
-static struct knownramregion known_regions[32];
-static struct knownramregion *known_regionsend = known_regions;
-__crit __nomp void debug_addknownramregion(__kernel void const *__restrict p, size_t s) {
- assert(ktask_iscrit());
- known_regionsend->begin = (uintptr_t)p;
- known_regionsend->end = (uintptr_t)p+s;
- ++known_regionsend;
-}
-int debug_isknownramregion(__kernel void const *__restrict p, size_t s) {
- struct knownramregion *iter,*end;
- uintptr_t region_begin,region_end;
- region_end = (region_begin = (uintptr_t)p)+s;
- iter = known_regions;
- end = known_regionsend;
- while (iter != end) {
-  if (region_begin >= iter->begin &&
-      region_end <= iter->end) return 1;
-  ++iter;
- }
- return 0;
-}
-__local int debug_isknownramregionbyte(void const *__restrict p) {
- struct knownramregion *iter,*end;
- iter = known_regions;
- end = known_regionsend;
- while (iter != end) {
-  if ((uintptr_t)p >= iter->begin &&
-      (uintptr_t)p < iter->end) return 1;
-  ++iter;
- }
- return 0;
-}
-
 //#define KMEM_DEBUG_CALL_FROM_NON_RING_ZERO
 
 
@@ -199,18 +160,24 @@ kerrno_t kmem_validatebyte(__kernel byte_t const *__restrict p) {
  if __unlikely(ksegment_currentring() != 0) return KE_OK;
 #endif
  if __unlikely(kpagedir_current() != kpagedir_kernel()) return KE_OK;
+ if __unlikely(!kpagedir_ismapped(kpagedir_kernel(),
+              (void *)alignd((uintptr_t)p,PAGEALIGN),1)) return KE_RANGE;
  if __unlikely(kpageframe_isfreepage(p,1)) return KE_INVAL;
- return debug_isknownramregionbyte(p) ? KE_OK : KE_RANGE;
+ return KE_OK;
 }
 kerrno_t kmem_validate(__kernel void const *__restrict p, size_t s) {
+ uintptr_t aligned_p;
  if __unlikely(!s) return KE_OK;
  if __unlikely(!p) return KS_EMPTY;
 #ifdef KMEM_DEBUG_CALL_FROM_NON_RING_ZERO
  if __unlikely(ksegment_currentring() != 0) return KE_OK;
 #endif
  if __unlikely(kpagedir_current() != kpagedir_kernel()) return KE_OK;
+ aligned_p = alignd((uintptr_t)p,PAGEALIGN);
+ if __unlikely(!kpagedir_ismapped(kpagedir_kernel(),(void *)aligned_p,
+              ceildiv(((uintptr_t)p-aligned_p)+s,PAGESIZE))) return KE_RANGE;
  if __unlikely(kpageframe_isfreepage(p,s)) return KE_INVAL;
- return debug_isknownramregion(p,s) ? KE_OK : KE_RANGE;
+ return KE_OK;
 }
 
 
@@ -236,7 +203,7 @@ void printirettail(struct irettail *tail) {
 void printregs(struct ktaskregisters3 *regs) {
  printf("printregs(%#p) {\n",regs);
  printf("\tbase.ds     = %#Ix\n",regs->base.ds);
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
  printf("\tbase.es     = %#Ix\n",regs->base.es);
  printf("\tbase.fs     = %#Ix\n",regs->base.fs);
  printf("\tbase.gs     = %#Ix\n",regs->base.gs);

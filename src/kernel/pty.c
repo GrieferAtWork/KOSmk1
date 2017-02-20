@@ -101,9 +101,9 @@ __crit void kpty_quit(struct kpty *self) {
  kassert_kpty(self);
  kiobuf_quit(&self->ty_s2m);
  kiobuf_quit(&self->ty_m2s);
- KTASK_NOINTR_BEGIN
+ //KTASK_NOINTR_BEGIN
  __evalexpr(krwlock_close(&self->ty_lock));
- KTASK_NOINTR_END
+ //KTASK_NOINTR_END
  krawbuf_quit(&self->ty_canon);
  if (self->ty_cproc) kproc_decref(self->ty_cproc);
  if (self->ty_fproc) kproc_decref(self->ty_fproc);

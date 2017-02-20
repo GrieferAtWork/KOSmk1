@@ -267,6 +267,9 @@
     <ClInclude Include="..\include\kos\kernel\shm2.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\panic.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.c">

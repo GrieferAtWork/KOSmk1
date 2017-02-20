@@ -25,7 +25,7 @@
 
 #include <kos/config.h>
 #ifdef __KERNEL__
-#if !KCONFIG_USE_SHM2
+#if !KCONFIG_HAVE_SHM2
 #include <sys/mman.h>
 #include <kos/compiler.h>
 #include <kos/types.h>
@@ -399,9 +399,9 @@ __DECL_END
 #include <kos/kernel/proc.h>
 #endif
 #endif
-#else /* !KCONFIG_USE_SHM2 */
+#else /* !KCONFIG_HAVE_SHM2 */
 #include <kos/kernel/shm2.h>
-#endif /* KCONFIG_USE_SHM2 */
+#endif /* KCONFIG_HAVE_SHM2 */
 
 #endif /* __KERNEL__ */
 

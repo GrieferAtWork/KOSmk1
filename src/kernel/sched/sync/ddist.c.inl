@@ -33,7 +33,7 @@
 #include <kos/kernel/time.h>
 #include <kos/timespec.h>
 #include <sys/types.h>
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
 #include <stdio.h>
 #include <stdlib.h>
 #endif
@@ -44,7 +44,7 @@ __DECL_BEGIN
 #define NO      0
 #define MAYBE (-1)
 
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
 __local int
 kddist_task_is_registered(struct kddist const *self,
                           struct ktask const *task) {
@@ -75,11 +75,11 @@ __crit kerrno_t kddist_adduser(struct kddist *self) {
  if (self->dd_sigpoll.s_flags&KSIGNAL_FLAG_DEAD) {
   // ddist was already destroyed.
   error = KE_DESTROYED;
- } else if __unlikely(self->dd_users == (__un(KDDIST_USERBITS))-1) {
+ } else if __unlikely(self->dd_users == (__un(KCONFIG_DDIST_USERBITS))-1) {
   // Too many registered users
   error = KE_OVERFLOW;
  } else {
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
   struct kddist_debug_slot *iter,*end;
   struct ktask *caller = ktask_self();
   if (!(self->dd_debug.ddd_flags&KDDIST_DEBUG_FLAG_NOMEM) || !self->dd_debug.ddd_regc) {
@@ -107,7 +107,7 @@ __crit kerrno_t kddist_adduser(struct kddist *self) {
     self->dd_debug.ddd_flags |= (KDDIST_DEBUG_FLAG_NOMEM);
    }
   }
-#endif /* KDEBUG_HAVE_TRACKEDDDIST */
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDDDIST */
   // Increment the users-counter
   ++self->dd_users;
  }
@@ -120,7 +120,7 @@ __crit void kddist_deluser(struct kddist *self) {
  kassert_kddist(self);
  ksignal_lock_c(&self->dd_sigpoll,KSIGNAL_LOCK_WAIT);
  if (!(self->dd_sigpoll.s_flags&KSIGNAL_FLAG_DEAD)) {
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
   struct kddist_debug_slot *iter,*end;
   struct ktask *caller = ktask_self();
   iter = (end = self->dd_debug.ddd_regv)+self->dd_debug.ddd_regc;
@@ -150,7 +150,7 @@ __crit void kddist_deluser(struct kddist *self) {
    abort();
   }
 found_it:
-#endif /* KDEBUG_HAVE_TRACKEDDDIST */
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDDDIST */
   assertf(self->dd_users,"No more registered users");
   if (--self->dd_users == self->dd_ready) {
    // Must signal baker thread
@@ -214,7 +214,7 @@ kerrno_t kddist_vtimeoutrecv(struct kddist *__restrict self,
  return kddist_vtimedrecv(self,&abstime,buf);
 }
 
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
 kerrno_t kddist_vrecv_unregistered(struct kddist *__restrict self,
                                    void *__restrict buf) {
  kerrno_t error;
@@ -250,7 +250,7 @@ kerrno_t kddist_vtimeoutrecv_unregistered(struct kddist *__restrict self,
  __timespec_add(&abstime,timeout);
  return kddist_vtimedrecv_unregistered(self,&abstime,buf);
 }
-#endif /* KDEBUG_HAVE_TRACKEDDDIST */
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDDDIST */
 
 
 ssize_t kddist_vsend(struct kddist *__restrict self,
@@ -468,7 +468,7 @@ __crit ssize_t _kddist_asyncbeginsend_c_maybeunlock(struct kddist *__restrict se
  return error;
 }
 
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
 __crit __size_t
 kddist_commitsend_c(struct kddist *__restrict self, __size_t n_tasks,
                     void const *__restrict buf, __size_t bufsize) {

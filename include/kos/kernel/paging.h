@@ -251,6 +251,15 @@ extern __nonnull((1)) kerrno_t kpagedir_setflags(struct kpagedir const *self, __
 #define kpagedir_kernel() ((struct kpagedir const *)&__kpagedir_kernel)
 extern struct kpagedir      __kpagedir_kernel;
 
+extern void
+kpagedir_kernel_installmemory(__pagealigned __physicaladdr void *addr,
+                              __size_t pages, kpageflag_t flags);
+#define KERNEL_INSTALLMEMORY(start,bytes,writable) \
+ kpagedir_kernel_installmemory((void *)alignd((__uintptr_t)(start),PAGEALIGN)\
+                              ,ceildiv((bytes)+((__uintptr_t)(start)-alignd((__uintptr_t)(start),PAGEALIGN)),PAGESIZE)\
+                              ,(writable) ? PAGEDIR_FLAG_READ_WRITE : 0)
+
+
 #ifdef __MAIN_C__
 extern void kernel_initialize_paging(void);
 #endif /* __MAIN_C__ */

@@ -32,7 +32,7 @@
 #include <kos/timespec.h>
 #include <malloc.h>
 #include <stddef.h>
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
 #include <traceback.h>
 #endif
 
@@ -43,7 +43,7 @@ __DECL_BEGIN
 #define MAYBE  (-1)
 #define ISDEAD(self) ((self)->ad_nbdat.s_flags&KSIGNAL_FLAG_DEAD)
 
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
 static int kaddist_hasticket(struct kaddist *__restrict self,
                              struct kaddistticket *__restrict ticket) {
  struct kaddistticket *iter;
@@ -76,7 +76,7 @@ _kaddist_genticket_andunlock(struct kaddist *__restrict self,
  assert(!self->ad_front || !self->ad_front->sd_prev);
  assert(!self->ad_back || !self->ad_back->sd_next);
  assert(self->ad_chunkc <= self->ad_chunkmax);
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  if (kaddist_hasticket(self,ticket) == YES) {
   k_syslogf(KLOG_ERROR
            ,"[ADDIST] Ticket at %p is already in use\n"
@@ -87,10 +87,10 @@ _kaddist_genticket_andunlock(struct kaddist *__restrict self,
  }
 #endif
  if __unlikely(ISDEAD(self)) { error = KE_DESTROYED; goto end; }
- if __unlikely(self->ad_known == (__un(KDDIST_USERBITS))-1) { error = KE_OVERFLOW; goto end; }
+ if __unlikely(self->ad_known == (__un(KCONFIG_DDIST_USERBITS))-1) { error = KE_OVERFLOW; goto end; }
  ++self->ad_known;
  kobject_init(ticket,KOBJECT_MAGIC_ADDIST2TICKET);
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  ticket->dt_dist = self;
  ticket->dt_mk_tb = dtraceback_captureex(1);
  ticket->dt_rd_tb = NULL;
@@ -119,7 +119,7 @@ _kaddist_delticket_andunlock(struct kaddist *__restrict self,
  assert(!self->ad_front || !self->ad_front->sd_prev);
  assert(!self->ad_back || !self->ad_back->sd_next);
  assert(self->ad_chunkc <= self->ad_chunkmax);
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  assertf(ticket->dt_dist == self,"Ticket %p registered to different ddist (%p) than %p",
          ticket,ticket->dt_dist,self);
  if (kaddist_hasticket(self,ticket) == NO) {
@@ -155,7 +155,7 @@ _kaddist_delticket_andunlock(struct kaddist *__restrict self,
   ticket->dt_prev->dt_next = ticket->dt_next;
   if (ticket->dt_next) ticket->dt_next->dt_prev = ticket->dt_prev;
  }
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  ticket->dt_prev = NULL;
  ticket->dt_next = NULL;
 #endif
@@ -190,7 +190,7 @@ _kaddist_delticket_andunlock(struct kaddist *__restrict self,
     if (!iter) break;
    }
   }
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
   ticket->dt_async = NULL;
 #endif
  }
@@ -198,7 +198,7 @@ _kaddist_delticket_andunlock(struct kaddist *__restrict self,
  --self->ad_known;
  /* Unlock the distributer. */
  ksignal_unlock_c(&self->ad_nbdat,KSIGNAL_LOCK_WAIT);
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  /* Free debug information. */
  ticket->dt_dist = NULL;
  dtraceback_free(ticket->dt_mk_tb);
@@ -222,7 +222,7 @@ kaddist_vtryrecv_unlocked(struct kaddist *__restrict self,
  assert(self->ad_chunkc <= self->ad_chunkmax);
  kassertmem(buf,self->ad_chunksz);
  if __unlikely(ISDEAD(self)) return KE_DESTROYED;
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  assertf(ticket->dt_dist == self,"Ticket %p registered to different ddist (%p) than %p",
          ticket,ticket->dt_dist,self);
  if (kaddist_hasticket(self,ticket) == NO) {

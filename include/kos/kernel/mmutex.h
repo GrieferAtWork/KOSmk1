@@ -29,16 +29,16 @@
 #include <kos/errno.h>
 #include <kos/kernel/signal.h>
 #include <strings.h>
-#if KDEBUG_HAVE_TRACKEDMMUTEX
+#if KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX
 #include <traceback.h>
-#endif /* KDEBUG_HAVE_TRACKEDMMUTEX */
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX */
 
 __DECL_BEGIN
 
 #define KOBJECT_MAGIC_MMUTEX  0x7707E3E /*< MMUTEX */
 #define kassert_kmmutex(self) kassert_object(self,KOBJECT_MAGIC_MMUTEX)
 
-#if KDEBUG_HAVE_TRACKEDMMUTEX
+#if KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX
 #define KMMUTEX_DEBUG_SIZEOF           (__SIZEOF_POINTER__*2)
 #define KMMUTEX_DEBUG_OFFSETOF_HOLDER  (0)
 #define KMMUTEX_DEBUG_OFFSETOF_LOCKTB  (__SIZEOF_POINTER__)
@@ -48,7 +48,7 @@ struct kmmutex_debug {
  struct dtraceback *md_locktb; /*< [0..1][lock(this)] Traceback of where the lock was acquired. */
 };
 #endif /* !__ASSEMBLY__ */
-#endif /* KDEBUG_HAVE_TRACKEDMMUTEX */
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX */
 
 //////////////////////////////////////////////////////////////////////////
 // KMMUTEX_LOCKC:   Max amount of available multi-mutex locks (usually 16)
@@ -75,11 +75,11 @@ struct kmmutex {
  KOBJECT_HEAD
  struct ksignal       mmx_sig;   /*< Signal used for locking. */
 #define mmx_locks     mmx_sig.s_useru
-#if KDEBUG_HAVE_TRACKEDMMUTEX
+#if KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX
  struct kmmutex_debug mmx_debug[KMMUTEX_LOCKC]; /*< Debug information. */
 #endif
 };
-#if KDEBUG_HAVE_TRACKEDMMUTEX
+#if KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX
 __local __crit void __kmmutex_free_debug(struct kmmutex *self) {
  struct kmmutex_debug *iter,*end;
  end = (iter = self->mmx_debug)+KMMUTEX_LOCKC;
@@ -141,7 +141,7 @@ extern __crit __nonnull((1)) kerrno_t kmmutex_reset(struct kmmutex *__restrict s
             __kmmutex_init_debug(__kmiself);\
             (void)0;\
  })
-#if KDEBUG_HAVE_TRACKEDMMUTEX
+#if KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX
 #define /*__crit*/ kmmutex_close(self) \
  __xblock({ struct kmmutex *const __kmmxcself = (self);\
             kerrno_t __kmmxcerr = ksignal_close(&__kmmxcself->mmx_sig,__sigself->s_useru=KMMUTEX_LOCKMASK);\

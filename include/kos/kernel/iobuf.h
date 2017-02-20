@@ -312,7 +312,7 @@ kiobuf_setmaxsize_c(struct kiobuf *__restrict self,
                     __size_t *__restrict old_value) {
  kerrno_t error;
  KTASK_CRIT_MARK
- kassert_kiobuf(self); kassertobj(result);
+ kassert_kiobuf(self); kassertobj(old_value);
  if __likely(KE_ISOK(error = krwlock_beginwrite(&self->ib_rwlock))) {
   if (old_value) *old_value = self->ib_maxsize;
   self->ib_maxsize = value;

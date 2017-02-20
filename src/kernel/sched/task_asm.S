@@ -161,7 +161,7 @@ GLOBAL_FUNCTION(ktask_switchimpl):
 	movI %eax, %cr3
 	movI %ecx, %esp
 
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
 	pop16 %ds
 	pop16 %es
 	pop16 %fs

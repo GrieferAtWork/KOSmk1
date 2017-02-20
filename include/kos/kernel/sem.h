@@ -44,14 +44,14 @@ struct ksem;
 struct ksem {
  KOBJECT_HEAD
  struct ksignal       s_sig; /*< Signal used to manage sleeping tasks. */
-#if KSEMAPHORE_TICKETBITS <= KSIGNAL_USERBITS
+#if KCONFIG_SEMAPHORE_TICKETBITS <= KSIGNAL_USERBITS
 #define s_tck         s_sig.s_useru
 #else
  __atomic ksemcount_t s_tck; /*< The amount of available tickets. */
 #endif
 };
 
-#if KSEMAPHORE_TICKETBITS <= KSIGNAL_USERBITS
+#if KCONFIG_SEMAPHORE_TICKETBITS <= KSIGNAL_USERBITS
 #define KSEM_INIT(tickets) {KOBJECT_INIT(KOBJECT_MAGIC_SEM) KSIGNAL_INIT_U(tickets)}
 #else
 #define KSEM_INIT(tickets) {KOBJECT_INIT(KOBJECT_MAGIC_SEM) KSIGNAL_INIT,tickets}

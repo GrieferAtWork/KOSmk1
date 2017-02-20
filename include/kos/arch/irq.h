@@ -26,7 +26,7 @@
 #include <kos/compiler.h>
 #include <kos/kernel/features.h>
 
-#if !KCONFIG_HAVE_INTERRUPTS
+#if !KCONFIG_HAVE_IRQ
 #undef karch_irq_enable
 #undef karch_irq_disable
 #undef karch_irq_idle

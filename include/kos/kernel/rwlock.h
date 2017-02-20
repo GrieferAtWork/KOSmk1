@@ -69,10 +69,10 @@ struct krwlock {
  /* v [lock(KSIGNAL_LOCK_WAIT)] Set when the lock is in write-mode. */
 #define KRWLOCK_FLAG_WRITEMODE   KSIGNAL_FLAG_USER(0)
  struct ksignal          rw_sig;   /*< Underlying signal. */
-#if KRWLOCK_READCBITS <= KSIGNAL_USERBITS
+#if KCONFIG_RWLOCK_READERBITS <= KSIGNAL_USERBITS
 #define rw_readc         rw_sig.s_useru
 #else
- __un(KRWLOCK_READCBITS) rw_readc; /*< [lock(KSIGNAL_LOCK_WAIT)] Amount of tasks currently performing read operations. */
+ __un(KCONFIG_RWLOCK_READERBITS) rw_readc; /*< [lock(KSIGNAL_LOCK_WAIT)] Amount of tasks currently performing read operations. */
 #endif
 };
 #define krwlock_iswritelocked(self) (!!((self)->rw_sig.s_flags&KRWLOCK_FLAG_WRITEMODE))
@@ -83,7 +83,7 @@ struct krwlock {
 #define KRWLOCK_INIT_IS_MEMSET_ZERO 1
 #endif
 
-#if KRWLOCK_READCBITS <= KSIGNAL_USERBITS
+#if KCONFIG_RWLOCK_READERBITS <= KSIGNAL_USERBITS
 #define KRWLOCK_INIT  {KOBJECT_INIT(KOBJECT_MAGIC_RWLOCK) KSIGNAL_INIT}
 #else
 #define KRWLOCK_INIT  {KOBJECT_INIT(KOBJECT_MAGIC_RWLOCK) KSIGNAL_INIT,0}
@@ -93,7 +93,7 @@ struct krwlock {
 extern __nonnull((1)) void krwlock_init(struct krwlock *__restrict self);
 #elif defined(KSIGNAL_INIT_IS_MEMSET_ZERO)
 #define krwlock_init(self) kobject_initzero(self,KOBJECT_MAGIC_RWLOCK)
-#elif KRWLOCK_READCBITS <= KSIGNAL_USERBITS
+#elif KCONFIG_RWLOCK_READERBITS <= KSIGNAL_USERBITS
 #define krwlock_init(self) \
  __xblock({ struct krwlock *const __rwself = (self);\
             kobject_init(__rwself,KOBJECT_MAGIC_RWLOCK);\

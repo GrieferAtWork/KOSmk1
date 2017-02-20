@@ -33,6 +33,11 @@
 #include <math.h>
 #include <assert.h>
 #include <stdio.h>
+#include <kos/kernel/panic.h>
+
+#ifdef __x86__ 
+#include <kos/arch/x86/vga.h>
+#endif
 
 __DECL_BEGIN
 
@@ -446,11 +451,72 @@ void kpagedir_print(struct kpagedir const *self) {
 
 
 
+#if 1
 
+/* The page directory itself is still statically allocated,
+ * just so we already know its final memory address at compile-time. */
+__attribute__((__aligned__(PAGEALIGN)))
+struct kpagedir __kpagedir_kernel;
+
+void
+kpagedir_kernel_installmemory(__pagealigned __physicaladdr void *addr,
+                              size_t pages, kpageflag_t flags) {
+ kerrno_t error;
+ assertf(isaligned((uintptr_t)addr,PAGEALIGN),
+         "Address not page-aligned: %p",addr);
+ if __unlikely(!pages) return;
+ k_syslogf(KLOG_DEBUG,"[PD] Installing kernel memory %p+%Ix...%p (%s)\n",
+           addr,pages*PAGESIZE,(void *)((uintptr_t)addr+pages*PAGESIZE),
+          (flags&X86_PDE_FLAG_READ_WRITE) ? "R/W" : "RO");
+ error = kpagedir_remap(&__kpagedir_kernel,addr,addr,pages,flags);
+ if __unlikely(KE_ISERR(error)) {
+  PANIC("Failed to install kernel memory %p+%Ix...%p (%s): %d",
+        addr,pages*PAGESIZE,(void *)((uintptr_t)addr+pages*PAGESIZE),
+       (flags&X86_PDE_FLAG_READ_WRITE) ? "R/W" : "RO",error);
+ }
+}
+
+
+void kernel_initialize_paging(void) {
+ extern __u8 __kernel_ro_begin[];
+ extern __u8 __kernel_ro_end[];
+ extern __u8 __kernel_rw_begin[];
+ extern __u8 __kernel_rw_end[];
+ uintptr_t kernel_begin,kernel_end;
+ /* When initializing RAM, make anything
+  * that isn't part of it non-present! */
+ kernel_begin = alignd((uintptr_t)__kernel_ro_begin,PAGEALIGN);
+ kernel_end   = align ((uintptr_t)__kernel_ro_end,  PAGEALIGN);
+ kpagedir_kernel_installmemory((void *)kernel_begin,ceildiv(kernel_end-kernel_begin,PAGESIZE),0);
+ kernel_begin = alignd((uintptr_t)__kernel_rw_begin,PAGEALIGN);
+ kernel_end   = align ((uintptr_t)__kernel_rw_end,  PAGEALIGN);
+ kpagedir_kernel_installmemory((void *)kernel_begin,ceildiv(kernel_end-kernel_begin,PAGESIZE),X86_PDE_FLAG_READ_WRITE);
+
+#ifdef __x86__ 
+ KERNEL_INSTALLMEMORY(VGA_ADDR,VGA_WIDTH*VGA_HEIGHT*2,1);
+#endif
+#if 0
+ kpagedir_kernel_installmemory((void *)NULL,((uintptr_t)-1)/PAGESIZE,X86_PDE_FLAG_READ_WRITE);
+ kpagedir_print(kpagedir_kernel());
+#endif
+
+ kpagedir_makecurrent(kpagedir_kernel());
+ __arch_enablepaging();
+#define WP (1 << 16)
+ /* Enable write-protection within kernel-land (ring 0) */
+ __u32 cr0; __asm_volatile__("movl %%cr0, %0" : "=r" (cr0));
+ cr0 |= WP; __asm_volatile__("movl %0, %%cr0" : : "r" (cr0));
+}
+#else
 // TODO: The kernel page table should be allocated dynamically
 //    >> That way, we can reduce the static size of the kernel _A_ _LOT_
 static x86_pte __attribute__((__aligned__(PAGEALIGN))) __kernel_pagetables[X86_PDE4DIC*X86_PTE4PDE];
 __attribute__((__aligned__(4096))) struct kpagedir __kpagedir_kernel;
+
+void
+kpagedir_kernel_installmemory(__pagealigned __physicaladdr void *addr,
+                              size_t pages, kpageflag_t flags) {
+}
 
 __local void mmu_init_pt(void) {
  x86_pte *iter,*end,entry;
@@ -476,7 +542,6 @@ __local void mmu_init_pd(void) {
 
 x86_pte *getpte(uintptr_t addr) {
  x86_pde *used_pde;
- kassertobj(self);
  used_pde = &__kpagedir_kernel.d_entries[X86_VPTR_GET_PDID(addr)];
  return &x86_pde_getpte(used_pde)[X86_VPTR_GET_PTID(addr)];
 }
@@ -504,7 +569,7 @@ void kernel_make_ro_immutable(void) {
 void kernel_initialize_paging(void) {
  mmu_init_pt();
  mmu_init_pd();
- kernel_make_ro_immutable();
+ //kernel_make_ro_immutable();
  // TODO: When initializing RAM, make anything that isn't
  //       part of it, or the kernel non-present!
  // TODO: Allocate kernel page tables dynamically (save a lot of mem that may...)
@@ -515,6 +580,8 @@ void kernel_initialize_paging(void) {
  __u32 cr0; __asm_volatile__("movl %%cr0, %0" : "=r" (cr0));
  cr0 |= WP; __asm_volatile__("movl %0, %%cr0" : : "r" (cr0));
 }
+#endif
+
 
 __DECL_END
 

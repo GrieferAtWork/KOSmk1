@@ -33,7 +33,7 @@
 #include <kos/syslog.h>
 #include <math.h>
 
-#if KCONFIG_USE_SHM2
+#if KCONFIG_HAVE_SHM2
 __DECL_BEGIN
 
 #define KSHM_LDT_BUFSIZE    (8)
@@ -293,6 +293,6 @@ kshm_ldtset(struct kshm *__restrict self, ksegid_t id,
 #undef VEC_END
               
 __DECL_END
-#endif /* KCONFIG_USE_SHM2 */
+#endif /* KCONFIG_HAVE_SHM2 */
 
 #endif /* !__KOS_KERNEL_SHM2_LDT_C_INL__ */

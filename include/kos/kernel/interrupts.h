@@ -37,7 +37,7 @@ __DECL_BEGIN
 #define KIRQ_REGISTERS_OFFSETOF_REGS_USERREGS (__SIZEOF_POINTER__*0)
 #define KIRQ_REGISTERS_OFFSETOF_REGS_USERCR3  (__SIZEOF_POINTER__*1)
 #define KIRQ_REGISTERS_OFFSETOF_REGS_DS       (__SIZEOF_POINTER__*2)
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
 #define KIRQ_REGISTERS_OFFSETOF_REGS_ES       (__SIZEOF_POINTER__*2+2)
 #define KIRQ_REGISTERS_OFFSETOF_REGS_FS       (__SIZEOF_POINTER__*2+4)
 #define KIRQ_REGISTERS_OFFSETOF_REGS_GS       (__SIZEOF_POINTER__*2+6)
@@ -63,7 +63,7 @@ __DECL_BEGIN
 
 __COMPILER_PACK_PUSH(1)
 struct __packed kirq_userregisters {
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
  /*4*/__u16 ds,es,fs,gs;
 #else
  /*2*/__u16 ds,__padding;
@@ -249,7 +249,7 @@ RUNTIME_REGION_DEFINE(NOIRQ);
 //       >> do_something();
 //       >> kmutex_unlock(&lock);
 //       >> NOIRQ_END
-#if KCONFIG_HAVE_INTERRUPTS
+#if KCONFIG_HAVE_IRQ
 #ifdef CONFIG_COMPILETIME_NOINTERRUPT_OPTIMIZATIONS
 #define NOIRQ_BEGIN                         REGION_ENTER(NOIRQ,!karch_irq_enabled,karch_irq_disable)
 #define NOIRQ_END                           REGION_LEAVE(NOIRQ,karch_irq_enable)
@@ -355,7 +355,7 @@ __DECL_END
     push32 %ebp
     push32 %esi
     push32 %edi
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
     push16 %gs
     push16 %fs
     push16 %es
@@ -371,7 +371,7 @@ __DECL_END
 .endm
 
 .macro POP_REGISTERS_NOEAX
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
     pop16 %ds
     pop16 %es
     pop16 %fs

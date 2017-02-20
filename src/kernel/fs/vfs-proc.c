@@ -108,7 +108,7 @@ kvinodepid_generic_getattr(struct kinode const *self,
                                  size_t ac, union kinodeattr *av) {
  kerrno_t error;
  for (; ac; ++av,--ac) switch (av->ia_common.a_id) {
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_START)
+#if KCONFIG_HAVE_TASK_STATS_START
   {
    struct ktask *root_task;
   case KATTR_FS_ATIME:
@@ -126,7 +126,7 @@ kvinodepid_generic_getattr(struct kinode const *self,
           sizeof(struct timespec));
    ktask_decref(root_task);
   } break;
-#endif /* KTASK_HAVE_STATS_START */
+#endif /* KCONFIG_HAVE_TASK_STATS_START */
   case KATTR_FS_OWNER: av->ia_owner.o_owner = kproc_uid(PROC); break;
   case KATTR_FS_GROUP: av->ia_group.g_group = kproc_gid(PROC); break;
   default:default_attrib:

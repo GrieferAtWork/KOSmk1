@@ -112,8 +112,10 @@ ksocket_recvfrom(struct ksocket *__restrict self,
                  struct sockaddr *__restrict addr, socklen_t *addrlen) {
  kassert_ksocket(self);
  kassertmem(buf,bufsize);
- kassertmemnull(addr,addrlen);
  kassertobjnull(addrlen);
+#if KCONFIG_HAVE_DEBUG_MEMCHECKS
+ if (addrlen) kassertmemnull(addr,*addrlen);
+#endif
  kassertobj(recv_size);
  if __unlikely(!self->s_ops->so_recvfrom) return KE_NOSYS;
  return (*self->s_ops->so_recvfrom)(self,buf,bufsize,recv_size,

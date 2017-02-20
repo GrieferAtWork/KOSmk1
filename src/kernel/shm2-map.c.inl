@@ -29,14 +29,15 @@
 #include <kos/kernel/interrupts.h>
 #include <kos/kernel/shm2.h>
 
-#if KCONFIG_USE_SHM2
+#if KCONFIG_HAVE_SHM2
 __DECL_BEGIN
 
 void
-print_branch(struct kshmbranch *__restrict branch,
-             uintptr_t addr_semi, unsigned int level) {
+kshmbranch_print(struct kshmbranch *__restrict branch,
+                 uintptr_t addr_semi, unsigned int level) {
  unsigned int new_level,i; uintptr_t new_semi;
  if (!branch) return;
+again:
  kassertobj(branch);
  kassert_kshmregion(branch->sb_region);
  for (i = 31; i > level; --i) printf("%s",(addr_semi&(1 << i)) ? "+" : "-");
@@ -62,79 +63,20 @@ print_branch(struct kshmbranch *__restrict branch,
  assert(branch->sb_map_min >= KSHMBRANCH_MAPMIN(addr_semi,level));
  assert(branch->sb_map_max <= KSHMBRANCH_MAPMAX(addr_semi,level));
  if (branch->sb_min) {
-  new_semi = addr_semi,new_level = level;
-  KSHMBRANCH_WALKMIN(new_semi,new_level);
-  print_branch(branch->sb_min,new_semi,new_level);
+  if (branch->sb_max) {
+   new_semi = addr_semi,new_level = level;
+   KSHMBRANCH_WALKMAX(new_semi,new_level);
+   kshmbranch_print(branch->sb_max,new_semi,new_level);
+  }
+  KSHMBRANCH_WALKMIN(addr_semi,level);
+  branch = branch->sb_min;
+  goto again;
  }
  if (branch->sb_max) {
-  new_semi = addr_semi,new_level = level;
-  KSHMBRANCH_WALKMAX(new_semi,new_level);
-  print_branch(branch->sb_max,new_semi,new_level);
+  KSHMBRANCH_WALKMAX(addr_semi,level);
+  branch = branch->sb_max;
+  goto again;
  }
-}
-
-static void
-reinsert_recursive(struct kshmbranch **__restrict pbranch,
-                   struct kshmbranch *__restrict newleaf,
-                   uintptr_t addr_semi, unsigned int level) {
-#if 0
- printf("recursive_insert leaf %p .. %p at %p .. %p semi %p, level %u\n",
-        newleaf->sb_map_min,newleaf->sb_map_max,
-        KSHMBRANCH_MAPMIN(addr_semi,level),
-        KSHMBRANCH_MAPMAX(addr_semi,level),
-        addr_semi,level);
-#endif
- if (newleaf->sb_min) reinsert_recursive(pbranch,newleaf->sb_min,addr_semi,level);
- if (newleaf->sb_max) reinsert_recursive(pbranch,newleaf->sb_max,addr_semi,level);
- asserte(kshmbranch_insert(pbranch,newleaf,addr_semi,level) == KE_OK);
-}
-
-
-/* Override a given branch with a new node.
- * This is a pretty complicated process, because any branch of the old
- * branch's min->[max...] and max->[min...] chain must be rebuild. */
-static void
-override_branch(struct kshmbranch **__restrict pbranch,
-                struct kshmbranch *__restrict newleaf,
-                uintptr_t addr_semi, unsigned int level) {
-#if 0
- struct kshmbranch *iter,**app_min,**app_max;
- uintptr_t newleaf_min;
- app_min     = &newleaf->sb_min;
- app_max     = &newleaf->sb_max;
- newleaf_min = newleaf->sb_map_min;
- iter        = *pbranch,*pbranch = newleaf;
- while (iter) {
-  assertf(iter->sb_map_max < newleaf_min ||
-          iter->sb_map_min > newleaf->sb_map_max,
-          "newleaf is overlapping with an existing branch");
-  if (iter->sb_map_max < addr_semi) {
-   /* Branch is located below the new leaf.
-    * (append to min-chain & continue searching towards max) */
-   *app_min = iter;
-   app_min  = &iter->sb_max;
-   iter     = iter->sb_max;
-   KSHMBRANCH_WALKMAX(addr_semi,level);
-  } else {
-   assert(iter->sb_map_min > addr_semi);
-   /* Branch is located above the new leaf.
-    * (append to max-chain & continue searching towards min) */
-   *app_max = iter;
-   app_max  = &iter->sb_min;
-   iter     = iter->sb_min;
-   KSHMBRANCH_WALKMIN(addr_semi,level);
-  }
- }
- /* Terminate the append-chains. */
- *app_min = NULL;
- *app_max = NULL;
-#else
- struct kshmbranch *iter;
- iter = *pbranch,*pbranch = newleaf;
- newleaf->sb_min = NULL;
- newleaf->sb_max = NULL;
- reinsert_recursive(pbranch,iter,addr_semi,level);
-#endif
 }
 
 __crit __nomp kerrno_t
@@ -179,7 +121,21 @@ got_it:
   assertf(iter->sb_map_max <= addr_semi ||
           iter->sb_map_min >= addr_semi,
           "But that would mean we are overlapping...");
-  override_branch(pcurr,newleaf,addr_semi,addr_level);
+  /* Override a given branch with a new node.
+   * This is a pretty complicated process, because we
+   * can't simply shift the entire tree down one level.
+   * >> Some of the underlying branches may have been
+   *    perfect fits before (aka. addr_semi-fits), yet
+   *    if we were to shift them directly, they would
+   *    reside in invalid and unexpected locations,
+   *    causing the entire tree to break.
+   * >> Instead we must recursively re-insert all
+   *    underlying branches, even though that might
+   *    seem extremely inefficient. */
+  newleaf->sb_min = NULL;
+  newleaf->sb_max = NULL;
+  *pcurr = newleaf;
+  kshmbranch_reinsertall(pcurr,iter,addr_semi,addr_level);
   goto got_it;
  }
  /* We are not a perfect fit for this leaf because
@@ -201,13 +157,20 @@ got_it:
 }
 
 __crit __nomp void
-kshmbranch_insertall(struct kshmbranch **__restrict proot,
-                     struct kshmbranch *__restrict insert_root,
-                     uintptr_t addr_semi, unsigned int addr_level) {
+kshmbranch_reinsertall(struct kshmbranch **__restrict proot,
+                       struct kshmbranch *__restrict insert_root,
+                       uintptr_t addr_semi, unsigned int addr_level) {
+#if 0
+ printf("recursive_insert leaf %p .. %p at %p .. %p semi %p, level %u\n",
+        newleaf->sb_map_min,newleaf->sb_map_max,
+        KSHMBRANCH_MAPMIN(addr_semi,level),
+        KSHMBRANCH_MAPMAX(addr_semi,level),
+        addr_semi,level);
+#endif
  kassertobj(insert_root);
  kassert_kshmregion(insert_root->sb_region);
- if (insert_root->sb_min) kshmbranch_insertall(proot,insert_root->sb_min,addr_semi,addr_level);
- if (insert_root->sb_max) kshmbranch_insertall(proot,insert_root->sb_max,addr_semi,addr_level);
+ if (insert_root->sb_min) kshmbranch_reinsertall(proot,insert_root->sb_min,addr_semi,addr_level);
+ if (insert_root->sb_max) kshmbranch_reinsertall(proot,insert_root->sb_max,addr_semi,addr_level);
  asserte(kshmbranch_insert(proot,insert_root,addr_semi,addr_level) == KE_OK);
 }
 
@@ -223,8 +186,8 @@ kshmbranch_popone(struct kshmbranch **proot,
  kassertobj(root);
  kassert_kshmregion(root->sb_region);
  *proot = NULL;
- if (root->sb_min) kshmbranch_insertall(proot,root->sb_min,addr_semi,addr_level);
- if (root->sb_max) kshmbranch_insertall(proot,root->sb_max,addr_semi,addr_level);
+ if (root->sb_min) kshmbranch_reinsertall(proot,root->sb_min,addr_semi,addr_level);
+ if (root->sb_max) kshmbranch_reinsertall(proot,root->sb_max,addr_semi,addr_level);
  return root;
 }
 
@@ -268,6 +231,6 @@ found_it:
 }
 
 __DECL_END
-#endif /* KCONFIG_USE_SHM2 */
+#endif /* KCONFIG_HAVE_SHM2 */
 
 #endif /* !__KOS_KERNEL_SHM2_MAP_C_INL__ */

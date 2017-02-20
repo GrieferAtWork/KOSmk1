@@ -141,7 +141,7 @@ __private void user_initialize_environ(void) {
  assertf(environ == __env_default
         ,"environ = %p at %p (expected: %p)"
         ,environ,&environ,&__env_default[0]);
- k_syslogf(KLOG_INFO,"environ = %p at %p (expected: %p)\n",
+ k_syslogf(KLOG_TRACE,"environ = %p at %p (expected: %p)\n",
            environ,&environ,&__env_default[0]);
  __envtext_begin = kos_allocenvtext();
  if __unlikely(!__envtext_begin) return;

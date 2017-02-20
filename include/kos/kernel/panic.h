@@ -20,38 +20,46 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_KERNEL_TYPES_H__
-#define __KOS_KERNEL_TYPES_H__ 1
+#ifndef __KOS_KERNEL_PANIC_H__
+#define __KOS_KERNEL_PANIC_H__ 1
 
 #include <kos/config.h>
+#include <kos/compiler.h>
 #ifdef __KERNEL__
 #ifndef __ASSEMBLY__
-#include <kos/types.h>
-#include <kos/kernel/features.h>
 
 __DECL_BEGIN
 
-#ifndef __ktaskprio_t_defined
-#define __ktaskprio_t_defined 1
-typedef __ktaskprio_t ktaskprio_t;
+extern __noinline __noclone __noreturn __coldcall
+#if    __LIBC_HAVE_DEBUG_PARAMS == 3
+       __attribute_vaformat(__printf__,4,5)
+#elif  __LIBC_HAVE_DEBUG_PARAMS == 0
+       __attribute_vaformat(__printf__,1,2)
+#else
+#      error "FIXME"
 #endif
+void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *fmt, ...);
 
-typedef __u32 __kpageflag_t;
-
-#define KTASKPRIO_MIN   (-32767-1)
-#define KTASKPRIO_MAX     32767
-
-typedef __un(KCONFIG_SEMAPHORE_TICKETBITS) ksemcount_t;
-
-// Module ID
-#ifndef __kmodid_t_defined
-#define __kmodid_t_defined 1
-typedef __kmodid_t kmodid_t;
-#endif
+//////////////////////////////////////////////////////////////////////////
+// Invoke kernel panic.
+// >> Similar to failing an assertion, but cannot be disabled
+//    through a preprocessor switch and should therefor be used
+//    as rare as possible.
+// >> Main uses are handling of allocation failure in kernel
+//    initialization routines, such as allocating the kernel's
+//    own page directory.
+// USE:
+// >> static void *buffer;
+// >> void kernel_initialize_buffer(void) {
+// >>   buffer = malloc(4096);
+// >>   if (!buffer) PANIC("Failed to allocated buffer");
+// >> }
+#define PANIC(...)   k_syspanic(__LIBC_DEBUG_ARGS_ __VA_ARGS__)
 
 __DECL_END
 
 #endif /* !__ASSEMBLY__ */
 #endif /* !__KERNEL__ */
 
-#endif /* !__KOS_KERNEL_TYPES_H__ */
+
+#endif /* !__KOS_KERNEL_PANIC_H__ */

@@ -52,13 +52,13 @@ kpageframe_alloc(__size_t n_pages)
  iter = first_free_page;
  while (iter != KPAGEFRAME_INVPTR) {
   assert(iter->pff_size != 0);
+  assertf((iter->pff_prev == KPAGEFRAME_INVPTR) == (iter == first_free_page),
+          "Only the first page may have no predecessor");
   if (iter->pff_size >= n_pages) {
 #ifdef TRYALLOC
    *did_alloc_pages = n_pages;
 take_iter:
 #endif
-   assertf((iter->pff_prev == KPAGEFRAME_INVPTR) == (iter == first_free_page),
-           "Only the first page may have no predecessor");
    assert((iter->pff_prev == KPAGEFRAME_INVPTR) || iter->pff_prev < iter);
    assert((iter->pff_next == KPAGEFRAME_INVPTR) || iter->pff_next > iter);
    // Usable page --> split it
@@ -85,6 +85,7 @@ enditer:
 #if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
    total_allocated_pages += n_pages;
 #endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
+   assert(!first_free_page || first_free_page->pff_prev == KPAGEFRAME_INVPTR);
    kpagealloc_unlock();
    return iter;
   }

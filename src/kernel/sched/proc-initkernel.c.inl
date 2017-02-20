@@ -32,9 +32,10 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_START)
+#if KCONFIG_HAVE_TASK_STATS_START
 #include <kos/kernel/time.h>
 #endif
+#include <kos/kernel/panic.h>
 
 __DECL_BEGIN
 
@@ -54,7 +55,7 @@ struct kproc __kproc_kernel = {
  /* p_environ */KPROCENV_INIT_ROOT,
 };
 
-#if !KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_START)
+#if !KCONFIG_HAVE_TASK_STATS_START
 extern struct timespec __kernel_boot_time;
 struct timespec __kernel_boot_time = {0,0};
 #endif
@@ -64,12 +65,11 @@ struct kproclist __kproclist_global = KPROCLIST_INIT;
 void kernel_initialize_process(void) {
  __kproc_kernel.p_threads.t_taskv = (struct ktask **)malloc(1*sizeof(struct ktask *));
  if __unlikely(!__kproc_kernel.p_threads.t_taskv) {
-  printf("Failed to initialize kernel task context: KE_NOMEM\n");
-  abort();
+  PANIC("Failed to initialize kernel task context: Not enough memory\n");
  }
  __kproc_kernel.p_threads.t_taska = 1;
  __kproc_kernel.p_threads.t_taskv[0] = ktask_zero();
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_START)
+#if KCONFIG_HAVE_TASK_STATS_START
  ktime_getnoworcpu(&ktask_zero()->t_stats.ts_abstime_start);
 #else
  ktime_getnoworcpu(&__kernel_boot_time);
@@ -79,8 +79,7 @@ void kernel_initialize_process(void) {
  __kproc_kernel.p_modules.pms_moda = 1;
  __kproc_kernel.p_modules.pms_modv = (struct kprocmodule *)malloc(sizeof(struct kprocmodule));
  if __unlikely(!__kproc_kernel.p_modules.pms_modv) {
-  printf("Failed to initialize kernel process modules: KE_NOMEM\n");
-  abort();
+  PANIC("Failed to initialize kernel process modules: Not enough memory\n");
  }
  kobject_init(&__kproc_kernel.p_modules.pms_modv[0],KOBJECT_MAGIC_PROCMODULE);
  __kproc_kernel.p_modules.pms_modv[0].pm_loadc = 1;
@@ -90,8 +89,7 @@ void kernel_initialize_process(void) {
 
  __kproclist_global.pl_procv = (struct kproc **)malloc(1*sizeof(struct kproc *));
  if __unlikely(!__kproclist_global.pl_procv) {
-  printf("Failed to initialize kernel process list: KE_NOMEM\n");
-  abort();
+  PANIC("Failed to initialize kernel process list: Not enough memory\n");
  }
  __kproclist_global.pl_proca = 1;
  __kproclist_global.pl_procv[0] = &__kproc_kernel;

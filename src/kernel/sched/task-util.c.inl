@@ -72,7 +72,7 @@ __COMPILER_PACK_POP
  memset(&stack,0,sizeof(stack));
  stack.regs.cs       = KSEG_KERNEL_CODE;
  stack.regs.ds       = KSEG_KERNEL_DATA;
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
  stack.regs.es       = KSEG_KERNEL_DATA;
  stack.regs.fs       = KSEG_KERNEL_DATA;
  stack.regs.gs       = KSEG_KERNEL_DATA;
@@ -404,7 +404,7 @@ void ktask_stackpop_sp_unlocked(struct ktask *__restrict self,
  *(uintptr_t *)&self->t_esp += s;
 }
 
-#if KCONFIG_HAVE_TASKNAMES
+#if KCONFIG_HAVE_TASK_NAMES
 __crit kerrno_t
 ktask_setnameex_ck(struct ktask *__restrict self,
                    char const *__restrict name, size_t maxlen) {
@@ -459,7 +459,7 @@ void ktask_setupuser(struct ktask *self, __user void *useresp, __user void *eip)
   *         Why is there no one on the entire Internet that already had to deal with this?
   * >> Like seriously: Am I writing the first hobby OS planned to include TRUE thread-local storage?
   */
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
  regs.base.es     =
  regs.base.fs     =
  regs.base.gs     =

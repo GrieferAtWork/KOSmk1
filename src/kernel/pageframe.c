@@ -72,13 +72,6 @@ void raminfo_addregion(__u64 start, __u64 size) {
  }
  native_start = (uintptr_t)start;
  native_size = (size_t)size;
- if __unlikely(!native_size) return;
- if __unlikely(!native_start) {
-  /* Don't map valid physical memory to NULL. - KOS uses NULL as... well: the NULL-pointer (ZERO-0). */
-  //k_syslogf(KLOG_WARN,"KOS cannot use RAM chips mapped to NULL (Skipping first page)\n");
-  ++native_start,--native_size;
-  if __unlikely(!native_size) return;
- }
 
  if (native_start < (uintptr_t)__kernel_end &&
      native_start+native_size > (uintptr_t)__kernel_begin) {
@@ -95,12 +88,16 @@ void raminfo_addregion(__u64 start, __u64 size) {
           native_start+native_size > (uintptr_t)__kernel_begin));
 
  // Align the used memory by the alignment of pages
-#if PAGEALIGN > 1
  used_start = align(native_start,PAGEALIGN);
-#else
- used_start = native_start;
-#endif
- used_size = native_size-(used_start-native_start);
+ used_size  = native_size-(used_start-native_start);
+ used_size  = alignd(used_size,PAGESIZE);
+ if __unlikely(!used_start) {
+  used_start += PAGESIZE;
+  if __unlikely(used_size <= PAGESIZE) return;
+  used_size -= PAGESIZE;
+ }
+ assert(used_start >= native_start);
+ assert(used_size <= native_size);
  k_syslogf(KLOG_INFO
           ,"[RAM] Determined usable memory %Ix+%Ix...%Ix (Using %Ix+%Ix...%Ix)\n"
           ,native_start,native_size,native_start+native_size
@@ -108,7 +105,7 @@ void raminfo_addregion(__u64 start, __u64 size) {
  // Simply mask the region as free!
  // NOTE: Dividing by PAGESIZE truncates
  kpageframe_free((struct kpageframe *)used_start,
-                used_size/PAGESIZE);
+                 used_size/PAGESIZE);
 }
 
 multiboot_info_t *__grub_mbt;
@@ -134,6 +131,7 @@ void kernel_initialize_raminfo(void) {
  size_t             cmdline_page_c;
  char   cmdline_safe_v[3*sizeof(void *)];
  size_t cmdline_safe_c;
+ memset(&__kpagedir_kernel,0,sizeof(__kpagedir_kernel));
  if (__grub_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
   k_syslogf(KLOG_ERROR,"KOS Must be booted with a multiboot-compatible bootloader (e.g.: grub)\n");
   goto nocmdline;
@@ -158,7 +156,7 @@ void kernel_initialize_raminfo(void) {
    if (iter->type == 1) {
     __u64 begin = ((__u64)iter->base_addr_high << 32) | (__u64)iter->base_addr_low;
     __u64 size  = ((__u64)iter->length_high << 32) | (__u64)iter->length_low;
-    debug_addknownramregion((void *)(uintptr_t)begin,(size_t)size);
+    //debug_addknownramregion((void *)(uintptr_t)begin,(size_t)size);
     raminfo_addregion(begin,size);
    }
    iter = (memory_map_t *)((uintptr_t)iter+(iter->size+sizeof(iter->size)));
@@ -203,6 +201,30 @@ nocmdline:
  assert((cmdline_addr != NULL) == (cmdline_page_v != NULL));
  assert((cmdline_addr != NULL) == (cmdline_length != 0));
  assert((cmdline_addr != NULL) == (cmdline_page_c != 0));
+ {
+  struct kpageframe *next,*iter = first_free_page;
+  struct kpageframe *tail;
+  first_free_page = KPAGEFRAME_INVPTR;
+  while (iter != KPAGEFRAME_INVPTR) {
+   size_t size = iter->pff_size;
+   tail = first_free_page,next = iter->pff_next,iter->pff_next = NULL;
+   iter->pff_next = NULL;
+   if (tail != KPAGEFRAME_INVPTR) {
+    while (tail->pff_next != KPAGEFRAME_INVPTR) tail = tail->pff_next;
+    tail->pff_next = iter;
+    iter->pff_prev = tail;
+   } else {
+    iter->pff_prev = NULL;
+    first_free_page = iter;
+   }
+   assert(first_free_page != KPAGEFRAME_INVPTR);
+   assert(first_free_page->pff_prev == KPAGEFRAME_INVPTR);
+   x64_reserve_realmode_bootstrap();
+   kpagedir_kernel_installmemory((struct kpageframe *)iter,size,
+                                 PAGEDIR_FLAG_READ_WRITE);
+   iter = next;
+  }
+ }
  if (cmdline_page_v) {
   // Implemented in '/src/kernel/procenv.c'
   extern void kernel_initialize_cmdline(char const *cmd, size_t cmdlen);
@@ -211,12 +233,14 @@ nocmdline:
   x64_reserve_realmode_bootstrap();
   kernel_initialize_cmdline(cmdline_addr,cmdline_length);
   kpageframe_free(cmdline_page_v,cmdline_page_c);
+  kpagedir_kernel_installmemory((struct kpageframe *)cmdline_page_v,
+                                cmdline_page_c,PAGEDIR_FLAG_READ_WRITE);
  }
+
  /* Reserve memory again in case the first attempt
   * failed because the region of memory in question
   * was allocated as part of the commandline. */
  x64_reserve_realmode_bootstrap();
-
 }
 
 
@@ -235,39 +259,43 @@ kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, size_t n_p
  kpagealloc_lock();
  iter = first_free_page;
  while (iter != KPAGEFRAME_INVPTR) {
-  if ((uintptr_t)start < (uintptr_t)iter) break; /* We won't find this region... */
-  if ((uintptr_t)start+n_pages < (uintptr_t)iter+iter->pff_size) {
-   assert(n_pages <= iter->pff_size);
-   if (start == iter) {
-    /* Split 1 --> 0/1 */
-    if (n_pages == iter->pff_size) {
-     assert((iter->pff_prev != KPAGEFRAME_INVPTR) == (iter != first_free_page));
-     if (iter->pff_prev ==KPAGEFRAME_INVPTR) first_free_page = iter->pff_next;
-     else iter->pff_prev->pff_next = iter->pff_next;
+  if ((uintptr_t)start >= (uintptr_t)iter) {
+   if (start+n_pages <= iter+iter->pff_size) {
+    assert(n_pages <= iter->pff_size);
+    if (start == iter) {
+     /* Split 1 --> 0/1 */
+     if (n_pages == iter->pff_size) {
+      assert((iter->pff_prev != KPAGEFRAME_INVPTR) == (iter != first_free_page));
+      if (iter->pff_prev == KPAGEFRAME_INVPTR) first_free_page = iter->pff_next;
+      else iter->pff_prev->pff_next = iter->pff_next;
+     } else {
+      split = iter+n_pages;
+      split->pff_prev = iter->pff_prev;
+      split->pff_next = iter->pff_next;
+      split->pff_size = iter->pff_size-n_pages;
+      if (split->pff_prev == KPAGEFRAME_INVPTR) first_free_page = split;
+      else split->pff_prev->pff_next = split;
+     }
     } else {
-     split = iter+n_pages;
-     split->pff_prev = iter->pff_prev;
+     size_t new_iter_size = (size_t)(start-iter);
+     split = start+n_pages;
+     assert(n_pages < iter->pff_size);
+     /* Split 1 --> 2 */
+     split->pff_prev = iter;
      split->pff_next = iter->pff_next;
-     split->pff_size = iter->pff_size-n_pages;
-     if (split->pff_prev == KPAGEFRAME_INVPTR) first_free_page = split;
-     else split->pff_prev->pff_next = split;
+     split->pff_size = iter->pff_size-(new_iter_size+n_pages);
+     iter->pff_next = split;
+     iter->pff_size = new_iter_size;
     }
-   } else {
-    size_t new_iter_size = (size_t)(start-iter);
-    split = start+n_pages;
-    assert(n_pages < iter->pff_size);
-    /* Split 1 --> 2 */
-    split->pff_prev = iter;
-    split->pff_next = iter->pff_next;
-    split->pff_size = iter->pff_size-(new_iter_size+n_pages);
-    iter->pff_next = split;
-    iter->pff_size = new_iter_size;
-   }
 #if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
-   total_allocated_pages += n_pages;
+    total_allocated_pages += n_pages;
 #endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
-   kpagealloc_unlock();
-   return start;
+    assert(!first_free_page || first_free_page->pff_prev == KPAGEFRAME_INVPTR);
+    kpagealloc_unlock();
+    return start;
+   }
+  } else {
+   break; /* We won't find this region... */
   }
   iter = iter->pff_next;
  }
@@ -373,6 +401,7 @@ kpageframe_free(__kernel __pagealigned struct kpageframe *__restrict start,
   iter = iter->pff_next;
  }
 end:
+ assert(!first_free_page || first_free_page->pff_prev == KPAGEFRAME_INVPTR);
 #if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
  total_allocated_pages -= n_pages;
 #endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */

@@ -37,7 +37,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <strings.h>
-#if KCONFIG_USE_SHM2
+#if KCONFIG_HAVE_SHM2
 
 // Shared memory layout
 __DECL_BEGIN
@@ -447,6 +447,13 @@ union{
 #define KSHMBRANCH_NEXTMAX(semi,level) ((semi)|((__uintptr_t)1 << ((level)-1)))                                /*< set level'th-1 bit. */
 #define KSHMBRANCH_SEMILEVEL(semi)     (ffs(semi)-1) /*< Get the current level associated with a given semi-address. */
 
+//////////////////////////////////////////////////////////////////////////
+// Print a representation of the given SHM
+// branch and all those reachable from it.
+// >> Only used for debugging and panic-info.
+extern void
+kshmbranch_print(struct kshmbranch *__restrict branch,
+                 __uintptr_t addr_semi, unsigned int level);
 
 //////////////////////////////////////////////////////////////////////////
 // Recursively delete an entire SHM-tree, starting at the given 'start'
@@ -483,10 +490,15 @@ extern __crit __nomp __wunused __retnonnull __nonnull((1)) struct kshmbranch *
 kshmbranch_popone(struct kshmbranch **__restrict proot,
                   __uintptr_t addr_semi, unsigned int addr_level);
 
+//////////////////////////////////////////////////////////////////////////
+// Recursively re-insert all branches reachable
+// from 'insert_root' in to the given '*proot'.
+// NOTE: Undefined behavior is invoked if any of
+//       the leaves overlap with existing branches.
 extern __crit __nomp __nonnull((1,2)) void
-kshmbranch_insertall(struct kshmbranch **__restrict proot,
-                     struct kshmbranch *__restrict insert_root,
-                     __uintptr_t addr_semi, unsigned int addr_level);
+kshmbranch_reinsertall(struct kshmbranch **__restrict proot,
+                       struct kshmbranch *__restrict insert_root,
+                       __uintptr_t addr_semi, unsigned int addr_level);
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -1200,7 +1212,7 @@ kshmbranch_plocateat(struct kshmbranch **__restrict proot, __uintptr_t addr,
 #endif
 
 __DECL_END
-#endif /* KCONFIG_USE_SHM2 */
+#endif /* KCONFIG_HAVE_SHM2 */
 #endif /* __KERNEL__ */
 
 #endif /* !__KOS_KERNEL_SHM2_H__ */

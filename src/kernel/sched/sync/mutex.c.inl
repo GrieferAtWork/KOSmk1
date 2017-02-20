@@ -30,7 +30,7 @@
 #include <kos/kernel/signal.h>
 #include <kos/kernel/time.h>
 #include <kos/timespec.h>
-#if KDEBUG_HAVE_TRACKEDMUTEX
+#if KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
 #include <kos/kernel/proc.h>
 #include <kos/kernel/task.h>
 #include <stdio.h>
@@ -39,7 +39,7 @@
 
 __DECL_BEGIN
 
-#if KDEBUG_HAVE_TRACKEDMUTEX
+#if KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
 #define KMUTEX_ONACQUIRE(self) \
 do{\
  /* Capture a traceback and save the current task as holder. */\

@@ -55,12 +55,12 @@ __struct_fwd(kcloselock);
 //      though no new tasks can start operating.
 
 #define KCLOSELOCK_OFFSETOF_OPSIG   (KOBJECT_SIZEOFHEAD)
-#if KCLOSELOCK_OPCOUNTBITS <= KSIGNAL_USERBITS
+#if KCONFIG_CLOSELOCK_OPCOUNTBITS <= KSIGNAL_USERBITS
 #define KCLOSELOCK_OFFSETOF_OPCOUNT (KOBJECT_SIZEOFHEAD+KSIGNAL_OFFSETOF_USER)
 #define KCLOSELOCK_SIZEOF           (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
 #else
 #define KCLOSELOCK_OFFSETOF_OPCOUNT (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
-#define KCLOSELOCK_SIZEOF           (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+(KCLOSELOCK_OPCOUNTBITS/8))
+#define KCLOSELOCK_SIZEOF           (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+(KCONFIG_CLOSELOCK_OPCOUNTBITS/8))
 #endif
 
 #ifndef __ASSEMBLY__
@@ -70,13 +70,13 @@ struct kcloselock {
        KSIGNAL_FLAG_USER(0) /*< [lock(KSIGNAL_LOCK_WAIT)] Set while attempting to close the object. */
  struct ksignal cl_opsig;   /*< The signal a closing task waits for. */
  // [lock(KSIGNAL_LOCK_WAIT)] Amount of tasks currently performing operations.
-#if KCLOSELOCK_OPCOUNTBITS <= KSIGNAL_USERBITS
+#if KCONFIG_CLOSELOCK_OPCOUNTBITS <= KSIGNAL_USERBITS
 #define cl_opcount            cl_opsig.s_useru
 #else
- __un(KCLOSELOCK_OPCOUNTBITS) cl_opcount;
+ __un(KCONFIG_CLOSELOCK_OPCOUNTBITS) cl_opcount;
 #endif
 };
-#if KCLOSELOCK_OPCOUNTBITS <= KSIGNAL_USERBITS
+#if KCONFIG_CLOSELOCK_OPCOUNTBITS <= KSIGNAL_USERBITS
 #define KCLOSELOCK_INIT  {KOBJECT_INIT(KOBJECT_MAGIC_CLOSELOCK) KSIGNAL_INIT}
 #else
 #define KCLOSELOCK_INIT  {KOBJECT_INIT(KOBJECT_MAGIC_CLOSELOCK) KSIGNAL_INIT,0}
@@ -88,7 +88,7 @@ struct kcloselock {
 extern        __nonnull((1)) void kcloselock_init(struct kcloselock *__restrict self);
 extern __crit __nonnull((1)) void kcloselock_quit(struct kcloselock *__restrict self);
 #else
-#if KCLOSELOCK_OPCOUNTBITS <= KSIGNAL_USERBITS
+#if KCONFIG_CLOSELOCK_OPCOUNTBITS <= KSIGNAL_USERBITS
 #define kcloselock_init(self) \
  __xblock({ struct kcloselock *__clself = (self);\
             kobject_init(__clself,KOBJECT_MAGIC_CLOSELOCK);\

@@ -65,7 +65,7 @@ kprocsand_initcopy(struct kprocsand *__restrict self,
  }
  self->ts_priomin = katomic_load(right->ts_priomin);
  self->ts_priomax = katomic_load(right->ts_priomax);
-#if KCONFIG_HAVE_TASKNAMES
+#if KCONFIG_HAVE_TASK_NAMES
  self->ts_namemax = katomic_load(right->ts_namemax);
 #endif
  self->ts_pipemax = katomic_load(right->ts_pipemax);
@@ -185,7 +185,7 @@ ktask_copy4fork(struct ktask *__restrict self,
  // >> That is good! So now lets manually allocate a new stack
  kstacksize = ktask_getkstacksize(self);
  // Map linear memory for the kernel stack
-#if KCONFIG_USE_SHM2
+#if KCONFIG_HAVE_SHM2
  if __unlikely(KE_ISERR(kshm_mapram_linear(&proc->p_shm,
                                            &result->t_kstack,
                                            &result->t_kstackvp,
@@ -205,17 +205,17 @@ ktask_copy4fork(struct ktask *__restrict self,
  assert(kstacksize == ktask_getkstacksize(result));
  kassertmem(result->t_kstack,kstacksize);
 
-#if KCONFIG_HAVE_TASKNAMES
+#if KCONFIG_HAVE_TASK_NAMES
  result->t_name = NULL;
-#endif /* KCONFIG_HAVE_TASKNAMES */
+#endif /* KCONFIG_HAVE_TASK_NAMES */
 
  // todo: minor: Shouldn't the resulting task wait for the same signals?
  ktasksig_init(&result->t_sigchain,result);
  ksignal_init(&result->t_joinsig);
  ktasklist_init(&result->t_children);
-#if KTASK_HAVE_STATS
+#if KCONFIG_HAVE_TASK_STATS
  ktaskstat_init(&result->t_stats);
-#endif /* KTASK_HAVE_STATS */
+#endif /* KCONFIG_HAVE_TASK_STATS */
 
  //kpagedir_print(self->t_userpd);
  //kpagedir_print(result->t_userpd);
@@ -230,7 +230,7 @@ ktask_copy4fork(struct ktask *__restrict self,
  {
   struct ktaskregisters3 regs;
   regs.base.ds     = userregs->ds;
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
   regs.base.es     = userregs->es;
   regs.base.fs     = userregs->fs;
   regs.base.gs     = userregs->gs;
@@ -257,7 +257,7 @@ ktask_copy4fork(struct ktask *__restrict self,
  if __unlikely(result->t_parid == (size_t)-1) goto err_kstack;
  if __unlikely(KE_ISERR(kproc_addtask(proc,result))) goto err_parid;
 
- //print_branch(proc->p_shm.s_map.m_root,
+ //kshmbranch_print(proc->p_shm.s_map.m_root,
  //             KSHMBRANCH_ADDRSEMI_INIT,
  //             KSHMBRANCH_ADDRLEVEL_INIT);
  //kpagedir_print(proc->p_shm.s_pd);

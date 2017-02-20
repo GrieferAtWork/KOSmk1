@@ -28,9 +28,9 @@
 #include <kos/compiler.h>
 #include <kos/errno.h>
 #include <kos/kernel/signal.h>
-#if KDEBUG_HAVE_TRACKEDMUTEX
+#if KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
 #include <traceback.h>
-#endif /* KDEBUG_HAVE_TRACKEDMUTEX */
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDMUTEX */
 
 __DECL_BEGIN
 
@@ -45,25 +45,25 @@ __struct_fwd(kmutex);
 
 #define KMUTEX_OFFSETOF_SIG    (KOBJECT_SIZEOFHEAD)
 #define KMUTEX_OFFSETOF_LOCKED (KOBJECT_SIZEOFHEAD+KSIGNAL_OFFSETOF_USER)
-#if KDEBUG_HAVE_TRACKEDMUTEX
+#if KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
 #define KMUTEX_OFFSETOF_HOLDER (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
 #define KMUTEX_OFFSETOF_LOCKTB (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+__SIZEOF_POINTER__)
 #define KMUTEX_SIZEOF          (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+__SIZEOF_POINTER__*2)
-#else /* KDEBUG_HAVE_TRACKEDMUTEX */
+#else /* KCONFIG_HAVE_DEBUG_TRACKEDMUTEX */
 #define KMUTEX_SIZEOF          (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
-#endif /* !KDEBUG_HAVE_TRACKEDMUTEX */
+#endif /* !KCONFIG_HAVE_DEBUG_TRACKEDMUTEX */
 
 #ifndef __ASSEMBLY__
 struct kmutex {
  KOBJECT_HEAD
  struct ksignal     m_sig; /*< Signal used for locking. */
 #define m_locked    m_sig.s_useru /*< [atomic] 0: unlocked; 1: locked */
-#if KDEBUG_HAVE_TRACKEDMUTEX
+#if KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
  struct ktask      *m_holder; /*< [0..1][lock(this)] Current holder of the mutex lock. */
  struct dtraceback *m_locktb; /*< [0..1][lock(this)] Traceback of where the lock was acquired. */
-#endif /* KDEBUG_HAVE_TRACKEDMUTEX */
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDMUTEX */
 };
-#if KDEBUG_HAVE_TRACKEDMUTEX
+#if KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
 #define /*__crit*/ __kmutex_free_debug(self)   dtraceback_free((self)->m_locktb)
 #define /*__crit*/ __kmutex_init_debug(self) ((self)->m_holder = NULL,(self)->m_locktb = NULL)
 #define            __KMUTEX_INIT_DEBUG ,NULL,NULL
@@ -111,7 +111,7 @@ extern __crit __nonnull((1)) kerrno_t kmutex_reset(struct kmutex *__restrict sel
             __kmutex_init_debug(__kmiself);\
             (void)0;\
  })
-#if KDEBUG_HAVE_TRACKEDMUTEX
+#if KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
 #define /*__crit*/ kmutex_close(self) \
  __xblock({ struct kmutex *const __kmxcself = (self);\
             kerrno_t __kmxcerr = ksignal_close(&__kmxcself->m_sig,__sigself->s_useru=1);\

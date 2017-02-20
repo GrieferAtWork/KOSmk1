@@ -53,10 +53,10 @@ SECTIONS
 	{
 		*(COMMON)
 		*(.bss)
+		__kernel_rw_end = .;
+		__kernel_end = .;
 	}
 
-	__kernel_rw_end = .;
-	__kernel_end = .;
 	
 	/DISCARD/ :
 	{

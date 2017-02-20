@@ -26,27 +26,8 @@
 #include <kos/config.h>
 
 #ifdef __KERNEL__
-#define KCONFIG_HAVE_TASKNAMES 1
-#define KCONFIG_HAVE_INTERRUPTS 1
+#define KCONFIG_HAVE_IRQ 1
 //#define KCONFIG_HAVE_SINGLECORE
-#if KCONFIG_HAVE_TASKNAMES
-#define KCONFIG_TASKZERO_NAME   "KERNEL"
-#endif /* KCONFIG_HAVE_TASKNAMES */
-
-//////////////////////////////////////////////////////////////////////////
-// Secure user (ring-3) task bootstrapping:
-//  - When defined, all registers that may still contain
-//    kernel (physical) pointers are set to NULL before
-//    execution is switching to a ring-3 (user) program.
-// NOTE: Even when disabled, this does not pose a security
-//       risk, as paging prevents ring-3 applications from
-//       accessing kernel-space memory.
-//    >> Though some hacky applications might (ab-)use those
-//       physical pointers (from EAX,EBX,ECX and EDX), not
-//       necessarily to do bad things, but good (like randomization
-//       seeds), keeping this hidden from user-apps improves
-//       sandboxing as a task is not able to get this information.
-#define KCONFIG_SECUREUSERBOOTSTRAP 1
 
 /* Count allocated pages within the pageframe allocator.
  * >> Required for x/y-style memory usage statistics. */
@@ -56,101 +37,153 @@
 // Save all segment registers individually during a task switch
 // When not defined, only '%es' is saved.
 // Otherwise '%es', '%ds', '%fs' and '%gs' are saved.
-#define KTASK_I386_SAVE_SEGMENT_REGISTERS 1
+#define KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS 1
 
-#define KTASK_HAVE_CRITICAL_TASK           1
-#define KTASK_HAVE_CRITICAL_TASK_INTERRUPT 1
+/* TODO: The following two probably shouldn't be options... */
+#define KCONFIG_HAVE_TASK_CRITICAL           1
+#define KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT 1
+
 //#define KCONFIG_HAVE_SINGLECORE 1
+#define KCONFIG_HAVE_TASK_NAMES   1
+#define KCONFIG_TASKNAME_KERNEL   "KERNEL"
 
-#define KTASK_HAVE_STATS_START     0x01
-#define KTASK_HAVE_STATS_QUANTUM   0x02
-#define KTASK_HAVE_STATS_NOSCHED   0x04
-#define KTASK_HAVE_STATS_SLEEP     0x08
-#define KTASK_HAVE_STATS_SWITCHOUT 0x10
-#define KTASK_HAVE_STATS_SWITCHIN  0x20
+/* Task stat features supported by the kernel */
+#define KCONFIG_HAVE_TASK_STATS_START     1
+#define KCONFIG_HAVE_TASK_STATS_QUANTUM   1
+#define KCONFIG_HAVE_TASK_STATS_NOSCHED   1
+#define KCONFIG_HAVE_TASK_STATS_SLEEP     1
+#define KCONFIG_HAVE_TASK_STATS_SWITCHOUT 1
+#define KCONFIG_HAVE_TASK_STATS_SWITCHIN  1
 
-// Task stat features supported by the kernel
-#define KTASK_HAVE_STATS \
- (KTASK_HAVE_STATS_START|KTASK_HAVE_STATS_QUANTUM|\
-  KTASK_HAVE_STATS_NOSCHED|KTASK_HAVE_STATS_SLEEP|\
-  KTASK_HAVE_STATS_SWITCHOUT|KTASK_HAVE_STATS_SWITCHIN)
-#define KTASK_HAVE_STATS_FEATURE(f) ((KTASK_HAVE_STATS&(f))==(f))
 
 
 // NOTE: Special size optimizations may be performed for bit sizes fitting
 //       inside of 'KSIGNAL_USERBITS' (16) (s.a.: <kos/kernel/signal.h>)
-#define KCLOSELOCK_OPCOUNTBITS  32 /*< Amount of bits used for recursion in close locks. */
-#define KSEMAPHORE_TICKETBITS   32 /*< Amount of bits used to represent semaphore tickets. */
-#define KRWLOCK_READCBITS       32 /*< Amount of bits used for recursive reading in R/W locks. */
-#define KDDIST_USERBITS         32 /*< Amount of bits available tracking the amount of registered users. */
+#define KCONFIG_CLOSELOCK_OPCOUNTBITS  32 /*< Amount of bits used for recursion in close locks. */
+#define KCONFIG_SEMAPHORE_TICKETBITS   32 /*< Amount of bits used to represent semaphore tickets. */
+#define KCONFIG_RWLOCK_READERBITS      32 /*< Amount of bits used for recursive reading in R/W locks. */
+#define KCONFIG_DDIST_USERBITS         32 /*< Amount of bits available tracking the amount of registered users. */
 
 #ifdef __DEBUG__
 // Track the holder of non-recursive mutex locks and assert that any
 // given task doesn't attempt to acquire a single mutex more than once.
 // NOTE: Due to the fact that the traceback of acquired locks is stored
 //       as well, non-released locks will be dumped as memory leaks.
-#define KDEBUG_HAVE_TRACKEDMUTEX 1
-#define KDEBUG_HAVE_TRACKEDMMUTEX 1
-#define KDEBUG_HAVE_TRACKEDDDIST 1
+#define KCONFIG_HAVE_DEBUG_TRACKEDMUTEX  1
+#define KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX 1
+#define KCONFIG_HAVE_DEBUG_TRACKEDDDIST  1
+#define KCONFIG_HAVE_DEBUG_MEMCHECKS     0
 #endif
 
 /* Size for the global cache of recently loaded shared libraries
  * & executables. Define as ZERO(0) to disable this cache. */
-#define KSHLIB_RECENT_CACHE_SIZE 32
+#define KCONFIG_SHLIB_RECENT_CACHE_SIZE 32
 
 
 // Not fully implemented yet: copy-on-write fork() paging
 #define KCONFIG_HAVE_SHM_COPY_ON_WRITE 0
 
 /* Use the new SHM engine. */
-#define KCONFIG_USE_SHM2 1
+#define KCONFIG_HAVE_SHM2 1
+
+
 
 #ifdef __INTELLISENSE__
-#undef KDEBUG_HAVE_TRACKEDMUTEX
-#undef KDEBUG_HAVE_TRACKEDMMUTEX
-//#undef KDEBUG_HAVE_TRACKEDDDIST
+#undef KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
+#undef KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX
+#undef KCONFIG_HAVE_DEBUG_TRACKEDDDIST
 #endif
 
 
-#ifndef KCONFIG_HAVE_TASKNAMES
-#define KCONFIG_HAVE_TASKNAMES 0
+//
+// ---== End of configurable section ==---
+//
+
+
+#ifndef KCONFIG_HAVE_TASK_STATS_START
+#define KCONFIG_HAVE_TASK_STATS_START     0
 #endif
-#ifndef KCONFIG_HAVE_INTERRUPTS
-#define KCONFIG_HAVE_INTERRUPTS 1
+#ifndef KCONFIG_HAVE_TASK_STATS_QUANTUM
+#define KCONFIG_HAVE_TASK_STATS_QUANTUM   0
 #endif
-#ifndef KCONFIG_SECUREUSERBOOTSTRAP
-#define KCONFIG_SECUREUSERBOOTSTRAP 0
+#ifndef KCONFIG_HAVE_TASK_STATS_NOSCHED
+#define KCONFIG_HAVE_TASK_STATS_NOSCHED 0
 #endif
-#ifndef KTASK_I386_SAVE_SEGMENT_REGISTERS
-#define KTASK_I386_SAVE_SEGMENT_REGISTERS 0
+#ifndef KCONFIG_HAVE_TASK_STATS_SLEEP
+#define KCONFIG_HAVE_TASK_STATS_SLEEP 0
 #endif
-#ifndef KDEBUG_HAVE_TRACKEDMUTEX
-#define KDEBUG_HAVE_TRACKEDMUTEX 0
+#ifndef KCONFIG_HAVE_TASK_STATS_SWITCHOUT
+#define KCONFIG_HAVE_TASK_STATS_SWITCHOUT 0
 #endif
-#ifndef KDEBUG_HAVE_TRACKEDMMUTEX
-#define KDEBUG_HAVE_TRACKEDMMUTEX 0
+#ifndef KCONFIG_HAVE_TASK_STATS_SWITCHIN
+#define KCONFIG_HAVE_TASK_STATS_SWITCHIN 0
 #endif
-#ifndef KDEBUG_HAVE_TRACKEDDDIST
-#define KDEBUG_HAVE_TRACKEDDDIST 0
+#ifndef KCONFIG_HAVE_TASK_NAMES
+#define KCONFIG_HAVE_TASK_NAMES 0
 #endif
-#ifndef KTASK_HAVE_CRITICAL_TASK
-#define KTASK_HAVE_CRITICAL_TASK 1
+#ifndef KCONFIG_HAVE_IRQ
+#define KCONFIG_HAVE_IRQ 1
 #endif
-#ifndef KTASK_HAVE_CRITICAL_TASK_INTERRUPT
-#define KTASK_HAVE_CRITICAL_TASK_INTERRUPT 1
+#ifndef KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
+#define KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS 0
 #endif
-#ifndef KTASK_HAVE_STATS
-#define KTASK_HAVE_STATS 0
+#ifndef KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
+#define KCONFIG_HAVE_DEBUG_TRACKEDMUTEX 0
 #endif
-#if !KCONFIG_HAVE_SHM_COPY_ON_WRITE
+#ifndef KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX
+#define KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX 0
+#endif
+#ifndef KCONFIG_HAVE_DEBUG_TRACKEDDDIST
+#define KCONFIG_HAVE_DEBUG_TRACKEDDDIST 0
+#endif
+#ifndef KCONFIG_HAVE_TASK_CRITICAL
+#define KCONFIG_HAVE_TASK_CRITICAL 1
+#endif
+#ifndef KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
+#define KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT 1
+#endif
+#ifndef KCONFIG_HAVE_SHM_COPY_ON_WRITE
 #define KCONFIG_HAVE_SHM_COPY_ON_WRITE 0
 #endif
-#if !KTASK_HAVE_CRITICAL_TASK
-#undef KTASK_HAVE_CRITICAL_TASK_INTERRUPT
-#define KTASK_HAVE_CRITICAL_TASK_INTERRUPT 0
+#if !KCONFIG_HAVE_TASK_CRITICAL
+#undef KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
+#define KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT 0
 #endif
-#ifndef KSHLIB_RECENT_CACHE_SIZE
-#define KSHLIB_RECENT_CACHE_SIZE 0
+#ifndef KCONFIG_SHLIB_RECENT_CACHE_SIZE
+#define KCONFIG_SHLIB_RECENT_CACHE_SIZE 0
+#endif
+#ifndef KCONFIG_HAVE_DEBUG_MEMCHECKS
+#define KCONFIG_HAVE_DEBUG_MEMCHECKS 0
+#endif
+#ifndef KCONFIG_HAVE_TASK_STATS_START
+#define KCONFIG_HAVE_TASK_STATS_START 0
+#endif
+#ifndef KCONFIG_HAVE_TASK_STATS_QUANTUM
+#define KCONFIG_HAVE_TASK_STATS_QUANTUM 0
+#endif
+#ifndef KCONFIG_HAVE_TASK_STATS_NOSCHED
+#define KCONFIG_HAVE_TASK_STATS_NOSCHED 0
+#endif
+#ifndef KCONFIG_HAVE_TASK_STATS_SLEEP
+#define KCONFIG_HAVE_TASK_STATS_SLEEP 0
+#endif
+#ifndef KCONFIG_HAVE_TASK_STATS_SWITCHOUT
+#define KCONFIG_HAVE_TASK_STATS_SWITCHOUT 0
+#endif
+#ifndef KCONFIG_HAVE_TASK_STATS_SWITCHIN
+#define KCONFIG_HAVE_TASK_STATS_SWITCHIN 0
+#endif
+
+#undef KCONFIG_HAVE_TASK_STATS
+#if KCONFIG_HAVE_TASK_STATS_START \
+ || KCONFIG_HAVE_TASK_STATS_QUANTUM \
+ || KCONFIG_HAVE_TASK_STATS_NOSCHED \
+ || KCONFIG_HAVE_TASK_STATS_SLEEP \
+ || KCONFIG_HAVE_TASK_STATS_SWITCHOUT \
+ || KCONFIG_HAVE_TASK_STATS_SWITCHIN
+#define KCONFIG_HAVE_TASK_STATS  1
+#else
+#define KCONFIG_HAVE_TASK_STATS  0
 #endif
 
 

@@ -464,7 +464,7 @@ extern __crit __ref struct kshlib *kshlibcache_fgetlib(struct kfile *fp);
 
 
 
-#if KSHLIB_RECENT_CACHE_SIZE
+#if KCONFIG_SHLIB_RECENT_CACHE_SIZE
 //////////////////////////////////////////////////////////////////////////
 // Special shlib cache for recently loaded libraries
 // >> This cache is used to keep libraries loaded for a

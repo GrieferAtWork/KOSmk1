@@ -31,6 +31,7 @@
 #include <kos/compiler.h>
 #include <kos/errno.h>
 #include <kos/kernel/types.h>
+#include <kos/kernel/features.h>
 #include <traceback.h>
 
 __DECL_BEGIN
@@ -39,11 +40,6 @@ __DECL_BEGIN
 
 #define debug_hexdumpo(o) debug_hexdump(&(o),sizeof(o))
 extern __nonnull((1)) void debug_hexdump(void const *p, __size_t s);
-
-//////////////////////////////////////////////////////////////////////////
-// Manage known memory regions
-extern __crit __nomp __nonnull((1)) void debug_addknownramregion(__kernel void const *__restrict p, __size_t s);
-extern               __nonnull((1))  int debug_isknownramregion(__kernel void const *__restrict p, __size_t s);
 
 //////////////////////////////////////////////////////////////////////////
 // Validates a given memory range to describe valid kernel memory
@@ -56,7 +52,7 @@ extern __nonnull((1)) kerrno_t kmem_validate(__kernel void const *__restrict p, 
 
 __DECL_END
 
-#ifdef __KERNEL_HAVE_DEBUG_MEMCHECKS
+#if KCONFIG_HAVE_DEBUG_MEMCHECKS
 #include <assert.h>
 #include <kos/errno.h>
 #define kassertobj(o)        kassertmem(o,sizeof(*(o)))
@@ -99,10 +95,7 @@ __forcelocal char const *__kassertmem_msg(kerrno_t err) {
                            "Invalid memory: %p+%Iu ... %p (%s)\n>> %s",\
                            __p,__s,(void *)((__uintptr_t)__p+__s),kassertmem_msg(__errid),msg);\
  })
-#endif /* __KERNEL_HAVE_DEBUG_MEMCHECKS */
-
-#else /* __DEBUG__ */
-#define debug_addknownramregion(p,s) (void)0
+#endif /* KCONFIG_HAVE_DEBUG_MEMCHECKS */
 #endif /* !__DEBUG__ */
 #else /* __KERNEL__ */
 #define kmem_validatebyte(p) ((p) ? KE_OK : KS_EMPTY)

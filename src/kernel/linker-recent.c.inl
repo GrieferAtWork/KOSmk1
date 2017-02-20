@@ -30,9 +30,9 @@
 
 __DECL_BEGIN
 
-#if KSHLIB_RECENT_CACHE_SIZE
+#if KCONFIG_SHLIB_RECENT_CACHE_SIZE
 /* TODO: Allocate the recent cache dynamically? */
-static __ref struct kshlib *recent_libs[KSHLIB_RECENT_CACHE_SIZE] = {NULL,};
+static __ref struct kshlib *recent_libs[KCONFIG_SHLIB_RECENT_CACHE_SIZE] = {NULL,};
 
 /* Position of the where the next recent library is placed. */
 static struct kshlib **recent_libs_rotate = recent_libs;
@@ -49,11 +49,11 @@ __crit void kshlibrecent_add(struct kshlib *lib) {
  if __unlikely(KE_ISERR(kshlib_incref(lib))) return;
  RECENT_ACQUIRE
  assert(recent_libs_rotate >= recent_libs &&
-        recent_libs_rotate < recent_libs+KSHLIB_RECENT_CACHE_SIZE);
+        recent_libs_rotate < recent_libs+KCONFIG_SHLIB_RECENT_CACHE_SIZE);
  /* Overwrite an existing recent library and advance the cache R/W pointer. */
  old_recent = *recent_libs_rotate;
  *recent_libs_rotate++ = lib;
- if __unlikely(recent_libs_rotate == recent_libs+KSHLIB_RECENT_CACHE_SIZE) {
+ if __unlikely(recent_libs_rotate == recent_libs+KCONFIG_SHLIB_RECENT_CACHE_SIZE) {
   recent_libs_rotate = recent_libs;
  }
  RECENT_RELEASE
@@ -64,7 +64,7 @@ __crit void kshlibrecent_add(struct kshlib *lib) {
 }
 
 __crit void kshlibrecent_clear(void) {
- __ref struct kshlib *recent_copy[KSHLIB_RECENT_CACHE_SIZE];
+ __ref struct kshlib *recent_copy[KCONFIG_SHLIB_RECENT_CACHE_SIZE];
  struct kshlib **iter,**end;
  KTASK_CRIT_MARK
  RECENT_ACQUIRE
@@ -74,13 +74,13 @@ __crit void kshlibrecent_clear(void) {
  recent_libs_rotate = recent_libs;
  RECENT_RELEASE
  /* Drop stored references from all recent libraries. */
- end = (iter = recent_copy)+KSHLIB_RECENT_CACHE_SIZE;
+ end = (iter = recent_copy)+KCONFIG_SHLIB_RECENT_CACHE_SIZE;
  for (; iter != end; ++iter) if (*iter) {
   kshlib_decref(*iter);
  }
 }
 
-#endif /* KSHLIB_RECENT_CACHE_SIZE */
+#endif /* KCONFIG_SHLIB_RECENT_CACHE_SIZE */
 
 __DECL_END
 

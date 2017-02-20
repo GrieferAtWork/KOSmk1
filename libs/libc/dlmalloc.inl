@@ -15,6 +15,7 @@
 
 #ifdef __KERNEL__
 #include <kos/kernel/pageframe.h>
+#include <kos/kernel/panic.h>
 /* Define low-level page-based allocators in kernel-mode.
  * These functions are what is being used to manage physical
  * pages of ~real~ memory at the lowest possible level. */
@@ -30,6 +31,7 @@
  * overwrite our malloc-hooks as defined above, or to make wrong
  * assumptions about the kind of memory we're allocating above. */
 #define LACKS_SYS_MMAN_H
+#define ABORT            PANIC("dlmalloc panic")
 #endif
 
 /* Prefer using one-time initialization, instead of lazy initialization:

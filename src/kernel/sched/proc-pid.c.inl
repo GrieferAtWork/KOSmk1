@@ -193,7 +193,6 @@ kproclist_enumproc(__ref struct kproc **__restrict procv, size_t procc) {
  struct kproc **piter,**pend,*proc;
  size_t result;
  kassertmem(procv,procc*sizeof(struct kproc *));
- kassertobjnull(reqprocc);
  end = (iter = procv)+procc;
  if __unlikely(KE_ISERR(kmutex_lock(&pl.pl_lock))) return 0;
  pend = (piter = pl.pl_procv)+pl.pl_proca;

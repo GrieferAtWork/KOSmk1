@@ -96,10 +96,10 @@ again:
  if ((ticket->dt_next = self->ad_tnready) != NULL)
   ticket->dt_next->dt_prev = ticket;
  self->ad_tnready = ticket;
-#if KDEBUG_HAVE_TRACKEDDDIST
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  dtraceback_free(ticket->dt_rd_tb);
  ticket->dt_rd_tb = dtraceback_captureex(1);
-#endif /* KDEBUG_HAVE_TRACKEDDDIST */
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDDDIST */
 end:
  ksignal_unlock_c(&self->ad_nbdat,KSIGNAL_LOCK_WAIT);
  return error;

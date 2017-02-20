@@ -37,14 +37,14 @@
 #include <kos/kernel/interrupts.h>
 #include <kos/timespec.h>
 #include <limits.h>
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
 #include <kos/kernel/region.h>
-#endif /* KTASK_HAVE_CRITICAL_TASK */
-#if KTASK_HAVE_STATS
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
+#if KCONFIG_HAVE_TASK_STATS
 #ifndef __INTELLISENSE__
 #include <kos/kernel/time.h>
 #endif
-#endif /* KTASK_HAVE_STATS */
+#endif /* KCONFIG_HAVE_TASK_STATS */
 #ifndef __KOS_KERNEL_SIGNAL_H__
 #include <kos/kernel/signal.h>
 #endif /* !__KOS_KERNEL_SIGNAL_H__ */
@@ -183,7 +183,7 @@ kcpu_unschedulesleep_unlocked(struct kcpu *__restrict self,
 
 
 #define KTASKREGISTERS_OFFSETOF_DS       (0)
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
 #define KTASKREGISTERS_OFFSETOF_ES       (2)
 #define KTASKREGISTERS_OFFSETOF_FS       (4)
 #define KTASKREGISTERS_OFFSETOF_GS       (6)
@@ -211,7 +211,7 @@ struct __packed ktaskregisters {
  //    one instance of this structure must be pushed on the task's stack
  //    using the 'ktask_stackpush_sp_unlocked' function before it may be launched by
  //    calling 'ktask_resume_k'.
-#if KTASK_I386_SAVE_SEGMENT_REGISTERS
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
  __u16 ds,es,fs,gs;
 #else
  __u16 ds,__padding;
@@ -367,42 +367,42 @@ extern struct ktask *ktasklist_erase(struct ktasklist *self, __size_t index);
 
 
 #ifndef __ASSEMBLY__
-#if KTASK_HAVE_STATS
+#if KCONFIG_HAVE_TASK_STATS
 struct ktaskstat {
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_START)
+#if KCONFIG_HAVE_TASK_STATS_START
 #define __KTASKSTAT_INIT_START {0,0},
  struct timespec ts_abstime_start;   /*< Point in time when a task got created. */
 #else
 #define __KTASKSTAT_INIT_START
 #endif
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_QUANTUM)
+#if KCONFIG_HAVE_TASK_STATS_QUANTUM
 #define __KTASKSTAT_INIT_QUANTUM {0,0},{0,0},
  struct timespec ts_reltime_run;     /*< Amount of time the task spent running. */
  struct timespec ts_abstime_quantum_start; /*< Point in time when a task's quantum started. */
 #else
 #define __KTASKSTAT_INIT_QUANTUM
 #endif
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_NOSCHED)
+#if KCONFIG_HAVE_TASK_STATS_NOSCHED
 #define __KTASKSTAT_INIT_NOSCHED {0,0},{0,0},
  struct timespec ts_reltime_nosched; /*< Amount of time the task spent not being scheduled. */
  struct timespec ts_abstime_nosched; /*< Point in time when a suspended task got unscheduled. */
 #else
 #define __KTASKSTAT_INIT_NOSCHED
 #endif
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_SLEEP)
+#if KCONFIG_HAVE_TASK_STATS_SLEEP
 #define __KTASKSTAT_INIT_SLEEP {0,0},{0,0},
  struct timespec ts_reltime_sleep;   /*< Amount of time the task spent as a sleeper. */
  struct timespec ts_abstime_sleep;   /*< Point in time when a sleeping task started sleeping. */
 #else
 #define __KTASKSTAT_INIT_SLEEP
 #endif
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_SWITCHIN)
+#if KCONFIG_HAVE_TASK_STATS_SWITCHIN
 #define __KTASKSTAT_INIT_SWITCHIN 0,
  __u32           ts_irq_switchin;   /*< Amount of this times this task was the winner at the end of an IRQ. */
 #else
 #define __KTASKSTAT_INIT_SWITCHIN
 #endif
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_SWITCHOUT)
+#if KCONFIG_HAVE_TASK_STATS_SWITCHOUT
 #define __KTASKSTAT_INIT_SWITCHOUT 0,
  __u32           ts_irq_switchout;  /*< Amount of this times this task was switched away from within the IRQ. */
 #else
@@ -416,7 +416,7 @@ struct ktaskstat {
   __KTASKSTAT_INIT_SWITCHIN __KTASKSTAT_INIT_SWITCHOUT 0}
 #ifdef __INTELLISENSE__
 extern void ktaskstat_init(struct ktaskstat *self);
-#elif KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_START)
+#elif KCONFIG_HAVE_TASK_STATS_START
 #define ktaskstat_init(self) \
  __xblock({ struct ktaskstat *const __ktsself = (self);\
             memset(__ktsself,0,sizeof(struct ktaskstat));\
@@ -427,19 +427,19 @@ extern void ktaskstat_init(struct ktaskstat *self);
 #define ktaskstat_init(self) memset(self,0,sizeof(struct ktaskstat))
 #endif
 #ifdef __INTELLISENSE__
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_QUANTUM)
+#if KCONFIG_HAVE_TASK_STATS_QUANTUM
 extern void ktaskstat_on_enterquantum_tm(struct ktaskstat *self, struct timespec const *tmnow);
 extern void ktaskstat_on_leavequantum_tm(struct ktaskstat *self, struct timespec const *tmnow);
 extern void ktaskstat_on_enterquantum(struct ktaskstat *self);
 extern void ktaskstat_on_leavequantum(struct ktaskstat *self);
 #endif
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_NOSCHED)
+#if KCONFIG_HAVE_TASK_STATS_NOSCHED
 extern void ktaskstat_on_unschedule_tm(struct ktaskstat *self, struct timespec const *tmnow);
 extern void ktaskstat_on_reschedule_tm(struct ktaskstat *self, struct timespec const *tmnow);
 extern void ktaskstat_on_unschedule(struct ktaskstat *self);
 extern void ktaskstat_on_reschedule(struct ktaskstat *self);
 #endif
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_SLEEP)
+#if KCONFIG_HAVE_TASK_STATS_SLEEP
 extern void ktaskstat_on_entersleep_tm(struct ktaskstat *self, struct timespec const *tmnow);
 extern void ktaskstat_on_leavesleep_tm(struct ktaskstat *self, struct timespec const *tmnow);
 extern void ktaskstat_on_entersleep(struct ktaskstat *self);
@@ -453,19 +453,19 @@ extern void ktaskstat_on_leavesleep(struct ktaskstat *self);
  __timespec_sub(&__mtime,&self->abs);\
  __timespec_add(&self->rel,&__mtime);\
  ++self->ts_version;
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_QUANTUM)
+#if KCONFIG_HAVE_TASK_STATS_QUANTUM
 __local void ktaskstat_on_enterquantum_tm(struct ktaskstat *self, struct timespec const *tmnow) { __ktaskstat_on_entertm(ts_reltime_run,ts_abstime_quantum_start) }
 __local void ktaskstat_on_leavequantum_tm(struct ktaskstat *self, struct timespec const *tmnow) { __ktaskstat_on_leavetm(ts_reltime_run,ts_abstime_quantum_start) }
 __local void ktaskstat_on_enterquantum(struct ktaskstat *self) { struct timespec tmnow; ktime_getnoworcpu(&tmnow); ktaskstat_on_enterquantum_tm(self,&tmnow); }
 __local void ktaskstat_on_leavequantum(struct ktaskstat *self) { struct timespec tmnow; ktime_getnoworcpu(&tmnow); ktaskstat_on_leavequantum_tm(self,&tmnow); }
 #endif
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_NOSCHED)
+#if KCONFIG_HAVE_TASK_STATS_NOSCHED
 __local void ktaskstat_on_reschedule_tm(struct ktaskstat *self, struct timespec const *tmnow) { __ktaskstat_on_entertm(ts_reltime_nosched,ts_abstime_nosched) }
 __local void ktaskstat_on_unschedule_tm(struct ktaskstat *self, struct timespec const *tmnow) { __ktaskstat_on_leavetm(ts_reltime_nosched,ts_abstime_nosched) }
 __local void ktaskstat_on_reschedule(struct ktaskstat *self) { struct timespec tmnow; ktime_getnoworcpu(&tmnow); ktaskstat_on_reschedule_tm(self,&tmnow); }
 __local void ktaskstat_on_unschedule(struct ktaskstat *self) { struct timespec tmnow; ktime_getnoworcpu(&tmnow); ktaskstat_on_unschedule_tm(self,&tmnow); }
 #endif
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_SLEEP)
+#if KCONFIG_HAVE_TASK_STATS_SLEEP
 __local void ktaskstat_on_entersleep_tm(struct ktaskstat *self, struct timespec const *tmnow) { __ktaskstat_on_entertm(ts_reltime_sleep,ts_abstime_sleep) }
 __local void ktaskstat_on_leavesleep_tm(struct ktaskstat *self, struct timespec const *tmnow) { __ktaskstat_on_leavetm(ts_reltime_sleep,ts_abstime_sleep) }
 __local void ktaskstat_on_entersleep(struct ktaskstat *self) { struct timespec tmnow; ktime_getnoworcpu(&tmnow); ktaskstat_on_entersleep_tm(self,&tmnow); }
@@ -479,17 +479,17 @@ __local void ktaskstat_get(struct ktaskstat const *self, struct ktaskstat *resul
  while (self->ts_version != result->ts_version);
 }
 
-#endif /* KTASK_HAVE_STATS */
+#endif /* KCONFIG_HAVE_TASK_STATS */
 
 //////////////////////////////////////////////////////////////////////////
 // The point in time when the kernel was booted (boot time)
 // >> This can be used as a reference pointer to figure out stuff like uptime.
-#if KTASK_HAVE_STATS_FEATURE(KTASK_HAVE_STATS_START)
+#if KCONFIG_HAVE_TASK_STATS_START
 #define KERNEL_BOOT_TIME  (*(struct timespec const *)&ktask_zero()->t_stats.ts_abstime_start)
-#else /* KTASK_HAVE_STATS_START */
+#else /* KCONFIG_HAVE_TASK_STATS_START */
 extern struct timespec __kernel_boot_time;
 #define KERNEL_BOOT_TIME  (*(struct timespec const *)&__kernel_boot_time)
-#endif /* !KTASK_HAVE_STATS_START */
+#endif /* !KCONFIG_HAVE_TASK_STATS_START */
 
 #endif /* !__ASSEMBLY__ */
 
@@ -550,15 +550,15 @@ extern struct timespec __kernel_boot_time;
 #define KTASK_OFFSETOF_KSTACKVP    (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__*11+__SIZEOF_SIZE_T__*3+16+__TIMESPEC_SIZEOF+KTASKSIG_SIZEOF+KSIGNAL_SIZEOF+KTASKLIST_SIZEOF)
 #define KTASK_OFFSETOF_KSTACK      (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__*12+__SIZEOF_SIZE_T__*3+16+__TIMESPEC_SIZEOF+KTASKSIG_SIZEOF+KSIGNAL_SIZEOF+KTASKLIST_SIZEOF)
 #define KTASK_OFFSETOF_KSTACKEND   (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__*13+__SIZEOF_SIZE_T__*3+16+__TIMESPEC_SIZEOF+KTASKSIG_SIZEOF+KSIGNAL_SIZEOF+KTASKLIST_SIZEOF)
-#if KCONFIG_HAVE_TASKNAMES
+#if KCONFIG_HAVE_TASK_NAMES
 #define KTASK_OFFSETOF_NAME        (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__*14+__SIZEOF_SIZE_T__*3+16+__TIMESPEC_SIZEOF+KTASKSIG_SIZEOF+KSIGNAL_SIZEOF+KTASKLIST_SIZEOF)
 #define KTASK_OFFSETOF_TLS         (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__*15+__SIZEOF_SIZE_T__*3+16+__TIMESPEC_SIZEOF+KTASKSIG_SIZEOF+KSIGNAL_SIZEOF+KTASKLIST_SIZEOF)
-#else /* KCONFIG_HAVE_TASKNAMES */
+#else /* KCONFIG_HAVE_TASK_NAMES */
 #define KTASK_OFFSETOF_TLS         (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__*14+__SIZEOF_SIZE_T__*3+16+__TIMESPEC_SIZEOF+KTASKSIG_SIZEOF+KSIGNAL_SIZEOF+KTASKLIST_SIZEOF)
-#endif /* !KCONFIG_HAVE_TASKNAMES */
-#if KTASK_HAVE_STATS
+#endif /* !KCONFIG_HAVE_TASK_NAMES */
+#if KCONFIG_HAVE_TASK_STATS
 #define KTASK_OFFSETOF_STAT        (KTASK_OFFSETOF_TLS+KTLSPT_SIZEOF)
-#endif /* KTASK_HAVE_STATS */
+#endif /* KCONFIG_HAVE_TASK_STATS */
 
 #ifndef __ASSEMBLY__
 struct ktask {
@@ -608,15 +608,15 @@ struct ktask {
 #define KTASK_FLAG_USERTASK   0x01 /*< [const] This task is running in ring 3. */
 #define KTASK_FLAG_OWNSUSTACK 0x02 /*< [const] t_ustackvp is free'd upon task destruction (Requires the 'KTASK_FLAG_USERTASK' flag). */
 #define KTASK_FLAG_MALLKSTACK 0x04 /*< [const] The kernel stack is allocated through malloc, instead of mmap (NOTE: Only allowed for kernel tasks; aka. when 'KTASK_FLAG_USERTASK' isn't set). */
-#if KTASK_HAVE_CRITICAL_TASK
+#if KCONFIG_HAVE_TASK_CRITICAL
 #define KTASK_FLAG_CRITICAL   0x08 /*< [lock(r:KTASK_LOCK_STATE|ktask_self();w:KTASK_LOCK_STATE)] This task is currently running critical code, and may not be terminated directly. */
-#endif /* KTASK_HAVE_CRITICAL_TASK */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL */
 #define KTASK_FLAG_TIMEDOUT   0x10 /*< [lock(KTASK_LOCK_STATE)] The task timed out. */
 #define KTASK_FLAG_ALARMED    0x20 /*< [lock(KTASK_LOCK_STATE)] The task may be running, but a 't_abstime' describes a user-defined alarm. */
-#if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
+#if KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
 #define KTASK_FLAG_WASINTR    0x40 /*< [lock(KTASK_LOCK_STATE)] An interrupt signal was send to a critical task (While set, the signal is still pending). */
 #define KTASK_FLAG_NOINTR     0x80 /*< [lock(r:KTASK_LOCK_STATE|ktask_self();w:KTASK_LOCK_STATE)] Don't send KE_INTR errors to this task when it gets terminated while inside a critical block. */
-#endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
+#endif /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
  void                        *t_exitcode; /*< [?..?][lock(KTASK_LOCK_STATE)] Exitcode of the task (non-locked & read-only after termination). NOTE: This must not necessarily be a pointer! */
  struct kcpu                 *t_cpu;      /*< [0..1][lock(KTASK_LOCK_STATE)] CPU Hosting the task (Only non-NULL if the state implies 'KTASK_STATE_HASCPU'). */
  __ref struct ktask          *t_prev;     /*< [?..1][lock(t_cpu:KCPU_LOCK_TASKS|KCPU_LOCK_SLEEP)] Previous sleeping/pending task (Only used if a cpu is present). */
@@ -642,13 +642,13 @@ struct ktask {
  __user   __pagealigned void *t_kstackvp; /*< [1..1][const] Virtual address of the kernel stack ('tanslated() == t_kstack'; '== t_kstack' for kernel tasks) (NOTE: Potentially unaligned). */
  __kernel __pagealigned void *t_kstack;   /*< [1..1][const][owned(KTASK_FLAG_OWNSKSTACK)] Physical address of the kernel stack (NOTE: Potentially unaligned). */
  __kernel void               *t_kstackend;/*< [1..1][const] Physical address of the kernel stack end. */
-#if KCONFIG_HAVE_TASKNAMES
+#if KCONFIG_HAVE_TASK_NAMES
  __atomic char               *t_name;     /*< [0..1][write_once(!NULL)] Name for this task (May only be set once). */
-#endif /* KCONFIG_HAVE_TASKNAMES */
+#endif /* KCONFIG_HAVE_TASK_NAMES */
  struct ktlspt                t_tls;      /*< [lock(KTASK_LOCK_TLS)] Per-task TLS data. */
-#if KTASK_HAVE_STATS
+#if KCONFIG_HAVE_TASK_STATS
  struct ktaskstat             t_stats;    /*< Task statistics. */
-#endif /* KTASK_HAVE_STATS */
+#endif /* KCONFIG_HAVE_TASK_STATS */
 };
 
 #ifdef __INTELLISENSE__
@@ -770,12 +770,12 @@ __local KOBJECT_DEFINE_DECREF(ktask_decref,struct ktask,t_refcnt,kassert_ktask,k
 //                        NOTE: This value is never returned for 'ktask_self()'
 //                        NOTE: Due to race-conditions, this should not be considered an error
 // @return: KE_OVERFLOW:  Failed to acquire a new reference to 'self' (needed for timeouts)
-//#if KTASK_HAVE_CRITICAL_TASK_INTERRUPT
+//#if KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
 // @return: KE_INTR:      After a waiting/suspended unscheduling, a critical
 //                        task was re-awakened due to an attempt at termination.
 //                        >> Not returned if the task is within a task-level nointr block
 //                        Only returned once, but can be reset.
-//#endif /* KTASK_HAVE_CRITICAL_TASK_INTERRUPT */
+//#endif /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
 #define ktask_unschedule(self,newstate,arg) ktask_unschedule_ex(self,newstate,arg,0,NULL)
 extern __wunused __nonnull((1)) kerrno_t __SCHED_CALL
 ktask_unschedule_ex(struct ktask *__restrict self, __u8 newstate, void *__restrict arg,
@@ -1127,7 +1127,7 @@ extern struct ktask __ktask_hwirq;
 //  Task statistics access
 // ========================
 
-#if KTASK_HAVE_STATS
+#if KCONFIG_HAVE_TASK_STATS
 #ifdef __INTELLISENSE__
 //////////////////////////////////////////////////////////////////////////
 // Read the statistics of a given task and stores them in '*stats'
@@ -1137,7 +1137,7 @@ ktask_getstat(struct ktask const *__restrict self,
 #else
 #define ktask_getstat(self,stats) ktaskstat_get(&(self)->t_stats,stats)
 #endif
-#endif /* KTASK_HAVE_STATS */
+#endif /* KCONFIG_HAVE_TASK_STATS */
 
 #ifdef KTASK_FLAG_CRITICAL
 #define __ktask_region_crit_tryenter(did_not_enter) \
@@ -1386,7 +1386,7 @@ extern           __nonnull((1)) kerrno_t ktask_resume_kr(struct ktask *__restric
 extern __wunused __nonnull((1)) kerrno_t ktask_suspend_r(struct ktask *__restrict self);
 extern           __nonnull((1)) kerrno_t ktask_resume_r(struct ktask *__restrict self);
 
-#if KCONFIG_HAVE_TASKNAMES
+#if KCONFIG_HAVE_TASK_NAMES
 //////////////////////////////////////////////////////////////////////////
 // Get/Set the name of a task
 // @return: KE_EXISTS: A name was already set (task names cannot be changed once set).
