@@ -562,12 +562,11 @@ int main(int argc, char *argv[]) {
  // Map the x86 VGA terminal.
  vga_dev = (cell_t *)mmapdev(0,VGA_SIZE*sizeof(cell_t),
                              PROT_READ|PROT_WRITE,
-                             MAP_PRIVATE,VGA_ADDR);
+                             MAP_PRIVATE|_MAP_LOOSE,VGA_ADDR);
  if (vga_dev == (cell_t *)(uintptr_t)-1) {
   perror("Failed to map x86 VGA terminal");
   _exit(EXIT_FAILURE);
  }
- //*(uintptr_t *)0 = 42;
 
  k_syslogf(KLOG_DEBUG,"Mapped terminal device from %p to %p\n",VGA_ADDR,vga_dev);
  vga_buf = (cell_t *)malloc((VGA_SIZE+VGA_WIDTH)*sizeof(cell_t));

@@ -222,8 +222,10 @@ __crit void
 kshmchunk_quit(struct kshmchunk *__restrict self) {
  struct kshmpart *iter,*end;
  kassert_kshmchunk(self);
- end = (iter = self->sc_partv)+self->sc_partc;
- for (; iter != end; ++iter) kpageframe_free(iter->sp_frame,iter->sp_pages);
+ if (!(self->sc_flags&KSHMREGION_FLAG_NOFREE)) {
+  end = (iter = self->sc_partv)+self->sc_partc;
+  for (; iter != end; ++iter) kpageframe_free(iter->sp_frame,iter->sp_pages);
+ }
  free(self->sc_partv);
 }
 
@@ -300,6 +302,9 @@ kshmregion_freecluster(struct kshmregion *__restrict self,
  cluster_start -= iter->sp_start;
  end = self->sre_chunk.sc_partv+self->sre_chunk.sc_partc;
  /* Delete all frames associated with this cluster. */
+#ifndef __DEBUG__
+ if (!(self->sre_chunk.sc_flags&KSHMREGION_FLAG_NOFREE))
+#endif
  for (;;) {
   assertf(iter >= self->sre_chunk.sc_partv && iter < end
          ,"Part index %Id is out of bounds of 0..%Iu ()"
@@ -308,8 +313,11 @@ kshmregion_freecluster(struct kshmregion *__restrict self,
   max_pages = min(cluster_delete,iter->sp_pages-cluster_start);
 #ifdef __DEBUG__
   assert(iter->sp_frame != NULL);
+  if (!(self->sre_chunk.sc_flags&KSHMREGION_FLAG_NOFREE))
 #endif
-  kpageframe_free(iter->sp_frame+cluster_start,max_pages);
+  {
+   kpageframe_free(iter->sp_frame+cluster_start,max_pages);
+  }
 #ifdef __DEBUG__
   if (!cluster_start && max_pages == iter->sp_pages) iter->sp_frame = NULL;
 #endif

@@ -39,6 +39,9 @@ __DECL_BEGIN
 #define MAP_ANONYMOUS 0x04 /*< Map anonymous memory. */
 #define MAP_ANON      MAP_ANONYMOUS
 
+/* KOS-mmap extensions. */
+#define _MAP_LOOSE    0x10 /*< Don't keep the mapping after a fork(). */
+
 #ifndef __CONFIG_MIN_LIBC__
 #ifndef __KERNEL__
 // These wouldn't work in the kernel, which uses physical addresses on a 1 to 1 mapping

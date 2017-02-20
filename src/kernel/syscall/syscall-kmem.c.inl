@@ -64,6 +64,7 @@ SYSCALL(sys_kmem_map) {
  else hint = (void *)alignd((uintptr_t)hint,PAGEALIGN);
  prot &= (KSHMREGION_FLAG_EXEC|KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE); /*< Don't reveil the hidden flags. */
  if (flags&MAP_SHARED) prot |= KSHMREGION_FLAG_SHARED;
+ if (flags&_MAP_LOOSE) prot |= KSHMREGION_FLAG_LOSEONFORK;
  /* Calculate the min amount of pages. */
  pages = ceildiv(length,PAGESIZE);
  /* Make sure we're always allocating something. */
@@ -121,6 +122,7 @@ SYSCALL(sys_kmem_mapdev) {
  length          += alignment_offset;
  prot            &= (KSHMREGION_FLAG_EXEC|KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE); /*< Don't reveil the hidden flags. */
  if (flags&MAP_SHARED) prot |= KSHMREGION_FLAG_SHARED;
+ if (flags&_MAP_LOOSE) prot |= KSHMREGION_FLAG_LOSEONFORK;
  if __unlikely(u_get(hint_and_result,hint)) RETURN(KE_FAULT);
  if (flags&MAP_FIXED) {
   void *aligned_hint;

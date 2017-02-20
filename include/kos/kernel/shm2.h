@@ -297,6 +297,7 @@ kshmregion_getphysaddr_s(struct kshmregion *__restrict self,
 //    Create a new region that can be used for mapping a physical
 //    address, allowing you to map special areas of memory, such
 //    as the VGA screen buffer outside of ring-#0.
+//    NOTE: 'KSHMREGION_FLAG_NOFREE' is automatically added to the given flags.
 // kshmregion_hardcopy:
 //    Creates a hard copy of the given region, containing a new area
 //    of memory the same size of the old, unless the given region
