@@ -26,16 +26,20 @@
 #include <assert.h>
 #include <malloc.h>
 #include <kos/config.h>
+#include <kos/kernel/features.h>
 #include <kos/kernel/debug.h>
 #include <kos/kernel/gdt.h>
 #include <kos/kernel/shm2.h>
 #include <kos/syslog.h>
 #include <math.h>
 
+#if KCONFIG_USE_SHM2
 __DECL_BEGIN
 
 #define KSHM_LDT_BUFSIZE    (8)
 #define KSHM_LDT_PAGEFLAGS  (PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE)
+/* Read access: Obvious: The user must be able to read it.
+ * Write access: Necessary because of 'accessed' bit... */
 
 
 
@@ -289,5 +293,6 @@ kshm_ldtset(struct kshm *__restrict self, ksegid_t id,
 #undef VEC_END
               
 __DECL_END
+#endif /* KCONFIG_USE_SHM2 */
 
 #endif /* !__KOS_KERNEL_SHM2_LDT_C_INL__ */

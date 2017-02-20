@@ -60,8 +60,9 @@ kenventry_new(char const *name, size_t name_size,
                             kenventry_memsz(self))
 
 
-size_t kenventry_hashof(char const *text,
-                        size_t text_size) {
+size_t
+kenventry_hashof(char const *__restrict text,
+                 size_t text_size) {
  char const *end = text+text_size;
  size_t result = 1;
  kassertmem(text,text_size);
@@ -70,7 +71,8 @@ size_t kenventry_hashof(char const *text,
  return result;
 }
 
-__local void kprocenv_quit_environ(struct kprocenv *self) {
+__local void
+kprocenv_quit_environ(struct kprocenv *__restrict self) {
  struct kenventry **iter,**end,*bucket,*next;
  end = (iter = self->pe_map)+KPROCENV_HASH_SIZE;
  for (; iter != end; ++iter) {
@@ -82,29 +84,33 @@ __local void kprocenv_quit_environ(struct kprocenv *self) {
   }
  }
 }
-__local void kprocenv_quit_args(struct kprocenv *self) {
+__local void
+kprocenv_quit_args(struct kprocenv *__restrict self) {
  char **argv_iter,**argv_end;
  argv_end = (argv_iter = self->pe_argv)+self->pe_argc;
  for (; argv_iter != argv_end; ++argv_iter) free(*argv_iter);
  free(self->pe_argv);
 }
 
-__crit void kprocenv_quit(struct kprocenv *self) {
+__crit void
+kprocenv_quit(struct kprocenv *__restrict self) {
  KTASK_CRIT_MARK
  kprocenv_quit_environ(self);
  kprocenv_quit_args(self);
 }
 
-__crit void kprocenv_clear_c(struct kprocenv *self) {
+__crit void
+kprocenv_clear_c(struct kprocenv *__restrict self) {
  KTASK_CRIT_MARK
  kprocenv_quit(self);
  memset(&self->pe_memcur,0,
         sizeof(struct kprocenv)-
         offsetof(struct kprocenv,pe_memcur));
 }
-void kprocenv_install_after_exec(struct kprocenv *__restrict self,
-                                 struct kprocenv *__restrict newenv,
-                                 int args_only) {
+void
+kprocenv_install_after_exec(struct kprocenv *__restrict self,
+                            struct kprocenv *__restrict newenv,
+                            int args_only) {
  kassert_kprocenv(self);
  kassert_kprocenv(newenv);
  assert(self != newenv);
@@ -133,8 +139,8 @@ void kprocenv_install_after_exec(struct kprocenv *__restrict self,
 
 
 __crit kerrno_t
-kprocenv_initcopy(struct kprocenv *self,
-                  struct kprocenv const *right) {
+kprocenv_initcopy(struct kprocenv *__restrict self,
+                  struct kprocenv const *__restrict right) {
  struct kenventry **iter,**end,*const *src;
  struct kenventry *entry_src,*dest,*next;
  char **arg_iter,**arg_end,**arg_src;
@@ -307,13 +313,14 @@ kprocenv_putenv_c(struct kprocenv *__restrict self,
  return kprocenv_setenv(self,text,(size_t)(equals_sign-text),text,(size_t)-1,1);
 }
 
-kerrno_t
+__crit kerrno_t
 kprocenv_setargv_c(struct kprocenv *__restrict self, size_t max_argc,
                    char const __kernel *const __kernel *argv,
                    size_t const __kernel *max_arglenv) {
  char **new_argv,**arg_iter,**arg_end,*arg;
  char const *const *arg_src; size_t const *arglen_src;
  size_t vector_size,newmem,real_argc; kerrno_t error;
+ KTASK_CRIT_MARK
  kassert_kprocenv(self);
  assertf(!self->pe_argc && !self->pe_argv,"Arguments have already been set");
  real_argc = 0;
@@ -351,12 +358,13 @@ err_argiter:
  return error;
 }
 
-kerrno_t
+__crit kerrno_t
 kprocenv_setargv_cu(struct kprocenv *__restrict self, size_t max_argc,
                     char const __user *const __user *argv,
                     size_t const __user *max_arglenv) {
  char **new_argv,**temp_argv,*arg; size_t const __user *arglen_src;
  size_t arglen,newmem,curr_argc,curr_arga; kerrno_t error;
+ KTASK_CRIT_MARK
  kassert_kprocenv(self);
  assertf(!self->pe_argc && !self->pe_argv,"Arguments have already been set");
  curr_arga = curr_argc = 0,new_argv = NULL;
@@ -426,7 +434,8 @@ kprocenv_setargv_cu(struct kprocenv *__restrict self, size_t max_argc,
 #define env  (&kproc_kernel()->p_environ)
 
 __local int
-kernel_parse_arg(char const *arg, size_t len, int warn_unknown) {
+kernel_parse_arg(char const *__restrict arg,
+                 size_t len, int warn_unknown) {
  size_t name_size,value_size; char const *value;
  kerrno_t error;
  while (len && isspace(arg[0])) ++arg,--len;

@@ -146,9 +146,9 @@ __physicaladdr void *kpagedir_translate_flags(struct kpagedir const *self,
  assert(flags&X86_PTE_FLAG_PRESENT);
 #endif
  used_pde = self->d_entries[X86_VPTR_GET_PDID(virt)];
- if __unlikely(!(used_pde.u&flags)) return NULL;
+ if __unlikely((used_pde.u&flags) != flags) return NULL;
  used_pte = x86_pde_getpte(&used_pde)[X86_VPTR_GET_PTID(virt)];
- if __unlikely(!(used_pte.u&flags)) return NULL;
+ if __unlikely((used_pte.u&flags) != flags) return NULL;
  return (__physicaladdr void *)(x86_pte_getpptr(&used_pte)+X86_VPTR_GET_POFF(virt));
 }
 
@@ -244,7 +244,6 @@ kpagedir_setflags(struct kpagedir *self, __virtualaddr void const *virt,
  flags |= X86_PTE_FLAG_PRESENT;
 #endif
  KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,,{
-  //diter->u |= X86_PDE_FLAG_USER|X86_PDE_FLAG_READ_WRITE;
   diter->u = (titer->u&mask)|flags;
  }) {
   titer->u = (titer->u&mask)|flags;

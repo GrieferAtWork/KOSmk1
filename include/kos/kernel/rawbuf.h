@@ -43,7 +43,7 @@ __DECL_BEGIN
 
 //
 // A simple, asynchronous buffer, not capable of
-// performing any blocking, and is meant for intermediate
+// performing any blocking, and meant for intermediate
 // storage of data only arriving in small chunks,
 // but required to be flushed as a whole when a
 // specific event occurs, such as a control input
@@ -148,18 +148,18 @@ extern kerrno_t krawbuf_reset(struct krawbuf *__restrict self);
 #endif
 
 
+#ifdef __INTELLISENSE__
 //////////////////////////////////////////////////////////////////////////
 // Write data into a given raw buffer.
 // @return: KE_OK:        Up to 'bufsize' bytes were written (Exact count is stored in '*wsize')
 // @return: KE_NOMEM:     Not enough memory was available to reallocate the buffer ('*wsize' is set to '0').
-// @return: KE_ACCES:     The buffer is full and not allowed to grow anymore.
+// @return: KE_PERM:      The buffer is full and not allowed to grow anymore.
 // @return: KE_DESTROYED: The buffer was destroyed (closed).
 __local __wunused __nonnull((1)) kerrno_t
 krawbuf_write(struct krawbuf *__restrict self, void const *buf,
               __size_t bufsize, __size_t *wsize);
 
 
-#ifdef __INTELLISENSE__
 //////////////////////////////////////////////////////////////////////////
 // Capture raw buffer data:
 // >> krawbuf_capture_begin(buf);
@@ -203,13 +203,20 @@ extern __crit void krawbuf_capture_end_inherit(struct krawbuf *self);
 
 
 #ifndef __INTELLISENSE__
+#define krawbuf_write(self,buf,bufsize,wsize) \
+ __xblock({ struct krawbuf *const __rbwself = (self); kerrno_t __rbwerror;\
+            NOIRQ_BEGINLOCK(krawbuf_trylock(__rbwself,KRAWBUF_LOCK_DATA));\
+            __rbwerror = __krawbuf_write_unlocked(__rbwself,buf,bufsize,wsize);\
+            NOIRQ_ENDUNLOCK(krawbuf_unlock(__rbwself,KRAWBUF_LOCK_DATA));\
+            __xreturn __rbwerror;\
+ })
+
 __local kerrno_t
-krawbuf_write(struct krawbuf *__restrict self, void const *buf,
-              __size_t bufsize, __size_t *wsize) {
+__krawbuf_write_unlocked(struct krawbuf *__restrict self, void const *buf,
+                         __size_t bufsize, __size_t *wsize) {
  __size_t newsize,bufavail,copysize = 0;
  __byte_t *newbuf; kerrno_t error = KE_OK;
  kassert_krawbuf(self); kassertobj(wsize);
- NOIRQ_BEGINLOCK(krawbuf_trylock(self,KRAWBUF_LOCK_DATA));
  assert((self->rb_bufend != NULL) == (self->rb_buffer != NULL));
  assert((self->rb_bufpos != NULL) == (self->rb_buffer != NULL));
  bufavail = (__size_t)(self->rb_bufend-self->rb_bufpos);
@@ -221,7 +228,7 @@ krawbuf_write(struct krawbuf *__restrict self, void const *buf,
   assert(newsize != (__size_t)(self->rb_bufend-self->rb_buffer));
   if (newsize > self->rb_maxsize) {
    newsize = self->rb_maxsize;
-   if (newsize == (__size_t)(self->rb_bufend-self->rb_buffer)) { error = KE_ACCES; goto end; }
+   if (newsize == (__size_t)(self->rb_bufend-self->rb_buffer)) { error = KE_PERM; goto end; }
   }
   newbuf = (__byte_t *)realloc(self->rb_buffer,newsize);
   if __unlikely(!newbuf) { error = KE_NOMEM; goto end; }
@@ -238,7 +245,6 @@ krawbuf_write(struct krawbuf *__restrict self, void const *buf,
  self->rb_bufpos += copysize;
 end:
  *wsize = copysize;
- NOIRQ_ENDUNLOCK(krawbuf_unlock(self,KRAWBUF_LOCK_DATA));
  return error;
 }
 #endif

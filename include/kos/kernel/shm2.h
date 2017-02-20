@@ -72,13 +72,21 @@ __DECL_BEGIN
 //     page-aligned region of physical memory, as allocated
 //     directly using the page frame allocator.
 // 
+// >> shm-chunk: (Global/Shared)
+//   - Vector of SHM-parts
+//   - Tracking of SHM-part order
+//
 // >> shm-cluster: (Global/Shared)
-//   - A reference counted descriptor for
-//     'KSHM_CLUSTERSIZE' pages of shm-parts.
+//   - A reference counted descriptor for up to
+//     'KSHM_CLUSTERSIZE' pages described by shm-parts.
+//   - Knows lowest associated part for pointer to allow for O(1) part-lookup.
 //
 // >> shm-region: (Global/Shared)
-//   - Owns a vector of shm-parts.
-//   - Owns a vector of shm-clusters to ref-track its shm-parts.
+//   - Owns an SHM-chunk.
+//   - Owns a vector of shm-clusters for
+//     reference accounting of all shm-parts.
+//   - Stores meta-data to track access permissions,
+//     such as read, write, exec, shared, etc.
 //
 // >> shm-branch: (Per-process)
 //   - Reference-counted descriptor for a single SHM region.
@@ -127,6 +135,7 @@ typedef __u32 kshmrefcnt_t;
 #define KSHMREGION_FLAG_RESTRICTED 0x0020 /*< This region of memory is restricted, meaning that the user cannot use 'munmap()' to delete it. (NOTE: Superceided by 'KSHMREGION_FLAG_LOSEONFORK'). */
 #define KSHMREGION_FLAG_NOFREE     0x0040 /*< Don't free memory from this chunk when the reference counter hits ZERO(0). - Used for 1-1 physical/device memory mappings. */
 #define KSHMREGION_FLAG_NOCOPY     0x0080 /*< Don't hard-copy memory from this chunk, but alias it when set in 'right->mt_flags' in 'kshmchunk_hardcopy'. */
+//#define KSHMREGION_FLAG_ZERO       0x0100 /*< TODO: Symbolic region of potentially infinite size; fill-on-read; filled only with zeros (useful for bss sections). */
 
 #define KSHM_FLAG_SIZEOF  2
 #ifndef __ASSEMBLY__
@@ -484,6 +493,9 @@ kshmbranch_combine(struct kshmbranch *__restrict min_branch,
 __local __wunused struct kshmbranch **
 kshmbranch_plocate(struct kshmbranch **__restrict proot, __uintptr_t addr,
                    __uintptr_t *result_semi);
+__local __wunused struct kshmbranch **
+kshmbranch_plocateat(struct kshmbranch **__restrict proot, __uintptr_t addr,
+                     __uintptr_t *addr_semi, unsigned int *addr_level);
 
 //////////////////////////////////////////////////////////////////////////
 // Creates a split at the given page offset within the branch at '*pself'.
@@ -1120,6 +1132,51 @@ kshmbranch_plocate(struct kshmbranch **__restrict proot,
   if (addr >= root->sb_map_min &&
       addr <= root->sb_map_max) {
    if (result_semi) *result_semi = addr_semi;
+   return proot;
+  }
+  assert(addr_level);
+  if (addr < addr_semi) {
+   /* Continue with min-branch */
+   KSHMBRANCH_WALKMIN(addr_semi,addr_level);
+   proot = &root->sb_min;
+  } else {
+   /* Continue with max-branch */
+   KSHMBRANCH_WALKMAX(addr_semi,addr_level);
+   proot = &root->sb_max;
+  }
+ }
+ /*printf("Nothing found for %p at %p %u\n",addr,addr_semi,addr_level);*/
+ return NULL;
+}
+__local __wunused struct kshmbranch **
+kshmbranch_plocateat(struct kshmbranch **__restrict proot, __uintptr_t addr,
+                     __uintptr_t *_addr_semi, unsigned int *_addr_level) {
+ struct kshmbranch *root;
+ /* addr_semi is the center point splitting the max
+  * ranges of the underlying sb_min/sb_max branches. */
+ __uintptr_t addr_semi = *_addr_semi;
+ unsigned int addr_level = *_addr_level;
+ while ((kassertobj(proot),(root = *proot) != NULL)) {
+  kassertobj(root);
+  kassert_kshmregion(root->sb_region);
+#ifdef __DEBUG__
+  { /* Assert that the current branch has a valid min/max address range. */
+   __uintptr_t addr_min = KSHMBRANCH_MAPMIN(addr_semi,addr_level);
+   __uintptr_t addr_max = KSHMBRANCH_MAPMAX(addr_semi,addr_level);
+   assertf(root->sb_map_min <= root->sb_map_max,"Branch has invalid min/max configuration (min(%p) > max(%p))",root->sb_map_min,root->sb_map_max);
+   assertf(root->sb_map_min >= addr_min,
+           "Unexpected branch min address (%p < %p; max: %p; looking for %p; semi %p; level %u)",
+           root->sb_map_min,addr_min,root->sb_map_max,addr,addr_semi,addr_level);
+   assertf(root->sb_map_max <= addr_max,
+           "Unexpected branch max address (%p > %p; min: %p; looking for %p; semi %p; level %u)",
+           root->sb_map_max,addr_max,root->sb_map_min,addr,addr_semi,addr_level);
+  }
+#endif
+  /* Check if the given address lies within this branch. */
+  if (addr >= root->sb_map_min &&
+      addr <= root->sb_map_max) {
+   *_addr_semi = addr_semi;
+   *_addr_level = addr_level;
    return proot;
   }
   assert(addr_level);

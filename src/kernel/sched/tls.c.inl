@@ -34,7 +34,9 @@ kerrno_t ktlsman_initcopy(struct ktlsman *self,
  kassertobj(self);
  kassert_ktlsman(right);
  kobject_init(self,KOBJECT_MAGIC_TLSMAN);
- self->tls_usedv = (__u8 *)memdup(right->tls_usedv,(right->tls_usedc/8)*sizeof(__u8));
+ self->tls_usedv = (__u8 *)memdup(right->tls_usedv,
+                                 (right->tls_usedc/8)*
+                                  sizeof(__u8));
  if __unlikely(!self->tls_usedv) return KE_NOMEM;
  self->tls_cnt   = right->tls_cnt;
  self->tls_max   = right->tls_max;

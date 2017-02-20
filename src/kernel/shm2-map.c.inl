@@ -29,6 +29,7 @@
 #include <kos/kernel/interrupts.h>
 #include <kos/kernel/shm2.h>
 
+#if KCONFIG_USE_SHM2
 __DECL_BEGIN
 
 static __attribute_unused void
@@ -37,7 +38,10 @@ print_branch(struct kshmbranch *__restrict branch,
  unsigned int new_level,i; uintptr_t new_semi;
  for (i = 31; i > level; --i) printf("%s",(addr_semi&(1 << i)) ? "+" : "-");
  for (i = 0; i < level; ++i) printf(" ");
- printf("leaf %p .. %p at %p .. %p semi %p, level %u\n",
+ printf("leaf (%c%c%c) %p .. %p at %p .. %p semi %p, level %u\n",
+        (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_EXEC ) ? 'X' : '-',
+        (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_WRITE) ? 'W' : '-',
+        (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_READ ) ? 'R' : '-',
         branch->sb_map_min,branch->sb_map_max,
         KSHMBRANCH_MAPMIN(addr_semi,level),
         KSHMBRANCH_MAPMAX(addr_semi,level),
@@ -282,7 +286,7 @@ found_it:
  return kshmbranch_popone(proot);
 }
 
-
 __DECL_END
+#endif /* KCONFIG_USE_SHM2 */
 
 #endif /* !__KOS_KERNEL_SHM2_MAP_C_INL__ */

@@ -242,9 +242,9 @@ __local kerrno_t kshmtab_loaddata(struct kshmtab *self, size_t filesz,
   if __unlikely(KE_ISERR(error)) return error;
   if __unlikely(!filesz) break;
  }
- // Fill the rest with ZEROs
+ /* Fill the rest with ZEROs */
  while ((addr = kshmtab_translate_offset(self,offset,&maxbytes)) != NULL) {
-  memset(addr,0,maxbytes);
+  memset(addr,0x00,maxbytes);
   offset += maxbytes;
  }
  return KE_OK;

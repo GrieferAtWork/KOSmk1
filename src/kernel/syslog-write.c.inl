@@ -28,7 +28,31 @@ __DECL_BEGIN
 
 #ifndef __syslog_last_writer_defined
 #define __syslog_last_writer_defined 1
+#if 1
+static          int           syslog_recursion = 0;
+static __atomic struct ktask *syslog_current = NULL; /*< Task currently writing to the syslog. */
+__local void syslog_enter(void) {
+ struct ktask *current;
+ struct ktask *caller = ktask_self();
+again:
+ do {
+  current = katomic_load(syslog_current);
+  if (current == caller) { ++syslog_recursion; return; }
+  if (current) { ktask_yield(); goto again; }
+ } while (!katomic_cmpxch(syslog_current,NULL,caller));
+ syslog_recursion = 1;
+}
+__local void syslog_leave(void) {
+ assert(syslog_current == ktask_self());
+ if (!--syslog_recursion) katomic_store(syslog_current,NULL);
+}
+#define SYSLOG_ENTER   syslog_enter();
+#define SYSLOG_LEAVE   syslog_leave();
+#else
 static __atomic int  syslog_lock = 0;
+#define SYSLOG_ENTER while (!katomic_cmpxch(syslog_lock,0,1)) ktask_yield();
+#define SYSLOG_LEAVE katomic_store(syslog_lock,0);
+#endif
 static struct kproc *syslog_last_writer = NULL;
 #endif
 
@@ -85,28 +109,13 @@ void k_dosyslog(int level, void (*print_prefix)(int,void *),
      if (!haslf) new_state |=  (KPROCSTATE_FLAG_SYSLOGINL);
      else        new_state &= ~(KPROCSTATE_FLAG_SYSLOGINL);
      caller->p_sand.ts_state = new_state;
-     /* Begin logging. */
-     while (!katomic_cmpxch(syslog_lock,0,1)) ktask_yield();
-     if (syslog_last_writer != caller) {
-      if __likely(syslog_last_writer) {
-       /* Special handling for interleaved logging.
-          When multiple tasks log concurrently,
-          still always prepend their prefix! */
-       if (syslog_last_writer->p_sand.ts_state&KPROCSTATE_FLAG_SYSLOGINL
-           ) k_writesyslog(level,"\n",1);
-       syslog_last_writer = caller;
-       goto do_print_prefix;
-      } else {
-       syslog_last_writer = caller;
-      }
-     }
      if (!(old_state&KPROCSTATE_FLAG_SYSLOGINL)) {
-do_print_prefix:
 #if KLOGFORMAT_PREFIXTIME
       if (!tmbuf)
 #else
       if (!mnemonic)
 #endif
+do_cache_prefix:
       {
 #if KLOGFORMAT_PREFIXTIME
        struct timespec tmnow; ktime_getnoworcpu(&tmnow);
@@ -136,6 +145,34 @@ err_appname: strcpy(appname,"??" "?");
 #endif
        mnemonic = k_sysloglevel_mnemonic(level);
       }
+     }
+
+     /* Begin logging. */
+     SYSLOG_ENTER
+     if (syslog_last_writer != caller) {
+      if __likely(syslog_last_writer) {
+#if KLOGFORMAT_PREFIXTIME
+       if (!tmbuf)
+#else
+       if (!mnemonic)
+#endif
+       {
+        SYSLOG_LEAVE
+        goto do_cache_prefix;
+       }
+       /* Special handling for interleaved logging.
+          When multiple tasks log concurrently,
+          still always prepend their prefix! */
+       if (syslog_last_writer->p_sand.ts_state&KPROCSTATE_FLAG_SYSLOGINL
+           ) k_writesyslog(level,"\n",1);
+       syslog_last_writer = caller;
+       goto do_print_prefix;
+      } else {
+       syslog_last_writer = caller;
+      }
+     }
+     if (!(old_state&KPROCSTATE_FLAG_SYSLOGINL)) {
+do_print_prefix:
 #if KLOGFORMAT_PREFIXTIME
       k_writesyslog(level,tmbuf,32);
 #else
@@ -177,7 +214,7 @@ err_appname: strcpy(appname,"??" "?");
      }
      k_writesyslog(level,flush_start,(size_t)(iter-flush_start));
      /* End logging. */
-     katomic_store(syslog_lock,0);
+     SYSLOG_LEAVE
 #ifdef USER
      if (iter == end) break;
      if (!*iter) goto done;

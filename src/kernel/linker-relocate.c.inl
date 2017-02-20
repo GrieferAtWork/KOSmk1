@@ -191,6 +191,11 @@ kreloc_elf32_rel_exec(Elf32_Rel const *relv, size_t relc,
     SETMEM(ADDR(iter->r_offset),&new_address,sizeof(uintptr_t));
     break;
    case R_386_COPY:
+    //if (sym && sym->s_size == 4) {
+    // uintptr_t symval = GETMEM(uintptr_t,(void *)new_address);
+    // printf("Copy %s: *%p := *%p (%Ix)\n",sym->s_name,
+    //        ADDR(iter->r_offset),new_address,symval);
+    //}
     if (sym &&
         kshm_memcpy_u2u(&proc->p_shm,ADDR(iter->r_offset),
                        (void *)new_address,sym->s_size) != sym->s_size) {

@@ -57,7 +57,7 @@ __DECL_BEGIN
 
 #ifndef __ASSEMBLY__
 // Returns the hash of a given environment variable name.
-extern __size_t kenventry_hashof(char const *text, __size_t text_size);
+extern __size_t kenventry_hashof(char const *__restrict text, __size_t text_size);
 
 struct kenventry {
  struct kenventry *ee_next;    /*< [0..1][owned] Next environment entry who's name has the same hash. */
@@ -101,8 +101,8 @@ kprocenv_install_after_exec(struct kprocenv *__restrict self,
 //////////////////////////////////////////////////////////////////////////
 // Initialize 'self' as a copy of 'right'
 extern __crit __wunused __nonnull((1,2)) kerrno_t
-kprocenv_initcopy(struct kprocenv *self,
-                  struct kprocenv const *right);
+kprocenv_initcopy(struct kprocenv *__restrict self,
+                  struct kprocenv const *__restrict right);
 
 
 #define KPROCENV_FOREACH_BREAK    {__pe_map_iter=__pe_map_end;break;}
