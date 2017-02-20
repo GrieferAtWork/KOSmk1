@@ -37,7 +37,8 @@ Chaos|KOS - Total anarchy.
      - pipe (Missing named pipes)
      - sandbox-oriented security model (barriers)
      - shared memory (Missing from user-space)
-       - Reference-counted memory (Missing copy-on-write)
+       - Reference-counted memory
+       - Full copy-on-write support
      - mmap/munmap/brk/sbrk
    - threads
      - new_thread
