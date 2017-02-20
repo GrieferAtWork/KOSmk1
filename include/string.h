@@ -233,6 +233,12 @@ extern __wunused __purecall __nonnull((1)) void const *memchr(void const *__rest
 extern __wunused __purecall __nonnull((1)) void *memrchr(void *__restrict __p, int __needle, size_t __bytes) __asmname("memrchr");
 extern __wunused __purecall __nonnull((1)) void const *memrchr(void const *__restrict __p, int __needle, size_t __bytes) __asmname("memrchr");
 
+extern __wunused __purecall __nonnull((1,3)) void *memmem(void *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen) __asmname("memmem");
+extern __wunused __purecall __nonnull((1,3)) void const *memmem(void const *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen) __asmname("memmem");
+extern __wunused __purecall __nonnull((1,3)) void *_memrmem(void *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen) __asmname("_memrmem");
+extern __wunused __purecall __nonnull((1,3)) void const *_memrmem(void const *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen) __asmname("_memrmem");
+
+
 #ifndef __strchr_defined
 #define __strchr_defined 1
 extern __wunused __purecall __nonnull((1)) char *strchr(char *__restrict __haystack, int __needle) __asmname("strchr");
@@ -305,6 +311,9 @@ extern __wunused __purecall __nonnull((1)) void *memchr __P((void const *__restr
 #endif
 extern __wunused __purecall __nonnull((1)) void *memrchr __P((void const *__restrict __p, int __needle, size_t __bytes));
 
+extern __wunused __purecall __nonnull((1,3)) void *memmem __P((void const *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen));
+extern __wunused __purecall __nonnull((1,3)) void *_memrmem __P((void const *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen));
+
 #ifndef __strchr_defined
 #define __strchr_defined 1
 extern __wunused __purecall __nonnull((1)) char *strchr __P((char const *__restrict __haystack, int __needle));
@@ -330,6 +339,7 @@ extern __wunused __purecall __retnonnull __nonnull((1)) char *_strend __P((char 
 extern __wunused __purecall __retnonnull __nonnull((1)) char *_strnend __P((char const *__restrict __s, __size_t __maxchars));
 #ifndef __STDC_PURE__
 #ifndef __NO_asmname
+extern __wunused __purecall __nonnull((1,3)) void *memrmem __P((void const *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen)) __asmname("_memrmem");
 extern __wunused __purecall __nonnull((1)) char *strnchr __P((char const *__restrict __haystack, __size_t __max_haychars, int __needle)) __asmname("_strnchr");
 extern __wunused __purecall __nonnull((1)) char *strnrchr __P((char const *__restrict __haystack, __size_t __max_haychars, int __needle)) __asmname("_strnrchr");
 extern __wunused __purecall __nonnull((1,2)) char *strrstr __P((char const *__haystack, char const *__needle)) __asmname("_strrstr");
@@ -341,6 +351,7 @@ extern __wunused __purecall __nonnull((1,3)) char *strnrpbrk __P((char const *__
 extern __wunused __purecall __retnonnull __nonnull((1)) char *strend __P((char const *__restrict __s)) __asmname("_strend");
 extern __wunused __purecall __retnonnull __nonnull((1)) char *strnend __P((char const *__restrict __s, __size_t __maxchars)) __asmname("_strnend");
 #else /* !__NO_asmname */
+#   define memrmem   _memrmem
 #   define strnchr   _strnchr
 #   define strnrchr  _strnrchr
 #   define strrstr   _strrstr
@@ -935,6 +946,15 @@ __DECL_END
 #ifdef karch_memrchr
 #define memrchr   karch_memrchr
 #endif /* karch_memrchr */
+#ifdef karch_memmem
+#define memmem    karch_memmem
+#endif /* karch_memmem */
+#ifdef karch_memrmem
+#define _memrmem  karch_memrmem
+#ifndef __STDC_PURE__
+#define memrmem   karch_memrmem
+#endif /* !__STDC_PURE__ */
+#endif /* karch_memrmem */
 #ifdef karch_strchr
 #undef strchr
 #define strchr    karch_strchr

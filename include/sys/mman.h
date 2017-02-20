@@ -29,31 +29,67 @@
 __DECL_BEGIN
 
 #define PROT_NONE     0x00 /*< Data cannot be accessed. */
-#define PROT_EXEC     0x01 /*< [== KSHMREGION_FLAG_EXEC] Data can be executed. */
-#define PROT_WRITE    0x02 /*< [== KSHMREGION_FLAG_WRITE] Data can be written. */
-#define PROT_READ     0x04 /*< [== KSHMREGION_FLAG_READ] Data can be read. */
+#define PROT_EXEC     0x01 /*< Data can be executed (aka. 'KSHMREGION_FLAG_EXEC'). */
+#define PROT_WRITE    0x02 /*< Data can be written (aka. 'KSHMREGION_FLAG_WRITE'). */
+#define PROT_READ     0x04 /*< Data can be read (aka. 'KSHMREGION_FLAG_READ'). */
 
 #define MAP_PRIVATE   0x00 /*< Changes are private. */
-#define MAP_SHARED    0x01 /*< Changes are shared. */
+#define MAP_SHARED    0x01 /*< Changes are shared (aka. 'KSHMREGION_FLAG_SHARED'). */
 #define MAP_FIXED     0x02 /*< Interpret addr exactly. */
 #define MAP_ANONYMOUS 0x04 /*< Map anonymous memory. */
 #define MAP_ANON      MAP_ANONYMOUS
 
 /* KOS-mmap extensions. */
-#define _MAP_LOOSE    0x10 /*< Don't keep the mapping after a fork(). */
+#define _MAP_LOOSE    0x10 /*< Don't keep the mapping after a fork() (aka. 'KSHMREGION_FLAG_LOSEONFORK'). */
 
-#ifndef __CONFIG_MIN_LIBC__
+#ifndef __STDC_PURE__
+#define MAP_LOOSE     _MAP_LOOSE
+#endif
+
 #ifndef __KERNEL__
-// These wouldn't work in the kernel, which uses physical addresses on a 1 to 1 mapping
+#ifndef __CONFIG_MIN_LIBC__
+
+/* Map dynamic memory as specified by the given arguments.
+ * NOTE: When non-NULL and 'MAP_FIXED' isn't set, KOS will interpret 'ADDR'
+ *       as a hint for where to map the new memory in the virtual address
+ *       space of the calling process, usually choosing the nearest unused
+ *       chunk of virtual memory that is of sufficient size.
+ *       When NULL is passed, KOS will instead choose a suitable builtin
+ *       hint address to prefer when searching for available memory.
+ * NOTE: KOS does not enforce any alignment of either 'ADDR' or 'LENGTH',
+ *       both in calls to 'mmap', as well as 'munmap'. Instead, both
+ *       arguments are rounded up/down to the nearest page borders.
+ */
 extern void *mmap __P((void *__addr, size_t __length, int __prot,
                        int __flags, int __fd, __off_t __offset));
 extern int munmap __P((void *__addr, size_t __length));
 
-// KOS-extension: Request direct mmapping of physical memory
+
+/* KOS-extension: Request direct m-mapping of physical (aka. device) memory
+ * NOTE: The kernel will imply the following flags:
+ *   - KSHMREGION_FLAG_NOCOPY
+ *   - KSHMREGION_FLAG_NOFREE
+ * HINT: Consider specifying the 'MAP_LOOSE' if you don't
+ *       want the memory to remain mapped in the child
+ *       process after a call to 'fork()'.
+ * NOTE: When attempting to map physical memory to a fixed address,
+ *       both the fixed address 'ADDR' and 'PHYSICAL_ADDRESS' must
+ *       share the same page-alignment offset. e.g.:
+ *       Assuming PAGESIZE is 4096 (4k):
+ *       ALLOWED:             ========---
+ *         ADDR             = 0xBA6BAR123
+ *         PHYSICAL_ADDRESS = 0xF00F00123
+ *       ILLEGAL:             ========---
+ *         ADDR             = 0xBA6BAR123
+ *         PHYSICAL_ADDRESS = 0xF00F00321
+ *       Or speaking in code:
+ *         require(((uintptr_t)ADDR % PAGESIZE) == ((uintptr_t)PHYSICAL_ADDRESS % PAGESIZE));
+ */
 extern void *mmapdev __P((void *__addr, size_t __length, int __prot,
                           int __flags, __kernel void *__physical_address));
-#endif /* !__KERNEL__ */
+
 #endif /* !__CONFIG_MIN_LIBC__ */
+#endif /* !__KERNEL__ */
 
 __DECL_END
 

@@ -559,10 +559,12 @@ int main(int argc, char *argv[]) {
  int child_proc,result;
  if (argc < 2) { usage(argv[0],EXIT_FAILURE); }
 
- // Map the x86 VGA terminal.
+ /* Map the x86 VGA terminal.
+  * NOTE: We map it as loose, so that the device memory won't be
+  *       mapped in the child process we're forking into below. */
  vga_dev = (cell_t *)mmapdev(0,VGA_SIZE*sizeof(cell_t),
                              PROT_READ|PROT_WRITE,
-                             MAP_PRIVATE|_MAP_LOOSE,VGA_ADDR);
+                             MAP_PRIVATE|MAP_LOOSE,VGA_ADDR);
  if (vga_dev == (cell_t *)(uintptr_t)-1) {
   perror("Failed to map x86 VGA terminal");
   _exit(EXIT_FAILURE);
@@ -605,7 +607,7 @@ int main(int argc, char *argv[]) {
   dup2(aslave,STDOUT_FILENO);
   dup2(aslave,STDERR_FILENO);
   // Close all other descriptors
-  kfd_closeall(3,INT_MAX);
+  closeall(3,INT_MAX);
   // Exec the given process
   execl(argv[1],argv[1],NULL);
   perror("Failed to exec given process");

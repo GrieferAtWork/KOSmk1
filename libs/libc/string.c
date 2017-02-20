@@ -215,6 +215,51 @@ __public void *memrchr(void const *p, int needle, size_t bytes) {
 #endif
 }
 
+#undef memmem
+__public void *
+memmem(void const *haystack, size_t haystacklen,
+       void const *needle, size_t needlelen) {
+#ifdef karch_memmem
+ kassertmem(haystack,haystacklen);
+ kassertmem(needle,needlelen);
+ return karch_memmem(haystack,haystacklen,
+                     needle,needlelen);
+#else
+ byte_t *iter,*end;
+ kassertmem(haystack,haystacklen);
+ if __unlikely(needlelen > haystacklen) return NULL;
+ end = (iter = (byte_t *)haystack)+(haystacklen-needlelen);
+ for (;;) {
+  if (!memcmp(iter,needle,needlelen)) return iter;
+  if (iter++ == end) break;
+ }
+ return NULL;
+#endif
+}
+
+#undef _memrmem
+__public void *
+_memrmem(void const *haystack, size_t haystacklen,
+         void const *needle, size_t needlelen) {
+#ifdef karch_memrmem
+ kassertmem(haystack,haystacklen);
+ kassertmem(needle,needlelen);
+ return karch_memrmem(haystack,haystacklen,
+                      needle,needlelen);
+#else
+ byte_t *iter,*end,*result = NULL;
+ kassertmem(haystack,haystacklen);
+ if __unlikely(needlelen > haystacklen) return NULL;
+ end = (iter = (byte_t *)haystack)+(haystacklen-needlelen);
+ for (;;) {
+  if (!memcmp(iter,needle,needlelen)) result = iter;
+  if (iter++ == end) break;
+ }
+ return (void *)result;
+#endif
+}
+
+
 #ifndef __KERNEL__
 #undef strcat
 __public char *strcat(char *dst, char const *src) {

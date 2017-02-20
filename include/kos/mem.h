@@ -30,23 +30,23 @@
 #define KMEM_MAP_FAIL   ((void *)(__uintptr_t)-1)
 #ifndef __NO_PROTOTYPES
 #ifndef __KERNEL__
-#include <kos/syscall.h>
-#include <kos/errno.h>
+#   include <kos/syscall.h>
+#   include <kos/errno.h>
 #ifndef KFD_POSITION
 #if __SIZEOF_POINTER__ <= 4
-#include <kos/endian.h>
-#include <kos/arch.h>
-#include <stdint.h>
-#define KFD_HAVE_BIARG_POSITIONS
-#define KFD_POSITION_HI(x) (__u32)(((x)&UINT64_C(0xffffffff00000000))>>32)
-#define KFD_POSITION_LO(x)  (__u32)((x)&UINT64_C(0x00000000ffffffff))
+#   include <kos/endian.h>
+#   include <kos/arch.h>
+#   include <stdint.h>
+#   define KFD_HAVE_BIARG_POSITIONS
+#   define KFD_POSITION_HI(x) (__u32)(((x)&UINT64_C(0xffffffff00000000))>>32)
+#   define KFD_POSITION_LO(x)  (__u32)((x)&UINT64_C(0x00000000ffffffff))
 #if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
-#define KFD_POSITION(x)      KFD_POSITION_HI(x),KFD_POSITION_LO(x)
+#   define KFD_POSITION(x)      KFD_POSITION_HI(x),KFD_POSITION_LO(x)
 #else /* linear: down */
-#define KFD_POSITION(x)      KFD_POSITION_LO(x),KFD_POSITION_HI(x)
+#   define KFD_POSITION(x)      KFD_POSITION_LO(x),KFD_POSITION_HI(x)
 #endif /* linear: up */
 #else
-#define KFD_POSITION(x)      x
+#   define KFD_POSITION(x)      x
 #endif
 #endif /* !KFD_POSITION */
 
@@ -55,12 +55,12 @@ __DECL_BEGIN
 #ifdef __WANT_KERNEL_MEM_VALIDATE
 //////////////////////////////////////////////////////////////////////////
 // Validates a given memory range to describe valid user memory
-// @return: KE_OK:        Everything's fine!
+// @return: KE_OK:        Every thing's fine!
 // @return: KS_EMPTY:     The NULL pointer is part of the given range.
 // @return: KE_FAULT:     Apart of the given range isn't mapped.
 // @return: KE_INVAL:     The given memory describes a portion of memory that is not allocated.
 // @return: KE_RANGE:     The given memory doesn't map to any valid RAM/Device memory.
-// @return: KE_DESTROYED: The calling process is currently being destroyed (can't lock its page directory).
+// @return: KE_DESTROYED: The calling process is currently being destroyed (can't access the page directory).
 __local _syscall2(kerrno_t,kmem_validate,void const *__restrict,addr,__size_t,bytes);
 #endif
 
@@ -71,9 +71,7 @@ __local _syscall2(kerrno_t,kmem_validate,void const *__restrict,addr,__size_t,by
 // fail with various kinds of errors.
 // It should be obvious that you can't just map any memory, with this
 // function being meant to map device memory, such as the x86-VGA terminal.
-// - You can never map ~real~ physical memory when that
-//   memory is already in use by a different process.
-// - You can also never map memory if you're not allowed to.
+// - You can never map memory if you're not allowed to.
 __local _syscall5(kerrno_t,kmem_mapdev,void **,hint_and_result,
                   __size_t,length,int,prot,int,flags,void *,physptr);
 
