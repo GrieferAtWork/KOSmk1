@@ -39,23 +39,72 @@ __local int __karch_ffs(int i) {
  return result;
 }
 
-__local void *__karch_memcpy(void *__dst, void const *__src, __size_t __bytes) {
+__local void *__karch_memcpy_b(void *__restrict __dst,
+                               void const *__restrict __src,
+                               __size_t __bytes) {
  void *__result = __dst;
  __asm_volatile__("cld\n"
                   "rep movsb\n"
                   : "+c" (__bytes)
-                  ,"+S" (__src)
-                  ,"+D" (__dst)
+                  , "+S" (__src)
+                  , "+D" (__dst)
                   : : "memory");
  return __result;
 }
-__local void *__karch_memset(void *__dst, int __byte, __size_t __bytes) {
+__local void *__karch_memcpy_w(void *__restrict __dst,
+                               void const *__restrict __src,
+                               __size_t __words) {
+ void *__result = __dst;
+ __asm_volatile__("cld\n"
+                  "rep movsw\n"
+                  : "+c" (__words)
+                  , "+S" (__src)
+                  , "+D" (__dst)
+                  : : "memory");
+ return __result;
+}
+__local void *__karch_memcpy_l(void *__restrict __dst,
+                               void const *__restrict __src,
+                               __size_t __dwords) {
+ void *__result = __dst;
+ __asm_volatile__("cld\n"
+                  "rep movsl\n"
+                  : "+c" (__dwords)
+                  , "+S" (__src)
+                  , "+D" (__dst)
+                  : : "memory");
+ return __result;
+}
+__local void *__karch_memset_b(void *__restrict __dst,
+                               unsigned char __byte, __size_t __bytes) {
  void *__result = __dst;
  __asm_volatile__("cld\n"
                   "rep stosb\n"
                   : "+c" (__bytes)
                   , "+D" (__dst)
                   : "a" (__byte)
+                  : "memory");
+ return __result;
+}
+__local void *__karch_memset_w(void *__restrict __dst,
+                               unsigned short __word, __size_t __bytes) {
+ void *__result = __dst;
+ __asm_volatile__("cld\n"
+                  "rep stosw\n"
+                  : "+c" (__bytes)
+                  , "+D" (__dst)
+                  : "a" (__word)
+                  : "memory");
+ return __result;
+}
+__local void *__karch_memset_l(void *__restrict __dst,
+                               unsigned long __dword, __size_t __bytes) {
+ void *__result = __dst;
+ __asm_volatile__("cld\n"
+                  "rep stosl\n"
+                  : "+c" (__bytes)
+                  , "+D" (__dst)
+                  : "a" (__dword)
                   : "memory");
  return __result;
 }
@@ -127,9 +176,20 @@ __local __size_t __karch_strnlen(char const *__s, __size_t __maxchars) {
  return __result;
 }
 
+/* TODO: We can implement a _LOT_ more string routines,
+ * like (mem|str)chr, (mem|str)cmp.
+ * (I think) even something like strstr, and strspn and memmem. */
+
 #define __karch_raw_ffs      __karch_ffs
-#define __karch_raw_memcpy   __karch_memcpy
-#define __karch_raw_memset   __karch_memset
+#define __karch_raw_memcpy   __karch_memcpy_b
+#define __karch_raw_memset(dst,byte,bytes) \
+ __karch_memset_b(dst,(unsigned char)(byte),bytes)
+#define __karch_raw_memcpy_b __karch_memcpy_b
+#define __karch_raw_memcpy_w __karch_memcpy_w
+#define __karch_raw_memcpy_l __karch_memcpy_l
+#define __karch_raw_memset_b __karch_memset_b
+#define __karch_raw_memset_w __karch_memset_w
+#define __karch_raw_memset_l __karch_memset_l
 #define __karch_raw_strend   __karch_strend
 #define __karch_raw_strnend  __karch_strnend
 #define __karch_raw_strlen   __karch_strlen

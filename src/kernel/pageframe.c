@@ -39,6 +39,8 @@
 
 #if defined(__i386__) || defined(__x86_64__)
 #include <kos/kernel/arch/x86/realmode.h>
+#include <kos/arch/x86/string.h>
+#include <kos/arch/string.h>
 #endif
 
 __DECL_BEGIN
@@ -464,8 +466,17 @@ void
 kpageframe_memcpy(__pagealigned struct kpageframe *__restrict dst,
                   __pagealigned struct kpageframe const *__restrict src,
                   size_t n_pages) {
- /* TODO: 'rep movsl' (copy 4 bytes at a time). */
+ assert(isaligned((uintptr_t)dst,PAGEALIGN));
+ assert(isaligned((uintptr_t)src,PAGEALIGN));
+ kassertmem(dst,n_pages*PAGESIZE);
+ kassertmem(src,n_pages*PAGESIZE);
+#if defined(__karch_raw_memcpy_l) && \
+    !(PAGESIZE % __SIZEOF_LONG__)
+ /* Use 'rep movsl' (copy 4 bytes at a time). */
+ __karch_raw_memcpy_l(dst,src,n_pages*PAGESIZE/4);
+#else
  memcpy(dst,src,n_pages*PAGESIZE);
+#endif
 }
 
 
