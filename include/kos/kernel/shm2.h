@@ -442,6 +442,8 @@ union{
 #define KSHMBRANCH_MAPMAX(semi,level)  ((semi)| (((__uintptr_t)1 << (level))-1))
 #define KSHMBRANCH_WALKMIN(semi,level) ((semi)  = (((semi)&~((__uintptr_t)1 << (level)))|((__uintptr_t)1 << ((level)-1))),--(level)) /*< unset level'th bit; set level'th-1 bit. */
 #define KSHMBRANCH_WALKMAX(semi,level) (--(level),(semi) |= ((__uintptr_t)1 << (level)))                                             /*< set level'th-1 bit. */
+#define KSHMBRANCH_NEXTMIN(semi,level) (((semi)&~((__uintptr_t)1 << (level)))|((__uintptr_t)1 << ((level)-1))) /*< unset level'th bit; set level'th-1 bit. */
+#define KSHMBRANCH_NEXTMAX(semi,level) ((semi)|((__uintptr_t)1 << ((level)-1)))                                /*< set level'th-1 bit. */
 #define KSHMBRANCH_SEMILEVEL(semi)     (ffs(semi)-1) /*< Get the current level associated with a given semi-address. */
 
 
@@ -477,13 +479,13 @@ kshmbranch_locate(struct kshmbranch *__restrict root,
 // Special handling is performed to determine the perfect match when
 // '*proot' has both a min and a max branch.
 extern __crit __nomp __wunused __retnonnull __nonnull((1)) struct kshmbranch *
-kshmbranch_popone(struct kshmbranch **__restrict proot);
+kshmbranch_popone(struct kshmbranch **__restrict proot,
+                  __uintptr_t addr_semi, unsigned int addr_level);
 
-//////////////////////////////////////////////////////////////////////////
-// Returns the root of two min/max branches after combining them.
-extern __crit __nomp __wunused __retnonnull __nonnull((1,2)) struct kshmbranch *
-kshmbranch_combine(struct kshmbranch *__restrict min_branch,
-                   struct kshmbranch *__restrict max_branch);
+extern __crit __nomp __nonnull((1,2)) void
+kshmbranch_insertall(struct kshmbranch **__restrict proot,
+                     struct kshmbranch *__restrict insert_root,
+                     __uintptr_t addr_semi, unsigned int addr_level);
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -603,7 +605,7 @@ kshmbranch_unmap_portion(struct kshmbranch **__restrict pself,
 //       in the given 'right_pd', or are hard-copied.
 // @return: KE_NOMEM: Not enough available memory.
 extern __crit __nomp __wunused __nonnull((1,2,3,4)) kerrno_t
-kshmbranch_fillfork(struct kshmbranch **__restrict pself, struct kpagedir *__restrict self_pd,
+kshmbranch_fillfork(struct kshmbranch **__restrict proot, struct kpagedir *__restrict self_pd,
                     struct kshmbranch *__restrict source, struct kpagedir *__restrict source_pd);
 #endif /* !__ASSEMBLY__ */
 

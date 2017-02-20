@@ -186,14 +186,14 @@ ktask_copy4fork(struct ktask *__restrict self,
  kstacksize = ktask_getkstacksize(self);
  // Map linear memory for the kernel stack
 #if KCONFIG_USE_SHM2
- if __unlikely(KE_ISERR(
-  kshm_mapram_linear(&proc->p_shm,
-                     &result->t_kstack,
-                     &result->t_kstackvp,kstacksize,
-                     KPAGEDIR_MAPANY_HINT_KSTACK,
-                     KSHMREGION_FLAG_LOSEONFORK|
-                     KSHMREGION_FLAG_RESTRICTED
-  ))) goto err_tls;
+ if __unlikely(KE_ISERR(kshm_mapram_linear(&proc->p_shm,
+                                           &result->t_kstack,
+                                           &result->t_kstackvp,
+                                            ceildiv(kstacksize,PAGESIZE),
+                                           KPAGEDIR_MAPANY_HINT_KSTACK,
+                                           KSHMREGION_FLAG_LOSEONFORK|
+                                           KSHMREGION_FLAG_RESTRICTED
+               ))) goto err_tls;
 #else
  result->t_kstackvp = kshm_mmap_linear(&proc->p_shm,KPAGEDIR_MAPANY_HINT_KSTACK,kstacksize,
                                        PROT_READ|PROT_WRITE|KSHMTAB_FLAG_K,MAP_PRIVATE,
@@ -256,6 +256,12 @@ ktask_copy4fork(struct ktask *__restrict self,
  ktask_unlock(self,KTASK_LOCK_CHILDREN);
  if __unlikely(result->t_parid == (size_t)-1) goto err_kstack;
  if __unlikely(KE_ISERR(kproc_addtask(proc,result))) goto err_parid;
+
+ //print_branch(proc->p_shm.s_map.m_root,
+ //             KSHMBRANCH_ADDRSEMI_INIT,
+ //             KSHMBRANCH_ADDRLEVEL_INIT);
+ //kpagedir_print(proc->p_shm.s_pd);
+
  return result;
 err_parid:
  ktask_lock(self,KTASK_LOCK_CHILDREN);

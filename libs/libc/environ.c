@@ -38,6 +38,7 @@
 #include <malloc.h>
 #include <assert.h>
 #include <kos/config.h>
+#include <kos/syslog.h>
 #endif
 
 __DECL_BEGIN
@@ -138,8 +139,10 @@ __private void user_initialize_environ(void) {
  // TODO: This should be removed at some point, as this
  //       doesn't apply if a user overwrites 'environ'.
  assertf(environ == __env_default
-        ,"environ = %p (expected: %p)"
-        ,environ,&__env_default[0]);
+        ,"environ = %p at %p (expected: %p)"
+        ,environ,&environ,&__env_default[0]);
+ k_syslogf(KLOG_INFO,"environ = %p at %p (expected: %p)\n",
+           environ,&environ,&__env_default[0]);
  __envtext_begin = kos_allocenvtext();
  if __unlikely(!__envtext_begin) return;
  for (iter = __envtext_begin; *iter; iter = strend(iter)+1) ++envc;

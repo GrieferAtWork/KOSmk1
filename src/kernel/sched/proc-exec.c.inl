@@ -175,6 +175,12 @@ kproc_exec(struct kshlib *__restrict exec_main,
             (void *)((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz),
             ((uintptr_t)0-((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz))/PAGESIZE,
             KSHMUNMAP_FLAG_NONE);
+ assertf(kpagedir_ismapped(self->p_shm.s_pd,caller_thread->t_ustackvp,
+                           ceildiv(ktask_getustacksize(caller_thread),PAGESIZE)),
+         "Be we explicitly excluded the user-stack...");
+ assertf(kpagedir_ismapped(self->p_shm.s_pd,caller_thread->t_kstackvp,
+                           ceildiv(ktask_getkstacksize(caller_thread),PAGESIZE)),
+         "But the kernel stack should have been restricted...");
 #else
  kshm_delusertabs(&self->p_shm,
                  (caller_thread->t_flags&KTASK_FLAG_OWNSUSTACK)
@@ -198,6 +204,7 @@ kproc_exec(struct kshlib *__restrict exec_main,
  //       the existing modules in order to prevent the addresses
  //       from clashing.
  k_syslogf_prefixfile(KLOG_DEBUG,exec_main->sh_file,"Inserting module on exec()\n");
+
  error = kproc_insmod_unlocked(self,exec_main,&modid);
  assertf(KE_ISOK(error)
         ,"TODO: We must (fail to) do this before destroying the existing process... %d"

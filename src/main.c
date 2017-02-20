@@ -53,7 +53,7 @@ void run_init(void) {
  argv[0] = path;
  kerrno_t error; struct kshlib *lib;
  struct kproc *process; struct ktask *root;
- kmodid_t modid;
+ kmodid_t modid; void *exitcode;
  // Create a new root process
  process = kproc_newroot();
  assert(process);
@@ -72,18 +72,19 @@ void run_init(void) {
  assertf(KE_ISOK(error),"%d",error);
  error = kprocenv_setargv(&process->p_environ,(size_t)-1,argv,NULL);
  assertf(KE_ISOK(error),"%d",error);
- error = ktask_setname(root,path);
+ error = ktask_setname(root,"INIT");
  assertf(KE_ISOK(error),"%d",error);
  error = ktask_resume_k(root);
  assertf(KE_ISOK(error),"%d",error);
  //printf("Joining process\n");
- error = ktask_join(root,NULL);
+ error = ktask_join(root,&exitcode);
  assertf(KE_ISOK(error),"%d",error);
  ktask_decref(root);
  kproc_decref(process);
  kshlib_decref(lib);
  // TODO: Implement recursive join and remove the following line!
  while (ktask_zero()->t_children.t_taska) ktask_yield();
+ k_syslogf(KLOG_INFO,"[init] Joined root process returning %Iu\n",exitcode);
 }
 
 int k_sysloglevel = KLOG_DEBUG;

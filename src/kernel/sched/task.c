@@ -362,35 +362,37 @@ ktask_newuser(struct ktask *__restrict parent, struct kproc *__restrict ctx,
 }
 
 __crit __ref struct ktask *
-ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict ctx,
+ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
                 __pagealigned __user void *__restrict ustackaddr, __size_t ustacksize,
                 __size_t kstacksize, __u16 flags) {
  struct ktask *result;
  KTASK_CRIT_MARK
- kassert_ktask(parent); kassert_kproc(ctx);
- assertf(kproc_islocked(ctx,KPROC_LOCK_SHM),
+ kassert_ktask(parent); kassert_kproc(proc);
+ assertf(kproc_islocked(proc,KPROC_LOCK_SHM),
          "The caller must lock the pagedir of the associated task context!");
  assertf(isaligned((uintptr_t)ustackaddr,PAGEALIGN),
          "User stack address %p is not page-aligned",ustackaddr);
  assertf(!(flags&KTASK_FLAG_OWNSUSTACK) || kpagedir_ismapped
-         (ctx->p_shm.sm_pd,ustackaddr,ceildiv(ustacksize,PAGESIZE)),
+         (proc->p_shm.sm_pd,ustackaddr,ceildiv(ustacksize,PAGESIZE)),
          "Kernel-managed user-stack is not properly allocated");
  assertf(flags&KTASK_FLAG_USERTASK,"The 'KTASK_FLAG_USERTASK' flag is not set in %I16x",flags);
  if __unlikely(KE_ISERR(ktask_incref(parent))) return NULL;
- if __unlikely(KE_ISERR(kproc_incref(ctx))) goto err_par;
+ if __unlikely(KE_ISERR(kproc_incref(proc))) goto err_par;
  if __unlikely((result = omalloc(struct ktask)) == NULL) goto err_ctx;
  kobject_init(result,KOBJECT_MAGIC_TASK);
  // Allocate and map a linear kernel stack for user tasks
 #if KCONFIG_USE_SHM2
- if __unlikely(KE_ISERR(kshm_mapram_linear(&ctx->p_shm,
+ k_syslogf(KLOG_DEBUG,"[TASK] Mapping Linear RAM for kernel stack of user-thread...\n");
+ if __unlikely(KE_ISERR(kshm_mapram_linear(&proc->p_shm,
                                            &result->t_kstack,
                                            &result->t_kstackvp,
                                            ceildiv(kstacksize,PAGESIZE),
                                            KPAGEDIR_MAPANY_HINT_KSTACK,
-                                           KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE
+                                           KSHMREGION_FLAG_LOSEONFORK|
+                                           KSHMREGION_FLAG_RESTRICTED
                ))) goto err_r;
 #else
- result->t_kstackvp = kshm_mmap_linear(&ctx->p_shm,KPAGEDIR_MAPANY_HINT_KSTACK,kstacksize,
+ result->t_kstackvp = kshm_mmap_linear(&proc->p_shm,KPAGEDIR_MAPANY_HINT_KSTACK,kstacksize,
                                        PROT_READ|PROT_WRITE|KSHMTAB_FLAG_K,MAP_PRIVATE,
                                        &result->t_kstack);
  if __unlikely(result->t_kstackvp == MAP_FAIL) goto err_r;
@@ -400,9 +402,9 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict ctx,
  result->t_ustacksz    = ustacksize;
  result->t_esp         = (__user void *)((uintptr_t)result->t_kstackvp+kstacksize);
  result->t_esp0        = result->t_esp;
- result->t_userpd      = kproc_pagedir(ctx);
+ result->t_userpd      = kproc_pagedir(proc);
  result->t_kstackend   = (void *)((uintptr_t)result->t_kstack+kstacksize);
- result->t_proc        = ctx; // Inherit reference
+ result->t_proc        = proc; // Inherit reference
  result->t_refcnt      = 1;
  result->t_locks       = 0;
  result->t_state       = KTASK_STATE_SUSPENDED;
@@ -429,7 +431,7 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict ctx,
  result->t_name = NULL;
 #endif /* KCONFIG_HAVE_TASKNAMES */
  // Initialize the task's TID and setup its parent hooks
- if __unlikely(KE_ISERR(kproc_addtask(ctx,result))) goto err_map;
+ if __unlikely(KE_ISERR(kproc_addtask(proc,result))) goto err_map;
  ktask_lock(parent,KTASK_LOCK_CHILDREN);
  if __unlikely(ktask_isterminated(parent)) {
   // TODO: Handle terminate parent task (Fail with something that doesn't imply no memory...)
@@ -440,10 +442,10 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict ctx,
  ktask_unlock(parent,KTASK_LOCK_CHILDREN);
  if __unlikely(result->t_parid == (size_t)-1) goto err_ctx2;
  return result;
-err_ctx2: kproc_deltask(ctx,result);
-err_map:  kshm_munmap(&ctx->p_shm,result->t_kstackvp,ktask_getkstacksize(result),1);
+err_ctx2: kproc_deltask(proc,result);
+err_map:  kshm_munmap(&proc->p_shm,result->t_kstackvp,ktask_getkstacksize(result),1);
 err_r:    free(result);
-err_ctx:  kproc_decref(ctx);
+err_ctx:  kproc_decref(proc);
 err_par:  ktask_decref(parent);
  return NULL;
 }

@@ -32,20 +32,33 @@
 #if KCONFIG_USE_SHM2
 __DECL_BEGIN
 
-static __attribute_unused void
+void
 print_branch(struct kshmbranch *__restrict branch,
              uintptr_t addr_semi, unsigned int level) {
  unsigned int new_level,i; uintptr_t new_semi;
+ if (!branch) return;
+ kassertobj(branch);
+ kassert_kshmregion(branch->sb_region);
  for (i = 31; i > level; --i) printf("%s",(addr_semi&(1 << i)) ? "+" : "-");
  for (i = 0; i < level; ++i) printf(" ");
- printf("leaf (%c%c%c) %p .. %p at %p .. %p semi %p, level %u\n",
-        (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_EXEC ) ? 'X' : '-',
-        (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_WRITE) ? 'W' : '-',
-        (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_READ ) ? 'R' : '-',
+ printf("leaf (%c%c%c%c%c%c) %Iu pages %p .. %p at %p .. %p semi %p, level %u\n",
+       (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_EXEC) ? 'X' : '-',
+       (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_WRITE) ? 'W' : '-',
+       (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_READ) ? 'R' : '-',
+       (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_SHARED) ? 'S' : '-',
+       (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_LOSEONFORK) ? 'F' : '-',
+       (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_RESTRICTED) ? 'R' : '-',
+        branch->sb_rpages,
         branch->sb_map_min,branch->sb_map_max,
         KSHMBRANCH_MAPMIN(addr_semi,level),
         KSHMBRANCH_MAPMAX(addr_semi,level),
         addr_semi,level);
+ assert(branch->sb_rpages != 0);
+ assert(branch->sb_rstart+branch->sb_rpages <=
+        branch->sb_region->sre_chunk.sc_pages);
+ assert(branch->sb_cluster_min == kshmregion_getcluster(branch->sb_region,branch->sb_rstart));
+ assert(branch->sb_cluster_max == kshmregion_getcluster(branch->sb_region,branch->sb_rstart+(branch->sb_rpages-1)));
+ assert(branch->sb_map_min <= branch->sb_map_max);
  assert(branch->sb_map_min >= KSHMBRANCH_MAPMIN(addr_semi,level));
  assert(branch->sb_map_max <= KSHMBRANCH_MAPMAX(addr_semi,level));
  if (branch->sb_min) {
@@ -132,6 +145,7 @@ kshmbranch_insert(struct kshmbranch **__restrict pcurr,
  uintptr_t newleaf_min,newleaf_max;
  kassertobj(pcurr);
  kassertobj(newleaf);
+ kassert_kshmregion(newleaf->sb_region);
  newleaf_min = newleaf->sb_map_min;
  newleaf_max = newleaf->sb_map_max;
 again:
@@ -186,64 +200,31 @@ got_it:
  goto again;
 }
 
-
-__crit __nomp struct kshmbranch *
-kshmbranch_combine(struct kshmbranch *__restrict min_branch,
-                   struct kshmbranch *__restrict max_branch) {
- /* NOTE: Technically we'd need to initialize the sizes to 1, but since
-  *       we're just comparing them later, we can just offset both. */
- unsigned int min_size = 0,max_size = 0;
- struct kshmbranch **min_pend,**max_pend;
- kassertobj(min_branch);
- kassertobj(max_branch);
- min_pend = &min_branch->sb_max,
- max_pend = &max_branch->sb_min;
- /* Complicated case: the leaf we're supposed to remove
-  *                   has two branches coming off of it.
-  * >> We solve this situation by looking at how deep
-  *    the right-most branch of the left branch reaches,
-  *    as well as how deep the left-most of the right one does.
-  * >> Then we append the longer of the two at the end of the shorter:
-  *
-  *   .   e        >>|>>    .   e
-  *    \ /         >>|>>     \ /
-  * .   c   d   .  >>|>>  .   c
-  *  \ /     \ /   >>|>>   \ /
-  *   a       b    >>|>>    a   .
-  *    \     /     >>|>>     \ /
-  *     \   /      >>|>>      d
-  *      \ /       >>|>>       \
-  *      [x]       >>|>>        b
-  *      /         >>|>>       /
-  *     .          >>|>>      .
-  */
- while (*min_pend) ++min_size,min_pend = &(*min_pend)->sb_max;
- while (*max_pend) ++max_size,max_pend = &(*max_pend)->sb_min;
- assert(!*max_pend);
- assert(!*min_pend);
- if (max_size <= min_size) {
-  /* Append min onto max & append max on *proot. */
-  *max_pend = min_branch;
-  return max_branch;
- } else {
-  /* Append max onto min & append min on *proot. */
-  *min_pend = max_branch;
-  return min_branch;
- }
+__crit __nomp void
+kshmbranch_insertall(struct kshmbranch **__restrict proot,
+                     struct kshmbranch *__restrict insert_root,
+                     uintptr_t addr_semi, unsigned int addr_level) {
+ kassertobj(insert_root);
+ kassert_kshmregion(insert_root->sb_region);
+ if (insert_root->sb_min) kshmbranch_insertall(proot,insert_root->sb_min,addr_semi,addr_level);
+ if (insert_root->sb_max) kshmbranch_insertall(proot,insert_root->sb_max,addr_semi,addr_level);
+ asserte(kshmbranch_insert(proot,insert_root,addr_semi,addr_level) == KE_OK);
 }
 
 
+
 __crit __nomp struct kshmbranch *
-kshmbranch_popone(struct kshmbranch **proot) {
+kshmbranch_popone(struct kshmbranch **proot,
+                  __uintptr_t addr_semi,
+                  unsigned int addr_level) {
  struct kshmbranch *root;
  kassertobj(proot);
  root = *proot;
  kassertobj(root);
  kassert_kshmregion(root->sb_region);
- *proot = root->sb_min ? (root->sb_max
-  ? kshmbranch_combine(root->sb_min,root->sb_max) /*< Combine min+max. */
-  : root->sb_min) /*< Only min branch. */
-  : root->sb_max; /*< Only max branch. */
+ *proot = NULL;
+ if (root->sb_min) kshmbranch_insertall(proot,root->sb_min,addr_semi,addr_level);
+ if (root->sb_max) kshmbranch_insertall(proot,root->sb_max,addr_semi,addr_level);
  return root;
 }
 
@@ -283,7 +264,7 @@ found_it:
  assert(iter == *proot);
  assert(addr >= iter->sb_map_min &&
         addr <= iter->sb_map_max);
- return kshmbranch_popone(proot);
+ return kshmbranch_popone(proot,addr_semi,addr_level);
 }
 
 __DECL_END

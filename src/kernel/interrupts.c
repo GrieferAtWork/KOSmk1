@@ -42,6 +42,7 @@
 #include <kos/kernel/task.h>
 #include <kos/kernel/proc.h>
 #include <disasm/disasm.h>
+#include <kos/kernel/shm2.h>
 
 __DECL_BEGIN
 
@@ -200,6 +201,10 @@ print_error(char const *__restrict data,
  return 0;
 }
 
+void
+print_branch(struct kshmbranch *__restrict branch,
+             uintptr_t addr_semi, unsigned int level);
+
 
 void __kirq_default_handler(struct kirq_registers *regs) {
  //assert(ktask_self() != NULL);
@@ -236,9 +241,14 @@ void __kirq_default_handler(struct kirq_registers *regs) {
 #endif
   {
    struct kpagedir *pd = NULL;
-   if (caller && caller->t_proc) {
-    if ((pd = caller->t_proc->p_shm.sm_pd) != NULL) {
+   if ((kmem_validateob(caller) == KE_OK) &&
+       (kmem_validateob(caller->t_proc) == KE_OK)) {
+    if ((pd = caller->t_proc->p_shm.sm_pd) != NULL &&
+        (kmem_validateob(pd) == KE_OK)) {
      kpagedir_print(pd);
+     print_branch(caller->t_proc->p_shm.s_map.m_root,
+                  KSHMBRANCH_ADDRSEMI_INIT,
+                  KSHMBRANCH_ADDRLEVEL_INIT);
     } else {
      printf("INVALID PAGEDIRECTORY (NULL POINTER)\n");
     }

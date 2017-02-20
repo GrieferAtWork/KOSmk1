@@ -45,6 +45,12 @@ static kerrno_t kshm_initldtcopy(struct kshm *__restrict self, struct kshm *__re
 static void kshm_quitldt(struct kshm *__restrict self);
 
 
+void
+print_branch(struct kshmbranch *__restrict branch,
+             uintptr_t addr_semi, unsigned int level);
+
+
+
 //////////////////////////////////////////////////////////////////////////
 // ===== kshmchunk
 __crit kerrno_t
@@ -883,6 +889,7 @@ kshmbranch_remap(struct kshmbranch const *__restrict self,
  size_t part_offset = self->sb_rstart % KSHM_CLUSTERSIZE;
  size_t remaning_pages = self->sb_rpages;
  size_t map_pages; kshm_flag_t region_flags;
+ kpageflag_t page_flags;
  __pagealigned __user void *virtual_address;
  part = self->sb_cluster_min->sc_part;
  virtual_address = self->sb_map;
@@ -899,8 +906,14 @@ kshmbranch_remap(struct kshmbranch const *__restrict self,
   struct kshmregion *region = self->sb_region;
   struct kpageframe *phys_addr;
   size_t map_pages;
-  kpageflag_t used_page_flags,page_flags = PAGEDIR_FLAG_READ_WRITE;
-  if (region_flags&KSHMREGION_FLAG_READ) page_flags |= PAGEDIR_FLAG_USER;
+  kpageflag_t used_page_flags;
+  if (region_flags&KSHMREGION_FLAG_READ) {
+   page_flags = PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE;
+  } else {
+   /* Don't map access from user-space. */
+   page_flags = PAGEDIR_FLAG_READ_WRITE;
+   goto map_normal;
+  }
   /* Special case: Must look at the reference counters
    *               of all the different clusters to
    *               determine if they should be mapped
@@ -935,9 +948,11 @@ kshmbranch_remap(struct kshmbranch const *__restrict self,
    }
   }
  } else {
-  kpageflag_t page_flags = 0;
-  if (region_flags&KSHMREGION_FLAG_READ)  page_flags |= PAGEDIR_FLAG_USER;
+  page_flags = 0;
   if (region_flags&KSHMREGION_FLAG_WRITE) page_flags |= PAGEDIR_FLAG_READ_WRITE;
+  if (region_flags&KSHMREGION_FLAG_READ)  page_flags |= PAGEDIR_FLAG_USER;
+  else page_flags |= PAGEDIR_FLAG_READ_WRITE;
+map_normal:
   for (;;) {
    map_pages = min(remaning_pages,part->sp_pages);
    /* Remap the physical part of this region. */
@@ -967,8 +982,8 @@ __crit __nomp kerrno_t
 kshmbranch_unmap_portion(struct kshmbranch **__restrict pself,
                          struct kpagedir *__restrict pd,
                          kshmregion_page_t first_page,
-                         __uintptr_t page_count,
-                         __uintptr_t addr_semi) {
+                         uintptr_t page_count,
+                         uintptr_t addr_semi) {
  kerrno_t error;
  struct kshmbranch *branch;
  struct kshmcluster *new_cluster;
@@ -1062,7 +1077,7 @@ search_again:
   if (addr_min <= root->sb_map_min &&
       addr_max >= root->sb_map_max) {
    /* Remove this entire branch! */
-   asserte(kshmbranch_popone(proot) == root);
+   asserte(kshmbranch_popone(proot,addr_semi,addr_level) == root);
    kpagedir_unmap(pd,root->sb_map,root->sb_rpages);
    result += root->sb_rpages;
    /* Drop a references from all used clusters. */
@@ -1138,14 +1153,16 @@ kshmbrach_putsplit(struct kshmbranch **__restrict pself,
  region = min_branch->sb_region;
  kassert_kshmregion(region);
  assert(min_branch->sb_map_min <= min_branch->sb_map_max);
- assert(page_offset < region->sre_chunk.sc_pages);
- assert(page_offset >= min_branch->sb_rstart);
- assert(page_offset <  min_branch->sb_rstart+min_branch->sb_rpages);
  assertf(page_offset != min_branch->sb_rstart,
          "Can't split branch at start %Iu (this would create an empty leaf)",
          min_branch->sb_rstart);
  assertf(page_offset != (min_branch->sb_rstart+min_branch->sb_rpages)-1,
          "Can't split branch at index %Iu (this would create an empty leaf)",page_offset);
+ assert(page_offset >= min_branch->sb_rstart);
+ assert(page_offset < min_branch->sb_rstart+min_branch->sb_rpages);
+ assertf(page_offset < region->sre_chunk.sc_pages,
+         "The given page_offset %Iu is ouf-of-bounds of 0..%Iu",
+         page_offset,region->sre_chunk.sc_pages);
  /* We can only hope that 'addr_semi' is correct... */
  max_branch = omalloc(struct kshmbranch);
  if __unlikely(!max_branch) return KE_NOMEM;
@@ -1251,73 +1268,63 @@ free_max_branch:
 
 
 __crit __nomp kerrno_t
-kshmbranch_fillfork(struct kshmbranch **__restrict pself, struct kpagedir *__restrict self_pd,
+kshmbranch_fillfork(struct kshmbranch **__restrict proot, struct kpagedir *__restrict self_pd,
                     struct kshmbranch *__restrict source, struct kpagedir *__restrict source_pd) {
  struct kshmbranch *newbranch;
- kerrno_t error;
+ kerrno_t error = KE_OK;
  kassertobj(pself);
  kassertobj(source);
  kassert_kshmregion(source->sb_region);
- if (source->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_LOSEONFORK) {
-  struct kshmbranch *minbranch,*maxbranch;
-  /* We're not allowed to copy this branch during a fork()-operation.
-   * Instead, we must merge the sub-branches of the given source. */
-  if (source->sb_min && !source->sb_max) return kshmbranch_fillfork(pself,self_pd,source->sb_min,source_pd);
-  if (source->sb_max && !source->sb_min) return kshmbranch_fillfork(pself,self_pd,source->sb_max,source_pd);
-  /* Manually re-combine the tree. */
-  error = kshmbranch_fillfork(&minbranch,self_pd,source->sb_min,source_pd);
-  if __unlikely(KE_ISERR(error)) return error;
-  error = kshmbranch_fillfork(&maxbranch,self_pd,source->sb_max,source_pd);
-  if __unlikely(KE_ISERR(error)) { kshmbranch_deltree(minbranch); return error; }
-  /* Combine the two branches. */
-  *pself = kshmbranch_combine(minbranch,maxbranch);
-  return error;
- }
- newbranch = (struct kshmbranch *)memdup(source,sizeof(struct kshmbranch));
- if __unlikely(!newbranch) return KE_NOMEM;
- /* Add new references to all clusters covered by us. */
- error = kshmregion_incref(newbranch->sb_region,
-                           newbranch->sb_cluster_min,
-                           newbranch->sb_cluster_max);
- if __likely(KE_ISOK(error)) {
-  size_t affected_pages;
-  /* re-map the region as read-only in 'source_pd'.
-   * NOTE: Even if we fail later, it is OK to leave the mapping as
-   *       read-only, as the #PF-handler will see it as a COW-page
-   *       that has returned to its original owner. */
-  affected_pages = kpagedir_setflags(source_pd,source->sb_map,source->sb_rpages,
-                                   ~(PAGEDIR_FLAG_READ_WRITE),0);
-  assertf(affected_pages == source->sb_rpages,
-          "Unexpected amount of affected pages (expected %Iu, got %Iu)",
-          source->sb_rpages,affected_pages);
-  goto ok;
- }
- /* Fallback: Try to create a hard copy of the given branch. */
- newbranch->sb_region = kshmregion_hardcopy(newbranch->sb_region,
-                                            newbranch->sb_rstart,
-                                            newbranch->sb_rpages);
- if __unlikely(!newbranch->sb_region) { free(newbranch); return KE_NOMEM; }
- /* Must update the clusters and offsets to mirror the new branch. */
- newbranch->sb_rstart      = 0;
- newbranch->sb_cluster_min = kshmregion_getcluster(newbranch->sb_region,0);
- newbranch->sb_cluster_max = kshmregion_getcluster(newbranch->sb_region,newbranch->sb_rpages-1);
+ if (!(source->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_LOSEONFORK)) {
+  newbranch = (struct kshmbranch *)memdup(source,sizeof(struct kshmbranch));
+  if __unlikely(!newbranch) return KE_NOMEM;
+  /* Add new references to all clusters covered by us. */
+  error = kshmregion_incref(newbranch->sb_region,
+                            newbranch->sb_cluster_min,
+                            newbranch->sb_cluster_max);
+  if __likely(KE_ISOK(error)) {
+   size_t affected_pages;
+   /* re-map the region as read-only in 'source_pd'.
+    * NOTE: Even if we fail later, it is OK to leave the mapping as
+    *       read-only, as the #PF-handler will see it as a COW-page
+    *       that has returned to its original owner. */
+   affected_pages = kpagedir_setflags(source_pd,source->sb_map,source->sb_rpages,
+                                    ~(PAGEDIR_FLAG_READ_WRITE),0);
+   assertf(affected_pages == source->sb_rpages,
+           "Unexpected amount of affected pages (expected %Iu, got %Iu)",
+           source->sb_rpages,affected_pages);
+   goto ok;
+  }
+  /* Fallback: Try to create a hard copy of the given branch. */
+  newbranch->sb_region = kshmregion_hardcopy(newbranch->sb_region,
+                                             newbranch->sb_rstart,
+                                             newbranch->sb_rpages);
+  if __unlikely(!newbranch->sb_region) { free(newbranch); return KE_NOMEM; }
+  /* Must update the clusters and offsets to mirror the new branch. */
+  newbranch->sb_rstart      = 0;
+  newbranch->sb_cluster_min = kshmregion_getcluster(newbranch->sb_region,0);
+  newbranch->sb_cluster_max = kshmregion_getcluster(newbranch->sb_region,newbranch->sb_rpages-1);
 ok:
- error = kshmbranch_remap(newbranch,self_pd);
- if __unlikely(KE_ISERR(error)) {
+  error = kshmbranch_remap(newbranch,self_pd);
+  if __unlikely(KE_ISERR(error)) {
 /*err_newbranch:*/
-  kshmregion_decref(newbranch->sb_region,
-                    newbranch->sb_cluster_min,
-                    newbranch->sb_cluster_max);
-  free(newbranch);
-  return error;
+   kshmregion_decref(newbranch->sb_region,
+                     newbranch->sb_cluster_min,
+                     newbranch->sb_cluster_max);
+   free(newbranch);
+   return error;
+  }
+  asserte(kshmbranch_insert(proot,newbranch,
+                            KSHMBRANCH_ADDRSEMI_INIT,
+                            KSHMBRANCH_ADDRLEVEL_INIT
+          ) == KE_OK);
  }
- *pself = newbranch;
  if (source->sb_min) {
-  error = kshmbranch_fillfork(&newbranch->sb_min,self_pd,source->sb_min,source_pd);
+  error = kshmbranch_fillfork(proot,self_pd,source->sb_min,source_pd);
   if __unlikely(KE_ISERR(error)) return error;
  }
  if (source->sb_max) {
-  error = kshmbranch_fillfork(&newbranch->sb_max,self_pd,source->sb_max,source_pd);
+  error = kshmbranch_fillfork(proot,self_pd,source->sb_max,source_pd);
   if __unlikely(KE_ISERR(error)) return error;
  }
  return error;
@@ -1332,6 +1339,7 @@ ok:
 
 
 
+#define KERNEL_MAP_FLAGS  (PAGEDIR_FLAG_READ_WRITE)
 
 //////////////////////////////////////////////////////////////////////////
 // ===== kshm
@@ -1343,7 +1351,7 @@ kshm_init(struct kshm *__restrict self,
  kassertobj(self);
  kobject_init(self,KOBJECT_MAGIC_SHM);
  if __unlikely((self->s_pd = kpagedir_new()) == NULL) return KE_NOMEM;
- if __unlikely(KE_ISERR(error = kpagedir_mapkernel(self->s_pd,0))) goto err_pd;
+ if __unlikely(KE_ISERR(error = kpagedir_mapkernel(self->s_pd,KERNEL_MAP_FLAGS))) goto err_pd;
  if __unlikely(KE_ISERR(error = kshm_initldt(self,ldt_size_hint))) goto err_pd;
  kshmmap_init(&self->s_map);
  return KE_OK;
@@ -1358,6 +1366,7 @@ kshm_quit(struct kshm *__restrict self) {
  kassert_kshm(self);
  kshmmap_quit(&self->s_map);
  kshm_quitldt(self);
+ k_syslogf(KLOG_DEBUG,"Deleting page directory at %p\n",self->s_pd);
  kpagedir_delete(self->s_pd);
 }
 
@@ -1373,13 +1382,14 @@ kshm_initfork(struct kshm *__restrict self,
  kassertobj(self);
  kobject_init(self,KOBJECT_MAGIC_SHM);
  if __unlikely((self->s_pd = kpagedir_new()) == NULL) return KE_NOMEM;
- if __unlikely(KE_ISERR(error = kpagedir_mapkernel(self->s_pd,0))) goto err_pd;
+ if __unlikely(KE_ISERR(error = kpagedir_mapkernel(self->s_pd,KERNEL_MAP_FLAGS))) goto err_pd;
  if __unlikely(KE_ISERR(error = kshm_initldtcopy(self,right))) goto err_pd;
  /* Enable copy-on-write semantics for the original process. */
  kshmmap_init(&self->s_map);
  if (right->s_map.m_root) {
   error = kshmbranch_fillfork(&self->s_map.m_root,self->s_pd,right->s_map.m_root,right->s_pd);
   if __unlikely(KE_ISERR(error)) goto err_map;
+  kpagedir_print(right->s_pd);
  }
  return error;
 err_map: kshmmap_quit(&self->s_map);
@@ -1388,10 +1398,6 @@ err_pd:  kpagedir_delete(self->s_pd);
  return error;
 }
 
-
-static void
-print_branch(struct kshmbranch *__restrict branch,
-             uintptr_t addr_semi, unsigned int level);
 
 __crit __nomp kerrno_t
 kshm_mapregion_inherited(struct kshm *__restrict self,
@@ -1421,9 +1427,16 @@ kshm_mapregion_inherited(struct kshm *__restrict self,
  /* Insert the branch into the tree of SHM mappings.
   * NOTE: Must do this before attempting to map it, as to not overwrite
   *       existing page directory mapping in case of KE_EXISTS. */
+#if 0
+ printf("BEGIN Insert leaf %p .. %p\n",branch->sb_map_min,branch->sb_map_max);
+ print_branch(self->s_map.m_root,
+              KSHMBRANCH_ADDRSEMI_INIT,
+              KSHMBRANCH_ADDRLEVEL_INIT);                                  
+#endif
  error = kshmmap_insert(&self->s_map,branch);
  if __unlikely(KE_ISERR(error)) goto err_branch;
 #if 0
+ printf("END Insert leaf %p .. %p\n",branch->sb_map_min,branch->sb_map_max);
  print_branch(self->s_map.m_root,
               KSHMBRANCH_ADDRSEMI_INIT,
               KSHMBRANCH_ADDRLEVEL_INIT);
@@ -1536,21 +1549,19 @@ kshm_touch(struct kshm *__restrict self,
  /* Figure out all the pages we're actually going to touch within this branch. */
  min_page  = ((uintptr_t)address-(uintptr_t)branch->sb_map)/PAGESIZE;
  min_page += branch->sb_rstart;
- assert(min_page >= branch->sb_rstart);
- assert(min_page <  branch->sb_rstart+branch->sb_rpages);
- assert(branch->sb_rstart+branch->sb_rpages <= region->sre_chunk.sc_pages);
- max_page  = min(min_page+touch_pages,
-                (branch->sb_rstart+branch->sb_rpages));
- assertf(max_page > min_page,"%Iu <= %Iu",max_page,min_page);
- assert(max_page <= branch->sb_rstart+branch->sb_rpages);
+ max_page  = min_page+touch_pages;
  /* In order to prevent entire clusters being copied more than once
   * because only a page at a time is being accessed from them, align
   * the page numbers we just figured out by cluster-borders. */
  min_page = alignd(min_page,KSHM_CLUSTERSIZE);
  max_page = align (max_page,KSHM_CLUSTERSIZE);
- max_page = min(max_page,region->sre_chunk.sc_pages); /*< Make sure we don't exceed the maximum! */
+ max_page = min(max_page,branch->sb_rstart+branch->sb_rpages); /*< Make sure we don't exceed the maximum! */
  --max_page;
  assert(max_page >= min_page);
+ assert(min_page >= branch->sb_rstart);
+ assert(max_page <  branch->sb_rstart+branch->sb_rpages);
+ assert(branch->sb_rstart+branch->sb_rpages > branch->sb_rstart);
+ assert(branch->sb_rstart+branch->sb_rpages <= region->sre_chunk.sc_pages);
 
  {
   struct kshmcluster *iter,*end;
@@ -1637,6 +1648,7 @@ true_shared_access:;
   * But we still must check for the potential of
   * a second split near the end of 'pbranch'. */
  assert(max_page < region->sre_chunk.sc_pages);
+ assert(max_page < branch->sb_rstart+branch->sb_rpages);
  assert(branch->sb_cluster_min <= branch->sb_cluster_max);
  assert(branch->sb_cluster_max >= region->sre_clusterv &&
         branch->sb_cluster_max <  region->sre_clusterv+
@@ -1808,11 +1820,13 @@ kshm_unmapregion(struct kshm *self,
                  __pagealigned __user void *base_address,
                  struct kshmregion *region) {
  struct kshmbranch **pbranch,*branch;
+ uintptr_t addr_semi;
  kassert_kshm(self);
  kassert_kshmregion(region);
  assert(isaligned((uintptr_t)base_address,PAGEALIGN));
  pbranch = kshmbranch_plocate(&self->s_map.m_root,
-                             (uintptr_t)base_address,NULL);
+                             (uintptr_t)base_address,
+                              &addr_semi);
  /* Make sure that there really is a branch mapped at the given address. */
  if __unlikely(!pbranch) return KE_FAULT;
  branch = *pbranch;
@@ -1822,7 +1836,7 @@ kshm_unmapregion(struct kshm *self,
  /* Finally, make sure that it is the given region, that is mapped here. */
  if __unlikely(branch->sb_region != region) return KE_PERM;
  /* OK! Time to delete this thing! */
- asserte(kshmbranch_popone(pbranch) == branch);
+ asserte(kshmbranch_popone(pbranch,addr_semi,KSHMBRANCH_SEMILEVEL(addr_semi)) == branch);
  kpagedir_unmap(self->s_pd,base_address,branch->sb_rpages);
  /* Drop references from all affected clusters. */
  kshmregion_decref(region,

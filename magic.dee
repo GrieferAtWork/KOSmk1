@@ -927,7 +927,7 @@ function run_addr2line(addr) {
 
 function run_qemu(kernel_binary) {
 	local qemu = process(executables["qemu"],[
-		//(!hosted ? ["-no-reboot","-no-shutdown"] : [])...,
+		(hosted ? ["-no-reboot","-no-shutdown"] : [])...,
 		"-serial","stdio",
 		(remote ? ["-s","-S"] : [])...,
 		"-kernel",kernel_binary,

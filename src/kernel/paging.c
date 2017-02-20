@@ -244,7 +244,7 @@ kpagedir_setflags(struct kpagedir *self, __virtualaddr void const *virt,
  flags |= X86_PTE_FLAG_PRESENT;
 #endif
  KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,,{
-  diter->u = (titer->u&mask)|flags;
+  diter->u = (diter->u&mask)|flags;
  }) {
   titer->u = (titer->u&mask)|flags;
   ++result;
@@ -433,7 +433,7 @@ static int kpagedir_print_callback(__virtualaddr void *vbegin,
                                    size_t pagecount, kpageflag_t flags, void *closure) {
  return printf("MAP %#.8Ix bytes (%#.8Ix pages) (%c%c) V[%.8p ... %.8p] --> P[%.8p ... %.8p]\n"
                ,pagecount*PAGESIZE,pagecount
-               ,flags&PAGEDIR_FLAG_USER ? 'R' : '-'
+               ,flags&PAGEDIR_FLAG_USER ? 'U' : '-'
                ,flags&PAGEDIR_FLAG_READ_WRITE ? 'W' : '-'
                ,vbegin,(uintptr_t)vbegin+pagecount*PAGESIZE
                ,pbegin,(uintptr_t)pbegin+pagecount*PAGESIZE);

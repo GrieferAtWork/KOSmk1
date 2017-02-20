@@ -567,6 +567,7 @@ int main(int argc, char *argv[]) {
   perror("Failed to map x86 VGA terminal");
   _exit(EXIT_FAILURE);
  }
+ k_syslogf(KLOG_DEBUG,"Mapped terminal device from %p to %p\n",VGA_ADDR,vga_dev);
  vga_buf = (cell_t *)malloc((VGA_SIZE+VGA_WIDTH)*sizeof(cell_t));
  if (!vga_buf) {
   perror("Failed to allocate VGA buffer");
@@ -595,6 +596,7 @@ int main(int argc, char *argv[]) {
   _exit(EXIT_FAILURE);
  }
 
+#if 1
  if ((child_proc = task_fork()) == 0) {
   // === Child process
   // Redirect all standard files to the terminal
@@ -607,7 +609,9 @@ int main(int argc, char *argv[]) {
   execl(argv[1],argv[1],NULL);
   perror("Failed to exec given process");
   _exit(errno);
- } else if (child_proc == -1) {
+ } else if (child_proc == -1)
+#endif
+ {
   perror("Failed to fork child process");
   _exit(EXIT_FAILURE);
  }
@@ -620,12 +624,14 @@ int main(int argc, char *argv[]) {
  relay_slave_out_thread = task_newthread(&relay_slave_out_threadmain,NULL,TASK_NEWTHREAD_DEFAULT);
  relay_incoming_thread = task_newthread(&relay_incoming_threadmain,NULL,TASK_NEWTHREAD_DEFAULT);
 
+ k_syslogf(KLOG_DEBUG,"Updating screen for the first time\n");
  // Do an initial blit to clear any leftovers originating from the kernel
  BLIT();
 
  {
   // Join the slave process
   uintptr_t child_exit;
+  k_syslogf(KLOG_DEBUG,"Begin joining child process\n");
   if (proc_join(child_proc,&child_exit) == -1) {
    perror("Failed to join child process");
    result = EXIT_FAILURE;
