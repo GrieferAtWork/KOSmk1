@@ -1271,11 +1271,13 @@ __crit __nomp kerrno_t
 kshmbranch_fillfork(struct kshmbranch **__restrict proot, struct kpagedir *__restrict self_pd,
                     struct kshmbranch *__restrict source, struct kpagedir *__restrict source_pd) {
  struct kshmbranch *newbranch;
+ kshm_flag_t source_flags;
  kerrno_t error = KE_OK;
  kassertobj(pself);
  kassertobj(source);
  kassert_kshmregion(source->sb_region);
- if (!(source->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_LOSEONFORK)) {
+ source_flags = source->sb_region->sre_chunk.sc_flags;
+ if (!(source_flags&KSHMREGION_FLAG_LOSEONFORK)) {
   newbranch = (struct kshmbranch *)memdup(source,sizeof(struct kshmbranch));
   if __unlikely(!newbranch) return KE_NOMEM;
   /* Add new references to all clusters covered by us. */
@@ -1284,15 +1286,17 @@ kshmbranch_fillfork(struct kshmbranch **__restrict proot, struct kpagedir *__res
                             newbranch->sb_cluster_max);
   if __likely(KE_ISOK(error)) {
    size_t affected_pages;
-   /* re-map the region as read-only in 'source_pd'.
-    * NOTE: Even if we fail later, it is OK to leave the mapping as
-    *       read-only, as the #PF-handler will see it as a COW-page
-    *       that has returned to its original owner. */
-   affected_pages = kpagedir_setflags(source_pd,source->sb_map,source->sb_rpages,
-                                    ~(PAGEDIR_FLAG_READ_WRITE),0);
-   assertf(affected_pages == source->sb_rpages,
-           "Unexpected amount of affected pages (expected %Iu, got %Iu)",
-           source->sb_rpages,affected_pages);
+   if (KSHMREGION_FLAG_USECOW(source_flags)) {
+    /* re-map the region as read-only in 'source_pd'.
+     * NOTE: Even if we fail later, it is OK to leave the mapping as
+     *       read-only, as the #PF-handler will see it as a COW-page
+     *       that has returned to its original owner. */
+    affected_pages = kpagedir_setflags(source_pd,source->sb_map,source->sb_rpages,
+                                     ~(PAGEDIR_FLAG_READ_WRITE),0);
+    assertf(affected_pages == source->sb_rpages,
+            "Unexpected amount of affected pages (expected %Iu, got %Iu)",
+            source->sb_rpages,affected_pages);
+   }
    goto ok;
   }
   /* Fallback: Try to create a hard copy of the given branch. */
@@ -1389,7 +1393,6 @@ kshm_initfork(struct kshm *__restrict self,
  if (right->s_map.m_root) {
   error = kshmbranch_fillfork(&self->s_map.m_root,self->s_pd,right->s_map.m_root,right->s_pd);
   if __unlikely(KE_ISERR(error)) goto err_map;
-  kpagedir_print(right->s_pd);
  }
  return error;
 err_map: kshmmap_quit(&self->s_map);

@@ -33,6 +33,7 @@
 #include <kos/syscallno.h>
 #include <math.h>
 #include <sys/mman.h>
+#include <kos/syslog.h>
 
 __DECL_BEGIN
 
@@ -62,11 +63,11 @@ SYSCALL(sys_kmem_map) {
  if (!hint) hint = KPAGEDIR_MAPANY_HINT_UHEAP;
  else hint = (void *)alignd((uintptr_t)hint,PAGEALIGN);
  prot &= (KSHMREGION_FLAG_EXEC|KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE); /*< Don't reveil the hidden flags. */
+ if (flags&MAP_SHARED) prot |= KSHMREGION_FLAG_SHARED;
  /* Calculate the min amount of pages. */
  pages = ceildiv(length,PAGESIZE);
  /* Make sure we're always allocating something. */
  if __unlikely(!pages) pages = 1;
- if (flags&MAP_SHARED) prot |= KSHMREGION_FLAG_SHARED;
  KTASK_CRIT_BEGIN_FIRST
  error = kproc_lock(procself,KPROC_LOCK_SHM);
  if __unlikely(KE_ISERR(error)) { hint = (void *)(uintptr_t)-1; goto end; }
@@ -119,6 +120,7 @@ SYSCALL(sys_kmem_mapdev) {
  alignment_offset = ((uintptr_t)physptr-(uintptr_t)aligned_physptr);
  length          += alignment_offset;
  prot            &= (KSHMREGION_FLAG_EXEC|KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE); /*< Don't reveil the hidden flags. */
+ if (flags&MAP_SHARED) prot |= KSHMREGION_FLAG_SHARED;
  if __unlikely(u_get(hint_and_result,hint)) RETURN(KE_FAULT);
  if (flags&MAP_FIXED) {
   void *aligned_hint;
@@ -133,8 +135,7 @@ SYSCALL(sys_kmem_mapdev) {
  pages = ceildiv(length,PAGESIZE);
  /* Make sure we're always allocating something. */
  if __unlikely(!pages) pages = 1;
- if (flags&MAP_SHARED) prot |= KSHMREGION_FLAG_SHARED;
- /* Make sure that the specifed area of physical memory doesn't overflow. */
+ /* Make sure that the specified area of physical memory doesn't overflow. */
  if __unlikely(((uintptr_t)aligned_physptr+pages*PAGESIZE) <=
                 (uintptr_t)aligned_physptr) RETURN(KE_OVERFLOW);
  KTASK_CRIT_BEGIN_FIRST
@@ -155,7 +156,10 @@ SYSCALL(sys_kmem_mapdev) {
   error = KE_FAULT;
   goto end_unlock;
  }
- region = kshmregion_newphys(aligned_physptr,pages,prot);
+ k_syslogf(KLOG_DEBUG,"Creating user-requested physical mapping %p -> %p (%Iu pages)\n",
+           aligned_physptr,hint,pages);
+ region = kshmregion_newphys(aligned_physptr,pages,
+                             prot|KSHMREGION_FLAG_NOCOPY);
  if __unlikely(!region) { error = KE_NOMEM; goto end_unlock; }
  /* Map the new region of memory within the calling process. */
  error = kshm_mapfullregion_inherited(&procself->p_shm,hint,region);
