@@ -103,37 +103,43 @@ kvinodepid_new_inherited(struct kvprocdirent const *__restrict decl,
 
 //////////////////////////////////////////////////////////////////////////
 // Generic functions for all "/proc/[PID]" files/folders.
-void kvinodepid_generic_quit(struct kinode *self) { kproc_decref(PROC); }
+void kvinodepid_generic_quit(struct kinode *__restrict self) { kproc_decref(PROC); }
 kerrno_t
-kvinodepid_generic_getattr(struct kinode const *self,
+kvinodepid_generic_getattr(struct kinode const *__restrict self,
                            size_t ac, __user union kinodeattr *av) {
+ union kinodeattr attr;
  kerrno_t error;
- for (; ac; ++av,--ac) switch (av->ia_common.a_id) {
+ for (; ac; ++av,--ac) {
+  if __unlikely(copy_from_user(&attr,av,sizeof(union kinodeattr))) return KE_FAULT;
+  switch (attr.ia_common.a_id) {
 #if KCONFIG_HAVE_TASK_STATS_START
-  {
-   struct ktask *root_task;
-  case KATTR_FS_ATIME:
-  case KATTR_FS_MTIME:
+   {
+    struct ktask *root_task;
+   case KATTR_FS_ATIME:
+   case KATTR_FS_MTIME:
 #if 0
-   /* TODO: access/modification time should be when any
-    *       thread of the process was last scheduled. */
-   break;
+    /* TODO: access/modification time should be when any
+     *       thread of the process was last scheduled. */
+    break;
 #endif
-  case KATTR_FS_CTIME:
-   /* creation time should be when the process root was spawned. */
-   if __unlikely((root_task = kproc_getroottask(PROC)) == NULL) goto default_attrib;
-   memcpy(&av->ia_time.tm_time,
-          &root_task->t_stats.ts_abstime_start,
-          sizeof(struct timespec));
-   ktask_decref(root_task);
-  } break;
+   case KATTR_FS_CTIME:
+    /* creation time should be when the process root was spawned. */
+    if __unlikely((root_task = kproc_getroottask(PROC)) == NULL) goto default_attrib;
+    memcpy(&attr.ia_time.tm_time,
+           &root_task->t_stats.ts_abstime_start,
+           sizeof(struct timespec));
+    ktask_decref(root_task);
+   } break;
 #endif /* KCONFIG_HAVE_TASK_STATS_START */
-  case KATTR_FS_OWNER: av->ia_owner.o_owner = kproc_getuid(PROC); break;
-  case KATTR_FS_GROUP: av->ia_group.g_group = kproc_getgid(PROC); break;
-  default:default_attrib:
-   error = kinode_user_generic_getattr(self,1,av);
-   if __unlikely(KE_ISERR(error)) return error;
-   break;
+   case KATTR_FS_OWNER: attr.ia_owner.o_owner = kproc_getuid(PROC); break;
+   case KATTR_FS_GROUP: attr.ia_group.g_group = kproc_getgid(PROC); break;
+   default:default_attrib:
+    error = kinode_user_generic_getattr(self,1,av);
+    if __unlikely(KE_ISERR(error)) return error;
+    goto next_attr;
+  }
+  if __unlikely(copy_to_user(av,&attr,sizeof(union kinodeattr))) return KE_FAULT;
+next_attr:;
  }
  return KE_OK;
 }
@@ -141,8 +147,8 @@ kvinodepid_generic_getattr(struct kinode const *self,
 //////////////////////////////////////////////////////////////////////////
 // Generic functions for all "/proc/[PID]" folders.
 kerrno_t
-kvinodepiddir_generic_walk(struct kinode *self,
-                           struct kdirentname const *name,
+kvinodepiddir_generic_walk(struct kinode *__restrict self,
+                           struct kdirentname const *__restrict name,
                            __ref struct kinode **resnode) {
  __ref struct kvinodepidfile *node; kerrno_t error;
  struct kvprocdirent *iter = SELF_DIR->pd_elem;
@@ -160,7 +166,7 @@ kvinodepiddir_generic_walk(struct kinode *self,
  return KE_NOENT;
 }
 kerrno_t
-kvinodepiddir_generic_enumdir(struct kinode *self,
+kvinodepiddir_generic_enumdir(struct kinode *__restrict self,
                               pkenumdir callback,
                               void *closure) {
  __ref struct kvinodepidfile *node;
@@ -195,7 +201,7 @@ struct kinodetype kvinodedirtype_proc_pid = {
 //////////////////////////////////////////////////////////////////////////
 // "/proc/[PID]/cwd|root" special symbolic link files
 static kerrno_t
-procpid_fdentry_readlink(struct kinode *self,
+procpid_fdentry_readlink(struct kinode *__restrict self,
                          struct kfdentry *fdentry,
                          struct kdirentname *target) {
  kerrno_t error; char buffer[PATH_MAX];
@@ -225,7 +231,7 @@ end_buf:
  return error;
 }
 static kerrno_t
-procpid_fd_readlink(struct kinode *self, int fd,
+procpid_fd_readlink(struct kinode *__restrict self, int fd,
                     struct kdirentname *target) {
  kerrno_t error; struct kfdentry fdentry;
  if __unlikely(KE_ISERR(error = kproc_getfd(PROC,fd,&fdentry))) return error;
@@ -233,9 +239,9 @@ procpid_fd_readlink(struct kinode *self, int fd,
  kfdentry_quit(&fdentry);
  return error;
 }
-static kerrno_t vfsfile_proc_pid_cwd_readlink(struct kinode *self, struct kdirentname *target) { return procpid_fd_readlink(self,KFD_CWD,target); }
-static kerrno_t vfsfile_proc_pid_root_readlink(struct kinode *self, struct kdirentname *target) { return procpid_fd_readlink(self,KFD_ROOT,target); }
-static kerrno_t vfsfile_proc_pid_exe_readlink(struct kinode *self, struct kdirentname *target) {
+static kerrno_t vfsfile_proc_pid_cwd_readlink(struct kinode *__restrict self, struct kdirentname *target) { return procpid_fd_readlink(self,KFD_CWD,target); }
+static kerrno_t vfsfile_proc_pid_root_readlink(struct kinode *__restrict self, struct kdirentname *target) { return procpid_fd_readlink(self,KFD_ROOT,target); }
+static kerrno_t vfsfile_proc_pid_exe_readlink(struct kinode *__restrict self, struct kdirentname *target) {
  __ref struct kshlib *root_exe; struct kfdentry entry; kerrno_t error;
  if __unlikely((root_exe = kproc_getrootexe(PROC)) == NULL) return KE_DESTROYED;
  entry.fd_attr = KFD_ATTR(KFDTYPE_FILE,KFD_FLAG_NONE);
@@ -376,11 +382,10 @@ struct kfiletype kvfiletype_proc_kcore = {
  .ft_getdirent = &kvfile_getdirent,
 };
 static kerrno_t
-vfsnode_proc_kcore_getattr(struct kinode const *self,
+vfsnode_proc_kcore_getattr(struct kinode const *__restrict self,
                            size_t ac, __user union kinodeattr *av) {
  kerrno_t error;
  union kinodeattr attr;
-next_attr:
  for (; ac; ++av,--ac) {
   if __unlikely(copy_from_user(&attr,av,sizeof(union kinodeattr))) return KE_FAULT;
   switch (attr.ia_common.a_id) {
@@ -405,6 +410,7 @@ next_attr:
     goto next_attr;
   }
   if __unlikely(copy_to_user(av,&attr,sizeof(union kinodeattr))) return KE_FAULT;
+next_attr:;
  }
  return KE_OK;
 }
@@ -426,8 +432,8 @@ static struct kvsdirent vfsent_proc[] = {
 };
 
 static kerrno_t
-kfsproc_walk(struct kinode *self,
-             struct kdirentname const *name,
+kfsproc_walk(struct kinode *__restrict self,
+             struct kdirentname const *__restrict name,
              __ref struct kinode **resnode) {
  char const *iter,*end; pid_t pid;
  __ref struct kproc *proc;
@@ -453,7 +459,7 @@ do if __unlikely((error = (*callback)(name,name,closure)) != KE_OK) return error
 while(0)
 
 static kerrno_t
-kfsproc_enumdir(struct kinode *self,
+kfsproc_enumdir(struct kinode *__restrict self,
                 pkenumdir callback,
                 void *closure) {
  kerrno_t error;

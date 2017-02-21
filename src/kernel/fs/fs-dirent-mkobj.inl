@@ -30,19 +30,19 @@
 #endif
 
 #ifdef MKLNK
-kerrno_t kdirent_mklnk(struct kdirent *self, struct kdirentname const *name,
+kerrno_t kdirent_mklnk(struct kdirent *__restrict self, struct kdirentname const *__restrict name,
                        size_t ac, __kernel union kinodeattr const *av,
-                       struct kdirentname const *target,
+                       struct kdirentname const *__restrict target,
                        __ref /*opt*/struct kdirent **resent,
                        __ref /*opt*/struct kinode **resnode)
 #elif defined(MKDIR)
-kerrno_t kdirent_mkdir(struct kdirent *self,
-                       struct kdirentname const *name,
+kerrno_t kdirent_mkdir(struct kdirent *__restrict self,
+                       struct kdirentname const *__restrict name,
                        size_t ac, __kernel union kinodeattr const *av, 
                        __ref /*opt*/struct kdirent **resent,
                        __ref /*opt*/struct kinode **resnode)
 #elif defined(MKREG)
-kerrno_t kdirent_mkreg(struct kdirent *self, struct kdirentname const *name,
+kerrno_t kdirent_mkreg(struct kdirent *__restrict self, struct kdirentname const *__restrict name,
                        __size_t ac, __kernel union kinodeattr const *av,
                        __ref /*opt*/struct kdirent **resent,
                        __ref /*opt*/struct kinode **resnode)

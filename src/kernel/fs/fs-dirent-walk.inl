@@ -26,25 +26,28 @@
 #endif
 
 #ifdef WALKENV
-kerrno_t kdirent_walkenv(struct kfspathenv const *env,
-                         struct kdirentname const *name,
-                         __ref struct kdirent **result)
+kerrno_t
+kdirent_walkenv(struct kfspathenv const *__restrict env,
+                struct kdirentname const *__restrict name,
+                __ref struct kdirent **__restrict result)
 #elif defined(WITHRESNODE)
-kerrno_t kdirent_walknode(struct kdirent *self,
-                          struct kdirentname const *name,
-                          __ref struct kdirent **result,
-                          __ref struct kinode **resnode)
+kerrno_t
+kdirent_walknode(struct kdirent *__restrict self,
+                 struct kdirentname const *__restrict name,
+                 __ref struct kdirent **__restrict result,
+                 __ref struct kinode **__restrict resnode)
 #else
-kerrno_t kdirent_walk(struct kdirent *self,
-                      struct kdirentname const *name,
-                      __ref struct kdirent **result)
+kerrno_t
+kdirent_walk(struct kdirent *__restrict self,
+             struct kdirentname const *__restrict name,
+             __ref struct kdirent **__restrict result)
 #endif
 {
  struct kdirent *resent,*newresult; struct kinode *inode;
  kerrno_t error; struct kinode *used_resnode;
  struct kdirentname used_name;
 #ifdef WALKENV
- struct kdirent *self;
+ struct kdirent *__restrict self;
  kassertobj(env);
  kassertobj(result);
  kassert_kdirent(env->env_cwd);
@@ -123,7 +126,7 @@ deadent:
   if __unlikely(KE_ISERR(error)) return error;
   kfspathenv_initfrom(&target_env,env,self,env->env_root);
   ++target_env.env_lnk;
-  error = kdirent_walkall(&target_env,&target_ent,link_name.dn_name,link_name.dn_size);
+  error = kdirent_walkall(&target_env,link_name.dn_name,link_name.dn_size,&target_ent);
   kdirentname_quit(&link_name);
   if __unlikely(KE_ISERR(error)) return error;
   target_env.env_cwd = target_ent;

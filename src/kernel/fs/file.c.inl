@@ -104,28 +104,29 @@ kerrno_t
 __kfile_user_getfilename_fromdirent(struct kfile const *__restrict self,
                                     __user char *__restrict buf, size_t bufsize,
                                     __kernel size_t *__restrict reqsize) {
- __ref struct kdirent *__restrict dent;
+ __ref struct kdirent *__restrict dent; kerrno_t error;
  if __unlikely((dent = kfile_getdirent((struct kfile *)self)) == NULL) return KE_NOSYS;
- kdirent_getfilename(dent,buf,bufsize,reqsize);
+ error = kdirent_user_getfilename(dent,buf,bufsize,reqsize);
  kdirent_decref(dent);
- return KE_OK;
+ return error;
 }
 kerrno_t
 __kfile_user_getpathname_fromdirent(struct kfile const *__restrict self,
                                     struct kdirent *__restrict root,
                                     __user char *__restrict buf, size_t bufsize,
                                     __kernel size_t *__restrict reqsize) {
- __ref struct kdirent *__restrict dent;
+ __ref struct kdirent *__restrict dent; kerrno_t error;
  if (root) kassert_kdirent(root);
  if __unlikely((dent = kfile_getdirent((struct kfile *)self)) == NULL) return KE_NOSYS;
- kdirent_getpathname(dent,root,buf,bufsize,reqsize);
+ error = kdirent_user_getpathname(dent,root,buf,bufsize,reqsize);
  kdirent_decref(dent);
- return KE_OK;
+ return error;
 }
 
-kerrno_t kfile_user_pread(struct kfile *__restrict self, pos_t pos,
-                          __user void *buf, size_t bufsize,
-                          __kernel size_t *__restrict rsize) {
+kerrno_t
+kfile_user_pread(struct kfile *__restrict self, pos_t pos,
+                 __user void *buf, size_t bufsize,
+                 __kernel size_t *__restrict rsize) {
  kerrno_t(*callback)(struct kfile *,pos_t,void *,size_t,size_t *);
  kerrno_t error; kassert_kfile(self);
  if ((callback = self->f_type->ft_pread) != NULL) {
@@ -142,9 +143,10 @@ kerrno_t kfile_user_pread(struct kfile *__restrict self, pos_t pos,
  }
  return error;
 }
-kerrno_t kfile_user_pwrite(struct kfile *__restrict self, pos_t pos,
-                           __user void const *buf, size_t bufsize,
-                           __kernel size_t *__restrict wsize) {
+kerrno_t
+kfile_user_pwrite(struct kfile *__restrict self, pos_t pos,
+                  __user void const *buf, size_t bufsize,
+                  __kernel size_t *__restrict wsize) {
  kerrno_t(*callback)(struct kfile *,pos_t,void const *,size_t,size_t *);
  kerrno_t error; kassert_kfile(self);
  if ((callback = self->f_type->ft_pwrite) != NULL) {
@@ -161,9 +163,10 @@ kerrno_t kfile_user_pwrite(struct kfile *__restrict self, pos_t pos,
  }
  return error;
 }
-kerrno_t kfile_user_fast_pread(struct kfile *__restrict self, pos_t pos,
-                               __user void *buf, size_t bufsize,
-                               __kernel size_t *__restrict rsize) {
+kerrno_t
+kfile_user_fast_pread(struct kfile *__restrict self, pos_t pos,
+                      __user void *buf, size_t bufsize,
+                      __kernel size_t *__restrict rsize) {
  kerrno_t(*callback)(struct kfile *,pos_t,void *,size_t,size_t *);
  kerrno_t error; kassert_kfile(self);
  if ((callback = self->f_type->ft_pread) != NULL) {
@@ -175,9 +178,10 @@ kerrno_t kfile_user_fast_pread(struct kfile *__restrict self, pos_t pos,
  }
  return error;
 }
-kerrno_t kfile_user_fast_pwrite(struct kfile *__restrict self, pos_t pos,
-                                __user void const *buf, size_t bufsize,
-                                __kernel size_t *__restrict wsize) {
+kerrno_t
+kfile_user_fast_pwrite(struct kfile *__restrict self, pos_t pos,
+                       __user void const *buf, size_t bufsize,
+                       __kernel size_t *__restrict wsize) {
  kerrno_t(*callback)(struct kfile *,pos_t,void const *,size_t,size_t *);
  kerrno_t error; kassert_kfile(self);
  if ((callback = self->f_type->ft_pwrite) != NULL) {
@@ -190,8 +194,9 @@ kerrno_t kfile_user_fast_pwrite(struct kfile *__restrict self, pos_t pos,
  return error;
 }
 
-kerrno_t kfile_user_readall(struct kfile *__restrict self,
-                            __user void *buf, size_t bufsize) {
+kerrno_t
+kfile_user_readall(struct kfile *__restrict self,
+                   __user void *buf, size_t bufsize) {
  kerrno_t error; size_t rsize;
  kassert_kfile(self);
  kassertmem(buf,bufsize);
@@ -204,8 +209,9 @@ kerrno_t kfile_user_readall(struct kfile *__restrict self,
  }
  return error;
 }
-kerrno_t kfile_user_writeall(struct kfile *__restrict self,
-                             __user void const *buf, size_t bufsize) {
+kerrno_t
+kfile_user_writeall(struct kfile *__restrict self,
+                    __user void const *buf, size_t bufsize) {
  kerrno_t error; size_t wsize;
  kassert_kfile(self);
  kassertmem(buf,bufsize);
@@ -219,8 +225,9 @@ kerrno_t kfile_user_writeall(struct kfile *__restrict self,
  return error;
 }
 
-kerrno_t kfile_user_preadall(struct kfile *__restrict self, pos_t pos,
-                             __user void *buf, size_t bufsize) {
+kerrno_t
+kfile_user_preadall(struct kfile *__restrict self, pos_t pos,
+                    __user void *buf, size_t bufsize) {
  kerrno_t error; size_t rsize;
  kassert_kfile(self);
  kassertmem(buf,bufsize);
@@ -234,8 +241,10 @@ kerrno_t kfile_user_preadall(struct kfile *__restrict self, pos_t pos,
  }
  return error;
 }
-kerrno_t kfile_user_pwriteall(struct kfile *__restrict self, pos_t pos,
-                              __user void const *buf, size_t bufsize) {
+
+kerrno_t
+kfile_user_pwriteall(struct kfile *__restrict self, pos_t pos,
+                     __user void const *buf, size_t bufsize) {
  kerrno_t error; size_t wsize;
  kassert_kfile(self);
  kassertmem(buf,bufsize);
@@ -249,8 +258,10 @@ kerrno_t kfile_user_pwriteall(struct kfile *__restrict self, pos_t pos,
  }
  return error;
 }
-kerrno_t kfile_user_fast_preadall(struct kfile *__restrict self, pos_t pos,
-                                  __user void *buf, size_t bufsize) {
+
+kerrno_t
+kfile_user_fast_preadall(struct kfile *__restrict self, pos_t pos,
+                         __user void *buf, size_t bufsize) {
  kerrno_t error; size_t rsize;
  kassert_kfile(self);
  kassertmem(buf,bufsize);
@@ -264,8 +275,10 @@ kerrno_t kfile_user_fast_preadall(struct kfile *__restrict self, pos_t pos,
  }
  return error;
 }
-kerrno_t kfile_user_fast_pwriteall(struct kfile *__restrict self, pos_t pos,
-                                   __user void const *buf, size_t bufsize) {
+
+kerrno_t
+kfile_user_fast_pwriteall(struct kfile *__restrict self, pos_t pos,
+                          __user void const *buf, size_t bufsize) {
  kerrno_t error; size_t wsize;
  kassert_kfile(self);
  kassertmem(buf,bufsize);
@@ -320,7 +333,7 @@ kfile_generic_writeat_isdir(struct kfile *__restrict __unused(self),
 }
 
 
-__crit __kernel char *kfile_getmallname(struct kfile *fp) {
+__crit __kernel char *kfile_getmallname(struct kfile *__restrict fp) {
  char *result,*newresult; size_t bufsize,reqsize; kerrno_t error;
  KTASK_CRIT_MARK
  result = (char *)malloc(bufsize = (PATH_MAX+1)*sizeof(char));

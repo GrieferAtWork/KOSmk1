@@ -109,32 +109,39 @@ extern __crit __wunused __malloccall __kernel char *__user_strndup_c(__user char
  * (aka. how many bytes were already handled in previous iterations). */
 #define USER_FOREACH_OFFSET   ((__uintptr_t)__uf_p-(__uintptr_t)__uf_start)
 
+/* The amount of pending bytes. */
+#define USER_FOREACH_PENDING  (__uf_s)
+
 /* Begin a user-pointer foreach-part iteration. */
 #define USER_FOREACH_BEGIN(p,s,part_p,part_s,writeable) \
-do{ struct ktask *__uf_caller = ktask_self();\
-    struct kproc *__uf_proc = ktask_getproc(__uf_caller);\
+do{ struct ktask *const __uf_caller = ktask_self();\
+    struct kproc *const __uf_proc = ktask_getproc(__uf_caller);\
+    struct kpagedir const *const __uf_epd = __uf_caller->t_epd;\
+    int const __uf_kepd = KTASK_ISKEPD_P || __uf_epd == kpagedir_kernel();\
     __user void *__uf_p; __user __attribute_unused void *__uf_start;\
     __uf_p = __uf_start = (__user void *)(p);\
     __size_t __uf_part,__uf_s = (s);\
     KTASK_CRIT_BEGIN\
-    if __likely(KE_ISOK(kproc_lock(__uf_proc,KPROC_LOCK_SHM))) {\
-     while (__uf_s &&\
-           (*(__kernel void **)&(part_p) = \
+    if __likely(__uf_kepd || KE_ISOK(kproc_lock(__uf_proc,KPROC_LOCK_SHM))) {\
+     while (__uf_s && (__uf_kepd\
+        ? ( *(__kernel void **)&(part_p) = __uf_p,__uf_part = __uf_s,1)\
+        : ((*(__kernel void **)&(part_p) = \
               kshm_translateuser(kproc_getshm(__uf_proc),\
-                                 __uf_caller->t_epd,\
+                                 __uf_epd,\
                                  __uf_p,__uf_s,&__uf_part,\
-                                 writeable)) != NULL) {\
+                                 writeable)) != NULL))) {\
+      assert(__uf_part);\
       assert(__uf_part <= __uf_s);\
       (part_s) = __uf_part;\
-      if (0);else
+      if (1)
 
 /* End a user-pointer foreach-part iteration. */
 #define USER_FOREACH_END(...) \
+      else;\
       __uf_s -= __uf_part;\
       *(__uintptr_t *)&__uf_p += __uf_part;\
-      __uf_s -= __uf_part;\
      }\
-     kproc_unlock(__uf_proc,KPROC_LOCK_SHM);\
+     if (!__uf_kepd) kproc_unlock(__uf_proc,KPROC_LOCK_SHM);\
     }\
     KTASK_CRIT_END\
     if (__uf_s) {__VA_ARGS__;}\

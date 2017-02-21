@@ -23,22 +23,20 @@
 #ifndef __KOS_KERNEL_PTY_C__
 #define __KOS_KERNEL_PTY_C__ 1
 
-#include <kos/config.h>
+#include <kos/arch.h>
 #include <kos/compiler.h>
+#include <kos/config.h>
+#include <kos/kernel/fs/fs.h>
+#include <kos/kernel/fs/vfs-dev.h>
+#include <kos/kernel/fs/vfs.h>
 #include <kos/kernel/proc.h>
 #include <kos/kernel/pty.h>
-#include <kos/kernel/fs/fs.h>
-#include <kos/kernel/fs/vfs.h>
-#include <kos/kernel/fs/vfs-dev.h>
 #include <kos/kernel/util/string.h>
-#include <unistd.h>
 #include <kos/syslog.h>
-#include <sys/stat.h>
-#include <kos/arch.h>
 #include <stdio.h>
-#ifdef __x86__
-#include <kos/arch/x86/vga.h>
-#endif
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 __DECL_BEGIN
 
@@ -479,7 +477,6 @@ kfspty_mgetattr(struct kfspty const *self,
                 size_t ac, __user union kinodeattr *av) {
  kerrno_t error;
  union kinodeattr attr;
-next_attr:
  for (; ac; --ac,++av) {
   if __unlikely(copy_from_user(&attr,av,sizeof(union kinodeattr))) return KE_FAULT;
   switch (attr.ia_common.a_id) {
@@ -499,6 +496,7 @@ next_attr:
     goto next_attr;
   }
   if __unlikely(copy_to_user(av,&attr,sizeof(union kinodeattr))) return KE_FAULT;
+next_attr:;
  }
  return KE_OK;
 }
@@ -507,7 +505,6 @@ kfspty_sgetattr(struct kfspty const *self, size_t ac,
                 __user union kinodeattr *av) {
  kerrno_t error;
  union kinodeattr attr;
-next_attr:
  for (; ac; --ac,++av) {
   if __unlikely(copy_from_user(&attr,av,sizeof(union kinodeattr))) return KE_FAULT;
   switch (attr.ia_common.a_id) {
@@ -527,6 +524,7 @@ next_attr:
     goto next_attr;
   }
   if __unlikely(copy_to_user(av,&attr,sizeof(union kinodeattr))) return KE_FAULT;
+next_attr:;
  }
  return KE_OK;
 }
@@ -537,8 +535,8 @@ next_attr:
 // File system integration from here on...
 
 __crit __ref struct kfspty *
-kfspty_new(struct termios const *ios,
-           struct winsize const *size) {
+kfspty_new(struct termios const *__restrict ios,
+           struct winsize const *__restrict size) {
  __ref struct kfspty *result;
  KTASK_CRIT_MARK
  result = (__ref struct kfspty *)__kinode_alloc((struct ksuperblock *)&kvfs_dev,
@@ -557,7 +555,7 @@ struct kfspty_slave_inode {
        struct kinode  s_node; /*< Underlying INode. */
  __ref struct kfspty *s_pty;  /*< [1..1] Associated PTY Master INode. */
 };
-static void kfspty_slave_inode_quit(struct kinode *self) {
+static void kfspty_slave_inode_quit(struct kinode *__restrict self) {
  kinode_decref(&((struct kfspty_slave_inode *)self)->s_pty->fp_node);
 }
 
@@ -568,7 +566,7 @@ struct kinodetype kfspty_slave_type = {
 };
 
 
-static void kfspty_quit(struct kinode *self) {
+static void kfspty_quit(struct kinode *__restrict self) {
  kpty_quit(&((struct kfspty *)self)->fp_pty);
 }
 
@@ -582,9 +580,9 @@ struct kinodetype kfspty_type = {
 
 
 __crit kerrno_t
-kfspty_insnod(struct kfspty *self,
-              __ref struct kdirent **master_ent,
-              __ref struct kdirent **slave_ent,
+kfspty_insnod(struct kfspty *__restrict self,
+              __ref struct kdirent **__restrict master_ent,
+              __ref struct kdirent **__restrict slave_ent,
               __user char *master_name_buf) {
  kerrno_t error; kptynum_t resnum;
  char master_name[32],slave_name[32];
@@ -660,11 +658,12 @@ err_slave: kinode_decref((struct kinode *)slave_inode);
 }
 
 
-__local __ref struct kptyfile *
+__local __crit __nonnull((1,3)) __ref struct kptyfile *
 kptyfile_new(struct kfspty *__restrict pty,
              struct kdirent *dent,
              struct kfiletype *__restrict type) {
  __ref struct kptyfile *result;
+ KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kinode_incref(&pty->fp_node))) return NULL;
  if __unlikely(dent && KE_ISERR(kdirent_incref(dent))) {
   kinode_decref(&pty->fp_node);
@@ -677,14 +676,16 @@ kptyfile_new(struct kfspty *__restrict pty,
  return result;
 }
 
-__ref struct kptyfile *
+__crit __ref struct kptyfile *
 kptyfile_slave_new(struct kfspty *__restrict pty,
                    struct kdirent *dent) {
+ KTASK_CRIT_MARK
  return kptyfile_new(pty,dent,&kptyfile_slave_type);
 }
-__ref struct kptyfile *
+__crit __ref struct kptyfile *
 kptyfile_master_new(struct kfspty *__restrict pty,
                     struct kdirent *dent) {
+ KTASK_CRIT_MARK
  return kptyfile_new(pty,dent,&kptyfile_master_type);
 }
 
@@ -696,7 +697,7 @@ static void kptyfile_quit(struct kfile *__restrict self) {
 }
 static kerrno_t
 kptyfile_open(struct kfile *__restrict self, struct kdirent *__restrict dirent,
-              struct kinode *__restrict inode, __openmode_t mode) {
+              struct kinode *__restrict inode, openmode_t mode) {
  kerrno_t error;
  /* Resolve slave-node proxy reference */
  if (inode->i_type == &kfspty_slave_type) {
@@ -711,14 +712,12 @@ kptyfile_open(struct kfile *__restrict self, struct kdirent *__restrict dirent,
 }
 
 static __ref struct kinode *kptyfile_getinode(struct kfile *__restrict self) {
- __ref struct kinode *result;
- result = (struct kinode *)((struct kptyfile *)self)->pf_pty;
+ __ref struct kinode *result = (struct kinode *)SELF->pf_pty;
  if __unlikely(KE_ISERR(kinode_incref(result))) result = NULL;
  return result;
 }
 static __ref struct kdirent *kptyfile_getdirent(struct kfile *__restrict self) {
- __ref struct kdirent *result;
- result = ((struct kptyfile *)self)->pf_dent;
+ __ref struct kdirent *result = SELF->pf_dent;
  if __unlikely(KE_ISERR(kdirent_incref(result))) result = NULL;
  return result;
 }

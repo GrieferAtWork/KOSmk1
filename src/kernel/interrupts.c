@@ -35,6 +35,7 @@
 #include <itos.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/io.h>
 #include <kos/kernel/paging.h>

@@ -87,8 +87,8 @@ struct kvsdirnode {
 #define KVSDIRNODE_INIT(superblock,entries) \
  KVSDIRNODE_INIT_EX(superblock,entries,&kvsdirnode_type.st_node)
 extern struct ksuperblocktype kvsdirnode_type;
-extern kerrno_t kvsdirnode_walk(struct kinode *self, struct kdirentname const *name, __ref struct kinode **resnode);
-extern kerrno_t kvsdirnode_enumdir(struct kinode *self, pkenumdir callback, void *closure);
+extern kerrno_t kvsdirnode_walk(struct kinode *__restrict self, struct kdirentname const *__restrict name, __ref struct kinode **resnode);
+extern kerrno_t kvsdirnode_enumdir(struct kinode *__restrict self, pkenumdir callback, void *closure);
 
 
 //////////////////////////////////////////////////////////////////////////

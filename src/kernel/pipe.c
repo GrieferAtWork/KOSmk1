@@ -40,28 +40,36 @@ struct ksuperblock kpipe_fs;
 
 
 #define SELF ((struct kpipe *)self)
-static void pipe_quit(struct kinode *self) { kiobuf_quit(&SELF->p_iobuf); }
-static kerrno_t pipe_getattr(struct kinode const *self, __size_t ac, union kinodeattr *av) {
+static void pipe_quit(struct kinode *__restrict self) { kiobuf_quit(&SELF->p_iobuf); }
+static kerrno_t
+pipe_getattr(struct kinode const *__restrict self,
+             size_t ac, __user union kinodeattr *av) {
  kerrno_t error;
- for (; ac; --ac,++av) switch (av->ia_common.a_id) {
-  {
-   size_t cursize;
-   if (0) { case KATTR_FS_SIZE: error = kiobuf_getrsize(&SELF->p_iobuf,&cursize); }
-   if (0) { case KATTR_FS_BUFSIZE: error = kiobuf_getwsize(&SELF->p_iobuf,&cursize); }
-   if (0) { case KATTR_FS_MAXSIZE: error = kiobuf_getmaxsize(&SELF->p_iobuf,&cursize); }
-   if __unlikely(KE_ISERR(error)) return error;
-   av->ia_size.sz_size = (pos_t)cursize;
-   break;
+ union kinodeattr attr;
+ for (; ac; --ac,++av) {
+  if __unlikely(copy_from_user(&attr,av,sizeof(union kinodeattr))) return KE_FAULT;
+  switch (attr.ia_common.a_id) {
+   {
+    size_t cursize;
+    if (0) { case KATTR_FS_SIZE: error = kiobuf_getrsize(&SELF->p_iobuf,&cursize); }
+    if (0) { case KATTR_FS_BUFSIZE: error = kiobuf_getwsize(&SELF->p_iobuf,&cursize); }
+    if (0) { case KATTR_FS_MAXSIZE: error = kiobuf_getmaxsize(&SELF->p_iobuf,&cursize); }
+    if __unlikely(KE_ISERR(error)) return error;
+    attr.ia_size.sz_size = (pos_t)cursize;
+    break;
+   }
+   default:
+    error = kinode_user_generic_getattr(self,1,av);
+    if __unlikely(KE_ISERR(error)) return error;
+    goto next_attr;
   }
-  default:
-   error = kinode_user_generic_getattr(self,1,av);
-   if __unlikely(KE_ISERR(error)) return error;
-   break;
+  if __unlikely(copy_to_user(av,&attr,sizeof(union kinodeattr))) return KE_FAULT;
+next_attr:;
  }
  return KE_OK;
 }
 static kerrno_t
-pipe_setattr(struct kinode *self, __size_t ac,
+pipe_setattr(struct kinode *__restrict self, size_t ac,
              union kinodeattr const *av) {
  kerrno_t error;
  size_t new_max_size;

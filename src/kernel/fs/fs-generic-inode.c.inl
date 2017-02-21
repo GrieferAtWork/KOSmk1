@@ -33,11 +33,11 @@ __DECL_BEGIN
 // --- KINODE
 #ifdef GETATTR
 kerrno_t
-kinode_user_generic_getattr(struct kinode const *self, size_t ac,
+kinode_user_generic_getattr(struct kinode const *__restrict self, size_t ac,
                             __user union kinodeattr *av)
 #else
 kerrno_t
-kinode_user_generic_setattr(struct kinode *self, size_t ac,
+kinode_user_generic_setattr(struct kinode *__restrict self, size_t ac,
                             __user union kinodeattr const *av)
 #endif
 {
@@ -46,10 +46,9 @@ kinode_user_generic_setattr(struct kinode *self, size_t ac,
         union kinodeattr attr;
 #endif
  kassert_kinode(self);
- kassertmem(av,ac*sizeof(union kinodeattr));
 #ifdef GETATTR
  end = (iter = av)+ac;
- while (iter != end) {
+ for (; iter != end; ++iter) {
   if __unlikely(copy_from_user(&attr,iter,sizeof(attr))) return KE_FAULT;
   switch (attr.ia_common.a_id) {
    case KATTR_FS_ATIME:
@@ -70,7 +69,6 @@ kinode_user_generic_setattr(struct kinode *self, size_t ac,
    default: return KE_NOSYS;
   }
   if __unlikely(copy_to_user(iter,&attr,sizeof(attr))) return KE_FAULT;
-  ++iter;
  }
  return KE_OK;
 #else

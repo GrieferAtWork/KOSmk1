@@ -76,8 +76,8 @@ struct kfiletype kvfile_empty_type = {
 // === kvsdirnode ===
 extern struct ksuperblocktype kvsdirnode_type;
 kerrno_t
-kvsdirnode_walk(struct kinode *self,
-                struct kdirentname const *name,
+kvsdirnode_walk(struct kinode *__restrict self,
+                struct kdirentname const *__restrict name,
                 __ref struct kinode **resnode) {
  struct kvsdirent *iter;
  //assert(self->i_type == &kvsdirnode_type.st_node);
@@ -91,7 +91,7 @@ kvsdirnode_walk(struct kinode *self,
  return KE_NOENT;
 }
 kerrno_t
-kvsdirnode_enumdir(struct kinode *self, pkenumdir callback, void *closure) {
+kvsdirnode_enumdir(struct kinode *__restrict self, pkenumdir callback, void *closure) {
  kerrno_t error; struct kvsdirent *iter;
  //assert(self->i_type == &kvsdirnode_type.st_node);
  iter = ((struct kvsdirnode *)self)->dn_dir;
@@ -131,11 +131,11 @@ kvlinknode_new(struct ksuperblock *superblock,
  kdirentname_init(&result->ln_name,(char *)text);
  return (struct kinode *)result;
 }
-static void kvlinknode_quit(struct kinode *self) {
+static void kvlinknode_quit(struct kinode *__restrict self) {
  kdirentname_quit(&((struct kvlinknode *)self)->ln_name);
 }
 static kerrno_t
-kvlinknode_readlink(struct kinode *self,
+kvlinknode_readlink(struct kinode *__restrict self,
                     struct kdirentname *target) {
  return kdirentname_initcopy(target,&((struct kvlinknode *)self)->ln_name);
 }

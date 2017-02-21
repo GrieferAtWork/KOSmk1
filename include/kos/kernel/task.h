@@ -1319,6 +1319,12 @@ extern int ktask_isnointr(void);
             __xreturn __ktcres;\
  })
 
+#define KTASK_KEPD_V(expr) \
+ __xblock({ KTASK_KEPD_BEGIN\
+            (expr);\
+            KTASK_KEPD_END\
+            (void)0;\
+ })
 #define KTASK_KEPD(expr) \
  __xblock({ __typeof__(expr) __ktcres;\
             KTASK_KEPD_BEGIN\

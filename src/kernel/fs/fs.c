@@ -56,9 +56,9 @@ __DECL_BEGIN
 //////////////////////////////////////////////////////////////////////////
 // --- KINODE
 __crit __ref struct kinode *
-__kinode_alloc(struct ksuperblock *superblock,
-               struct kinodetype *nodetype,
-               struct kfiletype *filetype,
+__kinode_alloc(struct ksuperblock *__restrict superblock,
+               struct kinodetype *__restrict nodetype,
+               struct kfiletype *__restrict filetype,
                mode_t filekind) {
  struct kinode *result;
  kassert_ksuperblock(superblock);
@@ -82,7 +82,7 @@ __kinode_alloc(struct ksuperblock *superblock,
  }
  return result;
 }
-__crit void __kinode_free(struct kinode *self) {
+__crit void __kinode_free(struct kinode *__restrict self) {
  kassert_kinode(self);
  assert(self->i_refcnt == 1);
  kassert_ksuperblock(self->i_sblock);
@@ -99,12 +99,12 @@ void ksuperblock_syslogprefix(int level, struct ksuperblock *self) {
  k_dosyslogf(level,NULL,NULL,"[%.64s|%.64s] ",fs_type,fs_name);
 }
 
-kerrno_t kinode_close(struct kinode *self) {
+kerrno_t kinode_close(struct kinode *__restrict self) {
  kerrno_t error;
  if __likely(KE_ISOK(error = kcloselock_close(&self->i_closelock)) &&
              kinode_issuperblock(self)) {
   kerrno_t(*closecall)(struct ksuperblock *self);
-  struct ksuperblock *sblock = __kinode_superblock(self);
+  struct ksuperblock *__restrict sblock = __kinode_superblock(self);
   kassert_ksuperblock(sblock);
   if (k_sysloglevel >= KLOG_MSG) {
    ksuperblock_syslogprefix(KLOG_MSG,sblock);
@@ -124,8 +124,8 @@ kerrno_t kinode_close(struct kinode *self) {
  return error;
 }
 
-extern void kinode_destroy(struct kinode *self);
-void kinode_destroy(struct kinode *self) {
+extern void kinode_destroy(struct kinode *__restrict self);
+void kinode_destroy(struct kinode *__restrict self) {
  struct ksuperblock *obbase;
  void(*quitcall)(struct kinode *);
  kassert_object(self,KOBJECT_MAGIC_INODE);
@@ -147,7 +147,7 @@ void kinode_destroy(struct kinode *self) {
 }
 
 kerrno_t
-kinode_user_getattr(struct kinode const *self, size_t ac,
+kinode_user_getattr(struct kinode const *__restrict self, size_t ac,
                     __user union kinodeattr *av) {
  kerrno_t error; kassert_kinode(self);
  error = kcloselock_beginop((struct kcloselock *)&self->i_closelock);
@@ -159,7 +159,7 @@ kinode_user_getattr(struct kinode const *self, size_t ac,
  return error;
 }
 kerrno_t
-kinode_user_setattr(struct kinode *self, size_t ac,
+kinode_user_setattr(struct kinode *__restrict self, size_t ac,
                     __user union kinodeattr const *av) {
  kerrno_t error; kassert_kinode(self);
  error = kcloselock_beginop((struct kcloselock *)&self->i_closelock);
@@ -195,7 +195,7 @@ kinode_getlegacyattributesize(kattr_t attr) {
 }
 
 kerrno_t
-__kinode_user_getattr_legacy(struct kinode const *self, kattr_t attr,
+__kinode_user_getattr_legacy(struct kinode const *__restrict self, kattr_t attr,
                              __user void *__restrict buf, size_t bufsize,
                              __kernel size_t *__restrict reqsize) {
  kerrno_t error; union kinodeattr attrib; size_t minsize;
@@ -218,7 +218,7 @@ __kinode_user_getattr_legacy(struct kinode const *self, kattr_t attr,
  return error;
 }
 kerrno_t
-__kinode_user_setattr_legacy(struct kinode *self, kattr_t attr,
+__kinode_user_setattr_legacy(struct kinode *__restrict self, kattr_t attr,
                              __user void const *__restrict buf, size_t bufsize) {
  union kinodeattr attrib; size_t minsize;
  kassert_kinode(self);
@@ -234,7 +234,7 @@ __kinode_user_setattr_legacy(struct kinode *self, kattr_t attr,
  return kinode_kernel_setattr(self,1,&attrib);
 }
 kerrno_t
-kinode_user_getattr_legacy(struct kinode const *self, kattr_t attr,
+kinode_user_getattr_legacy(struct kinode const *__restrict self, kattr_t attr,
                            __user void *__restrict buf, size_t bufsize,
                            __kernel size_t *__restrict reqsize) {
  kerrno_t error;
@@ -250,7 +250,7 @@ kinode_user_getattr_legacy(struct kinode const *self, kattr_t attr,
  return __kinode_user_getattr_legacy(self,attr,buf,bufsize,reqsize);
 }
 kerrno_t
-kinode_user_setattr_legacy(struct kinode *self, kattr_t attr,
+kinode_user_setattr_legacy(struct kinode *__restrict self, kattr_t attr,
                            __user void const *__restrict buf, size_t bufsize) {
  kerrno_t error;
  kassert_kinode(self);
@@ -264,9 +264,10 @@ kinode_user_setattr_legacy(struct kinode *self, kattr_t attr,
  return __kinode_user_setattr_legacy(self,attr,buf,bufsize);
 }
 
-kerrno_t kinode_walk(struct kinode *self,
-                     struct kdirentname const *name,
-                     __ref struct kinode **result) {
+kerrno_t
+kinode_walk(struct kinode *__restrict self,
+            struct kdirentname const *__restrict name,
+            __ref struct kinode **__restrict result) {
  kerrno_t error;
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kinode **);
  kassert_kinode(self);
@@ -291,8 +292,8 @@ kerrno_t kinode_walk(struct kinode *self,
 }
 
 kerrno_t
-kinode_unlink(struct kinode *self,
-              struct kdirentname const *name,
+kinode_unlink(struct kinode *__restrict self,
+              struct kdirentname const *__restrict name,
               struct kinode *__restrict node) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
  kerrno_t error; kassert_kinode(self); kassert_kinode(node); kassertobj(name);
@@ -310,8 +311,8 @@ kinode_unlink(struct kinode *self,
  return error;
 }
 kerrno_t
-kinode_rmdir(struct kinode *self,
-             struct kdirentname const *name,
+kinode_rmdir(struct kinode *__restrict self,
+             struct kdirentname const *__restrict name,
              struct kinode *__restrict node) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
  kerrno_t error; kassert_kinode(self); kassert_kinode(node); kassertobj(name);
@@ -327,8 +328,8 @@ kinode_rmdir(struct kinode *self,
  return error;
 }
 kerrno_t
-kinode_remove(struct kinode *self,
-              struct kdirentname const *name,
+kinode_remove(struct kinode *__restrict self,
+              struct kdirentname const *__restrict name,
               struct kinode *__restrict node) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
  kerrno_t error; kassert_kinode(self); kassert_kinode(node); kassertobj(name);
@@ -346,8 +347,8 @@ kinode_remove(struct kinode *self,
  return error;
 }
 kerrno_t
-kinode_mkdir(struct kinode *self,
-             struct kdirentname const *name,
+kinode_mkdir(struct kinode *__restrict self,
+             struct kdirentname const *__restrict name,
              size_t ac, __user union kinodeattr const *av,
              __ref struct kinode **resnode) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,struct kinode **);
@@ -364,8 +365,8 @@ kinode_mkdir(struct kinode *self,
  return error;
 }
 kerrno_t
-kinode_mkreg(struct kinode *self,
-             struct kdirentname const *name,
+kinode_mkreg(struct kinode *__restrict self,
+             struct kdirentname const *__restrict name,
              size_t ac, __user union kinodeattr const *av,
              __ref struct kinode **resnode) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,struct kinode **);
@@ -382,10 +383,10 @@ kinode_mkreg(struct kinode *self,
  return error;
 }
 kerrno_t
-kinode_mklnk(struct kinode *self,
-             struct kdirentname const *name,
+kinode_mklnk(struct kinode *__restrict self,
+             struct kdirentname const *__restrict name,
              size_t ac, __user union kinodeattr const *av, 
-             struct kdirentname const *target,
+             struct kdirentname const *__restrict target,
              __ref struct kinode **resnode) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,size_t,
                      union kinodeattr const *,struct kdirentname const *,
@@ -404,8 +405,8 @@ kinode_mklnk(struct kinode *self,
  return error;
 }
 kerrno_t
-kinode_insnod(struct kinode *self,
-              struct kdirentname const *name,
+kinode_insnod(struct kinode *__restrict self,
+              struct kdirentname const *__restrict name,
               struct kinode *node) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
  kerrno_t error;
@@ -420,8 +421,8 @@ kinode_insnod(struct kinode *self,
  return error;
 }
 void
-kinode_delnod(struct kinode *self,
-              struct kdirentname const *name,
+kinode_delnod(struct kinode *__restrict self,
+              struct kdirentname const *__restrict name,
               struct kinode *node) {
  void(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
  kassert_kinode(self);
@@ -432,7 +433,7 @@ kinode_delnod(struct kinode *self,
  kcloselock_endop(&self->i_closelock);
 }
 kerrno_t
-kinode_readlink(struct kinode *self,
+kinode_readlink(struct kinode *__restrict self,
                 struct kdirentname *target) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname *);
  kerrno_t error; kassert_kinode(self); kassertobj(target);
@@ -445,9 +446,9 @@ kinode_readlink(struct kinode *self,
  return error;
 }
 kerrno_t
-kinode_mkhardlink(struct kinode *self,
-                  struct kdirentname const *name,
-                  struct kinode *target) {
+kinode_mkhardlink(struct kinode *__restrict self,
+                  struct kdirentname const *__restrict name,
+                  struct kinode *__restrict target) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
  kerrno_t error; kassert_kinode(self); kassertobj(name);
  kassertobj(self->i_type); kassert_kinode(target);
@@ -467,8 +468,8 @@ kinode_mkhardlink(struct kinode *self,
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 // --- KDIRENT
-kerrno_t kdirentname_initcopy(struct kdirentname *self,
-                              struct kdirentname const *right) {
+kerrno_t kdirentname_initcopy(struct kdirentname *__restrict self,
+                              struct kdirentname const *__restrict right) {
  kassertobj(self);
  kassertobj(right);
  self->dn_hash = right->dn_hash;
@@ -487,7 +488,9 @@ kerrno_t kdirentname_initcopy(struct kdirentname *self,
 #endif
  return self->dn_name ? KE_OK : KE_NOMEM;
 }
-size_t kdirentname_genhash(char const *data, size_t bytes) {
+size_t
+kdirentname_genhash(char const *__restrict data,
+                    size_t bytes) {
  size_t hash = 0;
  size_t const *iter,*end;
  end = (iter = (size_t const *)data)+(bytes/sizeof(size_t));
@@ -504,10 +507,10 @@ size_t kdirentname_genhash(char const *data, size_t bytes) {
   case 1:  hash += (size_t)((byte_t *)data)[0];
   default: break;
  }
- // NOTE: The hash '(size_t)-1' is reserved for internal use.
+ /* NOTE: The hash '(size_t)-1' is reserved for internal use. */
  return __likely(hash != (size_t)-1) ? hash : (size_t)-2;
 }
-kerrno_t kdirentcache_insert(struct kdirentcache *self, struct kdirent *child,
+kerrno_t kdirentcache_insert(struct kdirentcache *__restrict self, struct kdirent *child,
                              struct kdirent **existing_child) {
  size_t hashindex; struct kdirent **newvec;
  struct kdirent **iter,**end,*elem;
@@ -539,7 +542,7 @@ kerrno_t kdirentcache_insert(struct kdirentcache *self, struct kdirent *child,
  newvec[childvec->d_vecc++] = child;
  return KE_OK;
 }
-kerrno_t kdirentcache_remove(struct kdirentcache *self, struct kdirent *child) {
+kerrno_t kdirentcache_remove(struct kdirentcache *__restrict self, struct kdirent *child) {
  size_t hashindex; struct kdirent **iter,**end;
  struct kdirentcachevec *childvec;
  kassertobj(self);
@@ -568,8 +571,8 @@ kerrno_t kdirentcache_remove(struct kdirentcache *self, struct kdirent *child) {
  return KE_NOENT;
 }
 struct kdirent *
-kdirentcache_lookup(struct kdirentcache *self,
-                    struct kdirentname const *name) {
+kdirentcache_lookup(struct kdirentcache *__restrict self,
+                    struct kdirentname const *__restrict name) {
  size_t hashindex; struct kdirent **iter,**end,*elem;
  struct kdirentcachevec *childvec;
  kassertobj(self);
@@ -593,9 +596,9 @@ kdirentcache_lookup(struct kdirentcache *self,
 
 
 
-extern void kdirent_destroy(struct kdirent *self);
-void kdirent_destroy(struct kdirent *self) {
- struct kdirent *parent;
+extern void kdirent_destroy(struct kdirent *__restrict self);
+void kdirent_destroy(struct kdirent *__restrict self) {
+ struct kdirent *__restrict parent;
  kassert_object(self,KOBJECT_MAGIC_DIRENT);
  if __likely((parent = self->d_parent) != NULL) {
   kdirent_lock(parent,KDIRENT_LOCK_CACHE);
@@ -622,10 +625,11 @@ void kdirent_destroy(struct kdirent *self) {
  free(self);
 }
 
-__ref struct kdirent *
-__kdirent_alloc(struct kdirent *parent,
-                struct kdirentname const *name) {
+__crit __ref struct kdirent *
+__kdirent_alloc(struct kdirent *__restrict parent,
+                struct kdirentname const *__restrict name) {
  struct kdirent *result;
+ KTASK_CRIT_MARK
  kassert_kdirent(parent);
  kassertobj(name);
  result = omalloc(struct kdirent);
@@ -650,8 +654,10 @@ err_freer: free(result); return NULL;
 }
 
 kerrno_t
-kdirent_insnod(struct kdirent *self, struct kdirentname const *name,
-               struct kinode *__restrict node, __ref struct kdirent **resent) {
+kdirent_insnod(struct kdirent *__restrict self,
+               struct kdirentname const *__restrict name,
+               struct kinode *__restrict node,
+               __ref struct kdirent **__restrict resent) {
  struct kdirent *used_resent;
  struct kinode *selfnode;
  kerrno_t error;
@@ -686,8 +692,8 @@ err_node:
 }
 
 kerrno_t
-kdirent_mount(struct kdirent *self, struct kdirentname const *name,
-              struct ksuperblock *sblock, __ref /*opt*/struct kdirent **resent) {
+kdirent_mount(struct kdirent *__restrict self, struct kdirentname const *__restrict name,
+              struct ksuperblock *__restrict sblock, __ref /*opt*/struct kdirent **resent) {
  struct kdirent *used_resent; kerrno_t error;
  kassert_kdirent(self);
  kassert_ksuperblock(sblock);
@@ -717,9 +723,10 @@ kdirent_mount(struct kdirent *self, struct kdirentname const *name,
 }
 
 
-__ref struct kinode *
-kdirent_getnode(struct kdirent *self) {
+__crit __ref struct kinode *
+kdirent_getnode(struct kdirent *__restrict self) {
  struct kinode *result;
+ KTASK_CRIT_MARK
  kassert_kdirent(self);
  kdirent_lock(self,KDIRENT_LOCK_NODE);
  if __likely((result = self->d_inode) != NULL) {
@@ -730,11 +737,12 @@ kdirent_getnode(struct kdirent *self) {
  return result;
 }
 
-__ref struct kdirent *
-__kdirent_newinherited(__ref struct kdirent *parent,
-                       struct kdirentname const *name,
+__crit __ref struct kdirent *
+__kdirent_newinherited(__ref struct kdirent *__restrict parent,
+                       struct kdirentname const *__restrict name,
                        __ref struct kinode *__restrict inode) {
  struct kdirent *result;
+ KTASK_CRIT_MARK
  kassert_kdirent(parent);
  kassert_kinode(inode);
  kassertobj(name);
@@ -753,12 +761,13 @@ __kdirent_newinherited(__ref struct kdirent *parent,
  return result;
 }
 
-__ref struct kdirent *
-kdirent_new(struct kdirent *parent,
-            struct kdirentname const *name,
+__crit __ref struct kdirent *
+kdirent_new(struct kdirent *__restrict parent,
+            struct kdirentname const *__restrict name,
             struct kinode *__restrict inode) {
  struct kdirentname namecopy;
  struct kdirent *result;
+ KTASK_CRIT_MARK
  kassert_kdirent(parent);
  kassertobj(name);
  kassert_kinode(inode);
@@ -775,8 +784,8 @@ err_1: kdirent_decref(parent);
 }
 
 
-void kdirent_unlinknode(struct kdirent *self) {
- struct kinode *oldnode; struct kdirent *parent;
+void kdirent_unlinknode(struct kdirent *__restrict self) {
+ struct kinode *oldnode; struct kdirent *__restrict parent;
  kassert_kdirent(self);
  kassert_kdirent(self->d_parent);
  kdirent_lock(self,KDIRENT_LOCK_NODE);
@@ -813,37 +822,57 @@ void kdirent_unlinknode(struct kdirent *self) {
 #endif
 
 
-
-void
-kdirent_getfilename(struct kdirent const *self, char *__restrict buf,
-                    size_t bufsize, size_t *__restrict reqsize) {
+kerrno_t
+kdirent_user_getfilename(struct kdirent const *__restrict self,
+                         __user char *__restrict buf, size_t bufsize,
+                         __kernel size_t *__restrict reqsize) {
  size_t copysize;
  if (reqsize) *reqsize = (self->d_name.dn_size+1)*sizeof(char);
  copysize = self->d_name.dn_size;
  if (bufsize < copysize) copysize = bufsize;
- memcpy(buf,self->d_name.dn_name,copysize);
- if (bufsize > copysize) buf[copysize] = '\0';
+ if __unlikely(copy_to_user(buf,self->d_name.dn_name,copysize)) return KE_FAULT;
+ if (bufsize > copysize) {
+  if __unlikely(copy_to_user(buf+copysize,"\0",sizeof(char))) return KE_FAULT;
+ }
+ return KE_OK;
 }
-static void
-kdirent_dogetpathname(struct kdirent const *self, struct kdirent *__restrict root,
-                      char *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
- char *iter = buf,*end = buf+bufsize; size_t temp;
+static kerrno_t
+kdirent_user_dogetpathname(struct kdirent const *__restrict self,
+                           struct kdirent *__restrict root,
+                           __user char *__restrict buf, size_t bufsize,
+                           __kernel size_t *__restrict reqsize) {
+ kerrno_t error; size_t temp;
+ __user char *iter = buf,*end = buf+bufsize;
  kassert_kdirent(root);
  if (self->d_parent && self->d_parent != root) {
-  kdirent_dogetpathname(self->d_parent,root,iter,bufsize,&temp);
+  error = kdirent_user_dogetpathname(self->d_parent,root,iter,bufsize,&temp);
+  if __unlikely(KE_ISERR(error)) return error;
   iter += (temp-1);
  }
- if (iter < end) { *iter = KFS_SEP; } ++iter;
  if (iter < end) {
-  memcpy(iter,self->d_name.dn_name,
-         min((size_t)(end-iter),self->d_name.dn_size));
+  static char const sep[] = {KFS_SEP};
+  if __unlikely(copy_to_user(iter,sep,sizeof(char))) return KE_FAULT;
+ }
+ ++iter;
+ if (iter < end) {
+  if __unlikely(copy_to_user(iter,self->d_name.dn_name,
+                             min((size_t)(end-iter),self->d_name.dn_size))
+                ) return KE_FAULT;
  }
  iter += self->d_name.dn_size;
- if (iter < end) { *iter = '\0'; } ++iter;
+ if (iter < end) {
+  if __unlikely(copy_to_user(iter,"\0",sizeof(char))) return KE_FAULT;
+ }
+ ++iter;
  if (reqsize) *reqsize = (size_t)(iter-buf);
+ return KE_OK;
 }
-void kdirent_getpathname(struct kdirent const *self, struct kdirent *__restrict root,
-                         char *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
+
+kerrno_t
+kdirent_user_getpathname(struct kdirent const *__restrict self,
+                         struct kdirent *__restrict root,
+                         __user char *__restrict buf, size_t bufsize,
+                         __kernel size_t *__restrict reqsize) {
  /* Due to some minor exceptions to the strict chroot()-rules in KOS, it is
   * possible for the given 'root' to not be 'self' or apart of its chain.
   * Because of that, we must manually figure out if 'root' is actually a parent of 'self'.
@@ -851,9 +880,9 @@ void kdirent_getpathname(struct kdirent const *self, struct kdirent *__restrict 
   * returning an absolute path, but also not reveling anything about the
   * filesystem world beyond your little chroot()-corner. */
  if (!kdirent_isvisible(root,self)) {
-  kdirent_getfilename(self,buf,bufsize,reqsize);
+  return kdirent_user_getfilename(self,buf,bufsize,reqsize);
  } else {
-  kdirent_dogetpathname(self,root,buf,bufsize,reqsize);
+  return kdirent_user_dogetpathname(self,root,buf,bufsize,reqsize);
  }
 }
 
@@ -872,11 +901,14 @@ kdirent_isvisible(struct kdirent const *root,
  return 0;
 }
 
-
-kerrno_t kdirent_walklast(struct kfspathenv const *env, __ref struct kdirent **newroot,
-                          struct kdirentname *lastpart, char const *path, size_t pathmax) {
+__crit kerrno_t
+kdirent_walklast(struct kfspathenv const *__restrict env,
+                 char const *__restrict path, size_t pathmax,
+                 struct kdirentname *__restrict lastpart,
+                 __ref struct kdirent **__restrict newroot) {
  struct kdirentname part; kerrno_t error;
  char const *iter,*end; struct kfspathenv newenv;
+ KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
@@ -894,7 +926,7 @@ kerrno_t kdirent_walklast(struct kfspathenv const *env, __ref struct kdirent **n
   do ++path,--pathmax; // Re-start at root
   while (pathmax && KFS_ISSEP(*path));
   kfspathenv_initfrom(&newenv,env,env->env_root,env->env_root);
-  return kdirent_walklast(&newenv,newroot,lastpart,path,pathmax);
+  return kdirent_walklast(&newenv,path,pathmax,lastpart,newroot);
  }
  end = (iter = path)+pathmax;
  while (iter != end && isspace(*iter)) ++iter;
@@ -951,14 +983,17 @@ kerrno_t kdirent_walklast(struct kfspathenv const *env, __ref struct kdirent **n
  *lastpart = part;
  return error;
 }
-kerrno_t kdirent_walkall(struct kfspathenv const *env, __ref struct kdirent **finish,
-                         char const *path, size_t pathmax) {
+__crit kerrno_t
+kdirent_walkall(struct kfspathenv const *__restrict env,
+                char const *__restrict path, size_t pathmax,
+                __ref struct kdirent **__restrict finish) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *finish_root;
+ KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
- error = kdirent_walklast(env,&finish_root,&last,path,pathmax);
+ error = kdirent_walklast(env,path,pathmax,&last,&finish_root);
  if __unlikely(KE_ISERR(error)) return error;
  if (!last.dn_size) {
   *finish = finish_root; // Inherit reference
@@ -972,7 +1007,7 @@ kerrno_t kdirent_walkall(struct kfspathenv const *env, __ref struct kdirent **fi
 
 
 __crit kerrno_t
-kdirent_mkdirat(struct kfspathenv const *env, char const *path,
+kdirent_mkdirat(struct kfspathenv const *__restrict env, char const *path,
                 size_t pathmax, size_t ac, union kinodeattr const *av,
                 __ref /*opt*/struct kdirent **resent,
                 __ref /*opt*/struct kinode **resnode) {
@@ -983,7 +1018,7 @@ kdirent_mkdirat(struct kfspathenv const *env, char const *path,
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
  assert(__evalexpr(strnlen(path,pathmax)) || 1);
- error = kdirent_walklast(env,&objparent,&last,path,pathmax);
+ error = kdirent_walklast(env,path,pathmax,&last,&objparent);
  if __unlikely(KE_ISERR(error)) return error;
  if __unlikely(!last.dn_size) error = KE_EXISTS;
  else error = kdirent_mkdir(objparent,&last,ac,av,resent,resnode);
@@ -992,8 +1027,9 @@ kdirent_mkdirat(struct kfspathenv const *env, char const *path,
 }
 
 __crit kerrno_t
-kdirent_mkregat(struct kfspathenv const *env, char const *path,
-                size_t pathmax, size_t ac, union kinodeattr const *av,
+kdirent_mkregat(struct kfspathenv const *__restrict env,
+                char const *__restrict path, size_t pathmax,
+                size_t ac, union kinodeattr const *av,
                 __ref /*opt*/struct kdirent **resent,
                 __ref /*opt*/struct kinode **resnode) {
  struct kdirentname last; kerrno_t error;
@@ -1003,7 +1039,7 @@ kdirent_mkregat(struct kfspathenv const *env, char const *path,
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
  assert(__evalexpr(strnlen(path,pathmax)) || 1);
- error = kdirent_walklast(env,&objparent,&last,path,pathmax);
+ error = kdirent_walklast(env,path,pathmax,&last,&objparent);
  if __unlikely(KE_ISERR(error)) return error;
  if __unlikely(!last.dn_size) error = KE_EXISTS;
  else error = kdirent_mkreg(objparent,&last,ac,av,resent,resnode);
@@ -1012,9 +1048,12 @@ kdirent_mkregat(struct kfspathenv const *env, char const *path,
 }
 
 __crit kerrno_t
-kdirent_mklnkat(struct kfspathenv const *env, char const *path, size_t pathmax,
-                size_t ac, union kinodeattr const *av, struct kdirentname const *target,
-                __ref /*opt*/struct kdirent **resent, __ref /*opt*/struct kinode **resnode) {
+kdirent_mklnkat(struct kfspathenv const *__restrict env,
+                char const *__restrict path, size_t pathmax,
+                size_t ac, union kinodeattr const *av,
+                struct kdirentname const *__restrict target,
+                __ref /*opt*/struct kdirent **resent,
+                __ref /*opt*/struct kinode **resnode) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *objparent;
  KTASK_CRIT_MARK
@@ -1023,7 +1062,7 @@ kdirent_mklnkat(struct kfspathenv const *env, char const *path, size_t pathmax,
  kassert_kdirent(env->env_root);
  kassertobj(target);
  assert(__evalexpr(strnlen(path,pathmax)) || 1);
- error = kdirent_walklast(env,&objparent,&last,path,pathmax);
+ error = kdirent_walklast(env,path,pathmax,&last,&objparent);
  if __unlikely(KE_ISERR(error)) return error;
  if __unlikely(!last.dn_size) error = KE_EXISTS;
  else error = kdirent_mklnk(objparent,&last,ac,av,target,resent,resnode);
@@ -1032,15 +1071,15 @@ kdirent_mklnkat(struct kfspathenv const *env, char const *path, size_t pathmax,
 }
 
 __crit kerrno_t
-kdirent_rmdirat(struct kfspathenv const *env,
-                char const *path, size_t pathmax) {
+kdirent_rmdirat(struct kfspathenv const *__restrict env,
+                char const *__restrict path, size_t pathmax) {
  kerrno_t error; struct kdirent *objent;
  KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
  assert(__evalexpr(strnlen(path,pathmax)) || 1);
- error = kdirent_walkall(env,&objent,path,pathmax);
+ error = kdirent_walkall(env,path,pathmax,&objent);
  if __unlikely(KE_ISERR(error)) return error;
  error = kdirent_rmdir(objent);
  kdirent_decref(objent);
@@ -1048,15 +1087,15 @@ kdirent_rmdirat(struct kfspathenv const *env,
 }
 
 __crit kerrno_t
-kdirent_unlinkat(struct kfspathenv const *env,
-                 char const *path, size_t pathmax) {
+kdirent_unlinkat(struct kfspathenv const *__restrict env,
+                 char const *__restrict path, size_t pathmax) {
  kerrno_t error; struct kdirent *objent;
  KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
  assert(__evalexpr(strnlen(path,pathmax)) || 1);
- error = kdirent_walkall(env,&objent,path,pathmax);
+ error = kdirent_walkall(env,path,pathmax,&objent);
  if __unlikely(KE_ISERR(error)) return error;
  error = kdirent_unlink(objent);
  kdirent_decref(objent);
@@ -1064,15 +1103,15 @@ kdirent_unlinkat(struct kfspathenv const *env,
 }
 
 __crit kerrno_t
-kdirent_removeat(struct kfspathenv const *env,
-                 char const *path, size_t pathmax) {
+kdirent_removeat(struct kfspathenv const *__restrict env,
+                 char const *__restrict path, size_t pathmax) {
  kerrno_t error; struct kdirent *objent;
  KTASK_CRIT_MARK
  kassertobj(env);
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
  assert(__evalexpr(strnlen(path,pathmax)) || 1);
- error = kdirent_walkall(env,&objent,path,pathmax);
+ error = kdirent_walkall(env,path,pathmax,&objent);
  if __unlikely(KE_ISERR(error)) return error;
  error = kdirent_remove(objent);
  kdirent_decref(objent);
@@ -1080,8 +1119,10 @@ kdirent_removeat(struct kfspathenv const *env,
 }
 
 __crit kerrno_t
-kdirent_insnodat(struct kfspathenv const *env, char const *path, size_t pathmax,
-                 struct kinode *__restrict node, __ref struct kdirent **resent) {
+kdirent_insnodat(struct kfspathenv const *__restrict env,
+                 char const *__restrict path, size_t pathmax,
+                 struct kinode *__restrict node,
+                 __ref struct kdirent **__restrict resent) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *objparent;
  KTASK_CRIT_MARK
@@ -1090,7 +1131,7 @@ kdirent_insnodat(struct kfspathenv const *env, char const *path, size_t pathmax,
  kassert_kdirent(env->env_root);
  kassertobj(resent);
  assert(__evalexpr(strnlen(path,pathmax)) || 1);
- error = kdirent_walklast(env,&objparent,&last,path,pathmax);
+ error = kdirent_walklast(env,path,pathmax,&last,&objparent);
  if __unlikely(KE_ISERR(error)) return error;
  if __unlikely(!last.dn_size) error = KE_EXISTS;
  else error = kdirent_insnod(objparent,&last,node,resent);
@@ -1099,8 +1140,10 @@ kdirent_insnodat(struct kfspathenv const *env, char const *path, size_t pathmax,
 }
 
 __crit kerrno_t
-kdirent_mountat(struct kfspathenv const *env, char const *path, size_t pathmax,
-                struct ksuperblock *sblock, __ref /*opt*/struct kdirent **resent) {
+kdirent_mountat(struct kfspathenv const *__restrict env,
+                char const *__restrict path, size_t pathmax,
+                struct ksuperblock *__restrict sblock,
+                __ref /*opt*/struct kdirent **resent) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *objparent;
  KTASK_CRIT_MARK
@@ -1109,7 +1152,7 @@ kdirent_mountat(struct kfspathenv const *env, char const *path, size_t pathmax,
  kassert_kdirent(env->env_root);
  kassertobjnull(resent);
  assert(__evalexpr(strnlen(path,pathmax)) || 1);
- error = kdirent_walklast(env,&objparent,&last,path,pathmax);
+ error = kdirent_walklast(env,path,pathmax,&last,&objparent);
  if __unlikely(KE_ISERR(error)) return error;
  if __unlikely(!last.dn_size) error = KE_EXISTS;
  else error = kdirent_mount(objparent,&last,sblock,resent);
@@ -1118,8 +1161,9 @@ kdirent_mountat(struct kfspathenv const *env, char const *path, size_t pathmax,
 }
 
 __crit kerrno_t
-kdirent_openat(struct kfspathenv const *env, char const *path, size_t pathmax,
-               __openmode_t mode, size_t create_ac, union kinodeattr const *create_av,
+kdirent_openat(struct kfspathenv const *__restrict env,
+               char const *__restrict path, size_t pathmax, openmode_t mode,
+               size_t create_ac, union kinodeattr const *create_av,
                __ref struct kfile **__restrict result) {
  struct kdirentname last; kerrno_t error;
  struct kdirent *pathroot;
@@ -1129,7 +1173,7 @@ kdirent_openat(struct kfspathenv const *env, char const *path, size_t pathmax,
  kassert_kdirent(env->env_root);
  assert(__evalexpr(strnlen(path,pathmax)) || 1);
  kassertobj(result);
- error = kdirent_walklast(env,&pathroot,&last,path,pathmax);
+ error = kdirent_walklast(env,path,pathmax,&last,&pathroot);
  if __unlikely(KE_ISERR(error)) return error;
  if (last.dn_size) {
   error = kdirent_openlast(env,pathroot,&last,mode,create_ac,create_av,result);
@@ -1149,8 +1193,8 @@ kdirent_openat(struct kfspathenv const *env, char const *path, size_t pathmax,
 }
 
 __crit kerrno_t
-kdirent_openlast(struct kfspathenv const *env, struct kdirent *dir, struct kdirentname const *name,
-                 __openmode_t mode, size_t create_ac, union kinodeattr const *create_av,
+kdirent_openlast(struct kfspathenv const *__restrict env, struct kdirent *dir, struct kdirentname const *__restrict name,
+                 openmode_t mode, size_t create_ac, union kinodeattr const *create_av,
                  __ref struct kfile **__restrict result) {
  struct kinode *filenode;
  struct kdirent *fileent;
@@ -1192,7 +1236,7 @@ open_existing:
   if __unlikely(KE_ISERR(error)) goto end;
   kfspathenv_initfrom(&target_env,env,fileent,env->env_root);
   ++target_env.env_lnk;
-  error = kdirent_walkall(&target_env,&target_ent,link_name.dn_name,link_name.dn_size);
+  error = kdirent_walkall(&target_env,link_name.dn_name,link_name.dn_size,&target_ent);
   kdirentname_quit(&link_name);
   if __unlikely(KE_ISERR(error)) goto end;
   target_env.env_cwd = target_ent;
@@ -1217,14 +1261,17 @@ end:
 //////////////////////////////////////////////////////////////////////////
 // --- KSUPERBLOCK
 
-__ref struct ksdev *ksuperblock_getdev(struct ksuperblock const *self) {
+__crit __ref struct ksdev *
+ksuperblock_getdev(struct ksuperblock const *__restrict self) {
 #if 1
  kassert_ksuperblock(self);
+ KTASK_CRIT_MARK
  if __unlikely(!ksuperblock_type(self)->st_getdev) return NULL;
  return (*ksuperblock_type(self)->st_getdev)(self);
 #else
  struct ksdev *result;
  struct kinode *root_node;
+ KTASK_CRIT_MARK
  kassert_ksuperblock(self);
  if __unlikely(!ksuperblock_type(self)->st_getdev) return NULL;
  root_node = (struct kinode *)ksuperblock_root(self);
@@ -1236,7 +1283,8 @@ __ref struct ksdev *ksuperblock_getdev(struct ksuperblock const *self) {
 #endif
 }
 
-kerrno_t ksuperblock_flush(struct ksuperblock *self) {
+kerrno_t
+ksuperblock_flush(struct ksuperblock *__restrict self) {
  kerrno_t error;
  kerrno_t(*callback)(struct ksuperblock *);
  kassert_ksuperblock(self);
@@ -1251,8 +1299,9 @@ kerrno_t ksuperblock_flush(struct ksuperblock *self) {
 
 
 
-void ksuperblock_generic_init(struct ksuperblock *self,
-                              struct ksuperblocktype *stype) {
+void
+ksuperblock_generic_init(struct ksuperblock *__restrict self,
+                         struct ksuperblocktype *__restrict stype) {
  kassertobj(self);
  kassertobj(stype);
  kobject_init(self,KOBJECT_MAGIC_SUPERBLOCK);
@@ -1268,7 +1317,9 @@ void ksuperblock_generic_init(struct ksuperblock *self,
 
 
 struct kmountman kfs_mountman = KMOUNTMAN_INIT;
-void kmountman_unmount_unsafe(struct ksuperblock *fs) {
+
+void
+kmountman_unmount_unsafe(struct ksuperblock *__restrict fs) {
  kerrno_t error;
  kassert_ksuperblock(fs);
  if __unlikely(KE_ISERR(error = ksuperblock_umount(fs))) {
@@ -1298,9 +1349,11 @@ void kmountman_unmountall(void) {
  kmountman_unlock(KMOUNTMAN_LOCK_CHAIN);
 }
 
-kerrno_t _ksuperblock_delmnt(struct ksuperblock *self,
-                             struct kdirent *ent) {
+__crit kerrno_t
+_ksuperblock_delmnt(struct ksuperblock *__restrict self,
+                    struct kdirent *__restrict ent) {
  struct kdirent **iter,**end; kerrno_t error;
+ KTASK_CRIT_MARK
  kassert_ksuperblock(self);
  kassert_kdirent(ent);
  kmountman_lock(KMOUNTMAN_LOCK_CHAIN);
@@ -1331,18 +1384,23 @@ end:
  kmountman_unlock(KMOUNTMAN_LOCK_CHAIN);
  return error;
 }
-kerrno_t _ksuperblock_addmnt(struct ksuperblock *self,
-                             struct kdirent *ent) {
+
+__crit kerrno_t
+_ksuperblock_addmnt(struct ksuperblock *__restrict self,
+                    struct kdirent *__restrict ent) {
  kerrno_t error;
+ KTASK_CRIT_MARK
  if __likely(KE_ISOK(error = kdirent_incref(ent))) {
   error = _ksuperblock_addmnt_inherited(self,ent);
   if __unlikely(KE_ISERR(error)) kdirent_decref(ent);
  }
  return error;
 }
-kerrno_t _ksuperblock_addmnt_inherited(struct ksuperblock *self,
-                                       __ref struct kdirent *ent) {
+__crit kerrno_t
+_ksuperblock_addmnt_inherited(struct ksuperblock *__restrict self,
+                              __ref struct kdirent *__restrict ent) {
  kerrno_t error; struct kdirent **mntpoints;
+ KTASK_CRIT_MARK
  kassert_ksuperblock(self);
  kassert_kdirent(ent);
  if __unlikely(KE_ISERR(error = kcloselock_beginop(&self->s_root.i_closelock))) return error;
@@ -1379,8 +1437,10 @@ end:
  kcloselock_endop(&self->s_root.i_closelock);
  return error;
 }
-void _ksuperblock_clearmnt(struct ksuperblock *self) {
+__crit void
+_ksuperblock_clearmnt(struct ksuperblock *__restrict self) {
  struct kdirent **mntv,**iter,**end; size_t mntc;
+ KTASK_CRIT_MARK
  kassert_object(self,KOBJECT_MAGIC_SUPERBLOCK);
  kmountman_lock(KMOUNTMAN_LOCK_CHAIN);
  if (!self->s_mount.sm_mntc) { kmountman_unlock(KMOUNTMAN_LOCK_CHAIN); return; }
@@ -1396,7 +1456,8 @@ void _ksuperblock_clearmnt(struct ksuperblock *self) {
 
 
 /* Initialize a given path environment from user-space. */
-__crit kerrno_t kfspathenv_inituser(struct kfspathenv *__restrict self) {
+__crit kerrno_t
+kfspathenv_inituser(struct kfspathenv *__restrict self) {
  kerrno_t error;
  struct kproc *caller = kproc_self();
  struct kfdentry entry;
@@ -1437,8 +1498,11 @@ err_nofile: error = KE_NOFILE;
 
 
 
-kerrno_t ksuperblock_newfat(struct ksdev *sdev, __ref struct ksuperblock **result) {
+__crit kerrno_t
+ksuperblock_newfat(struct ksdev *__restrict sdev,
+                   __ref struct ksuperblock **__restrict result) {
  struct kfatsuperblock *resblock; kerrno_t error;
+ KTASK_CRIT_MARK
  resblock = ocalloc(struct kfatsuperblock);
  if __unlikely(!resblock) return KE_NOMEM;
  ksuperblock_generic_init((struct ksuperblock *)resblock,&kfatsuperblock_type);

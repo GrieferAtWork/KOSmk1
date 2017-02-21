@@ -92,7 +92,7 @@ static kerrno_t kfat_walkcallback(struct kfatfs *fs, struct kfatfilepos const *f
 }
 
 __local kerrno_t
-kfatinode_dir_walk_finalize(struct ksuperblock *sblock,
+kfatinode_dir_walk_finalize(struct ksuperblock *__restrict sblock,
                             struct kfatinode *resnode) {
  kerrno_t error;
  if __unlikely(KE_ISERR(error = ksuperblock_incref(sblock))) return error;
@@ -113,7 +113,7 @@ kfatinode_dir_walk_finalize(struct ksuperblock *sblock,
  return KE_OK;
 }
 static kerrno_t kfatinode_dir_walk(struct kfatinode *self,
-                                   struct kdirentname const *name,
+                                   struct kdirentname const *__restrict name,
                                    __ref struct kinode **resnod) {
  struct kfat_walkdata data; kerrno_t error;
  kassert_kinode(&self->fi_inode);
@@ -138,7 +138,7 @@ err_freenode:
  return KE_OK;
 }
 __local kerrno_t kfatinode_root_walk(struct kfatinode *self,
-                                     struct kdirentname const *name,
+                                     struct kdirentname const *__restrict name,
                                      __ref struct kinode **resnod) {
  struct kfat_walkdata data; kerrno_t error;
  struct kfatsuperblock *sb;
@@ -269,7 +269,7 @@ static kerrno_t kfatinode_setattr(struct kfatinode *self, size_t ac, union kinod
 }
 
 static kerrno_t kfatinode_unlink(struct kfatinode *self,
-                                 struct kdirentname const *name,
+                                 struct kdirentname const *__restrict name,
                                  struct kfatinode *inode) {
  struct kfatfs *fatfs; kerrno_t error;
  assert(self->fi_inode.i_type == &kfatinode_dir_type ||
@@ -286,7 +286,7 @@ static kerrno_t kfatinode_unlink(struct kfatinode *self,
  return error;
 }
 static kerrno_t kfatinode_rmdir(struct kfatinode *self,
-                                struct kdirentname const *name,
+                                struct kdirentname const *__restrict name,
                                 struct kfatinode *inode) {
  struct kfatfs *fatfs; kerrno_t error;
  assert(self->fi_inode.i_type == &kfatinode_dir_type);
@@ -301,7 +301,7 @@ static kerrno_t kfatinode_rmdir(struct kfatinode *self,
 }
 static kerrno_t
 kfatinode_mkdat(struct kfatinode *self,
-                struct kdirentname const *name,
+                struct kdirentname const *__restrict name,
                 size_t ac, union kinodeattr const *av, 
                 __ref struct kfatinode **resnode,
                 __u8 fat_file_attributes) {
@@ -343,13 +343,13 @@ err_newnode:
  return error;
 }
 static kerrno_t kfatinode_mkdir(struct kfatinode *self,
-                                struct kdirentname const *name,
+                                struct kdirentname const *__restrict name,
                                 size_t ac, union kinodeattr const *av, 
                                 __ref struct kfatinode **resnode) {
  return kfatinode_mkdat(self,name,ac,av,resnode,KFATFILE_ATTR_DIRECTORY);
 }
 static kerrno_t kfatinode_mkreg(struct kfatinode *self,
-                                struct kdirentname const *name,
+                                struct kdirentname const *__restrict name,
                                 size_t ac, union kinodeattr const *av, 
                                 __ref struct kfatinode **resnode) {
  return kfatinode_mkdat(self,name,ac,av,resnode,KFATFILE_ATTR_DIRECTORY);
@@ -492,7 +492,7 @@ static kerrno_t kfatsuperblock_close(struct ksuperblock *self) {
 static kerrno_t kfatsuperblock_flush(struct ksuperblock *self) {
  return kfatfs_fat_flush(&((struct kfatsuperblock *)self)->f_fs);
 }
-static void kfatsuperinode_quit(struct kinode *self) {
+static void kfatsuperinode_quit(struct kinode *__restrict self) {
  struct kfatfs *fs = &((struct kfatsuperblock *)__kinode_superblock(self))->f_fs;
  kerrno_t error = kfatfs_fat_close(fs);
  if (KE_ISERR(error) && error != KE_DESTROYED) {

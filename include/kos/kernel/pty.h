@@ -106,8 +106,8 @@ extern kerrno_t kfspty_sgetattr(struct kfspty const *__restrict self, __size_t a
 // @return: * :   A reference to a new Inode containing a PTY.
 // @return: NULL: Not enough available memory.
 extern __crit __ref struct kfspty *
-kfspty_new(struct termios const *ios,
-           struct winsize const *size);
+kfspty_new(struct termios const *__restrict ios,
+           struct winsize const *__restrict size);
 
 struct kdirent;
 //////////////////////////////////////////////////////////////////////////
@@ -117,10 +117,10 @@ struct kdirent;
 // @return: KE_NOMEM:    Not enough available memory.
 // @return: KE_EXISTS:   The given PTY was already registered.
 // @return: KE_FAULT:    'master_name_buf' is neither NULL, nor a valid pointer.
-extern __crit kerrno_t
-kfspty_insnod(struct kfspty *self,
-              __ref struct kdirent **master_ent,
-              __ref struct kdirent **slave_ent,
+extern __crit __nonnull((1,2,3)) kerrno_t
+kfspty_insnod(struct kfspty *__restrict self,
+              __ref struct kdirent **__restrict master_ent,
+              __ref struct kdirent **__restrict slave_ent,
               __user char *master_name_buf);
 
 extern struct kinodetype kfspty_type;
@@ -138,12 +138,10 @@ extern struct kfiletype kptyfile_master_type;
 // Create a new master/slave file for a given Filesystem PTY node.
 // @return: * :   A reference to a new file.
 // @return: NULL: Not enough available memory.
-extern __nonnull((1)) __ref struct kptyfile *
-kptyfile_slave_new(struct kfspty *__restrict pty,
-                   struct kdirent *dent);
-extern __nonnull((1)) __ref struct kptyfile *
-kptyfile_master_new(struct kfspty *__restrict pty,
-                    struct kdirent *dent);
+extern __crit __wunused __malloccall __nonnull((1)) __ref struct kptyfile *
+kptyfile_slave_new(struct kfspty *__restrict pty, struct kdirent *dent);
+extern __crit __wunused __malloccall __nonnull((1)) __ref struct kptyfile *
+kptyfile_master_new(struct kfspty *__restrict pty, struct kdirent *dent);
 
 
 

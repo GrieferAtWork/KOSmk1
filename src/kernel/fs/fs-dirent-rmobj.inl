@@ -26,11 +26,11 @@
 #endif
 
 #ifdef DO_RMDIR
-kerrno_t kdirent_rmdir(struct kdirent *self)
+kerrno_t kdirent_rmdir(struct kdirent *__restrict self)
 #elif defined(DO_UNLINK)
-kerrno_t kdirent_unlink(struct kdirent *self)
+kerrno_t kdirent_unlink(struct kdirent *__restrict self)
 #elif defined(DO_REMOVE)
-kerrno_t kdirent_remove(struct kdirent *self)
+kerrno_t kdirent_remove(struct kdirent *__restrict self)
 #else
 #error "Must #define something before #including this file"
 #endif

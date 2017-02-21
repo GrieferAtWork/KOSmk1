@@ -1135,21 +1135,21 @@ get_true_path(char *buf, size_t bufsize,
  char *end = buf+bufsize,*iter = buf;
  if (pathenv->env_root != kfs_getroot()) {
   /* Must prepend the path's root path. */
-  kdirent_getpathname(pathenv->env_root,kfs_getroot(),iter,
-                      iter < end ? (size_t)(end-iter) : 0,&reqsize);
+  kdirent_kernel_getpathname(pathenv->env_root,kfs_getroot(),iter,
+                             iter < end ? (size_t)(end-iter) : 0,&reqsize);
   iter += (reqsize/sizeof(char))-1;
-  /* 'kdirent_getpathname' doesn't include a trailing slash. - append it now! */
+  /* 'kdirent_kernel_getpathname' doesn't include a trailing slash. - append it now! */
   if (iter < end) *iter = KFS_SEP;
   ++iter;
  }
  if (!pathmax || !KFS_ISSEP(path[0])) {
   /* The given path points into the CWD directory.
    * >> Now we must also prepend the given cwd path. */
-  kdirent_getpathname(pathenv->env_cwd,pathenv->env_root,iter,
-                      iter < end ? (size_t)(end-iter) : 0,&reqsize);
+  kdirent_kernel_getpathname(pathenv->env_cwd,pathenv->env_root,iter,
+                             iter < end ? (size_t)(end-iter) : 0,&reqsize);
   iter += (reqsize/sizeof(char))-1;
   if (pathenv->env_cwd != kfs_getroot()) {
-   /* 'kdirent_getpathname' doesn't include a trailing slash. - append it now! */
+   /* 'kdirent_kernel_getpathname' doesn't include a trailing slash. - append it now! */
    if (iter < end) *iter = KFS_SEP;
    ++iter;
   }

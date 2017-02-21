@@ -86,45 +86,12 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc,
  if __unlikely((result = omalloc(struct kproc)) == NULL) return KE_NOMEM;
  kobject_init(result,KOBJECT_MAGIC_PROC);
  result->p_refcnt = 1;
- memcpy(&result->p_regs,&proc->p_regs,sizeof(struct kprocregs));
- if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_MODS))) goto err_free;
- error = kprocmodules_initcopy(&result->p_modules,&proc->p_modules);
- kproc_unlock(proc,KPROC_LOCK_MODS);
- if __unlikely(KE_ISERR(error)) goto err_free;
 
- if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_FDMAN))) goto err_shlib;
- error = kfdman_initcopy(&result->p_fdman,&proc->p_fdman);
- kproc_unlock(proc,KPROC_LOCK_FDMAN);
- if __unlikely(KE_ISERR(error)) goto err_shlib;
-
- if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_SHM))) goto err_fd;
+ /* TODO: Initialize the LDT later in case we won't be able to do a root-fork. */
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_SHM))) goto err_free;
  error = kshm_initfork(&result->p_shm,&proc->p_shm);
  kproc_unlock(proc,KPROC_LOCK_SHM);
- if __unlikely(KE_ISERR(error)) goto err_fd;
-
- if (flags&KTASK_NEW_FLAG_ROOTFORK) {
-  /* Perform a root-fork (grant all permissions to new process). */
-  error = kprocsand_initroot(&result->p_sand);
- } else {
-  if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_SAND))) goto err_shm;
-  error = kprocsand_initfork(&result->p_sand,&proc->p_sand);
-  kproc_unlock(proc,KPROC_LOCK_SAND);
- }
- if __unlikely(KE_ISERR(error)) goto err_shm;
-
- if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_TLSMAN))) goto err_sand;
- error = ktlsman_initcopy(&result->p_tlsman,&proc->p_tlsman);
- kproc_unlock(proc,KPROC_LOCK_TLSMAN);
- if __unlikely(KE_ISERR(error)) goto err_sand;
-
- if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_ENVIRON))) goto err_sand;
- error = kprocenv_initcopy(&result->p_environ,&proc->p_environ);
- kproc_unlock(proc,KPROC_LOCK_ENVIRON);
- if __unlikely(KE_ISERR(error)) goto err_tls;
-
- assert(result->p_fdman.fdm_cnt <= result->p_fdman.fdm_fda);
- ktasklist_init(&result->p_threads);
- kmmutex_init(&result->p_lock);
+ if __unlikely(KE_ISERR(error)) goto err_free;
 
  /* Check for root-fork permissions _AFTER_ we've already
   * created the process, just so we can ensure that there
@@ -137,16 +104,53 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc,
   *    copied it, thus fixing all possible race conditions.
   */
  if ((flags&KTASK_NEW_FLAG_ROOTFORK) &&
-     KE_ISERR(error = kproc_canrootfork(proc,eip))) goto err_env;
+     KE_ISERR(error = kproc_canrootfork(proc,eip))) goto err_shm;
+
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_MODS))) goto err_shm;
+ error = kprocmodules_initcopy(&result->p_modules,&proc->p_modules);
+ kproc_unlock(proc,KPROC_LOCK_MODS);
+ if __unlikely(KE_ISERR(error)) goto err_shm;
+
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_FDMAN))) goto err_mod;
+ error = kfdman_initcopy(&result->p_fdman,&proc->p_fdman);
+ kproc_unlock(proc,KPROC_LOCK_FDMAN);
+ if __unlikely(KE_ISERR(error)) goto err_mod;
+ assert(result->p_fdman.fdm_cnt <= result->p_fdman.fdm_fda);
+
+ if (flags&KTASK_NEW_FLAG_ROOTFORK) {
+  /* Perform a root-fork (grant all permissions to new process). */
+  error = kprocsand_initroot(&result->p_sand);
+ } else {
+  if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_SAND))) goto err_fdman;
+  error = kprocsand_initfork(&result->p_sand,&proc->p_sand);
+  kproc_unlock(proc,KPROC_LOCK_SAND);
+ }
+ if __unlikely(KE_ISERR(error)) goto err_fdman;
+
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_TLSMAN))) goto err_sand;
+ error = ktlsman_initcopy(&result->p_tlsman,&proc->p_tlsman);
+ kproc_unlock(proc,KPROC_LOCK_TLSMAN);
+ if __unlikely(KE_ISERR(error)) goto err_sand;
+
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_ENVIRON))) goto err_sand;
+ error = kprocenv_initcopy(&result->p_environ,&proc->p_environ);
+ kproc_unlock(proc,KPROC_LOCK_ENVIRON);
+ if __unlikely(KE_ISERR(error)) goto err_tls;
+
+ /* Initialize misc noexcept parts. */
+ memcpy(&result->p_regs,&proc->p_regs,sizeof(struct kprocregs));
+ ktasklist_init(&result->p_threads);
+ kmmutex_init(&result->p_lock);
+
  if __unlikely(KE_ISERR(kproclist_addproc(result))) goto err_env;
  *presult = result;
  return error;
 err_env:   kprocenv_quit(&result->p_environ);
 err_tls:   ktlsman_quit(&result->p_tlsman);
 err_sand:  kprocsand_quit(&result->p_sand);
+err_fdman: kfdman_quit(&result->p_fdman);
+err_mod:   kprocmodules_quit(&result->p_modules);
 err_shm:   kshm_quit(&result->p_shm);
-err_fd:    kfdman_quit(&result->p_fdman);
-err_shlib: kprocmodules_quit(&result->p_modules);
 err_free:  free(result);
  return error;
 }

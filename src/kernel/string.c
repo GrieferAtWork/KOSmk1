@@ -35,47 +35,27 @@ __crit size_t
 __copy_from_user_c(__kernel void *__restrict dst,
                    __user void const *src,
                    size_t bytes) {
- size_t copy_max; __kernel void *ksrc;
- struct ktask *caller = ktask_self();
- struct kproc *proc = ktask_getproc(caller);
+ size_t maxbytes; __kernel void const *kpt;
  KTASK_CRIT_MARK
- if __likely(KE_ISOK(kproc_lock(proc,KPROC_LOCK_SHM))) {
-  while (bytes &&
-        (ksrc = kshm_translateuser(kproc_getshm(proc),caller->t_epd,
-                                    src,bytes,&copy_max,0)
-         ) != NULL) {
-   assert(copy_max <= bytes);
-   memcpy(dst,ksrc,copy_max);
-   bytes -= copy_max;
-   *(uintptr_t *)&dst += copy_max;
-   *(uintptr_t *)&src += copy_max;
-  }
-  kproc_unlock(proc,KPROC_LOCK_SHM);
- }
- return bytes;
+ USER_FOREACH_BEGIN(src,bytes,kpt,maxbytes,0) {
+  memcpy(dst,kpt,maxbytes);
+ } USER_FOREACH_END({
+  return USER_FOREACH_PENDING;
+ });
+ return 0;
 }
 __crit size_t
 __copy_to_user_c(__user void *dst,
                  __kernel void const *__restrict src,
                  size_t bytes) {
- size_t copy_max; __kernel void *kdst;
- struct ktask *caller = ktask_self();
- struct kproc *proc = ktask_getproc(caller);
+ size_t maxbytes; __kernel void *kptr;
  KTASK_CRIT_MARK
- if __likely(KE_ISOK(kproc_lock(proc,KPROC_LOCK_SHM))) {
-  while (bytes &&
-        (kdst = kshm_translateuser(kproc_getshm(proc),caller->t_epd,
-                                    dst,bytes,&copy_max,1)
-         ) != NULL) {
-   assert(copy_max <= bytes);
-   memcpy(kdst,src,copy_max);
-   bytes -= copy_max;
-   *(uintptr_t *)&dst += copy_max;
-   *(uintptr_t *)&src += copy_max;
-  }
-  kproc_unlock(proc,KPROC_LOCK_SHM);
- }
- return bytes;
+ USER_FOREACH_BEGIN(dst,bytes,kptr,maxbytes,1) {
+  memcpy(kptr,src,maxbytes);
+ } USER_FOREACH_END({
+  return USER_FOREACH_PENDING;
+ });
+ return 0;
 }
 __crit size_t
 __copy_in_user_c(__user void *dst,
@@ -85,6 +65,7 @@ __copy_in_user_c(__user void *dst,
  struct ktask *caller = ktask_self();
  struct kproc *proc = ktask_getproc(caller);
  KTASK_CRIT_MARK
+ if (caller->t_epd == kpagedir_kernel()) { memcpy(dst,src,bytes); return 0; }
  if __likely(KE_ISOK(kproc_lock(proc,KPROC_LOCK_SHM))) {
   while (bytes &&
         (kdst = kshm_translateuser(kproc_getshm(proc),caller->t_epd,dst,bytes,&max_dst,1)) != NULL &&
@@ -102,25 +83,17 @@ __copy_in_user_c(__user void *dst,
 
 __wunused size_t
 __user_memset_c(__user void const *p, int byte, size_t bytes) {
- size_t set_max; __kernel void *kp;
- struct ktask *caller = ktask_self();
- struct kproc *proc = ktask_getproc(caller);
+ size_t maxbytes; __kernel void *kptr;
  KTASK_CRIT_MARK
- if __likely(KE_ISOK(kproc_lock(proc,KPROC_LOCK_SHM))) {
-  while (bytes &&
-        (kp = kshm_translateuser(kproc_getshm(proc),caller->t_epd,
-                                  p,bytes,&set_max,1)
-          ) != NULL) {
-   assert(set_max <= bytes);
-   memset(kp,byte,set_max);
-   bytes -= set_max;
-   *(uintptr_t *)&p += set_max;
-  }
-  kproc_unlock(proc,KPROC_LOCK_SHM);
- }
- return bytes;
+ USER_FOREACH_BEGIN(p,bytes,kptr,maxbytes,1) {
+  memset(kptr,byte,maxbytes);
+ } USER_FOREACH_END({
+  return USER_FOREACH_PENDING;
+ });
+ return 0;
 }
 
+/* TODO: Everything in this file should use 'USER_FOREACH'! */
 
 __crit __user void *
 __user_memchr_c(__user void const *p, int needle, size_t bytes) {

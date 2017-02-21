@@ -37,6 +37,7 @@
 #include <kos/kernel/linker.h>
 #include <kos/timespec.h>
 #include <kos/attr.h>
+#include <stdio.h>
 #include <alloca.h>
 
 __DECL_BEGIN
