@@ -34,10 +34,13 @@
 #include <kos/kernel/closelock.h>
 #include <kos/kernel/mutex.h>
 #include <kos/kernel/object.h>
-#include <kos/kernel/task.h>
 #include <kos/kernel/types.h>
 #include <kos/kernel/sched_yield.h>
 #include <kos/timespec.h>
+#ifndef __INTELLISENSE__
+#include <kos/kernel/task.h>
+#include <kos/kernel/proc.h>
+#endif
 
 __DECL_BEGIN
 
@@ -88,8 +91,8 @@ struct kinodetype {
   * NOTE: Some operators, such as (g|s)etattr are implemented with generic
   *       versions capable of emulating most common protocols when defined as NULL,
   *       though they will not be called if a custom operator returns KE_NOSYS. */
- kerrno_t (*it_getattr)(struct kinode const *self, __size_t ac, union kinodeattr *av);
- kerrno_t (*it_setattr)(struct kinode *self, __size_t ac, union kinodeattr const *av);
+ kerrno_t (*it_getattr)(struct kinode const *self, __size_t ac, __user union kinodeattr *av);
+ kerrno_t (*it_setattr)(struct kinode *self, __size_t ac, __user union kinodeattr const *av);
  kerrno_t (*it_delnode)(struct kinode *self); /*< Called to delete a node once its 'i_lnkcnt' drops to 0. */
  kerrno_t (*it_hrdlnk)(struct kinode *self, struct kdirentname const *name, struct kinode *__restrict inode); /*< Add a new hard link in directory 'self', maned 'named' and pointing to 'inode'. */
  kerrno_t (*it_unlink)(struct kinode *self, struct kdirentname const *name, struct kinode *__restrict inode); /*< Remove 'name' from 'self'. (Also called to decref hard links). */
@@ -99,9 +102,9 @@ struct kinodetype {
   *       returned without any given attributes being re-applied.
   * NOTE: If the given file already exists, but isn't of the requested type,
   *       KE_ISDIR/KE_NODIR must be returned without '*resnode' being filled. */
- kerrno_t (*it_mkdir)(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, __ref struct kinode **resnode); /*< Create a directory in 'self'. */
- kerrno_t (*it_mkreg)(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, __ref struct kinode **resnode); /*< Create a regular file in 'self'. */
- kerrno_t (*it_mklnk)(struct kinode *self, struct kdirentname const *name, __size_t ac, union kinodeattr const *av, struct kdirentname const *target, __ref struct kinode **resnode); /*< Create a symbolic link in 'self'. */
+ kerrno_t (*it_mkdir)(struct kinode *self, struct kdirentname const *name, __size_t ac, __kernel union kinodeattr const *av, __ref struct kinode **resnode); /*< Create a directory in 'self'. */
+ kerrno_t (*it_mkreg)(struct kinode *self, struct kdirentname const *name, __size_t ac, __kernel union kinodeattr const *av, __ref struct kinode **resnode); /*< Create a regular file in 'self'. */
+ kerrno_t (*it_mklnk)(struct kinode *self, struct kdirentname const *name, __size_t ac, __kernel union kinodeattr const *av, struct kdirentname const *target, __ref struct kinode **resnode); /*< Create a symbolic link in 'self'. */
  kerrno_t (*it_walk)(struct kinode *self, struct kdirentname const *name, __ref struct kinode **resnode); /*< Walks to the given name. */
  kerrno_t (*it_enumdir)(struct kinode *self, pkenumdir callback, void *closure); /*< Enumerate all files/folders. NOTE: If 'callback' returns non-KE_OK, return with that error/signal. */
  kerrno_t (*it_readlink)(struct kinode *self, struct kdirentname *target); /*< Upon successful return, the caller must destroy the 'target' name. */
@@ -192,12 +195,27 @@ extern __wunused kerrno_t kinode_close(struct kinode *self);
 // Perform various operations on an INode.
 // @return: KE_NOSYS:     The operation is not supported by the node.
 // @return: KE_DESTROYED: The Associated node was closed.
-extern __wunused __nonnull((1,3)) kerrno_t kinode_getattr(struct kinode const *self, __size_t ac, union kinodeattr *av);
-extern __wunused __nonnull((1,3)) kerrno_t kinode_setattr(struct kinode *self, __size_t ac, union kinodeattr const *av);
-extern __wunused __nonnull((1,3)) kerrno_t kinode_getattr_legacy(struct kinode const *self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,3)) kerrno_t kinode_setattr_legacy(struct kinode *self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
-extern __wunused __nonnull((1,3)) kerrno_t __kinode_getattr_legacy(struct kinode const *self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,3)) kerrno_t __kinode_setattr_legacy(struct kinode *self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kinode_user_getattr(struct kinode const *self, __size_t ac, __user union kinodeattr *av);
+extern __wunused __nonnull((1,3)) kerrno_t kinode_user_setattr(struct kinode *self, __size_t ac, __user union kinodeattr const *av);
+extern __wunused __nonnull((1,3)) kerrno_t kinode_user_getattr_legacy(struct kinode const *self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t kinode_user_setattr_legacy(struct kinode *self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t __kinode_user_getattr_legacy(struct kinode const *self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t __kinode_user_setattr_legacy(struct kinode *self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,3)) kerrno_t kinode_kernel_getattr(struct kinode const *self, __size_t ac, __user union kinodeattr *av);
+extern __wunused __nonnull((1,3)) kerrno_t kinode_kernel_setattr(struct kinode *self, __size_t ac, __user union kinodeattr const *av);
+extern __wunused __nonnull((1,3)) kerrno_t kinode_kernel_getattr_legacy(struct kinode const *self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t kinode_kernel_setattr_legacy(struct kinode *self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t __kinode_kernel_getattr_legacy(struct kinode const *self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t __kinode_kernel_setattr_legacy(struct kinode *self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+#else
+#define kinode_kernel_getattr(self,ac,av)                             KTASK_KEPD(kinode_user_getattr(self,ac,av))
+#define kinode_kernel_setattr(self,ac,av)                             KTASK_KEPD(kinode_user_setattr(self,ac,av))
+#define kinode_kernel_getattr_legacy(self,attr,buf,bufsize,reqsize)   KTASK_KEPD(kinode_user_getattr_legacy(self,attr,buf,bufsize,reqsize))
+#define kinode_kernel_setattr_legacy(self,attr,buf,bufsize)           KTASK_KEPD(kinode_user_setattr_legacy(self,attr,buf,bufsize))
+#define __kinode_kernel_getattr_legacy(self,attr,buf,bufsize,reqsize) KTASK_KEPD(__kinode_user_getattr_legacy(self,attr,buf,bufsize,reqsize))
+#define __kinode_kernel_setattr_legacy(self,attr,buf,bufsize)         KTASK_KEPD(__kinode_user_setattr_legacy(self,attr,buf,bufsize))
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the directory entry associated with the given name
@@ -254,8 +272,15 @@ kinode_mkhardlink(struct kinode *self,
 // Generic attributes.
 // >> When overwriting getattr or setattr, you should
 //    call these functions for attributes you don't know.
-extern __wunused __nonnull((1,3)) kerrno_t kinode_generic_getattr(struct kinode const *self, __size_t ac, union kinodeattr *av);
-extern __wunused __nonnull((1,3)) kerrno_t kinode_generic_setattr(struct kinode *self, __size_t ac, union kinodeattr const *av);
+extern __wunused __nonnull((1,3)) kerrno_t kinode_user_generic_getattr(struct kinode const *self, __size_t ac, __user union kinodeattr *av);
+extern __wunused __nonnull((1,3)) kerrno_t kinode_user_generic_setattr(struct kinode *self, __size_t ac, __user union kinodeattr const *av);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,3)) kerrno_t kinode_kernel_generic_getattr(struct kinode const *self, __size_t ac, __kernel union kinodeattr *av);
+extern __wunused __nonnull((1,3)) kerrno_t kinode_kernel_generic_setattr(struct kinode *self, __size_t ac, __kernel union kinodeattr const *av);
+#else
+#define kinode_kernel_generic_getattr(self,ac,av) KTASK_KEPD(kinode_user_generic_getattr(self,ac,av))
+#define kinode_kernel_generic_setattr(self,ac,av) KTASK_KEPD(kinode_user_generic_setattr(self,ac,av))
+#endif
 
 
 struct kdirentname {
@@ -649,9 +674,9 @@ extern __wunused __nonnull((1)) kerrno_t ksuperblock_flush(struct ksuperblock *s
 // @return: KE_DESTROYED: *ditto*
 extern __wunused __nonnull((1)) __ref struct ksdev *ksuperblock_getdev(struct ksuperblock const *self);
 #define ksuperblock_getattr(self,attr,buf,bufsize,reqsize) \
- kinode_getattr_legacy(ksuperblock_root(self),attr,buf,bufsize,reqsize)
+ kinode_kernel_getattr_legacy(ksuperblock_root(self),attr,buf,bufsize,reqsize)
 #define ksuperblock_setattr(self,attr,buf,bufsize) \
- kinode_setattr_legacy(ksuperblock_root(self),attr,buf,bufsize)
+ kinode_kernel_setattr_legacy(ksuperblock_root(self),attr,buf,bufsize)
 
 
 // Create a new FAT filesystem superblock
@@ -668,8 +693,15 @@ extern __nonnull((1,2)) void ksuperblock_generic_init(struct ksuperblock *self,
 // Generic attributes.
 // >> When overwriting getattr or setattr, you should
 //    call these functions for attributes you don't know.
-extern __wunused __nonnull((1,3)) kerrno_t ksuperblock_generic_getattr(struct ksuperblock const *self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,3)) kerrno_t ksuperblock_generic_setattr(struct ksuperblock *self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t ksuperblock_user_generic_getattr(struct ksuperblock const *self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t ksuperblock_user_generic_setattr(struct ksuperblock *self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,3)) kerrno_t ksuperblock_kernel_generic_getattr(struct ksuperblock const *self, kattr_t attr, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t ksuperblock_kernel_generic_setattr(struct ksuperblock *self, kattr_t attr, __kernel void const *__restrict buf, __size_t bufsize);
+#else
+#define ksuperblock_kernel_generic_getattr(self,attr,buf,bufsize,reqsize) KTASK_KEPD(ksuperblock_user_generic_getattr(self,attr,buf,bufsize,reqsize))
+#define ksuperblock_kernel_generic_setattr(self,attr,buf,bufsize)         KTASK_KEPD(ksuperblock_user_generic_setattr(self,attr,buf,bufsize))
+#endif
 
 
 

@@ -103,20 +103,20 @@ kerrno_t kfdentry_user_getattr(struct kfdentry *__restrict self, kattr_t attr,
   case KFDTYPE_FILE:  return kfile_user_getattr(self->fd_file,attr,buf,bufsize,reqsize);
   case KFDTYPE_TASK:  return ktask_getattr(self->fd_task,attr,buf,bufsize,reqsize); /* TODO: 'ktask_user_getattr' */
   case KFDTYPE_PROC:  return kproc_getattr(self->fd_proc,attr,buf,bufsize,reqsize); /* TODO: 'kproc_user_getattr' */
-  case KFDTYPE_INODE: return kinode_getattr_legacy(self->fd_inode,attr,buf,bufsize,reqsize); /* TODO: 'kinode_user_getattr_legacy' */
+  case KFDTYPE_INODE: return kinode_user_getattr_legacy(self->fd_inode,attr,buf,bufsize,reqsize);
   {
    struct kinode *dirnode; kerrno_t error;
   case KFDTYPE_DIRENT:
    KTASK_CRIT_BEGIN
    if __unlikely((dirnode = kdirent_getnode(self->fd_dirent)) == NULL) error = KE_DESTROYED;
-   else { /* TODO: 'kinode_user_getattr_legacy' */
-    error = kinode_getattr_legacy(dirnode,attr,buf,bufsize,reqsize);
+   else {
+    error = kinode_user_getattr_legacy(dirnode,attr,buf,bufsize,reqsize);
     kinode_decref(dirnode);
    }
    KTASK_CRIT_END
    return error;
   }
-  case KFDTYPE_DEVICE: return kdev_getattr(self->fd_dev,attr,buf,bufsize,reqsize);
+  case KFDTYPE_DEVICE: return kdev_user_getattr(self->fd_dev,attr,buf,bufsize,reqsize);
   default: break;
  }
  return KE_NOSYS;
@@ -127,20 +127,20 @@ kerrno_t kfdentry_user_setattr(struct kfdentry *__restrict self, kattr_t attr,
   case KFDTYPE_FILE:  return kfile_user_setattr(self->fd_file,attr,buf,bufsize);
   case KFDTYPE_TASK:  return ktask_setattr(self->fd_task,attr,buf,bufsize); /* TODO: 'ktask_user_setattr' */
   case KFDTYPE_PROC:  return kproc_setattr(self->fd_proc,attr,buf,bufsize); /* TODO: 'kproc_user_setattr' */
-  case KFDTYPE_INODE: return kinode_setattr_legacy(self->fd_inode,attr,buf,bufsize); /* TODO: 'kinode_user_setattr_legacy' */
+  case KFDTYPE_INODE: return kinode_user_setattr_legacy(self->fd_inode,attr,buf,bufsize);
   {
    struct kinode *dirnode; kerrno_t error;
   case KFDTYPE_DIRENT:
    KTASK_CRIT_BEGIN
    if __unlikely((dirnode = kdirent_getnode(self->fd_dirent)) == NULL) error = KE_DESTROYED;
-   else { /* TODO: 'kinode_user_setattr_legacy' */
-    error = kinode_setattr_legacy(dirnode,attr,buf,bufsize);
+   else {
+    error = kinode_user_setattr_legacy(dirnode,attr,buf,bufsize);
     kinode_decref(dirnode);
    }
    KTASK_CRIT_END
    return error;
   }
-  case KFDTYPE_DEVICE: return kdev_setattr(self->fd_dev,attr,buf,bufsize);
+  case KFDTYPE_DEVICE: return kdev_user_setattr(self->fd_dev,attr,buf,bufsize);
   default: break;
  }
  return KE_NOSYS;

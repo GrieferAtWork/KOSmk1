@@ -641,5 +641,8 @@
     <None Include="..\src\kernel\shm-translate.c.inl">
       <Filter>src\kernel</Filter>
     </None>
+    <None Include="..\src\kernel\iobuf-writeimpl.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
   </ItemGroup>
 </Project>

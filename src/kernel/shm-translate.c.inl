@@ -44,7 +44,12 @@ __kshm_translateuser_impl(struct kshm const *self, struct kpagedir const *epd,
  kassert_kshm(self);
  kassertobj(rwbytes);
  /* Try the page directory first. */
- rw_request = *rwbytes;
+ if __unlikely((rw_request = *rwbytes) == 0) {
+  /* Special handling for write-access to ZERO(0) bytes of memory.
+   * >> We simply translate the pointer to still operate
+   *    and assume a is-a-faulty-pointer-style request. */
+  return kpagedir_translate(self->s_pd,addr);
+ }
 again:
 #ifdef WRITEABLE
  /* NOTE: Don't set the dirty bit here. - This one's mean
@@ -71,13 +76,7 @@ again:
  /* Touch all pages within the specified area of memory, using linear touching. */
  address_page = alignd((uintptr_t)addr,PAGEALIGN);
  page_count   = ceildiv(rw_request+((uintptr_t)addr-address_page),PAGESIZE);
- if __unlikely(!page_count) {
-  /* Special handling for write-access to ZERO(0) bytes of memory.
-   * >> We simply translate the pointer to still operate
-   *    and assume a is-a-faulty-pointer-style request. */
-  assert(!rw_request && !*rwbytes);
-  return kpagedir_translate(self->s_pd,addr);
- }
+ assert(page_count);
  /* Actually touch the requested memory.
   * NOTE: The function itself will round up the
   *       pointer to cluster-borders, but we can easily

@@ -31,6 +31,10 @@
 #include <kos/kernel/rwlock.h>
 #include <kos/kernel/object.h>
 #include <kos/attr.h>
+#ifndef __INTELLISENSE__
+#include <kos/kernel/task.h>
+#include <kos/kernel/proc.h>
+#endif
 
 __DECL_BEGIN
 
@@ -46,8 +50,8 @@ struct kdev;
  void         (*d_quit)(struct kdev *self);\
  /* NOTE: The following two are optional. */\
  /* @return: KE_NOSYS: Querying/Setting the given attribute isn't supported by the device */\
- kerrno_t     (*d_getattr)(struct kdev const *self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);\
- kerrno_t     (*d_setattr)(struct kdev *self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
+ kerrno_t     (*d_getattr)(struct kdev const *self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);\
+ kerrno_t     (*d_setattr)(struct kdev *self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
 
 #define KDEV_INIT(quit,getattr,setattr) \
  KOBJECT_INIT(KOBJECT_MAGIC_DEV),0xffff,\
@@ -111,22 +115,26 @@ __local KOBJECT_DEFINE_DECREF(kdev_decref,struct kdev,d_refcnt,kassert_kdev,kdev
 // @return: KE_DESTROYED: The device was closed/destroyed. (Not returned by *_unlocked)
 // @return: KE_NOSYS:     The device does not support the given attribute.
 // @return: * :           Any attribute-/device specific error
-extern __wunused __nonnull((1,3)) kerrno_t kdev_getattr(struct kdev const *self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,3)) kerrno_t kdev_setattr(struct kdev *self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
-extern __wunused __nonnull((1,3)) kerrno_t kdev_getattr_unlocked(struct kdev const *self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,3)) kerrno_t kdev_setattr_unlocked(struct kdev *self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kdev_user_getattr(struct kdev const *self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t kdev_user_setattr(struct kdev *self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kdev_user_getattr_unlocked(struct kdev const *self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t kdev_user_setattr_unlocked(struct kdev *self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kdev_kernel_getattr(struct kdev const *self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t kdev_kernel_setattr(struct kdev *self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kdev_kernel_getattr_unlocked(struct kdev const *self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t kdev_kernel_setattr_unlocked(struct kdev *self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
 #else
-#define kdev_getattr_unlocked(self,attr,buf,bufsize,reqsize) \
+#define kdev_user_getattr_unlocked(self,attr,buf,bufsize,reqsize) \
  __xblock({ struct kdev const *const __kgau_self = (self);\
             __xreturn __kgau_self->d_getattr ? (*__kgau_self->d_getattr)\
                      (__kgau_self,attr,buf,bufsize,reqsize) : KE_NOSYS;\
  })
-#define kdev_setattr_unlocked(self,attr,buf,bufsize) \
+#define kdev_user_setattr_unlocked(self,attr,buf,bufsize) \
  __xblock({ struct kdev *const __ksau_self = (self);\
             __xreturn __ksau_self->d_setattr ? (*__ksau_self->d_setattr)\
                      (__ksau_self,attr,buf,bufsize) : KE_NOSYS;\
  })
-#define kdev_getattr(self,attr,buf,bufsize,reqsize) \
+#define kdev_user_getattr(self,attr,buf,bufsize,reqsize) \
  __xblock({ struct kdev const *const __kga_self = (self); kerrno_t __kga_err;\
             if __likely(KE_ISOK(__kga_err = kdev_lock_r(__kga_self))) {\
              __kga_err = __kga_self->d_getattr ? (*__kga_self->d_getattr)\
@@ -135,7 +143,7 @@ extern __wunused __nonnull((1,3)) kerrno_t kdev_setattr_unlocked(struct kdev *se
             }\
             __xreturn __kga_err;\
  })
-#define kdev_setattr(self,attr,buf,bufsize) \
+#define kdev_user_setattr(self,attr,buf,bufsize) \
  __xblock({ struct kdev *const __ksa_self = (self); kerrno_t __ksa_err;\
             if __likely(KE_ISOK(__ksa_err = kdev_lock_w(__ksa_self))) {\
              __ksa_err = __ksa_self->d_setattr ? (*__ksa_self->d_setattr)\
@@ -144,6 +152,10 @@ extern __wunused __nonnull((1,3)) kerrno_t kdev_setattr_unlocked(struct kdev *se
             }\
             __xreturn __ksa_err;\
  })
+#define kdev_kernel_getattr_unlocked(self,attr,buf,bufsize,reqsize) KTASK_KEPD(kdev_user_getattr_unlocked(self,attr,buf,bufsize,reqsize))
+#define kdev_kernel_setattr_unlocked(self,attr,buf,bufsize)         KTASK_KEPD(kdev_user_setattr_unlocked(self,attr,buf,bufsize))
+#define kdev_kernel_getattr(self,attr,buf,bufsize,reqsize)          KTASK_KEPD(kdev_user_getattr(self,attr,buf,bufsize,reqsize))
+#define kdev_kernel_setattr(self,attr,buf,bufsize)                  KTASK_KEPD(kdev_user_setattr(self,attr,buf,bufsize))
 #endif
 
 __DECL_END

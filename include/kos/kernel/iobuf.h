@@ -245,32 +245,33 @@ extern __nonnull((1)) kerrno_t kiobuf_flush(struct kiobuf *__restrict self);
 // @param: rsize|wsize: Amount of bytes transferred after a success call.
 // @return: KE_OK:        Up to 'bufsize' bytes were transferred (exact size is stored in '*rsize' / '*wsize')
 // @return: KE_DESTROYED: The given I/O buffer was closed.
+// @return: KE_FAULT:     [kiobuf_user_*] The given pointer is faulty.
 // @return: KE_TIMEDOUT:  [!KIO_BLOCKNONE] A timeout previously set using alarm() has expired.
 // @return: KE_INTR:      [!KIO_BLOCKNONE] The calling thread was interrupted.
 // @return: KS_EMPTY:     [kiobuf_read&KIO_BLOCKFIRST] The I/O buffer was interrupted using 'kiobuf_interrupt' ('*rsize' is set to ZERO(0)).
 // NOTE: [kiobuf_write] Neither the 'KIO_PEEK', nor the 'KIO_QUICKMOVE' flag is supported.
-extern __wunused __nonnull((1,4)) kerrno_t
-kiobuf_read_c(struct kiobuf *__restrict self, void *buf,
-              __size_t bufsize, __size_t *__restrict rsize,
-              kioflag_t mode);
-extern __wunused __nonnull((1,4)) kerrno_t
-kiobuf_write_c(struct kiobuf *__restrict self, void const *buf,
-               __size_t bufsize, __size_t *__restrict wsize,
-               kioflag_t mode);
+extern __wunused __nonnull((1,4)) kerrno_t kiobuf_read_c(struct kiobuf *__restrict self, void *buf, __size_t bufsize, __size_t *__restrict rsize, kioflag_t mode);
+extern __wunused __nonnull((1,4)) kerrno_t kiobuf_write_c(struct kiobuf *__restrict self, void const *buf, __size_t bufsize, __size_t *__restrict wsize, kioflag_t mode);
 #ifdef __INTELLISENSE__
-extern __wunused __nonnull((1,4)) kerrno_t
-kiobuf_read(struct kiobuf *__restrict self, void *buf,
-            __size_t bufsize, __size_t *__restrict rsize,
-            kioflag_t mode);
-extern __wunused __nonnull((1,4)) kerrno_t
-kiobuf_write(struct kiobuf *__restrict self, void const *buf,
-             __size_t bufsize, __size_t *__restrict wsize,
-             kioflag_t mode);
+extern __wunused __nonnull((1,4)) kerrno_t kiobuf_read(struct kiobuf *__restrict self, void *buf, __size_t bufsize, __size_t *__restrict rsize, kioflag_t mode);
+extern __wunused __nonnull((1,4)) kerrno_t kiobuf_write(struct kiobuf *__restrict self, void const *buf, __size_t bufsize, __size_t *__restrict wsize, kioflag_t mode);
+extern __wunused __nonnull((1,4)) kerrno_t kiobuf_user_read(struct kiobuf *__restrict self, void *buf, __size_t bufsize, __size_t *__restrict rsize, kioflag_t mode);
+extern __wunused __nonnull((1,4)) kerrno_t kiobuf_user_write(struct kiobuf *__restrict self, void const *buf, __size_t bufsize, __size_t *__restrict wsize, kioflag_t mode);
+extern __wunused __nonnull((1,4)) kerrno_t kiobuf_user_read_c(struct kiobuf *__restrict self, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict rsize, kioflag_t mode);
+extern __wunused __nonnull((1,4)) kerrno_t kiobuf_user_write_c(struct kiobuf *__restrict self, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize, kioflag_t mode);
 #else
-#define kiobuf_read(self,buf,bufsize,rsize,mode)  \
- KTASK_CRIT(kiobuf_read_c(self,buf,bufsize,rsize,mode))
-#define kiobuf_write(self,buf,bufsize,wsize,mode) \
- KTASK_CRIT(kiobuf_write_c(self,buf,bufsize,wsize,mode))
+extern __wunused __nonnull((1,4)) kerrno_t __kiobuf_user_read_c(struct kiobuf *__restrict self, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict rsize, kioflag_t mode);
+extern __wunused __nonnull((1,4)) kerrno_t __kiobuf_user_write_c(struct kiobuf *__restrict self, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize, kioflag_t mode);
+#define kiobuf_user_read_c(self,buf,bufsize,rsize,mode) \
+ (KTASK_ISKEPD_P ? kiobuf_read_c(self,buf,bufsize,rsize,mode)\
+          : __kiobuf_user_read_c(self,buf,bufsize,rsize,mode))
+#define kiobuf_user_write_c(self,buf,bufsize,wsize,mode) \
+ (KTASK_ISKEPD_P ? kiobuf_write_c(self,buf,bufsize,wsize,mode)\
+          : __kiobuf_user_write_c(self,buf,bufsize,wsize,mode))
+#define kiobuf_read(self,buf,bufsize,rsize,mode)       KTASK_CRIT(kiobuf_read_c(self,buf,bufsize,rsize,mode))
+#define kiobuf_write(self,buf,bufsize,wsize,mode)      KTASK_CRIT(kiobuf_write_c(self,buf,bufsize,wsize,mode))
+#define kiobuf_user_read(self,buf,bufsize,rsize,mode)  KTASK_CRIT(kiobuf_user_read_c(self,buf,bufsize,rsize,mode))
+#define kiobuf_user_write(self,buf,bufsize,wsize,mode) KTASK_CRIT(kiobuf_user_write_c(self,buf,bufsize,wsize,mode))
 #endif
 
 

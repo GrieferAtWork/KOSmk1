@@ -99,12 +99,12 @@ kerrno_t kpartdev_getattr(kpartdev_t const *self, kattr_t attr, void *__restrict
  kassertobj(self);
  kassertmem(buf,bufsize);
  kassertobjnull(reqsize);
- return kdev_getattr_unlocked((struct kdev *)self->pd_disk,attr,buf,bufsize,reqsize);
+ return kdev_kernel_getattr_unlocked((struct kdev *)self->pd_disk,attr,buf,bufsize,reqsize);
 }
 kerrno_t kpartdev_setattr(kpartdev_t *self, kattr_t attr, void const *__restrict buf, __size_t bufsize) {
  kassertobj(self);
  kassertmem(buf,bufsize);
- return kdev_setattr_unlocked((struct kdev *)self->pd_disk,attr,buf,bufsize);
+ return kdev_kernel_setattr_unlocked((struct kdev *)self->pd_disk,attr,buf,bufsize);
 }
 
 

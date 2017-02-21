@@ -36,6 +36,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <kos/kernel/util/string.h>
 
 __DECL_BEGIN
 
@@ -63,48 +64,57 @@ vfsfile_dev_kb_open(struct kfile *__restrict self, struct kdirent *__restrict di
 
 
 static kerrno_t
-vfsfile_dev_kbevent_read(struct kfile *__restrict self, void *__restrict buf,
-                         size_t bufsize, size_t *__restrict rsize) {
+vfsfile_dev_kbevent_read(struct kfile *__restrict self,
+                         __user void *buf, size_t bufsize,
+                         __kernel size_t *__restrict rsize) {
+ struct kbevent evt; kerrno_t error;
  if (bufsize < sizeof(struct kbevent)) { *rsize = 0; return KE_OK; }
+ error = kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,&evt);
  *rsize = sizeof(struct kbevent);
- return kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,buf);
+ if (__likely  (KE_ISOK(error)) &&
+     __unlikely(copy_to_user(buf,&evt,sizeof(struct kbevent)))
+     ) error = KE_FAULT;;
+ return error;
 }
 static kerrno_t
-vfsfile_dev_kbkey_read(struct kfile *__restrict self, void *__restrict buf,
-                       size_t bufsize, size_t *__restrict rsize) {
+vfsfile_dev_kbkey_read(struct kfile *__restrict self,
+                       __user void *buf, size_t bufsize,
+                       __kernel size_t *__restrict rsize) {
  struct kbevent event; kerrno_t error;
  if (bufsize < sizeof(kbkey_t)) { *rsize = 0; return KE_OK; }
  error = kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,&event);
- if __likely(KE_ISOK(error)) {
-  *(kbkey_t *)buf = event.e_key;
-  *rsize = sizeof(kbkey_t);
- }
+ if (__likely  (KE_ISOK(error)) &&
+     __unlikely(copy_to_user(buf,&event.e_key,sizeof(kbkey_t)))
+     ) error = KE_FAULT;;
+ *rsize = sizeof(kbkey_t);
  return error;
 }
 static kerrno_t
-vfsfile_dev_kbscan_read(struct kfile *__restrict self, void *__restrict buf,
-                          size_t bufsize, size_t *__restrict rsize) {
+vfsfile_dev_kbscan_read(struct kfile *__restrict self,
+                        __user void *buf, size_t bufsize,
+                        __kernel size_t *__restrict rsize) {
  struct kbevent event; kerrno_t error;
  if (bufsize < sizeof(kbscan_t)) { *rsize = 0; return KE_OK; }
  error = kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,&event);
- if __likely(KE_ISOK(error)) {
-  *(kbscan_t *)buf = event.e_scan;
-  *rsize = sizeof(kbscan_t);
- }
+ if (__likely  (KE_ISOK(error)) &&
+     __unlikely(copy_to_user(buf,&event.e_scan,sizeof(kbscan_t)))
+     ) error = KE_FAULT;;
+ *rsize = sizeof(kbscan_t);
  return error;
 }
 static kerrno_t
-vfsfile_dev_kbtext_read(struct kfile *__restrict self, void *__restrict buf,
-                        size_t bufsize, size_t *__restrict rsize) {
- struct kbevent event; kerrno_t error;
+vfsfile_dev_kbtext_read(struct kfile *__restrict self,
+                        __user void *buf, size_t bufsize,
+                        __kernel size_t *__restrict rsize) {
+ struct kbevent event; kerrno_t error; char ch;
  if (bufsize < sizeof(char)) { *rsize = 0; return KE_OK; }
  *rsize = sizeof(char);
  do {
   error = kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,&event);
   if __unlikely(KE_ISERR(error)) return error;
  } while (!KEY_ISUTF8(event.e_key) || !KEY_ISDOWN(event.e_key));
- *(char *)buf = KEY_TOUTF8(event.e_key);
- return error;
+ ch = KEY_TOUTF8(event.e_key);
+ return copy_to_user(buf,&ch,sizeof(char)) ? KE_FAULT : KE_OK;
 }
 
 struct kfiletype kvfiletype_dev_kbevent = {
@@ -146,13 +156,13 @@ struct kfiletype kvfiletype_dev_kbtext = {
 // === Special files ===
 static kerrno_t vfsfile_dev_full_write(struct kfile *__restrict __unused(self), void const *__restrict __unused(buf), size_t __unused(bufsize), size_t *__restrict wsize) { *wsize = 0; return KE_OK; }
 static kerrno_t vfsfile_dev_full_pwrite(struct kfile *__restrict __unused(self), pos_t __unused(pos), void const *__restrict __unused(buf), size_t __unused(bufsize), size_t *__restrict wsize) { *wsize = 0; return KE_OK; }
-static kerrno_t vfsfile_dev_zero_read(struct kfile *__restrict __unused(self), void *__restrict buf, size_t bufsize, size_t *__restrict rsize) { memset(buf,0,*rsize = bufsize); return KE_OK; }
-static kerrno_t vfsfile_dev_zero_pread(struct kfile *__restrict __unused(self), pos_t __unused(pos), void *__restrict buf, size_t bufsize, size_t *__restrict rsize) { memset(buf,0,*rsize = bufsize); return KE_OK; }
+static kerrno_t vfsfile_dev_zero_read(struct kfile *__restrict __unused(self), void *__restrict buf, size_t bufsize, size_t *__restrict rsize) { return user_memset(buf,0,*rsize = bufsize) ? KE_FAULT : KE_OK; }
+static kerrno_t vfsfile_dev_zero_pread(struct kfile *__restrict __unused(self), pos_t __unused(pos), void *__restrict buf, size_t bufsize, size_t *__restrict rsize) { return user_memset(buf,0,*rsize = bufsize) ? KE_FAULT : KE_OK; }
 static kerrno_t vfsfile_dev_null_read(struct kfile *__restrict __unused(self), void *__restrict __unused(buf), size_t __unused(bufsize), size_t *__restrict rsize) { *rsize = 0; return KE_OK; }
 static kerrno_t vfsfile_dev_null_pread(struct kfile *__restrict __unused(self), pos_t __unused(pos), void *__restrict __unused(buf), size_t __unused(bufsize), size_t *__restrict rsize) { *rsize = 0; return KE_OK; }
 static kerrno_t vfsfile_dev_null_write(struct kfile *__restrict __unused(self), void const *__restrict __unused(buf), size_t bufsize, size_t *__restrict wsize) { *wsize = bufsize; return KE_OK; }
 static kerrno_t vfsfile_dev_null_pwrite(struct kfile *__restrict __unused(self), pos_t __unused(pos), void const *__restrict __unused(buf), size_t bufsize, size_t *__restrict wsize) { *wsize = bufsize; return KE_OK; }
-static kerrno_t vfsfile_dev_null_seek(struct kfile *__restrict __unused(self), off_t __unused(off), int __unused(whence), pos_t *__restrict newpos) { *newpos = 0; return KE_OK; }
+static kerrno_t vfsfile_dev_null_seek(struct kfile *__restrict __unused(self), off_t __unused(off), int __unused(whence), pos_t *__restrict newpos) { if (newpos) *newpos = 0; return KE_OK; }
 static kerrno_t vfsfile_dev_null_trunc(struct kfile *__restrict __unused(self), pos_t __unused(newsize)) { return KE_OK; }
 static kerrno_t vfsfile_dev_null_flush(struct kfile *__restrict __unused(self)) { return KE_OK; }
 
@@ -224,9 +234,14 @@ end:
 // TTY Terminal writer special file.
 static kerrno_t
 vfsfile_dev_tty_write(struct kfile *__restrict __unused(self),
-                      void const *__restrict buf,
-                      size_t bufsize, size_t *__restrict wsize) {
- tty_prints((char const *)buf,bufsize);
+                      __user void const *buf, size_t bufsize,
+                      __kernel size_t *__restrict wsize) {
+ __kernel void *part_p; size_t part_s;
+ USER_FOREACH_BEGIN(buf,bufsize,part_p,part_s,0) {
+  tty_prints((char const *)part_p,part_s);
+ } USER_FOREACH_END({
+  return KE_FAULT;
+ });
  *wsize = bufsize;
  return KE_OK;
 }

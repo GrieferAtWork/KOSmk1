@@ -43,6 +43,7 @@
 #include <kos/kernel/tty.h>
 #include <kos/syslog.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <kos/kernel/panic.h>
 

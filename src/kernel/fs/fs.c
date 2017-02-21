@@ -44,6 +44,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <kos/kernel/task.h>
+#include <kos/kernel/util/string.h>
 
 __DECL_BEGIN
 
@@ -145,29 +146,32 @@ void kinode_destroy(struct kinode *self) {
  free(obbase);
 }
 
-kerrno_t kinode_getattr(struct kinode const *self, size_t ac, union kinodeattr *av) {
+kerrno_t
+kinode_user_getattr(struct kinode const *self, size_t ac,
+                    __user union kinodeattr *av) {
  kerrno_t error; kassert_kinode(self);
- kassertmem(av,ac*sizeof(union kinodeattr));
  error = kcloselock_beginop((struct kcloselock *)&self->i_closelock);
  if __unlikely(KE_ISERR(error)) return error;
  /* TODO: Make use of the INode cache. */
  error = self->i_type->it_getattr ? (*self->i_type->it_getattr)(self,ac,av)
-                                  : kinode_generic_getattr(self,ac,av);
+                                  : kinode_user_generic_getattr(self,ac,av);
  kcloselock_endop((struct kcloselock *)&self->i_closelock);
  return error;
 }
-kerrno_t kinode_setattr(struct kinode *self, size_t ac, union kinodeattr const *av) {
+kerrno_t
+kinode_user_setattr(struct kinode *self, size_t ac,
+                    __user union kinodeattr const *av) {
  kerrno_t error; kassert_kinode(self);
- kassertmem(av,ac*sizeof(union kinodeattr));
  error = kcloselock_beginop((struct kcloselock *)&self->i_closelock);
  if __unlikely(KE_ISERR(error)) return error;
  /* TODO: Make use of the INode cache. */
  error = self->i_type->it_setattr ? (*self->i_type->it_setattr)(self,ac,av)
-                                  : kinode_generic_setattr(self,ac,av);
+                                  : kinode_user_generic_setattr(self,ac,av);
  kcloselock_endop((struct kcloselock *)&self->i_closelock);
  return error;
 }
-__local size_t kinode_getlegacyattributesize(kattr_t attr) {
+__local size_t
+kinode_getlegacyattributesize(kattr_t attr) {
  switch (attr) {
   case KATTR_FS_ATIME:
   case KATTR_FS_CTIME:
@@ -190,71 +194,74 @@ __local size_t kinode_getlegacyattributesize(kattr_t attr) {
  return 0;
 }
 
-kerrno_t __kinode_getattr_legacy(struct kinode const *self, kattr_t attr,
-                                 void *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
+kerrno_t
+__kinode_user_getattr_legacy(struct kinode const *self, kattr_t attr,
+                             __user void *__restrict buf, size_t bufsize,
+                             __kernel size_t *__restrict reqsize) {
  kerrno_t error; union kinodeattr attrib; size_t minsize;
  kassert_kinode(self);
- kassertmem(buf,bufsize);
  kassertobjnull(reqsize);
  if (attr == KATTR_FS_ATTRS) {
   size_t n_elem = bufsize/sizeof(union kinodeattr);
   if (reqsize) *reqsize = n_elem*sizeof(union kinodeattr);
-  return kinode_getattr(self,n_elem,(union kinodeattr *)buf);
+  return kinode_user_getattr(self,n_elem,(union kinodeattr *)buf);
  }
  minsize = kinode_getlegacyattributesize(attr);
  if (!minsize) return KE_NOSYS;
  if (reqsize) *reqsize = minsize;
  if (bufsize < minsize) return KE_OK;
  attrib.ia_common.a_id = attr;
- error = kinode_getattr(self,1,&attrib);
- if (KE_ISOK(error)) memcpy(buf,(&attrib.ia_common.a_id)+1,minsize);
+ error = kinode_kernel_getattr(self,1,&attrib);
+ if (  __likely(KE_ISOK(error)) &&
+     __unlikely(copy_to_user(buf,(&attrib.ia_common.a_id)+1,minsize))
+     ) error = KE_FAULT;
  return error;
 }
-kerrno_t __kinode_setattr_legacy(struct kinode *self, kattr_t attr,
-                                 void const *__restrict buf, size_t bufsize) {
+kerrno_t
+__kinode_user_setattr_legacy(struct kinode *self, kattr_t attr,
+                             __user void const *__restrict buf, size_t bufsize) {
  union kinodeattr attrib; size_t minsize;
  kassert_kinode(self);
- kassertmem(buf,bufsize);
  if (attr == KATTR_FS_ATTRS) {
   size_t n_elem = bufsize/sizeof(union kinodeattr);
-  return kinode_setattr(self,n_elem,(union kinodeattr const *)buf);
+  return kinode_kernel_setattr(self,n_elem,(union kinodeattr const *)buf);
  }
  minsize = kinode_getlegacyattributesize(attr);
  if (!minsize) return KE_NOSYS;
  if (bufsize < minsize) return KE_BUFSIZ;
  attrib.ia_common.a_id = attr;
- memcpy((&attrib.ia_common.a_id)+1,buf,minsize);
- return kinode_setattr(self,1,&attrib);
+ if __unlikely(copy_from_user((&attrib.ia_common.a_id)+1,buf,minsize)) return KE_FAULT;
+ return kinode_kernel_setattr(self,1,&attrib);
 }
-kerrno_t kinode_getattr_legacy(struct kinode const *self, kattr_t attr,
-                               void *__restrict buf, size_t bufsize,
-                               size_t *__restrict reqsize) {
+kerrno_t
+kinode_user_getattr_legacy(struct kinode const *self, kattr_t attr,
+                           __user void *__restrict buf, size_t bufsize,
+                           __kernel size_t *__restrict reqsize) {
  kerrno_t error;
  kassert_kinode(self);
- kassertmem(buf,bufsize);
  kassertobjnull(reqsize);
  if (kinode_issuperblock(self)) {
   struct ksuperblocktype *tp = (struct ksuperblocktype *)self->i_type;
   error = tp->st_getattr
-   ? (*tp->st_getattr)(__kinode_superblock(self),attr,buf,bufsize,reqsize)
-   : ksuperblock_generic_getattr(__kinode_superblock(self),attr,buf,bufsize,reqsize);
+   ? (*tp->st_getattr)               (__kinode_superblock(self),attr,buf,bufsize,reqsize)
+   : ksuperblock_user_generic_getattr(__kinode_superblock(self),attr,buf,bufsize,reqsize);
   if (error != KE_NOSYS) return error;
  }
- return __kinode_getattr_legacy(self,attr,buf,bufsize,reqsize);
+ return __kinode_user_getattr_legacy(self,attr,buf,bufsize,reqsize);
 }
-kerrno_t kinode_setattr_legacy(struct kinode *self, kattr_t attr,
-                               void const *__restrict buf, size_t bufsize) {
+kerrno_t
+kinode_user_setattr_legacy(struct kinode *self, kattr_t attr,
+                           __user void const *__restrict buf, size_t bufsize) {
  kerrno_t error;
  kassert_kinode(self);
- kassertmem(buf,bufsize);
  if (kinode_issuperblock(self)) {
   struct ksuperblocktype *tp = (struct ksuperblocktype *)self->i_type;
   error = tp->st_setattr
-   ? (*tp->st_setattr)(__kinode_superblock(self),attr,buf,bufsize)
-   : ksuperblock_generic_setattr(__kinode_superblock(self),attr,buf,bufsize);
+   ? (*tp->st_setattr)               (__kinode_superblock(self),attr,buf,bufsize)
+   : ksuperblock_user_generic_setattr(__kinode_superblock(self),attr,buf,bufsize);
    if (error != KE_NOSYS) return error;
  }
- return __kinode_setattr_legacy(self,attr,buf,bufsize);
+ return __kinode_user_setattr_legacy(self,attr,buf,bufsize);
 }
 
 kerrno_t kinode_walk(struct kinode *self,
@@ -283,7 +290,10 @@ kerrno_t kinode_walk(struct kinode *self,
  return error;
 }
 
-kerrno_t kinode_unlink(struct kinode *self, struct kdirentname const *name, struct kinode *__restrict node) {
+kerrno_t
+kinode_unlink(struct kinode *self,
+              struct kdirentname const *name,
+              struct kinode *__restrict node) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
  kerrno_t error; kassert_kinode(self); kassert_kinode(node); kassertobj(name);
  if __unlikely((callback = self->i_type->it_unlink) == NULL)
@@ -299,7 +309,10 @@ kerrno_t kinode_unlink(struct kinode *self, struct kdirentname const *name, stru
  } else error = KE_OK; // Special file (not handled by the file system)
  return error;
 }
-kerrno_t kinode_rmdir(struct kinode *self, struct kdirentname const *name, struct kinode *__restrict node) {
+kerrno_t
+kinode_rmdir(struct kinode *self,
+             struct kdirentname const *name,
+             struct kinode *__restrict node) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
  kerrno_t error; kassert_kinode(self); kassert_kinode(node); kassertobj(name);
  if __unlikely((callback = self->i_type->it_rmdir) == NULL)
@@ -313,7 +326,10 @@ kerrno_t kinode_rmdir(struct kinode *self, struct kdirentname const *name, struc
  kcloselock_endop(&self->i_closelock);
  return error;
 }
-kerrno_t kinode_remove(struct kinode *self, struct kdirentname const *name, struct kinode *__restrict node) {
+kerrno_t
+kinode_remove(struct kinode *self,
+              struct kdirentname const *name,
+              struct kinode *__restrict node) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
  kerrno_t error; kassert_kinode(self); kassert_kinode(node); kassertobj(name);
  if (S_ISDIR(node->i_kind)) callback = self->i_type->it_rmdir;
@@ -329,8 +345,11 @@ kerrno_t kinode_remove(struct kinode *self, struct kdirentname const *name, stru
  kcloselock_endop(&self->i_closelock);
  return error;
 }
-kerrno_t kinode_mkdir(struct kinode *self, struct kdirentname const *name,
-                      size_t ac, union kinodeattr const *av, __ref struct kinode **resnode) {
+kerrno_t
+kinode_mkdir(struct kinode *self,
+             struct kdirentname const *name,
+             size_t ac, __user union kinodeattr const *av,
+             __ref struct kinode **resnode) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,struct kinode **);
  kerrno_t error;
  kassert_kinode(self);
@@ -344,14 +363,16 @@ kerrno_t kinode_mkdir(struct kinode *self, struct kdirentname const *name,
  if __unlikely(error == KE_NOSYS && !S_ISDIR(self->i_kind)) error = KE_NODIR;
  return error;
 }
-kerrno_t kinode_mkreg(struct kinode *self, struct kdirentname const *name,
-                      size_t ac, union kinodeattr const *av, __ref struct kinode **resnode) {
+kerrno_t
+kinode_mkreg(struct kinode *self,
+             struct kdirentname const *name,
+             size_t ac, __user union kinodeattr const *av,
+             __ref struct kinode **resnode) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,struct kinode **);
  kerrno_t error;
  kassert_kinode(self);
  kassertobj(name);
  kassertobj(resnode);
- kassertmem(av,ac*sizeof(union kinodeattr));
  if __unlikely((callback = self->i_type->it_mkreg) == NULL)
   return S_ISDIR(self->i_kind) ? KE_NOSYS : KE_NODIR;
  if __unlikely(KE_ISERR(error = kcloselock_beginop(&self->i_closelock))) return error;
@@ -360,9 +381,12 @@ kerrno_t kinode_mkreg(struct kinode *self, struct kdirentname const *name,
  if __unlikely(error == KE_NOSYS && !S_ISDIR(self->i_kind)) error = KE_NODIR;
  return error;
 }
-kerrno_t kinode_mklnk(struct kinode *self, struct kdirentname const *name,
-                      size_t ac, union kinodeattr const *av, 
-                      struct kdirentname const *target, __ref struct kinode **resnode) {
+kerrno_t
+kinode_mklnk(struct kinode *self,
+             struct kdirentname const *name,
+             size_t ac, __user union kinodeattr const *av, 
+             struct kdirentname const *target,
+             __ref struct kinode **resnode) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,size_t,
                      union kinodeattr const *,struct kdirentname const *,
                      __ref struct kinode **);
@@ -379,7 +403,10 @@ kerrno_t kinode_mklnk(struct kinode *self, struct kdirentname const *name,
  if __unlikely(error == KE_NOSYS && !S_ISDIR(self->i_kind)) error = KE_NODIR;
  return error;
 }
-kerrno_t kinode_insnod(struct kinode *self, struct kdirentname const *name, struct kinode *node) {
+kerrno_t
+kinode_insnod(struct kinode *self,
+              struct kdirentname const *name,
+              struct kinode *node) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
  kerrno_t error;
  kassert_kinode(self);
@@ -392,7 +419,10 @@ kerrno_t kinode_insnod(struct kinode *self, struct kdirentname const *name, stru
  if __unlikely(error == KE_NOSYS && !S_ISDIR(self->i_kind)) error = KE_NODIR;
  return error;
 }
-void kinode_delnod(struct kinode *self, struct kdirentname const *name, struct kinode *node) {
+void
+kinode_delnod(struct kinode *self,
+              struct kdirentname const *name,
+              struct kinode *node) {
  void(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
  kassert_kinode(self);
  kassertobj(name);
@@ -401,7 +431,9 @@ void kinode_delnod(struct kinode *self, struct kdirentname const *name, struct k
  (*callback)(self,name,node);
  kcloselock_endop(&self->i_closelock);
 }
-kerrno_t kinode_readlink(struct kinode *self, struct kdirentname *target) {
+kerrno_t
+kinode_readlink(struct kinode *self,
+                struct kdirentname *target) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname *);
  kerrno_t error; kassert_kinode(self); kassertobj(target);
  callback = self->i_type->it_readlink;
@@ -412,9 +444,10 @@ kerrno_t kinode_readlink(struct kinode *self, struct kdirentname *target) {
  if __unlikely(error == KE_NOLNK && !S_ISLNK(self->i_kind)) error = KE_INVAL;
  return error;
 }
-kerrno_t kinode_mkhardlink(struct kinode *self,
-                           struct kdirentname const *name,
-                           struct kinode *target) {
+kerrno_t
+kinode_mkhardlink(struct kinode *self,
+                  struct kdirentname const *name,
+                  struct kinode *target) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,struct kinode *);
  kerrno_t error; kassert_kinode(self); kassertobj(name);
  kassertobj(self->i_type); kassert_kinode(target);
@@ -967,7 +1000,6 @@ kdirent_mkregat(struct kfspathenv const *env, char const *path,
  struct kdirent *objparent;
  KTASK_CRIT_MARK
  kassertobj(env);
- kassertmem(av,ac*sizeof(union kinodeattr));
  kassert_kdirent(env->env_cwd);
  kassert_kdirent(env->env_root);
  assert(__evalexpr(strnlen(path,pathmax)) || 1);

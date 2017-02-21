@@ -54,6 +54,7 @@ __DECL_BEGIN
 struct ktask;
 struct kproc;
 struct kshlib;
+struct kdirentname;
 #endif /* !__ASSEMBLY__ */
 
 #define KOBJECT_MAGIC_PROC  0x960C // PROC

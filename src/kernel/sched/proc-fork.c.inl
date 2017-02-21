@@ -412,7 +412,6 @@ cont:;
  }
 end:
  kproc_unlocks(self,KPROC_LOCK_SHM|KPROC_LOCK_MODS);
- printf("HERE: %d %d\n",__LINE__,error);
  return error;
 }
 

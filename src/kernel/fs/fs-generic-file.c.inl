@@ -33,10 +33,11 @@ __DECL_BEGIN
 // --- KFILE
 #ifdef GETATTR
 kerrno_t kfile_generic_getattr(struct kfile const *__restrict self, kattr_t attr,
-                               void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize)
+                               __user void *__restrict buf, size_t bufsize,
+                               __kernel size_t *__restrict reqsize)
 #else
 kerrno_t kfile_generic_setattr(struct kfile *__restrict self, kattr_t attr,
-                               void const *__restrict buf, __size_t bufsize)
+                               __user void const *__restrict buf, size_t bufsize)
 #endif
 {
  kerrno_t error;
@@ -57,25 +58,25 @@ kerrno_t kfile_generic_setattr(struct kfile *__restrict self, kattr_t attr,
 #ifdef GETATTR
    if (attr == KATTR_FS_FILENAME) {
 getfilename:
-    return __kfile_kernel_getfilename_fromdirent(self,(char *)buf,bufsize,reqsize);
+    return __kfile_user_getfilename_fromdirent(self,(char *)buf,bufsize,reqsize);
    }
    if (attr == KATTR_FS_PATHNAME) {
     kerrno_t error; struct kdirent *rootdirent;
     rootdirent = kproc_getfddirent(kproc_self(),KFD_ROOT);
     if __unlikely(!rootdirent) {
      // Return at least ~some~ information...
-     return __kfile_kernel_getfilename_fromdirent(self,(char *)buf,bufsize,reqsize);
+     return __kfile_user_getfilename_fromdirent(self,(char *)buf,bufsize,reqsize);
     }
-    error = __kfile_kernel_getpathname_fromdirent(self,rootdirent,(char *)buf,bufsize,reqsize);
+    error = __kfile_user_getpathname_fromdirent(self,rootdirent,(char *)buf,bufsize,reqsize);
     kdirent_decref(rootdirent);
     return error;
    }
 #endif
    if __unlikely((filenode = kfile_getinode((struct kfile *)self)) == NULL) return KE_NOSYS;
 #ifdef GETATTR
-   error = kinode_getattr_legacy(filenode,attr,buf,bufsize,reqsize);
+   error = kinode_user_getattr_legacy(filenode,attr,buf,bufsize,reqsize);
 #else
-   error = kinode_setattr_legacy(filenode,attr,buf,bufsize);
+   error = kinode_user_setattr_legacy(filenode,attr,buf,bufsize);
 #endif
    kinode_decref(filenode);
    return error;

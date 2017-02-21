@@ -285,15 +285,17 @@ end:
  return error;
 }
 
-static kerrno_t kdirfile_ioctl(struct kdirfile *self, kattr_t cmd, __user void *arg) {
+static kerrno_t kdirfile_ioctl(struct kdirfile *self,
+                               kattr_t cmd, __user void *arg) {
  return kfile_generic_ioctl(&self->df_file,cmd,arg);
 }
 static kerrno_t kdirfile_getattr(struct kdirfile const *self, kattr_t attr,
-                                 void *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
+                                 __user void *__restrict buf, size_t bufsize,
+                                 __kernel size_t *__restrict reqsize) {
  return kfile_generic_getattr(&self->df_file,attr,buf,bufsize,reqsize);
 }
 static kerrno_t kdirfile_setattr(struct kdirfile *self, kattr_t attr,
-                                 void const *__restrict buf, size_t bufsize) {
+                                 __user void const *__restrict buf, size_t bufsize) {
  return kfile_generic_setattr(&self->df_file,attr,buf,bufsize);
 }
 

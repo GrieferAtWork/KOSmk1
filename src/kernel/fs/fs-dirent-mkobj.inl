@@ -31,19 +31,19 @@
 
 #ifdef MKLNK
 kerrno_t kdirent_mklnk(struct kdirent *self, struct kdirentname const *name,
-                       size_t ac, union kinodeattr const *av,
+                       size_t ac, __kernel union kinodeattr const *av,
                        struct kdirentname const *target,
                        __ref /*opt*/struct kdirent **resent,
                        __ref /*opt*/struct kinode **resnode)
 #elif defined(MKDIR)
 kerrno_t kdirent_mkdir(struct kdirent *self,
                        struct kdirentname const *name,
-                       size_t ac, union kinodeattr const *av, 
+                       size_t ac, __kernel union kinodeattr const *av, 
                        __ref /*opt*/struct kdirent **resent,
                        __ref /*opt*/struct kinode **resnode)
 #elif defined(MKREG)
 kerrno_t kdirent_mkreg(struct kdirent *self, struct kdirentname const *name,
-                       __size_t ac, union kinodeattr const *av,
+                       __size_t ac, __kernel union kinodeattr const *av,
                        __ref /*opt*/struct kdirent **resent,
                        __ref /*opt*/struct kinode **resnode)
 #endif
@@ -55,9 +55,6 @@ kerrno_t kdirent_mkreg(struct kdirent *self, struct kdirentname const *name,
  kassertobj(name);
  kassertobjnull(resent);
  kassertobjnull(resnode);
-#ifdef MKREG
- kassertmem(av,ac*sizeof(union kinodeattr));
-#endif
  if __unlikely((node = kdirent_getnode(self)) == NULL) return KE_DESTROYED;
 #ifdef MKLNK
  error = kinode_mklnk(node,name,ac,av,target,&used_resnode);

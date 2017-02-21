@@ -307,7 +307,7 @@ SYSCALL(sys_kfd_readdir) {
   if (flags&KFD_READDIR_FLAG_INO)   (*iter++).ia_common.a_id = KATTR_FS_INO;
   if (flags&KFD_READDIR_FLAG_PERM)  (*iter++).ia_common.a_id = KATTR_FS_PERM;
   if (iter != attr) {
-   error = kinode_getattr(inode,(size_t)(iter-attr),attr);
+   error = kinode_kernel_getattr(inode,(size_t)(iter-attr),attr);
    if __likely(KE_ISOK(error)) {
     iter = attr;
     if (flags&KFD_READDIR_FLAG_INO) dent->kd_ino = (*iter++).ia_ino.i_ino;

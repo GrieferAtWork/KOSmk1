@@ -36,6 +36,7 @@
 #include <sys/types.h>
 #include <kos/fd.h>
 #include <kos/kernel/linker.h>
+#include <kos/kernel/util/string.h>
 
 __DECL_BEGIN
 
@@ -105,7 +106,7 @@ kvinodepid_new_inherited(struct kvprocdirent const *__restrict decl,
 void kvinodepid_generic_quit(struct kinode *self) { kproc_decref(PROC); }
 kerrno_t
 kvinodepid_generic_getattr(struct kinode const *self,
-                                 size_t ac, union kinodeattr *av) {
+                           size_t ac, __user union kinodeattr *av) {
  kerrno_t error;
  for (; ac; ++av,--ac) switch (av->ia_common.a_id) {
 #if KCONFIG_HAVE_TASK_STATS_START
@@ -130,7 +131,7 @@ kvinodepid_generic_getattr(struct kinode const *self,
   case KATTR_FS_OWNER: av->ia_owner.o_owner = kproc_getuid(PROC); break;
   case KATTR_FS_GROUP: av->ia_group.g_group = kproc_getgid(PROC); break;
   default:default_attrib:
-   error = kinode_generic_getattr(self,1,av);
+   error = kinode_user_generic_getattr(self,1,av);
    if __unlikely(KE_ISERR(error)) return error;
    break;
  }
@@ -309,18 +310,18 @@ vfsfile_proc_kcore_read(struct kfile *__restrict self,
                         void *__restrict buf, size_t bufsize,
                         size_t *__restrict rsize) {
  size_t copysize = min(bufsize,MAXRW);
- memcpy(buf,SELF->c_pos,copysize);
+ if __unlikely(copy_to_user(buf,SELF->c_pos,copysize)) return KE_FAULT;
  *rsize = copysize;
  SELF->c_pos += copysize;
  return KE_OK;
 }
 static kerrno_t
 vfsfile_proc_kcore_write(struct kfile *__restrict self,
-                         void const *__restrict buf, size_t bufsize,
-                         size_t *__restrict wsize) {
+                         __user void const *buf, size_t bufsize,
+                         __kernel size_t *__restrict wsize) {
  size_t copysize = min(bufsize,MAXRW);
  /* We literally might not see the end of this... */
- memcpy(SELF->c_pos,buf,copysize);
+ if __unlikely(copy_from_user(SELF->c_pos,buf,copysize)) return KE_FAULT;
  *wsize = copysize;
  SELF->c_pos += copysize;
  return KE_OK;
@@ -331,7 +332,7 @@ vfsfile_proc_kcore_pread(struct kfile *__restrict self, pos_t pos,
                          size_t *__restrict rsize) {
  size_t copysize = (pos >= (pos_t)(uintptr_t)-1)
   ? 0 : min(bufsize,((uintptr_t)-1)-(uintptr_t)pos);
- memcpy(buf,(void *)(uintptr_t)pos,copysize);
+ if __unlikely(copy_to_user(buf,(void *)(uintptr_t)pos,copysize)) return KE_FAULT;
  *rsize = copysize;
  return KE_OK;
 }
@@ -342,7 +343,7 @@ vfsfile_proc_kcore_pwrite(struct kfile *__restrict self, pos_t pos,
  size_t copysize = (pos >= (pos_t)(uintptr_t)-1)
   ? 0 : min(bufsize,((uintptr_t)-1)-(uintptr_t)pos);
  /* We literally might not see the end of this... */
- memcpy((void *)(uintptr_t)pos,buf,copysize);
+ if __unlikely(copy_from_user((void *)(uintptr_t)pos,buf,copysize)) return KE_FAULT;
  *wsize = copysize;
  return KE_OK;
 }
@@ -376,28 +377,34 @@ struct kfiletype kvfiletype_proc_kcore = {
 };
 static kerrno_t
 vfsnode_proc_kcore_getattr(struct kinode const *self,
-                           size_t ac, union kinodeattr *av) {
+                           size_t ac, __user union kinodeattr *av) {
  kerrno_t error;
- for (; ac; ++av,--ac) switch (av->ia_common.a_id) {
-  {
-   int has_write_access;
-   int has_read_access;
-  case KATTR_FS_PERM:
-   /* Check for read/write access to the kernel. */
-   has_read_access    = ktask_accessgm(ktask_zero());
-   has_write_access   = ktask_accesssm(ktask_zero());
-   av->ia_perm.p_perm = (S_IRUSR|S_IWUSR|S_IRGRP|
-                        (has_write_access ? S_IWOTH : 0)|
-                        (has_read_access  ? S_IROTH : 0));
-  } break;
-  case KATTR_FS_SIZE:
-   /* This should be obvious... (SIZE_MAX) */
-   av->ia_size.sz_size = (pos_t)(uintptr_t)-1;
-   break;
-  default:
-   error = kinode_generic_getattr(self,1,av);
-   if __unlikely(KE_ISERR(error)) return error;
-   break;
+ union kinodeattr attr;
+next_attr:
+ for (; ac; ++av,--ac) {
+  if __unlikely(copy_from_user(&attr,av,sizeof(union kinodeattr))) return KE_FAULT;
+  switch (attr.ia_common.a_id) {
+   {
+    int has_write_access;
+    int has_read_access;
+   case KATTR_FS_PERM:
+    /* Check for read/write access to the kernel. */
+    has_read_access  = ktask_accessgm(ktask_zero());
+    has_write_access = ktask_accesssm(ktask_zero());
+    attr.ia_perm.p_perm = (S_IRUSR|S_IWUSR|S_IRGRP|
+                          (has_write_access ? S_IWOTH : 0)|
+                          (has_read_access ? S_IROTH : 0));
+   } break;
+   case KATTR_FS_SIZE:
+    /* This should be obvious... (SIZE_MAX) */
+    attr.ia_size.sz_size = (pos_t)(uintptr_t)-1;
+    break;
+   default:
+    error = kinode_user_generic_getattr(self,1,av);
+    if __unlikely(KE_ISERR(error)) return error;
+    goto next_attr;
+  }
+  if __unlikely(copy_to_user(av,&attr,sizeof(union kinodeattr))) return KE_FAULT;
  }
  return KE_OK;
 }

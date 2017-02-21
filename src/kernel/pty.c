@@ -35,6 +35,7 @@
 #include <kos/syslog.h>
 #include <sys/stat.h>
 #include <kos/arch.h>
+#include <stdio.h>
 #ifdef __x86__
 #include <kos/arch/x86/vga.h>
 #endif
@@ -48,9 +49,9 @@ __DECL_BEGIN
 #endif
 
 
-void kpty_init(struct kpty *self,
-               struct termios const *ios,
-               struct winsize const *size) {
+void kpty_init(struct kpty *__restrict self,
+               struct termios const *__restrict ios,
+               struct winsize const *__restrict size) {
  kassertobj(self);
  kobject_init(self,KOBJECT_MAGIC_PTY);
  self->ty_num = (kptynum_t)-1;
@@ -125,7 +126,9 @@ __local __crit kerrno_t kpty_dumpcanon_c(struct kpty *self) {
  return error;
 }
 
-kerrno_t kpty_ioctl(struct kpty *self, kattr_t cmd, __user void *arg) {
+kerrno_t
+kpty_user_ioctl(struct kpty *__restrict self,
+                kattr_t cmd, __user void *arg) {
  kerrno_t error;
  kassert_kpty(self);
  KTASK_CRIT_BEGIN
@@ -224,15 +227,8 @@ kpty_s2m_write_unlocked(struct kpty *__restrict self,
  kassert_kpty(self);
  assert(krwlock_isreadlocked(&self->ty_lock));
  if (!(self->ty_ios.c_oflag&ONLCR)) {
-#if 1
   return kiobuf_write(&self->ty_s2m,buf,bufsize,
                       wsize,PTY_WRITE_BLOCKING_MODE);
-#else
-  error = kiobuf_write(&self->ty_s2m,buf,bufsize,
-                       wsize,PTY_WRITE_BLOCKING_MODE);
-  printf("s2m:write() : %d : %Iu/%Iu\n",error,*wsize,bufsize);
-  return error;
-#endif
  }
  *wsize = 0;
  // Must convert '\n' to '\r\n'
@@ -434,36 +430,33 @@ kpty_mwrite(struct kpty *__restrict self, void const *buf,
 }
 
 
-kerrno_t kpty_sread(struct kpty *__restrict self, void *buf,
-                    size_t bufsize, size_t *__restrict rsize) {
+kerrno_t kpty_user_sread(struct kpty *__restrict self, __user void *buf,
+                         size_t bufsize, size_t *__restrict rsize) {
  kerrno_t error; kioflag_t iomode; cc_t min_read;
  kassert_kpty(self);
  KTASK_CRIT_BEGIN
- if __unlikely(KE_ISERR(error = krwlock_beginread(&self->ty_lock))) goto end_crit;
- // In canonical mode, block until the first byte has been read
- if (self->ty_ios.c_lflag&ICANON) iomode = KIO_BLOCKFIRST;
- else if ((min_read = self->ty_ios.c_cc[VMIN]) == 0) {
-  // Non-blocking read, when data is available
-  iomode = KIO_BLOCKNONE;
- } else {
-  size_t part;
-  // Blocking read, until at least 'min_read' characters have been read
+ if __likely(KE_ISOK(error = krwlock_beginread(&self->ty_lock))) {
+  // In canonical mode, block until the first byte has been read
+  if (self->ty_ios.c_lflag&ICANON) iomode = KIO_BLOCKFIRST;
+  else if ((min_read = self->ty_ios.c_cc[VMIN]) == 0) {
+   // Non-blocking read, when data is available
+   iomode = KIO_BLOCKNONE;
+  } else {
+   size_t part;
+   // Blocking read, until at least 'min_read' characters have been read
+   krwlock_endread(&self->ty_lock);
+   *rsize = 0; do {
+    error = kiobuf_user_read(&self->ty_m2s,buf,bufsize,&part,KIO_BLOCKFIRST);
+    // Shouldn't happen, but might due to race conditions... (I/O interrupt)
+    if __unlikely(!part) break;
+    *rsize += part;
+   } while (*rsize < min_read);
+   goto end;
+  }
   krwlock_endread(&self->ty_lock);
-  KTASK_CRIT_BREAK
-  *rsize = 0; do {
-   error = kiobuf_read(&self->ty_m2s,buf,bufsize,&part,KIO_BLOCKFIRST);
-   // Shouldn't happen, but might due to race conditions... (I/O interrupt)
-   if __unlikely(!part) break;
-   *rsize += part;
-  } while (*rsize < min_read);
-  return error;
+  error = kiobuf_user_read(&self->ty_m2s,buf,bufsize,rsize,iomode);
  }
- krwlock_endread(&self->ty_lock);
- {
-  KTASK_CRIT_BREAK
-  return kiobuf_read(&self->ty_m2s,buf,bufsize,rsize,iomode);
- }
-end_crit:
+end:
  KTASK_CRIT_END
  return error;
 }
@@ -481,43 +474,59 @@ kerrno_t kpty_swrite(struct kpty *__restrict self, void const *buf,
 }
 
 
-kerrno_t kfspty_mgetattr(struct kfspty const *self, __size_t ac, union kinodeattr *av) {
+kerrno_t
+kfspty_mgetattr(struct kfspty const *self,
+                size_t ac, __user union kinodeattr *av) {
  kerrno_t error;
- for (; ac; --ac,++av) switch (av->ia_common.a_id) {
-  case KATTR_FS_PERM:
-   av->ia_perm.p_perm = S_IRUSR|S_IWUSR|S_IRGRP;
-   break;
-  {
-   size_t maxsize;
-  case KATTR_FS_SIZE:
-   error = kiobuf_getrsize(&self->fp_pty.ty_s2m,&maxsize);
-   if __unlikely(KE_ISERR(error)) return error;
-   av->ia_size.sz_size = maxsize;
-  } break;
-  default:
-   error = kinode_generic_getattr((struct kinode *)self,1,av);
-   if __unlikely(KE_ISERR(error)) return error;
-   break;
+ union kinodeattr attr;
+next_attr:
+ for (; ac; --ac,++av) {
+  if __unlikely(copy_from_user(&attr,av,sizeof(union kinodeattr))) return KE_FAULT;
+  switch (attr.ia_common.a_id) {
+   case KATTR_FS_PERM:
+    attr.ia_perm.p_perm = S_IRUSR|S_IWUSR|S_IRGRP;
+    break;
+   {
+    size_t maxsize;
+   case KATTR_FS_SIZE:
+    error = kiobuf_getrsize(&self->fp_pty.ty_s2m,&maxsize);
+    if __unlikely(KE_ISERR(error)) return error;
+    attr.ia_size.sz_size = maxsize;
+   } break;
+   default:
+    error = kinode_user_generic_getattr((struct kinode *)self,1,av);
+    if __unlikely(KE_ISERR(error)) return error;
+    goto next_attr;
+  }
+  if __unlikely(copy_to_user(av,&attr,sizeof(union kinodeattr))) return KE_FAULT;
  }
  return KE_OK;
 }
-kerrno_t kfspty_sgetattr(struct kfspty const *self, __size_t ac, union kinodeattr *av) {
+kerrno_t
+kfspty_sgetattr(struct kfspty const *self, size_t ac,
+                __user union kinodeattr *av) {
  kerrno_t error;
- for (; ac; --ac,++av) switch (av->ia_common.a_id) {
-  case KATTR_FS_PERM:
-   av->ia_perm.p_perm = S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP;
-   break;
-  {
-   size_t maxsize;
-  case KATTR_FS_SIZE:
-   error = kiobuf_getrsize(&self->fp_pty.ty_m2s,&maxsize);
-   if __unlikely(KE_ISERR(error)) return error;
-   av->ia_size.sz_size = maxsize;
-  } break;
-  default:
-   error = kinode_generic_getattr((struct kinode *)self,1,av);
-   if __unlikely(KE_ISERR(error)) return error;
-   break;
+ union kinodeattr attr;
+next_attr:
+ for (; ac; --ac,++av) {
+  if __unlikely(copy_from_user(&attr,av,sizeof(union kinodeattr))) return KE_FAULT;
+  switch (attr.ia_common.a_id) {
+   case KATTR_FS_PERM:
+    attr.ia_perm.p_perm = S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP;
+    break;
+   {
+    size_t maxsize;
+   case KATTR_FS_SIZE:
+    error = kiobuf_getrsize(&self->fp_pty.ty_m2s,&maxsize);
+    if __unlikely(KE_ISERR(error)) return error;
+    attr.ia_size.sz_size = maxsize;
+   } break;
+   default:
+    error = kinode_user_generic_getattr((struct kinode *)self,1,av);
+    if __unlikely(KE_ISERR(error)) return error;
+    goto next_attr;
+  }
+  if __unlikely(copy_to_user(av,&attr,sizeof(union kinodeattr))) return KE_FAULT;
  }
  return KE_OK;
 }
@@ -716,29 +725,35 @@ static __ref struct kdirent *kptyfile_getdirent(struct kfile *__restrict self) {
 
 
 static kerrno_t
-kptyfile_master_read(struct kfile *__restrict self, void *__restrict buf,
-                     size_t bufsize, size_t *__restrict rsize) {
- return kpty_mread(&SELF->pf_pty->fp_pty,buf,bufsize,rsize);
+kptyfile_master_read(struct kfile *__restrict self,
+                     __user void *__restrict buf, size_t bufsize,
+                     __kernel size_t *__restrict rsize) {
+ return kpty_user_mread(&SELF->pf_pty->fp_pty,buf,bufsize,rsize);
 }
 static kerrno_t
-kptyfile_master_write(struct kfile *__restrict self, void const *__restrict buf,
-                      size_t bufsize, size_t *__restrict wsize) {
+kptyfile_master_write(struct kfile *__restrict self,
+                      __user void const *__restrict buf, size_t bufsize,
+                      __kernel size_t *__restrict wsize) {
+ /* TODO: 'kpty_user_mwrite'. */
  return kpty_mwrite(&SELF->pf_pty->fp_pty,buf,bufsize,wsize);
 }
 static kerrno_t
-kptyfile_slave_read(struct kfile *__restrict self, void *__restrict buf,
-                    size_t bufsize, size_t *__restrict rsize) {
- return kpty_sread(&SELF->pf_pty->fp_pty,buf,bufsize,rsize);
+kptyfile_slave_read(struct kfile *__restrict self,
+                    __user void *__restrict buf, size_t bufsize,
+                    __kernel size_t *__restrict rsize) {
+ return kpty_user_sread(&SELF->pf_pty->fp_pty,buf,bufsize,rsize);
 }
 static kerrno_t
-kptyfile_slave_write(struct kfile *__restrict self, void const *__restrict buf,
-                     size_t bufsize, size_t *__restrict wsize) {
+kptyfile_slave_write(struct kfile *__restrict self,
+                     __user void const *__restrict buf, size_t bufsize,
+                     __kernel size_t *__restrict wsize) {
+ /* TODO: 'kpty_user_swrite'. */
  return kpty_swrite(&SELF->pf_pty->fp_pty,buf,bufsize,wsize);
 }
 static kerrno_t
-kptyfile_ioctl(struct kfile *__restrict self, kattr_t cmd,
-               __user void *arg) {
- return kpty_ioctl(&SELF->pf_pty->fp_pty,cmd,arg);
+kptyfile_ioctl(struct kfile *__restrict self,
+               kattr_t cmd, __user void *arg) {
+ return kpty_user_ioctl(&SELF->pf_pty->fp_pty,cmd,arg);
 }
 #undef SELF
 

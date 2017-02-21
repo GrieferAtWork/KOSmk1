@@ -32,29 +32,31 @@ __DECL_BEGIN
 //////////////////////////////////////////////////////////////////////////
 // --- KSUPERBLOCK
 #ifdef GETATTR
-kerrno_t ksuperblock_generic_getattr(struct ksuperblock const *self, kattr_t attr,
-                                     void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize)
+kerrno_t
+ksuperblock_user_generic_getattr(struct ksuperblock const *self, kattr_t attr,
+                                 __user void *__restrict buf, size_t bufsize,
+                                 __kernel size_t *__restrict reqsize)
 #else
-kerrno_t ksuperblock_generic_setattr(struct ksuperblock *self, kattr_t attr,
-                                     void const *__restrict buf, __size_t bufsize)
+kerrno_t
+ksuperblock_user_generic_setattr(struct ksuperblock *self, kattr_t attr,
+                                 __user void const *__restrict buf, __size_t bufsize)
 #endif
 {
  kerrno_t error;
  kassert_ksuperblock(self);
- kassertmem(buf,bufsize);
 #ifdef GETATTR
  kassertobjnull(reqsize);
 #endif
  switch (KATTR_GETTOKEN(attr)) {
   {
    struct ksdev *mydev;
-   // Forward dev attributes to an associated device
+   /* Forward dev attributes to an associated device. */
   case KATTR_TOKEN_DEV:
    if ((mydev = ksuperblock_getdev(self)) != NULL) {
 #ifdef GETATTR
-    error = kdev_getattr((struct kdev *)mydev,attr,buf,bufsize,reqsize);
+    error = kdev_user_getattr((struct kdev *)mydev,attr,buf,bufsize,reqsize);
 #else
-    error = kdev_setattr((struct kdev *)mydev,attr,buf,bufsize);
+    error = kdev_user_setattr((struct kdev *)mydev,attr,buf,bufsize);
 #endif
     ksdev_decref(mydev);
     return error;
@@ -64,11 +66,11 @@ kerrno_t ksuperblock_generic_setattr(struct ksuperblock *self, kattr_t attr,
 
   default: break;
  }
- // Fallback: Use the legacy INode attribute interface
+ /* Fallback: Use the legacy INode attribute interface. */
 #ifdef GETATTR
- return __kinode_getattr_legacy(ksuperblock_root(self),attr,buf,bufsize,reqsize);
+ return __kinode_user_getattr_legacy(ksuperblock_root(self),attr,buf,bufsize,reqsize);
 #else
- return __kinode_setattr_legacy(ksuperblock_root(self),attr,buf,bufsize);
+ return __kinode_user_setattr_legacy(ksuperblock_root(self),attr,buf,bufsize);
 #endif
 }
 

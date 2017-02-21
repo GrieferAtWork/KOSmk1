@@ -67,11 +67,11 @@ struct kpty {
 
 
 
-extern void kpty_init(struct kpty *self,
-                      struct termios const *ios,
-                      struct winsize const *size);
-extern __crit void kpty_quit(struct kpty *self);
-extern kerrno_t kpty_ioctl(struct kpty *self, kattr_t cmd, __user void *arg);
+extern void kpty_init(struct kpty *__restrict self,
+                      struct termios const *__restrict ios,
+                      struct winsize const *__restrict size);
+extern __crit void kpty_quit(struct kpty *__restrict self);
+extern kerrno_t kpty_user_ioctl(struct kpty *__restrict self, kattr_t cmd, __user void *arg);
 
 // Write data to the master (Usually keyboard input)
 extern kerrno_t kpty_mwrite_unlocked(struct kpty *__restrict self, void const *buf, __size_t bufsize, __size_t *__restrict wsize);
@@ -80,12 +80,15 @@ extern kerrno_t kpty_mwrite(struct kpty *__restrict self, void const *buf, __siz
 // Read data from perspective of the master (aka. output of slave)
 #define kpty_mread(self,buf,bufsize,rsize) \
  kiobuf_read(&(self)->ty_s2m,buf,bufsize,rsize,KIO_BLOCKFIRST)
+#define kpty_user_mread(self,buf,bufsize,rsize) \
+ kiobuf_user_read(&(self)->ty_s2m,buf,bufsize,rsize,KIO_BLOCKFIRST)
 
 // Write data to the slave (Usually text that meant as output to the terminal; usually allowed to contain control characters)
 extern kerrno_t kpty_swrite(struct kpty *__restrict self, void const *buf, __size_t bufsize, __size_t *__restrict wsize);
 
 // Read data from perspective of the slave (usually processed & filtered keyboard input)
-extern kerrno_t kpty_sread(struct kpty *__restrict self, void *buf, __size_t bufsize, __size_t *__restrict rsize);
+extern kerrno_t kpty_user_sread(struct kpty *__restrict self, __user void *buf,
+                                __size_t bufsize, __kernel __size_t *__restrict rsize);
 
 
 struct kfspty {
@@ -94,8 +97,8 @@ struct kfspty {
  struct kpty   fp_pty;  /*< Associated PTY. */
 };
 
-extern kerrno_t kfspty_mgetattr(struct kfspty const *self, __size_t ac, union kinodeattr *av);
-extern kerrno_t kfspty_sgetattr(struct kfspty const *self, __size_t ac, union kinodeattr *av);
+extern kerrno_t kfspty_mgetattr(struct kfspty const *__restrict self, __size_t ac, __user union kinodeattr *av);
+extern kerrno_t kfspty_sgetattr(struct kfspty const *__restrict self, __size_t ac, __user union kinodeattr *av);
 
 
 //////////////////////////////////////////////////////////////////////////

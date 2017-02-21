@@ -129,14 +129,14 @@ struct kvproxyfile {
 };
 
 extern void     kvproxyfile_quit(struct kfile *__restrict self);
-extern kerrno_t kvproxyfile_read(struct kfile *__restrict self, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
-extern kerrno_t kvproxyfile_write(struct kfile *__restrict self, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
+extern kerrno_t kvproxyfile_read(struct kfile *__restrict self, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern kerrno_t kvproxyfile_write(struct kfile *__restrict self, __user void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
 extern kerrno_t kvproxyfile_ioctl(struct kfile *__restrict self, kattr_t cmd, __user void *arg);
-extern kerrno_t kvproxyfile_getattr(struct kfile const *__restrict self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize); /* NOTE: 'reqsize' may be NULL. */
+extern kerrno_t kvproxyfile_getattr(struct kfile const *__restrict self, kattr_t attr, void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize); /* NOTE: 'reqsize' may be NULL. */
 extern kerrno_t kvproxyfile_setattr(struct kfile *__restrict self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
-extern kerrno_t kvproxyfile_pread(struct kfile *__restrict self, __pos_t pos, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
-extern kerrno_t kvproxyfile_pwrite(struct kfile *__restrict self, __pos_t pos, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
-extern kerrno_t kvproxyfile_seek(struct kfile *__restrict self, __off_t off, int whence, __pos_t *__restrict newpos); /* NOTE: 'newpos' may be NULL. */
+extern kerrno_t kvproxyfile_pread(struct kfile *__restrict self, __pos_t pos, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern kerrno_t kvproxyfile_pwrite(struct kfile *__restrict self, __pos_t pos, __user void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern kerrno_t kvproxyfile_seek(struct kfile *__restrict self, __off_t off, int whence, __kernel __pos_t *__restrict newpos); /* NOTE: 'newpos' may be NULL. */
 extern kerrno_t kvproxyfile_trunc(struct kfile *__restrict self, __pos_t size); /*< Set the current end-of-file marker to 'size' */
 extern kerrno_t kvproxyfile_flush(struct kfile *__restrict self);
 extern kerrno_t kvproxyfile_readdir(struct kfile *__restrict self, __ref struct kinode **__restrict inode, struct kdirentname **__restrict name, __u32 flags); /*< Returns KS_EMPTY when the end is reached. */

@@ -29,6 +29,7 @@
 #include <malloc.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <kos/kernel/util/string.h>
 
 __DECL_BEGIN
 
@@ -53,27 +54,31 @@ static kerrno_t pipe_getattr(struct kinode const *self, __size_t ac, union kinod
    break;
   }
   default:
-   error = kinode_generic_getattr(self,1,av);
+   error = kinode_user_generic_getattr(self,1,av);
    if __unlikely(KE_ISERR(error)) return error;
    break;
  }
  return KE_OK;
 }
-static kerrno_t pipe_setattr(struct kinode *self, __size_t ac, union kinodeattr const *av) {
+static kerrno_t
+pipe_setattr(struct kinode *self, __size_t ac,
+             union kinodeattr const *av) {
  kerrno_t error;
- for (; ac; --ac,++av) switch (av->ia_common.a_id) {
-  {
-   size_t new_max_size;
-  case KATTR_FS_MAXSIZE:
-   new_max_size = FIX_MAXSIZE(av->ia_size.sz_size);
-   error = kiobuf_setmaxsize(&SELF->p_iobuf,new_max_size,NULL);
-   if __unlikely(KE_ISERR(error)) return error;
-   break;
+ size_t new_max_size;
+ union kinodeattr attr;
+ for (; ac; --ac,++av) {
+  if __unlikely(copy_from_user(&attr,av,sizeof(attr))) return KE_FAULT;
+  switch (attr.ia_common.a_id) {
+   case KATTR_FS_MAXSIZE:
+    new_max_size = FIX_MAXSIZE(attr.ia_size.sz_size);
+    error = kiobuf_setmaxsize(&SELF->p_iobuf,new_max_size,NULL);
+    if __unlikely(KE_ISERR(error)) return error;
+    break;
+   default:
+    error = kinode_user_generic_setattr(self,1,av);
+    if __unlikely(KE_ISERR(error)) return error;
+    break;
   }
-  default:
-   error = kinode_generic_setattr(self,1,av);
-   if __unlikely(KE_ISERR(error)) return error;
-   break;
  }
  return KE_OK;
 }
@@ -126,23 +131,23 @@ kpipefile_quit(struct kpipefile *__restrict self) {
 }
 static kerrno_t
 kpipefile_read(struct kpipefile *__restrict self,
-               void *__restrict buf, size_t bufsize,
-               size_t *__restrict rsize) {
+               __user void *buf, size_t bufsize,
+               __kernel size_t *__restrict rsize) {
  /* TODO: Blocking behavior can be configured through fcntl. */
- return kiobuf_read(&self->pr_pipe->p_iobuf,buf,bufsize,rsize,
-                    KIO_BLOCKFIRST|KIO_NONE);
+ return kiobuf_user_read(&self->pr_pipe->p_iobuf,buf,bufsize,rsize,
+                         KIO_BLOCKFIRST|KIO_NONE);
 }
 static kerrno_t
 kpipefile_write(struct kpipefile *__restrict self,
-                void const *__restrict buf, size_t bufsize,
-                size_t *__restrict wsize) {
+                __user void const *buf, size_t bufsize,
+                __kernel size_t *__restrict wsize) {
  /* TODO: Blocking behavior can be configured through fcntl. */
- return kiobuf_write(&self->pr_pipe->p_iobuf,buf,bufsize,wsize,
-                     KIO_BLOCKFIRST|KIO_NONE);
+ return kiobuf_user_write(&self->pr_pipe->p_iobuf,buf,bufsize,wsize,
+                          KIO_BLOCKFIRST|KIO_NONE);
 }
 static kerrno_t
 kpipefile_seek(struct kpipefile *__restrict self, off_t off,
-               int whence, pos_t *__restrict newpos) {
+               int whence, __kernel pos_t *__restrict newpos) {
  kerrno_t error; size_t did_skip;
  if __unlikely(whence != SEEK_CUR || off < 0) return KE_NOSYS;
  error = kiobuf_skip(&self->pr_pipe->p_iobuf,(size_t)off,&did_skip,
@@ -173,6 +178,7 @@ struct kfiletype kpipewriter_type = {
  .ft_size  = sizeof(struct kpipefile),
  .ft_quit  = (void(*)(struct kfile *__restrict))&kpipefile_quit,
  .ft_write = (kerrno_t(*)(struct kfile *__restrict,void const *__restrict,size_t,size_t *__restrict))&kpipefile_write,
+ /* TODO: ft_seek with a SEEK_CUR & negative offset: Take back written data if it hasn't been read yet. */
  .ft_flush = (kerrno_t(*)(struct kfile *__restrict))&kpipefile_flush,
 };
 

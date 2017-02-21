@@ -22,7 +22,8 @@
  */
 #ifdef __INTELLISENSE__
 #include "iobuf.c"
-#define SKIP_MEMORY
+//#define SKIP_MEMORY
+#define USER_MEMORY
 __DECL_BEGIN
 #endif
 
@@ -38,6 +39,11 @@ __DECL_BEGIN
 __crit kerrno_t
 kiobuf_skip_c(struct kiobuf *__restrict self,
               size_t bufsize, size_t *__restrict rsize, kioflag_t mode)
+#elif defined(USER_MEMORY)
+__crit kerrno_t
+__kiobuf_user_read_c(struct kiobuf *__restrict self, __user void *buf,
+                     size_t bufsize, __kernel size_t *__restrict rsize,
+                     kioflag_t mode)
 #else
 __crit kerrno_t
 kiobuf_read_c(struct kiobuf *__restrict self, void *__restrict buf,
@@ -53,11 +59,20 @@ kiobuf_read_c(struct kiobuf *__restrict self, void *__restrict buf,
  kassert_kiobuf(self);
  kassertobj(rsize);
 #ifndef SKIP_MEMORY
+#ifndef USER_MEMORY
  kassertmem(buf,bufsize);
+#endif
 #endif
 again_full:
 #ifndef SKIP_MEMORY
+#ifdef USER_MEMORY
+#define MEMCPY(dst,src,bytes) if __unlikely(copy_to_user(dst,src,bytes)) goto err_fault
+#else
+#define MEMCPY(dst,src,bytes) memcpy(dst,src,bytes)
+#endif
  destbuf = (byte_t *)buf;
+#else
+#define MEMCPY(dst,src,bytes) /* nothing */
 #endif
  destsize = bufsize;
  *rsize = 0;
@@ -114,9 +129,7 @@ handle_intr:
  // Read upper-half memory
  max_read_linear = min(max_read,(size_t)(bufend-rpos));
  max_read_linear = min(max_read_linear,destsize);
-#ifndef SKIP_MEMORY
- memcpy(destbuf,rpos,max_read_linear);
-#endif
+ MEMCPY(destbuf,rpos,max_read_linear);
  rpos += max_read_linear;
  *rsize += max_read_linear;
  if (destsize == max_read_linear ||
@@ -137,9 +150,7 @@ handle_intr:
 #endif
  // Read lower-half memory
  max_read_linear = min((size_t)(self->ib_wpos-rpos),destsize);
-#ifndef SKIP_MEMORY
- memcpy(destbuf,rpos,max_read_linear);
-#endif
+ MEMCPY(destbuf,rpos,max_read_linear);
  rpos += max_read_linear;
  *rsize += max_read_linear;
  if (destsize == max_read_linear) goto end_rpos;
@@ -225,12 +236,22 @@ wake_writers:
   }
  }
  error = KE_OK;
+#ifdef USER_MEMORY
+end_read:
+#endif
  krwlock_endread(&self->ib_rwlock);
 end_always:
  return error;
+#ifdef USER_MEMORY
+err_fault: error = KE_FAULT; goto end_read;
+#endif
 }
 
 #undef DEBUG_TRACE
+#undef MEMCPY
+#ifdef USER_MEMORY
+#undef USER_MEMORY
+#endif
 #ifdef SKIP_MEMORY
 #undef SKIP_MEMORY
 #endif

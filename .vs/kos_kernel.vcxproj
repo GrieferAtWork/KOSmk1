@@ -156,6 +156,7 @@
     <None Include="..\src\kernel\gdt.S" />
     <None Include="..\src\kernel\interrupts.S" />
     <None Include="..\src\kernel\iobuf-readimpl.c.inl" />
+    <None Include="..\src\kernel\iobuf-writeimpl.c.inl" />
     <None Include="..\src\kernel\linker-cache.c.inl" />
     <None Include="..\src\kernel\linker-recent.c.inl" />
     <None Include="..\src\kernel\linker-relocate.c.inl" />

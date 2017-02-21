@@ -33,6 +33,7 @@
 #include <kos/kernel/fs/fs.h>
 #include <kos/kernel/proc.h>
 #include <kos/kernel/time.h>
+#include <kos/kernel/util/string.h>
 
 __DECL_BEGIN
 
@@ -42,8 +43,7 @@ __DECL_BEGIN
 // --- KFILE
 kerrno_t
 kfile_generic_ioctl(struct kfile *__restrict self,
-                    kattr_t cmd,
-                    __user void *arg) {
+                    kattr_t cmd, __user void *arg) {
  (void)self,(void)cmd,(void)arg;
  kassert_kfile(self);
  return KE_NOSYS;

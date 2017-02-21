@@ -28,14 +28,12 @@
 #include <kos/compiler.h>
 #include <kos/errno.h>
 #include <kos/kernel/features.h>
-#include <kos/kernel/features.h>
 #include <kos/kernel/gdt.h>
 #include <kos/kernel/mutex.h>
 #include <kos/kernel/object.h>
 #include <kos/kernel/paging.h>
 #include <kos/types.h>
 #include <math.h>
-#include <stdio.h>
 #include <strings.h>
 
 // Shared memory layout

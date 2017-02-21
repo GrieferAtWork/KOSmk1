@@ -32,37 +32,44 @@ __DECL_BEGIN
 //////////////////////////////////////////////////////////////////////////
 // --- KINODE
 #ifdef GETATTR
-kerrno_t kinode_generic_getattr(struct kinode const *self, __size_t ac, union kinodeattr *av)
+kerrno_t
+kinode_user_generic_getattr(struct kinode const *self, size_t ac,
+                            __user union kinodeattr *av)
 #else
-kerrno_t kinode_generic_setattr(struct kinode *self, __size_t ac, union kinodeattr const *av)
+kerrno_t
+kinode_user_generic_setattr(struct kinode *self, size_t ac,
+                            __user union kinodeattr const *av)
 #endif
 {
 #ifdef GETATTR
- union kinodeattr *iter,*end;
+ __user union kinodeattr *iter,*end;
+        union kinodeattr attr;
 #endif
  kassert_kinode(self);
  kassertmem(av,ac*sizeof(union kinodeattr));
 #ifdef GETATTR
  end = (iter = av)+ac;
  while (iter != end) {
-  switch (iter->ia_common.a_id) {
+  if __unlikely(copy_from_user(&attr,iter,sizeof(attr))) return KE_FAULT;
+  switch (attr.ia_common.a_id) {
    case KATTR_FS_ATIME:
    case KATTR_FS_CTIME:
    case KATTR_FS_MTIME:
     /* boot time? */
-    memcpy(&iter->ia_time.tm_time,
+    memcpy(&attr.ia_time.tm_time,
            &KERNEL_BOOT_TIME,
            sizeof(struct timespec));
     break;
-   case KATTR_FS_PERM:  iter->ia_perm.p_perm = 0777; break;
-   case KATTR_FS_OWNER: iter->ia_owner.o_owner = 0; break;
-   case KATTR_FS_GROUP: iter->ia_group.g_group = 0; break;
-   case KATTR_FS_SIZE:  iter->ia_size.sz_size = 4096; break; /*< Eh... */
-   case KATTR_FS_INO:   iter->ia_ino.i_ino = (__ino_t)self; break;
-   case KATTR_FS_NLINK: iter->ia_nlink.n_lnk = 1; break;
-   case KATTR_FS_KIND:  iter->ia_kind.k_kind = self->i_kind; break;
+   case KATTR_FS_PERM:  attr.ia_perm.p_perm = 0777; break;
+   case KATTR_FS_OWNER: attr.ia_owner.o_owner = 0; break;
+   case KATTR_FS_GROUP: attr.ia_group.g_group = 0; break;
+   case KATTR_FS_SIZE:  attr.ia_size.sz_size = 4096; break; /*< Eh... */
+   case KATTR_FS_INO:   attr.ia_ino.i_ino = (__ino_t)self; break;
+   case KATTR_FS_NLINK: attr.ia_nlink.n_lnk = 1; break;
+   case KATTR_FS_KIND:  attr.ia_kind.k_kind = self->i_kind; break;
    default: return KE_NOSYS;
   }
+  if __unlikely(copy_to_user(iter,&attr,sizeof(attr))) return KE_FAULT;
   ++iter;
  }
  return KE_OK;
