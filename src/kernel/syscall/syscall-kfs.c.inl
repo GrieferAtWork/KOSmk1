@@ -54,8 +54,8 @@ SYSCALL(sys_kfs_mkdir) {
  env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
  if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
  env.env_flags = 0;
- env.env_uid   = kproc_uid(ctx);
- env.env_gid   = kproc_gid(ctx);
+ env.env_uid   = kproc_getuid(ctx);
+ env.env_gid   = kproc_getgid(ctx);
  kfspathenv_initcommon(&env);
  attr[0].ia_perm.a_id   = KATTR_FS_PERM;
  attr[0].ia_perm.p_perm = mode;
@@ -81,8 +81,8 @@ SYSCALL(sys_kfs_rmdir) {
  env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
  if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
  env.env_flags = 0;
- env.env_uid   = kproc_uid(ctx);
- env.env_gid   = kproc_gid(ctx);
+ env.env_uid   = kproc_getuid(ctx);
+ env.env_gid   = kproc_getgid(ctx);
  kfspathenv_initcommon(&env);
  error = kdirent_rmdirat(&env,path,pathmax);
  kdirent_decref(env.env_root);
@@ -106,8 +106,8 @@ SYSCALL(sys_kfs_unlink) {
  env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
  if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
  env.env_flags = 0;
- env.env_uid   = kproc_uid(ctx);
- env.env_gid   = kproc_gid(ctx);
+ env.env_uid   = kproc_getuid(ctx);
+ env.env_gid   = kproc_getgid(ctx);
  kfspathenv_initcommon(&env);
  error = kdirent_unlinkat(&env,path,pathmax);
  kdirent_decref(env.env_root);
@@ -131,8 +131,8 @@ SYSCALL(sys_kfs_remove) {
  env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
  if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
  env.env_flags = 0;
- env.env_uid   = kproc_uid(ctx);
- env.env_gid   = kproc_gid(ctx);
+ env.env_uid   = kproc_getuid(ctx);
+ env.env_gid   = kproc_getgid(ctx);
  kfspathenv_initcommon(&env);
  error = kdirent_removeat(&env,path,pathmax);
  kdirent_decref(env.env_root);
@@ -159,8 +159,8 @@ SYSCALL(sys_kfs_symlink) {
  env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
  if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
  env.env_flags = 0;
- env.env_uid   = kproc_uid(ctx);
- env.env_gid   = kproc_gid(ctx);
+ env.env_uid   = kproc_getuid(ctx);
+ env.env_gid   = kproc_getgid(ctx);
  kfspathenv_initcommon(&env);
  targetname.dn_name = (char *)target;
  targetname.dn_size = strnlen(target,targetmax);

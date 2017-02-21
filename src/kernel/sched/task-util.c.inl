@@ -452,7 +452,7 @@ void ktask_setupuser(struct ktask *self, __user void *useresp, __user void *eip)
  struct ktaskregisters3 regs;
  kassert_ktask(self);
  assert(ktask_isusertask(self));
- /* The 'self->t_proc->p_shm.sm_ldt.ldt_vector' vector (aka. the LDT vector)
+ /* The 'self->t_proc->p_shm.s_ldt.ldt_vector' vector (aka. the LDT vector)
   * must be mapped in the page directory active when in ring-#3
   *       
   * My god! Why do I have to figure this stuff out myself?

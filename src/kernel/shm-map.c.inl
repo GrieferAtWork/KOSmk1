@@ -20,16 +20,15 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_KERNEL_SHM2_MAP_C_INL__
-#define __KOS_KERNEL_SHM2_MAP_C_INL__ 1
+#ifndef __KOS_KERNEL_SHM_MAP_C_INL__
+#define __KOS_KERNEL_SHM_MAP_C_INL__ 1
 
 #include <malloc.h>
 #include <kos/config.h>
 #include <kos/kernel/features.h>
 #include <kos/kernel/interrupts.h>
-#include <kos/kernel/shm2.h>
+#include <kos/kernel/shm.h>
 
-#if KCONFIG_HAVE_SHM2
 __DECL_BEGIN
 
 void
@@ -231,6 +230,5 @@ found_it:
 }
 
 __DECL_END
-#endif /* KCONFIG_HAVE_SHM2 */
 
-#endif /* !__KOS_KERNEL_SHM2_MAP_C_INL__ */
+#endif /* !__KOS_KERNEL_SHM_MAP_C_INL__ */

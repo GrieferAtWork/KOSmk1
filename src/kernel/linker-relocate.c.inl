@@ -99,10 +99,10 @@ __dlsym(struct kproc *__restrict proc,
  // >>   // libc is already loaded, meaning that an existing
  // >>   // definition of 'errno' must be preferred over
  // >>   // a definition that would otherwise be loaded
- // >>   // as a result of the insertion of 'libproc.so'
+ // >>   // as a result of the insertion of 'libcurses.so'
  // >>   // WARNING: 'errno' isn't really the name of an exported symbol,
  // >>   //          but my point should be clear none-the-less.
- // >>   void *d = dlopen("libproc.so",RTLD_NOW);
+ // >>   void *d = dlopen("libcurses.so",RTLD_NOW);
  // >>   int *peno = (int *)dlsym(d,"errno");
  // >>   assert(peno == &errno); // This would otherwise fail
  // >> }
@@ -142,15 +142,16 @@ kreloc_elf32_rel_exec(Elf32_Rel const *relv, size_t relc,
   kassertobjnull(sym);
 #define GETMEM(T,addr) \
  __xblock({ T __inst; \
-            if (kshm_memcpy_u2k(&proc->p_shm,&__inst,addr,sizeof(T)) != sizeof(T)) {\
-             LOG(KLOG_ERROR,"[CMD %Iu] failed: memcpy(k:%p,u:%p,%Iu)\n",iter-relv,&__inst,addr,sizeof(T));\
+            if (kshm_copyfromuser(memspace,&__inst,addr,sizeof(T))) {\
+             LOG(KLOG_ERROR,"[CMD %Iu] failed: memcpy(k:%p,u:%p,%Iu)\n",\
+                 iter-relv,&__inst,addr,sizeof(T));\
              __inst = 0;\
             }\
             __xreturn __inst;\
  })
 #define SETMEM(dst,src,s) \
  do{\
-  if (kshm_memcpy_k2u(&proc->p_shm,dst,src,s) != (s)) {\
+  if (kshm_copytouser_w(memspace,dst,src,s)) {\
    LOG(KLOG_ERROR,"[CMD %Iu] failed: memcpy(u:%p,k:%p,%Iu)\n",iter-relv,dst,src,s);\
   }\
  }while(0)
@@ -197,8 +198,8 @@ kreloc_elf32_rel_exec(Elf32_Rel const *relv, size_t relc,
     //        ADDR(iter->r_offset),new_address,symval);
     //}
     if (sym &&
-        kshm_memcpy_u2u(&proc->p_shm,ADDR(iter->r_offset),
-                       (void *)new_address,sym->s_size) != sym->s_size) {
+        kshm_copyinuser_w(memspace,ADDR(iter->r_offset),
+                         (void *)new_address,sym->s_size)) {
      LOG(KLOG_ERROR,"[CMD %Iu] failed: memcpy(u:%p,u:%p,%Iu)\n",
          iter-relv,ADDR(iter->r_offset),(void *)new_address,sym->s_size);
     }

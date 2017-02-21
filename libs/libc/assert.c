@@ -128,7 +128,7 @@ void __assertion_failedf(__LIBC_DEBUG_PARAMS_ char const *expr,
  {
   struct ktask *task = ktask_self();
   struct kproc *proc = task ? ktask_getproc(task) : NULL;
-  struct kpagedir *pd = proc ? proc->p_shm.sm_pd : NULL;
+  struct kpagedir *pd = proc ? kproc_getpagedir(proc) : NULL;
   if (pd) kpagedir_print(pd);
   else ASSERT_PRINTF("NO PAGE DIRECTORY (task: %p, proc: %p, pd: %p)\n",task,proc,pd);
  }
@@ -174,7 +174,7 @@ void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *fmt, ...) {
  {
   struct ktask *task = ktask_self();
   struct kproc *proc = task ? ktask_getproc(task) : NULL;
-  struct kpagedir *pd = proc ? proc->p_shm.sm_pd : NULL;
+  struct kpagedir *pd = proc ? kproc_getpagedir(proc) : NULL;
   if (pd) kpagedir_print(pd);
   else ASSERT_PRINTF("NO PAGE DIRECTORY (task: %p, proc: %p, pd: %p)\n",task,proc,pd);
  }

@@ -222,20 +222,20 @@ kerrno_t ksymtable_rehash(struct ksymtable *self,
 }
 
 
-__local kerrno_t kshmtab_loaddata(struct kshmtab *self, size_t filesz,
+__local kerrno_t kshmtab_loaddata(struct kshmregion *self, size_t filesz,
                                   uintptr_t offset, struct kfile *fp);
-__local kerrno_t kshmtab_ploaddata(struct kshmtab *self, uintptr_t offset, pos_t pos,
+__local kerrno_t kshmtab_ploaddata(struct kshmregion *self, uintptr_t offset, pos_t pos,
                                    size_t filesz, struct kfile *fp) {
  kerrno_t error;
  if __unlikely(KE_ISERR(error = kfile_seek(fp,pos,SEEK_SET,NULL))) return error;
  return kshmtab_loaddata(self,filesz,offset,fp);
 }
-__local kerrno_t kshmtab_loaddata(struct kshmtab *self, size_t filesz,
+__local kerrno_t kshmtab_loaddata(struct kshmregion *self, size_t filesz,
                                   uintptr_t offset, struct kfile *fp) {
  size_t maxbytes,copysize;
  __kernel void *addr; kerrno_t error;
  while (filesz) {
-  addr = kshmtab_translate_offset(self,offset,&maxbytes);
+  addr = kshmregion_getphysaddr_s(self,offset,&maxbytes);
   copysize = min(maxbytes,filesz);
   offset += copysize,filesz -= copysize;
   error = kfile_readall(fp,addr,copysize);
@@ -243,7 +243,7 @@ __local kerrno_t kshmtab_loaddata(struct kshmtab *self, size_t filesz,
   if __unlikely(!filesz) break;
  }
  /* Fill the rest with ZEROs */
- while ((addr = kshmtab_translate_offset(self,offset,&maxbytes)) != NULL) {
+ while ((addr = kshmregion_getphysaddr_s(self,offset,&maxbytes)) != NULL) {
   memset(addr,0x00,maxbytes);
   offset += maxbytes;
  }
@@ -292,7 +292,7 @@ set_section_count:
  self->ed_secv = seciter = sections;
  for (iter = pheaderv; iter != end; *(uintptr_t *)&iter += pheadersize) {
   if (iter->p_type == PT_LOAD && iter->p_memsz) {
-   struct kshmtab *section_tab; size_t memsize,filesize;
+   struct kshmregion *section_region; size_t memsize,filesize;
    Elf32_Phdr header_copy; Elf32_Phdr const *header;
    if __likely(pheadersize >= sizeof(Elf32_Phdr)) {
     header = iter;
@@ -312,48 +312,40 @@ set_section_count:
                        ,(header->p_flags&PF_W) ? 'W' : '-'
                        ,(header->p_flags&PF_X) ? 'X' : '-'
                        ,(uintptr_t)header->p_align);
-#if KCONFIG_HAVE_SHM2
-   section_tab = kshmregion_newram(ceildiv(memsize,PAGESIZE),
-                                   ((header->p_flags&PF_X) ? KSHMREGION_FLAG_EXEC : 0)|
-#if 1 /* For debugging only. */
-                                   KSHMREGION_FLAG_WRITE|
+   section_region = kshmregion_newram(ceildiv(memsize,PAGESIZE),
+#if PF_X == KSHMREGION_FLAG_EXEC && \
+    PF_W == KSHMREGION_FLAG_WRITE && \
+    PF_R == KSHMREGION_FLAG_READ
+                                  (header->p_flags&(PF_X|PF_W|PF_R))
 #else
-                                   ((header->p_flags&PF_W) ? KSHMREGION_FLAG_WRITE : 0)|
+                                  ((header->p_flags&PF_X) ? KSHMREGION_FLAG_EXEC : 0)|
+                                  ((header->p_flags&PF_W) ? KSHMREGION_FLAG_WRITE : 0)|
+                                  ((header->p_flags&PF_R) ? KSHMREGION_FLAG_READ : 0)
 #endif
-                                   ((header->p_flags&PF_R) ? KSHMREGION_FLAG_READ : 0));
-#else
-   section_tab = kshmtab_newram(ceildiv(memsize,PAGESIZE),
-                               ((header->p_flags&PF_X) ? PROT_EXEC  : 0)|
-#if 1 // TODO: Without this we get #PFs (Why?)
-                               PROT_WRITE|
-#else
-                               ((header->p_flags&PF_W) ? PROT_WRITE : KSHMTAB_FLAG_S)|
-#endif
-                               ((header->p_flags&PF_R) ? PROT_READ  : 0));
-#endif
-   if __unlikely(!section_tab) {
+                                  );
+   if __unlikely(!section_region) {
     error = KE_NOMEM;
 err_seciter:
     while (seciter != sections) {
      --seciter;
-     kshmtab_decref(seciter->sls_tab);
+     kshmregion_decref_full(seciter->sls_region);
      free(sections);
     }
     return error;
    }
-   seciter->sls_tab = section_tab;
-   seciter->sls_size = memsize;
-   seciter->sls_base = (ksymaddr_t)header->p_vaddr;
+   seciter->sls_region = section_region;
+   seciter->sls_size   = memsize;
+   seciter->sls_base   = (ksymaddr_t)header->p_vaddr;
    seciter->sls_albase = alignd(seciter->sls_base,PAGEALIGN);
    filesize = header->p_filesz;
    if __unlikely(filesize > memsize) filesize = memsize;
    seciter->sls_filebase = (ksymaddr_t)header->p_offset;
    seciter->sls_filesize = filesize;
-   error = kshmtab_ploaddata(section_tab,
+   error = kshmtab_ploaddata(section_region,
                              seciter->sls_base-seciter->sls_albase,
                              header->p_offset,filesize,elf_file);
    if __unlikely(KE_ISERR(error)) {
-    kshmtab_decref(section_tab);
+    kshmregion_decref_full(section_region);
     goto err_seciter;
    }
    ++seciter;
@@ -366,7 +358,7 @@ err_seciter:
 void ksecdata_quit(struct ksecdata *self) {
  struct kshlibsection *iter,*end;
  end = (iter = self->ed_secv)+self->ed_secc;
- for (; iter != end; ++iter) kshmtab_decref(iter->sls_tab);
+ for (; iter != end; ++iter) kshmregion_decref_full(iter->sls_region);
  free(self->ed_secv);
 }
 
@@ -381,10 +373,10 @@ ksecdata_translate_ro(struct ksecdata const *__restrict self,
   if (addr >= iter->sls_base
   &&  addr < iter->sls_base+iter->sls_size
 #if 0
-  && (iter->sls_tab->mt_flags&KSHMTAB_FLAG_R)
+  && (kshmregion_getflags(iter->sls_region)&KSHMREGION_FLAG_READ)
 #endif
       ) {
-   return kshmtab_translate_offset(iter->sls_tab,addr-iter->sls_albase,maxsize);
+   return kshmregion_getphysaddr_s(iter->sls_region,addr-iter->sls_albase,maxsize);
   }
  }
  return NULL;
@@ -397,8 +389,8 @@ ksecdata_translate_rw(struct ksecdata *__restrict self,
  for (; iter != end; ++iter) {
   if (addr >= iter->sls_base
   &&  addr < iter->sls_base+iter->sls_size
-  && (iter->sls_tab->mt_flags&KSHMTAB_FLAG_W)) {
-   return kshmtab_translate_offset(iter->sls_tab,addr-iter->sls_albase,maxsize);
+  && (kshmregion_getflags(iter->sls_region)&KSHMREGION_FLAG_WRITE)) {
+   return kshmregion_getphysaddr_s(iter->sls_region,addr-iter->sls_albase,maxsize);
   }
  }
  return NULL;

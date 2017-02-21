@@ -45,7 +45,7 @@ struct kproc __kproc_kernel = {
  /* p_refcnt  */0xffff,
  /* p_pid     */0,
  /* p_lock    */KMMUTEX_INIT,
- /* p_shm     */KSHM_INITROOT((struct kpagedir *)kpagedir_kernel(),KSEG_KERNELLDT),
+ /* p_shm     */KSHM_INIT((struct kpagedir *)kpagedir_kernel(),KSEG_KERNELLDT),
  /* p_regs    */KPROCREGS_INIT(KSEG_KERNEL_CODE,KSEG_KERNEL_DATA),
  /* p_modules */KPROCMODULES_INIT,
  /* p_fdman   */KFDMAN_INITROOT((struct kfile *)&__kproc_kernel_root),

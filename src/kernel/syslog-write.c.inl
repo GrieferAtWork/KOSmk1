@@ -90,8 +90,7 @@ void k_dosyslog(int level, void (*print_prefix)(int,void *),
  KTASK_CRIT_BEGIN
  if __likely(KE_ISOK(error = kproc_lock(caller,KPROC_LOCK_SHM))) {
   for (;;) {
-   partmaxsize = maxlen;
-   kernel_s = (char *)kshm_translate_u(&caller->p_shm,s,&partmaxsize,0);
+   kernel_s = (char *)kshm_translateuser(kproc_getshm(caller),s,maxlen,&partmaxsize,0);
    if __unlikely(!kernel_s) { error = KE_FAULT; break; /* FAULT */ }
    assert(partmaxsize <= maxlen);
 #define s      kernel_s

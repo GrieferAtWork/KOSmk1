@@ -820,6 +820,24 @@ extern char *strerror __P((int __eno));
 extern char *strerror_r __P((int __eno, char *__restrict __buf, __size_t __buflen));
 #endif
 
+#if defined(__GNUC__) || __has_builtin(__builtin_ffsl)
+#   define ffsl   __builtin_ffsl
+#elif defined(karch_ffsl)
+#   define ffsl   karch_ffsl
+#else
+extern __wunused __constcall int ffsl __P((long __i));
+#endif
+
+#ifndef __NO_longlong
+#if defined(__GNUC__) || __has_builtin(__builtin_ffsll)
+#   define ffsll   __builtin_ffsll
+#elif defined(karch_ffsll)
+#   define ffsll   karch_ffsll
+#else
+extern __wunused __constcall int ffsll __P((long long __i));
+#endif
+#endif /* !__NO_longlong */
+
 #ifdef _WIN32
 #undef memcpy_s
 #   define memcpy_s(dst,dstsize,src,bytes)    memcpy(dst,src,bytes)
@@ -935,6 +953,12 @@ __DECL_END
             __xreturn (char *)karch_memset(__dst,ch,karch_strnlen(__dst,maxlen));\
  })
 #endif /* karch_strnset */
+#ifdef karch_memrev
+#define _memrev  karch_memrev
+#ifndef __STDC_PURE__
+#define memrev   karch_memrev
+#endif /* !__STDC_PURE__ */
+#endif /* karch_memrev */
 #if defined(_strnset) && !defined(__STDC_PURE__)
 #undef strnset
 #define strnset  _strnset

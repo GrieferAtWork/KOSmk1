@@ -436,7 +436,7 @@ SYSCALL(sys_ktask_newthread) {
  struct kproc *callerctx = ktask_getproc(caller);
  KTASK_CRIT_BEGIN_FIRST
  if __unlikely(KE_ISERR(error = kproc_lock(callerctx,KPROC_LOCK_SHM))) goto end;
- if __unlikely(!kpagedir_ismappedp(kproc_pagedir(callerctx),
+ if __unlikely(!kpagedir_ismappedp(kproc_getpagedir(callerctx),
                                   *(void **)&thread_main)
                ) { error = KE_FAULT; goto err_pdlock; }
  if (flags&KTASK_NEW_FLAG_UNREACHABLE) {
@@ -550,7 +550,7 @@ SYSCALL(sys_ktask_newthreadi) {
  buf = TRANSLATE(buf); kassertmem(buf,bufsize);
  KTASK_CRIT_BEGIN_FIRST
  if __unlikely(KE_ISERR(error = kproc_lock(callerctx,KPROC_LOCK_SHM))) goto end;
- if __unlikely(!kpagedir_ismappedp(kproc_pagedir(callerctx),
+ if __unlikely(!kpagedir_ismappedp(kproc_getpagedir(callerctx),
                                   *(void **)&thread_main)
                ) { error = KE_FAULT; goto err_pdlock; }
  if (flags&KTASK_NEW_FLAG_UNREACHABLE) {

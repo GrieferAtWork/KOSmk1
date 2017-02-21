@@ -40,7 +40,7 @@ __DECL_BEGIN
 __STATIC_ASSERT(offsetof(struct kproc,p_shm)     == KPROC_OFFSETOF_SHM);
 __STATIC_ASSERT(offsetof(struct kproc,p_regs)    == KPROC_OFFSETOF_REGS);
 __STATIC_ASSERT(offsetof(struct kproc,p_modules) == KPROC_OFFSETOF_MODULES);
-__STATIC_ASSERT(offsetof(struct kproc,p_shm.sm_ldt.ldt_gdtid) ==
+__STATIC_ASSERT(offsetof(struct kproc,p_shm.s_ldt.ldt_gdtid) ==
                (KPROC_OFFSETOF_SHM+KSHM_OFFSETOF_LDT+KLDT_OFFSETOF_GDTID));
 
 
@@ -68,7 +68,7 @@ kerrno_t kproc_close(struct kproc *__restrict self) {
  kassert_object(self,KOBJECT_MAGIC_PROC);
  error = kmmutex_close(&self->p_lock);
  if __likely(error != KS_UNCHANGED) {
-  kfdman_quit(kproc_fdman(self));
+  kfdman_quit(&self->p_fdman);
   kprocsand_quit(&self->p_sand);
   ktlsman_quit(&self->p_tlsman);
   kprocmodules_quit(&self->p_modules);
@@ -85,10 +85,10 @@ __crit kerrno_t kprocsand_initroot(struct kprocsand *self) {
   refcnt = katomic_load(taskgroup->t_refcnt);
   if __unlikely(refcnt > ((__u32)-1)-KSANDBOX_BARRIER_COUNT) return KE_OVERFLOW;
  } while (!katomic_cmpxch(taskgroup->t_refcnt,refcnt,refcnt+KSANDBOX_BARRIER_COUNT));
- self->ts_gpbarrier = taskgroup; // Inherit reference
- self->ts_spbarrier = taskgroup; // Inherit reference
- self->ts_gmbarrier = taskgroup; // Inherit reference
- self->ts_smbarrier = taskgroup; // Inherit reference
+ self->ts_gpbarrier = taskgroup; /*< Inherit reference. */
+ self->ts_spbarrier = taskgroup; /*< Inherit reference. */
+ self->ts_gmbarrier = taskgroup; /*< Inherit reference. */
+ self->ts_smbarrier = taskgroup; /*< Inherit reference. */
  self->ts_priomin   = KTASKPRIO_MIN;
  self->ts_priomax   = KTASKPRIO_MAX;
  self->ts_namemax   = (size_t)-1;
@@ -102,9 +102,9 @@ static kerrno_t kproc_initregs(struct kproc *self) {
  static struct ksegment const defseg_cs = KSEGMENT_INIT(0,SEG_LIMIT_MAX,SEG_CODE_PL3);
  static struct ksegment const defseg_ds = KSEGMENT_INIT(0,SEG_LIMIT_MAX,SEG_DATA_PL3);
  /* TODO: Using this, we can restrict execute access within the process. */
- if __unlikely((self->p_regs.pr_cs = kshm_ldtalloc(&self->p_shm,&defseg_cs)) == KSEG_NULL) return KE_NOMEM;
- if __unlikely((self->p_regs.pr_ds = kshm_ldtalloc(&self->p_shm,&defseg_ds)) == KSEG_NULL) return KE_NOMEM;
- k_syslogf(KLOG_DEBUG,"Initialized LDT at GDT offset %#I16x\n",self->p_shm.sm_ldt.ldt_gdtid);
+ if __unlikely((self->p_regs.pr_cs = kshm_ldtalloc(kproc_getshm(self),&defseg_cs)) == KSEG_NULL) return KE_NOMEM;
+ if __unlikely((self->p_regs.pr_ds = kshm_ldtalloc(kproc_getshm(self),&defseg_ds)) == KSEG_NULL) return KE_NOMEM;
+ k_syslogf(KLOG_DEBUG,"Initialized LDT at GDT offset %#I16x\n",kproc_getshm(self)->s_ldt.ldt_gdtid);
  return KE_OK;
 }
 

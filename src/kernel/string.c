@@ -39,7 +39,7 @@ __copy_from_user_c(__kernel void *__restrict dst,
  struct kproc *proc = kproc_self();
  KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) return 0;
- result = kshm_copyfromuser(&proc->p_shm,dst,src,bytes);
+ result = kshm_copyfromuser(kproc_getshm(proc),dst,src,bytes);
  kproc_unlock(proc,KPROC_LOCK_SHM);
  return result;
 }
@@ -51,7 +51,7 @@ __copy_to_user_c(__user void *dst,
  struct kproc *caller = kproc_self();
  KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return 0;
- result = kshm_copytouser(&caller->p_shm,dst,src,bytes);
+ result = kshm_copytouser(kproc_getshm(caller),dst,src,bytes);
  kproc_unlock(caller,KPROC_LOCK_SHM);
  return result;
 }
@@ -63,7 +63,7 @@ __copy_in_user_c(__user void *dst,
  struct kproc *caller = kproc_self();
  KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return 0;
- result = kshm_copyinuser(&caller->p_shm,dst,src,bytes);
+ result = kshm_copyinuser(kproc_getshm(caller),dst,src,bytes);
  kproc_unlock(caller,KPROC_LOCK_SHM);
  return result;
 }
@@ -77,7 +77,7 @@ __user_memchr_c(__user void const *p, int needle, size_t bytes) {
  struct kproc *caller = kproc_self();
  KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return NULL;
- while ((kp = kshm_translateuser(&caller->p_shm,iter,bytes,&bytes_max,0)) != NULL) {
+ while ((kp = kshm_translateuser(kproc_getshm(caller),iter,bytes,&bytes_max,0)) != NULL) {
   assert(bytes_max <= bytes);
   if ((result = memchr(kp,needle,bytes_max)) != NULL) {
    /* Convert the kernel-pointer into a user-pointer. */
@@ -125,7 +125,7 @@ __crit size_t __user_strlen_c(__user char const *s) {
  KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return 0;
  for (;;) {
-  addr = (char *)kshm_translate_1(&caller->p_shm,s,&partmaxsize,0);
+  addr = (char *)kshm_translateuser(kproc_getshm(caller),s,PAGESIZE,&partmaxsize,0);
   if __unlikely(!addr) break; /* FAULT */
   partmaxsize /= sizeof(char);
   partsize = strnlen(addr,partmaxsize);
@@ -142,7 +142,7 @@ __crit size_t __user_strnlen_c(__user char const *s, size_t maxchars) {
  KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return 0;
  for (;;) {
-  addr = (char *)kshm_translate_1(&caller->p_shm,s,&partmaxsize,0);
+  addr = (char *)kshm_translateuser(kproc_getshm(caller),s,maxchars,&partmaxsize,0);
   if __unlikely(!addr) break; /* FAULT */
   partmaxsize /= sizeof(char);
   partsize = strnlen(addr,min(maxchars,partmaxsize))*sizeof(char);

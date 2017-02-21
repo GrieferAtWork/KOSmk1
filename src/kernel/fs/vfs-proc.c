@@ -127,8 +127,8 @@ kvinodepid_generic_getattr(struct kinode const *self,
    ktask_decref(root_task);
   } break;
 #endif /* KCONFIG_HAVE_TASK_STATS_START */
-  case KATTR_FS_OWNER: av->ia_owner.o_owner = kproc_uid(PROC); break;
-  case KATTR_FS_GROUP: av->ia_group.g_group = kproc_gid(PROC); break;
+  case KATTR_FS_OWNER: av->ia_owner.o_owner = kproc_getuid(PROC); break;
+  case KATTR_FS_GROUP: av->ia_group.g_group = kproc_getgid(PROC); break;
   default:default_attrib:
    error = kinode_generic_getattr(self,1,av);
    if __unlikely(KE_ISERR(error)) return error;

@@ -620,8 +620,8 @@ kfspty_insnod(struct kfspty *self,
  if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_num; }
  env.env_cwd = env.env_root;
  env.env_flags = 0;
- env.env_uid   = kproc_uid(caller);
- env.env_gid   = kproc_gid(caller);
+ env.env_uid   = kproc_getuid(caller);
+ env.env_gid   = kproc_getgid(caller);
  kfspathenv_initcommon(&env);
  /* Generate the file names for the master and slave directory entries. */
  master_name_size = (size_t)sprintf(master_name,"/dev/tty%I32u",resnum);

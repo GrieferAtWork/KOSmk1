@@ -20,64 +20,51 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_KERNEL_SHM2_LDT_C_INL__
-#define __KOS_KERNEL_SHM2_LDT_C_INL__ 1
+#ifndef __KOS_KERNEL_SHM_LDT_C_INL__
+#define __KOS_KERNEL_SHM_LDT_C_INL__ 1
 
 #include <assert.h>
 #include <malloc.h>
 #include <kos/config.h>
-#include <kos/kernel/features.h>
 #include <kos/kernel/debug.h>
 #include <kos/kernel/gdt.h>
-#include <kos/kernel/shm2.h>
+#include <kos/kernel/shm.h>
 #include <kos/syslog.h>
 #include <math.h>
 
-#if KCONFIG_HAVE_SHM2
 __DECL_BEGIN
 
-#define KSHM_LDT_BUFSIZE    (8)
-#define KSHM_LDT_PAGEFLAGS  (PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE)
-/* Read access: Obvious: The user must be able to read it.
- * Write access: Necessary because of 'accessed' bit... */
-
-
-
 #define SELF          (self)
-#define SEGAT(offset) ((struct ksegment *)((uintptr_t)SELF->s_ldt.ldt_vector+(offset)))
-#define VEC_BEGIN     (SELF->s_ldt.ldt_vector)
-#define VEC_SIZE      (SELF->s_ldt.ldt_limit)
-#define VEC_END       ((struct ksegment *)((uintptr_t)SELF->s_ldt.ldt_vector+VEC_SIZE))
+#define SEGAT(offset) ((struct ksegment *)((uintptr_t)SELF->sm_ldt.ldt_vector+(offset)))
+#define VEC_BEGIN     (SELF->sm_ldt.ldt_vector)
+#define VEC_SIZE      (SELF->sm_ldt.ldt_limit)
+#define VEC_END       ((struct ksegment *)((uintptr_t)SELF->sm_ldt.ldt_vector+VEC_SIZE))
 #define BUFSIZE       (KSHM_LDT_BUFSIZE*sizeof(struct ksegment))
 
-static kerrno_t
-kshm_alloc_and_map_ldt_vector(struct kshm *__restrict self,
-                              __u16 limit) {
+static kerrno_t kshm_alloc_and_map_ldt_vector(struct kshm *self, __u16 limit) {
  kassert_kshm(self);
  assert(!(limit%sizeof(struct ksegment)));
  /* Initialize the LDT table with the given hint. */
- self->s_ldt.ldt_limit = limit;
- self->s_ldt.ldt_vector = (__kernel struct ksegment *)valloc(limit);
- if __unlikely(!self->s_ldt.ldt_vector) return KE_NOMEM;
- memset(self->s_ldt.ldt_vector,0,limit);
- assertf(isaligned((uintptr_t)self->s_ldt.ldt_vector,PAGEALIGN),"%p",self->s_ldt.ldt_vector);
+ self->sm_ldt.ldt_limit = limit;
+ self->sm_ldt.ldt_vector = (__kernel struct ksegment *)valloc(limit);
+ if __unlikely(!self->sm_ldt.ldt_vector) return KE_NOMEM;
+ memset(self->sm_ldt.ldt_vector,0,limit);
+ assertf(isaligned((uintptr_t)self->sm_ldt.ldt_vector,PAGEALIGN),"%p",self->sm_ldt.ldt_vector);
  /* Map the LDT in the kernel-internal area of memory. */
- self->s_ldt.ldt_base = (__user struct ksegment *)
-  kpagedir_mapanyex(self->s_pd,self->s_ldt.ldt_vector,ceildiv(limit,PAGESIZE),
+ self->sm_ldt.ldt_base = (__user struct ksegment *)
+  kpagedir_mapanyex(self->sm_pd,self->sm_ldt.ldt_vector,ceildiv(limit,PAGESIZE),
                     KPAGEDIR_MAPANY_HINT_KINTERN,KSHM_LDT_PAGEFLAGS);
- if __unlikely(!self->s_ldt.ldt_base) goto err_ldtvec;
+ if __unlikely(!self->sm_ldt.ldt_base) goto err_ldtvec;
  /* Re-align the mapped table base to fit match the physical address. */
  k_syslogf(KLOG_DEBUG,"[SHM] Mapped LDT vector at %p (limit %I16x; %Iu pages)\n",
-           self->s_ldt.ldt_base,limit,(size_t)ceildiv(limit,PAGESIZE));
+           self->sm_ldt.ldt_base,limit,(size_t)ceildiv(limit,PAGESIZE));
  return KE_OK;
 err_ldtvec:
- free(self->s_ldt.ldt_vector);
+ free(self->sm_ldt.ldt_vector);
  return KE_NOMEM;
 }
 
-static kerrno_t
-kshm_initldt(struct kshm *__restrict self,
-             __u16 size_hint) {
+static kerrno_t kshm_initldt(struct kshm *self, __u16 size_hint) {
  struct ksegment ldt_segment;
  kassert_kshm(self);
  /* Initialize the LDT table with the given hint. */
@@ -86,62 +73,58 @@ kshm_initldt(struct kshm *__restrict self,
                ))) return KE_NOMEM;
  /* Encode the LDT segment. */
  ksegment_encode(&ldt_segment,
-                (uintptr_t)self->s_ldt.ldt_base,
-                (uintptr_t)self->s_ldt.ldt_limit,
+                (uintptr_t)self->sm_ldt.ldt_base,
+                (uintptr_t)self->sm_ldt.ldt_limit,
                  SEG_LDT);
  /* Allocate a new GDT entry for our per-process segment. */
- self->s_ldt.ldt_gdtid = kgdt_alloc(&ldt_segment);
- if __unlikely(!self->s_ldt.ldt_gdtid) goto err_ldtvec;
+ self->sm_ldt.ldt_gdtid = kgdt_alloc(&ldt_segment);
+ if __unlikely(!self->sm_ldt.ldt_gdtid) goto err_ldtvec;
  /* And we are ready! */
  return KE_OK;
 err_ldtvec:
- free(self->s_ldt.ldt_vector);
+ free(self->sm_ldt.ldt_vector);
  return KE_NOMEM;
 }
 
-static kerrno_t
-kshm_initldtcopy(struct kshm *__restrict self,
-                 struct kshm *__restrict right) {
+static kerrno_t kshm_initldtcopy(struct kshm *self, struct kshm *right) {
  struct ksegment ldt_segment;
  kassert_kshm(self);
  kassertobj(right);
  /* Copy the LDT descriptor table. */
  if __unlikely(KE_ISERR(kshm_alloc_and_map_ldt_vector(self,
-                        right->s_ldt.ldt_limit
+                        right->sm_ldt.ldt_limit
                ))) return KE_NOMEM;
  /* Copy the segment data from the given right-hand-side SHM. */
- memcpy(self->s_ldt.ldt_vector,right->s_ldt.ldt_vector,
-        right->s_ldt.ldt_limit);
+ memcpy(self->sm_ldt.ldt_vector,right->sm_ldt.ldt_vector,
+        right->sm_ldt.ldt_limit);
  /* Encode the LDT segment. */
  ksegment_encode(&ldt_segment,
-                (uintptr_t)self->s_ldt.ldt_base,
-                (uintptr_t)self->s_ldt.ldt_limit,
+                (uintptr_t)self->sm_ldt.ldt_base,
+                (uintptr_t)self->sm_ldt.ldt_limit,
                  SEG_LDT);
  /* Allocate a new GDT entry for our per-process segment. */
- self->s_ldt.ldt_gdtid = kgdt_alloc(&ldt_segment);
- if __unlikely(self->s_ldt.ldt_gdtid == KSEG_NULL) goto err_ldtvec;
+ self->sm_ldt.ldt_gdtid = kgdt_alloc(&ldt_segment);
+ if __unlikely(self->sm_ldt.ldt_gdtid == KSEG_NULL) goto err_ldtvec;
  /* And we are ready! */
  return KE_OK;
 err_ldtvec:
- free(self->s_ldt.ldt_vector);
+ free(self->sm_ldt.ldt_vector);
  return KE_NOMEM;
 }
-static void
-kshm_quitldt(struct kshm *__restrict self) {
- kgdt_free(self->s_ldt.ldt_gdtid);
- free(self->s_ldt.ldt_vector);
+static void kshm_quitldt(struct kshm *self) {
+ kgdt_free(self->sm_ldt.ldt_gdtid);
+ free(self->sm_ldt.ldt_vector);
 }
 
 
-static kerrno_t
-kshm_ldtsetlimit(struct kshm *__restrict self, __u16 newlimit) {
+static kerrno_t kshm_ldtsetlimit(struct kshm *self, __u16 newlimit) {
  __kernel struct ksegment *new_kernel_vector,*old_kernel_vector;
  __user struct ksegment *new_kernel_mapping,*old_kernel_mapping;
  size_t usage_table_size,old_limit; struct ksegment ldt_segment;
- assert(newlimit != self->s_ldt.ldt_limit);
+ assert(newlimit != self->sm_ldt.ldt_limit);
  assert((newlimit % sizeof(struct ksegment)) == 0);
- old_limit = self->s_ldt.ldt_limit;
- old_kernel_vector = self->s_ldt.ldt_vector;
+ old_limit = self->sm_ldt.ldt_limit;
+ old_kernel_vector = self->sm_ldt.ldt_vector;
  assert(isaligned((uintptr_t)old_kernel_vector,PAGEALIGN));
  /* Figure out how much we can actually write inside of the existing vector. */
  usage_table_size = malloc_usable_size(old_kernel_vector);
@@ -156,47 +139,46 @@ kshm_ldtsetlimit(struct kshm *__restrict self, __u16 newlimit) {
          0,newlimit-old_limit);
   /* Map the new table. */
   new_kernel_mapping = (__user struct ksegment *)
-   kpagedir_mapanyex(self->s_pd,new_kernel_vector,ceildiv(newlimit,PAGESIZE),
+   kpagedir_mapanyex(self->sm_pd,new_kernel_vector,ceildiv(newlimit,PAGESIZE),
                      KPAGEDIR_MAPANY_HINT_KINTERN,KSHM_LDT_PAGEFLAGS);
   if __unlikely(!new_kernel_mapping) { free(new_kernel_mapping); return KE_NOMEM; }
-  old_kernel_mapping = self->s_ldt.ldt_base;
+  old_kernel_mapping = self->sm_ldt.ldt_base;
   /* Update the GDT pointer entry. */
-  self->s_ldt.ldt_base = new_kernel_mapping;
-  self->s_ldt.ldt_limit = newlimit;
+  self->sm_ldt.ldt_base = new_kernel_mapping;
+  self->sm_ldt.ldt_limit = newlimit;
   /* Encode the LDT segment. */
   ksegment_encode(&ldt_segment,
                  (uintptr_t)new_kernel_mapping,
                  (uintptr_t)newlimit,SEG_LDT);
   /* Update the GDT entry. */
-  kgdt_update(self->s_ldt.ldt_gdtid,&ldt_segment);
+  kgdt_update(self->sm_ldt.ldt_gdtid,&ldt_segment);
   /* Unmap the user-mapping of the old LDT vector. */
-  kpagedir_unmap(self->s_pd,old_kernel_mapping,ceildiv(old_limit,PAGESIZE));
+  kpagedir_unmap(self->sm_pd,old_kernel_mapping,ceildiv(old_limit,PAGESIZE));
   /* Free the old LDT vector. */
   free(old_kernel_vector);
  } else {
   /* Can re-use the existing LDT vector. - Only need to update its limit. */
-  self->s_ldt.ldt_limit = newlimit;
+  self->sm_ldt.ldt_limit = newlimit;
   /* Encode the LDT segment. */
   ksegment_encode(&ldt_segment,
-                 (uintptr_t)self->s_ldt.ldt_base,
+                 (uintptr_t)self->sm_ldt.ldt_base,
                  (uintptr_t)newlimit,SEG_LDT);
   /* Update the GDT entry. */
-  kgdt_update(self->s_ldt.ldt_gdtid,&ldt_segment);
+  kgdt_update(self->sm_ldt.ldt_gdtid,&ldt_segment);
  }
  return KE_OK;
 }
 
 __crit __nomp ksegid_t
-kshm_ldtalloc(struct kshm *__restrict self,
-              struct ksegment const *__restrict seg) {
+kshm_ldtalloc(struct kshm *self, struct ksegment const *seg) {
  struct ksegment *iter,*begin;
  ksegid_t result;
  kassert_kshm(self);
  kassertobj(seg);
- assertf(!(self->s_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
+ assertf(!(self->sm_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
  assertf(seg->present,"The given segment configuration must be marked as present");
- begin = self->s_ldt.ldt_vector;
- iter = (struct ksegment *)((uintptr_t)begin+self->s_ldt.ldt_limit);
+ begin = self->sm_ldt.ldt_vector;
+ iter = (struct ksegment *)((uintptr_t)begin+self->sm_ldt.ldt_limit);
  while (iter-- != begin) if (!iter->present) {
   /* Found an empty slot */
   memcpy(iter,seg,sizeof(struct ksegment));
@@ -205,9 +187,9 @@ kshm_ldtalloc(struct kshm *__restrict self,
   goto end;
  }
  /* Must allocate a new segment */
- result = self->s_ldt.ldt_limit;
+ result = self->sm_ldt.ldt_limit;
  if __unlikely(KE_ISERR(kshm_ldtsetlimit(self,
-                        align(self->s_ldt.ldt_limit+sizeof(struct ksegment),BUFSIZE))
+                        align(self->sm_ldt.ldt_limit+sizeof(struct ksegment),BUFSIZE))
                )) return KSEG_NULL;
  /* Use the lowest LDT address to speed up the next call to ldtalloc! */
  iter = SEGAT(result);
@@ -218,17 +200,17 @@ end:
 }
 
 __crit __nomp ksegid_t
-kshm_ldtallocat(struct kshm *__restrict self, ksegid_t reqid,
-                struct ksegment const *__restrict seg) {
+kshm_ldtallocat(struct kshm *self, ksegid_t reqid,
+                struct ksegment const *seg) {
  struct ksegment *result_seg;
  kassert_kshm(self);
  kassertobj(seg);
- assertf(!(self->s_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
+ assertf(!(self->sm_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
  assertf(seg->present,"The given segment configuration must be marked as present");
  assertf(KSEG_ISLDT(reqid),"The given segment ID %I16x isn't part of the LDT",reqid);
  assertf(!(reqid&0x3),"The given segment ID %I16x must not include privilege information",reqid);
  reqid &= ~0x7; /* Strip away internal bits. */
- if (reqid >= self->s_ldt.ldt_limit) {
+ if (reqid >= self->sm_ldt.ldt_limit) {
   /* Must allocate more memory. */
   if __unlikely(KE_ISERR(kshm_ldtsetlimit(self,
                          align(reqid+sizeof(struct ksegment),BUFSIZE))
@@ -243,13 +225,13 @@ kshm_ldtallocat(struct kshm *__restrict self, ksegid_t reqid,
  return KSEG_TOLDT(reqid);
 }
 __crit __nomp void
-kshm_ldtfree(struct kshm *__restrict self, ksegid_t id) {
+kshm_ldtfree(struct kshm *self, ksegid_t id) {
  struct ksegment *iter,*begin,*end;
  kassert_kshm(self);
- assertf(!(self->s_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
+ assertf(!(self->sm_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
  assertf(KSEG_ISLDT(id),"The given ID %I16x isn't part of the LDT",id);
  id &= ~0x7; /* Strip away internal bits. */
- assertf(id < self->s_ldt.ldt_limit,"The given ID %I16x is out-of-bounds",id);
+ assertf(id < self->sm_ldt.ldt_limit,"The given ID %I16x is out-of-bounds",id);
  iter = SEGAT(id);
  assertf(iter->present,"The segment described by %I16x isn't present",id);
  memset(iter,0,sizeof(struct ksegment));
@@ -257,33 +239,34 @@ kshm_ldtfree(struct kshm *__restrict self, ksegid_t id) {
  while (iter != begin && !iter[-1].present) --iter;
  if (iter != end) {
   __u16 new_limit = align((uintptr_t)iter-(uintptr_t)begin,BUFSIZE);
-  assert(new_limit <= self->s_ldt.ldt_limit);
+  assert(new_limit <= self->sm_ldt.ldt_limit);
   /* Try to reduce memory usage by releasing unused LDT entires. */
-  if ((self->s_ldt.ldt_limit-new_limit) >= (BUFSIZE*2)
+  if ((self->sm_ldt.ldt_limit-new_limit) >= (BUFSIZE*2)
       ) kshm_ldtsetlimit(self,new_limit);
  }
 }
 
-__nomp void
-kshm_ldtget(struct kshm const *__restrict self,
-            ksegid_t id, struct ksegment *__restrict seg) {
+__crit __nomp void
+kshm_ldtget(struct kshm const *self,
+            ksegid_t id, struct ksegment *seg) {
  kassert_kshm(self);
- assertf(!(self->s_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
+ assertf(!(self->sm_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
  assertf(KSEG_ISLDT(id),"The given ID %I16x isn't part of the LDT",id);
  id &= ~0x7; /* Strip away internal bits. */
- assertf(id < self->s_ldt.ldt_limit,"The given ID %I16x is out-of-bounds",id);
+ assertf(id < self->sm_ldt.ldt_limit,"The given ID %I16x is out-of-bounds",id);
  memcpy(seg,SEGAT(id),sizeof(struct ksegment));
 }
-__nomp void
-kshm_ldtset(struct kshm *__restrict self, ksegid_t id,
-            struct ksegment const *__restrict seg) {
+__crit __nomp void
+kshm_ldtset(struct kshm *self, ksegid_t id,
+            struct ksegment const *seg) {
  kassert_kshm(self);
- assertf(!(self->s_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
+ assertf(!(self->sm_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
  assertf(KSEG_ISLDT(id),"The given ID %I16x isn't part of the LDT",id);
  id &= ~0x7; /* Strip away internal bits. */
- assertf(id < self->s_ldt.ldt_limit,"The given ID %I16x is out-of-bounds",id);
+ assertf(id < self->sm_ldt.ldt_limit,"The given ID %I16x is out-of-bounds",id);
  memcpy(SEGAT(id),seg,sizeof(struct ksegment));
 }
+
 
 #undef BUFSIZE
 #undef SELF
@@ -293,6 +276,5 @@ kshm_ldtset(struct kshm *__restrict self, ksegid_t id,
 #undef VEC_END
               
 __DECL_END
-#endif /* KCONFIG_HAVE_SHM2 */
 
-#endif /* !__KOS_KERNEL_SHM2_LDT_C_INL__ */
+#endif /* !__KOS_KERNEL_SHM_LDT_C_INL__ */

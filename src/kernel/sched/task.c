@@ -270,7 +270,7 @@ ktask_newkernel(struct ktask *__restrict parent,
          "The caller must lock the pagedir of the associated task context!");
  assertf(!(flags&KTASK_FLAG_USERTASK),"Kernel tasks can't be user-level tasks. (DUH!)");
  assertf(!(flags&KTASK_FLAG_OWNSUSTACK),"Kernel tasks can't own user-level stacks");
- assertf(kproc_pagedir(proc) == kpagedir_kernel(),"Kernel tasks require a context using the kernel page directory");
+ assertf(kproc_getpagedir(proc) == kpagedir_kernel(),"Kernel tasks require a context using the kernel page directory");
  if __unlikely(KE_ISERR(ktask_incref(parent))) return NULL;
  if __unlikely(KE_ISERR(kproc_incref(proc))) goto err_par;
  if __unlikely((result = omalloc(struct ktask)) == NULL) goto err_ctx;
@@ -344,23 +344,16 @@ ktask_newuser(struct ktask *__restrict parent, struct kproc *__restrict ctx,
  kassertobj(useresp);
  assertf(kproc_islocked(ctx,KPROC_LOCK_SHM),
          "The caller must lock the pagedir of the associated task context!");
-#if KCONFIG_HAVE_SHM2
- if __unlikely(KE_ISERR(kshm_mapram(&ctx->p_shm,&userstack,ceildiv(ustacksize,PAGESIZE),
+ if __unlikely(KE_ISERR(kshm_mapram(kproc_getshm(ctx),&userstack,
+                                    ceildiv(ustacksize,PAGESIZE),
                                     KPAGEDIR_MAPANY_HINT_USTACK,
                                     KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE
                ))) return NULL;
-#else
- userstack = kshm_mmapram(&ctx->p_shm,KPAGEDIR_MAPANY_HINT_USTACK,ustacksize,
-                          PROT_READ|PROT_WRITE,MAP_PRIVATE);
- if __unlikely(userstack == MAP_FAIL) return NULL;
-#endif
  result = ktask_newuserex(parent,ctx,userstack,ustacksize,kstacksize,
                           KTASK_FLAG_USERTASK|KTASK_FLAG_OWNSUSTACK);
-#if KCONFIG_HAVE_SHM2
- if __unlikely(!result) kshm_unmap(&ctx->p_shm,userstack,ceildiv(ustacksize,PAGESIZE),0);
-#else
- if __unlikely(!result) kshm_munmap(&ctx->p_shm,userstack,ustacksize,0);
-#endif
+ if __unlikely(!result) kshm_unmap(kproc_getshm(ctx),userstack,
+                                   ceildiv(ustacksize,PAGESIZE),
+                                   KSHMUNMAP_FLAG_NONE);
  else *useresp = (__user void *)((uintptr_t)userstack+ustacksize);
  return result;
 }
@@ -377,7 +370,7 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  assertf(isaligned((uintptr_t)ustackaddr,PAGEALIGN),
          "User stack address %p is not page-aligned",ustackaddr);
  assertf(!(flags&KTASK_FLAG_OWNSUSTACK) || kpagedir_ismapped
-         (proc->p_shm.sm_pd,ustackaddr,ceildiv(ustacksize,PAGESIZE)),
+         (kproc_getpagedir(proc),ustackaddr,ceildiv(ustacksize,PAGESIZE)),
          "Kernel-managed user-stack is not properly allocated");
  assertf(flags&KTASK_FLAG_USERTASK,"The 'KTASK_FLAG_USERTASK' flag is not set in %I16x",flags);
  if __unlikely(KE_ISERR(ktask_incref(parent))) return NULL;
@@ -385,9 +378,8 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  if __unlikely((result = omalloc(struct ktask)) == NULL) goto err_ctx;
  kobject_init(result,KOBJECT_MAGIC_TASK);
  // Allocate and map a linear kernel stack for user tasks
-#if KCONFIG_HAVE_SHM2
- k_syslogf(KLOG_DEBUG,"[TASK] Mapping Linear RAM for kernel stack of user-thread...\n");
- if __unlikely(KE_ISERR(kshm_mapram_linear(&proc->p_shm,
+ k_syslogf(KLOG_TRACE,"[TASK] Mapping Linear RAM for kernel stack of user-thread\n");
+ if __unlikely(KE_ISERR(kshm_mapram_linear(kproc_getshm(proc),
                                            &result->t_kstack,
                                            &result->t_kstackvp,
                                            ceildiv(kstacksize,PAGESIZE),
@@ -395,18 +387,12 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
                                            KSHMREGION_FLAG_LOSEONFORK|
                                            KSHMREGION_FLAG_RESTRICTED
                ))) goto err_r;
-#else
- result->t_kstackvp = kshm_mmap_linear(&proc->p_shm,KPAGEDIR_MAPANY_HINT_KSTACK,kstacksize,
-                                       PROT_READ|PROT_WRITE|KSHMTAB_FLAG_K,MAP_PRIVATE,
-                                       &result->t_kstack);
- if __unlikely(result->t_kstackvp == MAP_FAIL) goto err_r;
-#endif
  result->t_flags       = flags;
  result->t_ustackvp    = ustackaddr;
  result->t_ustacksz    = ustacksize;
  result->t_esp         = (__user void *)((uintptr_t)result->t_kstackvp+kstacksize);
  result->t_esp0        = result->t_esp;
- result->t_userpd      = kproc_pagedir(proc);
+ result->t_userpd      = kproc_getpagedir(proc);
  result->t_kstackend   = (void *)((uintptr_t)result->t_kstack+kstacksize);
  result->t_proc        = proc; // Inherit reference
  result->t_refcnt      = 1;
@@ -447,13 +433,9 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  if __unlikely(result->t_parid == (size_t)-1) goto err_ctx2;
  return result;
 err_ctx2: kproc_deltask(proc,result);
-#if KCONFIG_HAVE_SHM2
-err_map:  kshm_unmap(&proc->p_shm,result->t_kstackvp,
+err_map:  kshm_unmap(kproc_getshm(proc),result->t_kstackvp,
                      ceildiv(ktask_getkstacksize(result),PAGESIZE),
                      KSHMUNMAP_FLAG_RESTRICTED);
-#else
-err_map:  kshm_munmap(&proc->p_shm,result->t_kstackvp,ktask_getkstacksize(result),1);
-#endif
 err_r:    free(result);
 err_ctx:  kproc_decref(proc);
 err_par:  ktask_decref(parent);
@@ -528,7 +510,7 @@ extern void ktask_schedule(struct scheddata *state) {
    if __unlikely(!currtask) return;
    KTASK_ONSWITCH("IRQ",NULL,currtask);
    /* Load local descriptor table of the new process. */
-   LOAD_LDT(currtask->t_proc->p_shm.sm_ldt.ldt_gdtid);
+   LOAD_LDT(kproc_getshm(ktask_getproc(currtask))->s_ldt.ldt_gdtid);
    goto setcurrtask;
   }
  } else if (!prevtask) {
@@ -620,7 +602,7 @@ rotate_normal:
  KTASK_ONLEAVEQUANTUM(prevtask,cpuself);
  if (prevtask->t_proc != currtask->t_proc) {
   /* Load local descriptor table of the new process. */
-  LOAD_LDT(currtask->t_proc->p_shm.sm_ldt.ldt_gdtid);
+  LOAD_LDT(kproc_getshm(ktask_getproc(currtask))->s_ldt.ldt_gdtid);
  }
  kcpu_unlock(cpuself,KCPU_LOCK_TASKS);
 setcurrtask:
@@ -801,27 +783,19 @@ __local __crit void ktask_releasedata(struct ktask *__restrict self) {
     assert(isaligned((uintptr_t)self->t_kstackvp,PAGEALIGN));
     assert(isaligned((uintptr_t)self->t_kstack,PAGEALIGN));
     if __likely(KE_ISOK(lockerror)) {
-     assert(self->t_kstack == kpagedir_translate(self->t_proc->p_shm.sm_pd,self->t_kstackvp));
-#if KCONFIG_HAVE_SHM2
-     kshm_unmap(&self->t_proc->p_shm,self->t_kstackvp,
+     assert(self->t_kstack == kpagedir_translate(kproc_getshm(ktask_getproc(self))->s_pd,self->t_kstackvp));
+     kshm_unmap(kproc_getshm(ktask_getproc(self)),self->t_kstackvp,
                 ceildiv(ktask_getkstacksize(self),PAGESIZE),
                 KSHMUNMAP_FLAG_RESTRICTED);
-#else
-     kshm_munmap(&self->t_proc->p_shm,self->t_kstackvp,ktask_getkstacksize(self),1);
-#endif
     }
     self->t_kstackvp = self->t_kstack = self->t_kstackend = NULL;
    }
    // Unmap the user stack of the tasks
    if (self->t_ustackvp && self->t_flags&KTASK_FLAG_OWNSUSTACK) {
     if __likely(KE_ISOK(lockerror)) {
-#if KCONFIG_HAVE_SHM2
-     kshm_unmap(&self->t_proc->p_shm,self->t_ustackvp,
+     kshm_unmap(kproc_getshm(ktask_getproc(self)),self->t_ustackvp,
                 ceildiv(self->t_ustacksz,PAGESIZE),
                 KSHMUNMAP_FLAG_RESTRICTED);
-#else
-     kshm_munmap(&self->t_proc->p_shm,self->t_ustackvp,self->t_ustacksz,0);
-#endif
     }
 #ifdef __DEBUG__
     self->t_flags &= ~(KTASK_FLAG_OWNSUSTACK);
@@ -838,7 +812,7 @@ __local __crit void ktask_releasedata(struct ktask *__restrict self) {
   assert(self->t_ustacksz == 0);
   assert(self->t_kstackvp == self->t_kstack);
   assert(self->t_userpd == kpagedir_kernel());
-  assert(self->t_proc->p_shm.sm_pd == kpagedir_kernel());
+  assert(kproc_getshm(ktask_getproc(self))->s_pd == kpagedir_kernel());
   if (self->t_kstack) {
    // In kernel mode, task stacks are allocated through pageframes
    if (self->t_flags&KTASK_FLAG_MALLKSTACK) {

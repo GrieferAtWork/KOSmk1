@@ -31,7 +31,7 @@
 #include <math.h>
 #include <malloc.h>
 #include <kos/mod.h>
-#include <kos/kernel/shm2.h>
+#include <kos/kernel/shm.h>
 
 __DECL_BEGIN
 
@@ -41,50 +41,22 @@ kproc_loadmodsections(struct kproc *__restrict self,
                       struct kshlib *__restrict module,
                       __pagealigned __user void *__restrict base) {
  struct kshlibsection *iter,*end; kerrno_t error;
-#if !KCONFIG_HAVE_SHM2
-#if !KCONFIG_HAVE_SHM_COPY_ON_WRITE
- struct kshmtab *usedtab;
-#endif
-#endif /* !KCONFIG_HAVE_SHM2 */
  KTASK_CRIT_MARK
  end = (iter = module->sh_data.ed_secv)+module->sh_data.ed_secc;
  for (; iter != end; ++iter) {
-#if KCONFIG_HAVE_SHM2
-  error = kshm_mapfullregion(&self->p_shm,
+  error = kshm_mapfullregion(kproc_getshm(self),
                             (void *)((uintptr_t)base+iter->sls_albase),
-                             iter->sls_tab);
+                             iter->sls_region);
   if __unlikely(KE_ISERR(error)) goto err_seciter;
-#else /* KCONFIG_HAVE_SHM2 */
-#if !KCONFIG_HAVE_SHM_COPY_ON_WRITE
-  /* Without copy-on-write, we need to
-   * create hard copies of writable tabs. */
-  if (iter->sls_tab->mt_flags&KSHMTAB_FLAG_W) {
-   usedtab = kshmtab_copy(iter->sls_tab);
-   error = usedtab ? KE_OK : KE_NOMEM;
-  } else
-#endif
-  { error = kshmtab_incref(usedtab = iter->sls_tab); }
-  if __unlikely(KE_ISERR(error)) goto err_seciter;
-  error = kshm_instab_inherited(&self->p_shm,usedtab,MAP_FIXED|MAP_PRIVATE,
-                               (void *)((uintptr_t)base+iter->sls_albase),NULL);
-  if __unlikely(KE_ISERR(error)) goto err_usedtab;
-#endif /* !KCONFIG_HAVE_SHM2 */
  }
  return KE_OK;
-#if !KCONFIG_HAVE_SHM2
-err_usedtab:
- kshmtab_decref(usedtab);
-#endif
 err_seciter:
  // Unmap all already mapped sections
  while (iter-- != module->sh_data.ed_secv) {
-#if KCONFIG_HAVE_SHM2
-  kshm_unmap(&self->p_shm,(void *)((uintptr_t)base+iter->sls_albase),
-             iter->sls_tab->mt_pages,KSHMUNMAP_FLAG_NONE);
-#else /* KCONFIG_HAVE_SHM2 */
-  kshm_munmap(&self->p_shm,(void *)((uintptr_t)base+iter->sls_albase),
-              iter->sls_tab->mt_pages*PAGESIZE,0);
-#endif /* !KCONFIG_HAVE_SHM2 */
+  kshm_unmap(kproc_getshm(self),
+            (void *)((uintptr_t)base+iter->sls_albase),
+             kshmregion_getpages(iter->sls_region),
+             KSHMUNMAP_FLAG_NONE);
  }
  return error;
 }
@@ -104,38 +76,18 @@ kproc_unloadmodsections(struct kproc *__restrict self,
  assert(isaligned((uintptr_t)base,PAGEALIGN));
  secend = (seciter = module->sh_data.ed_secv)+module->sh_data.ed_secc;
  for (; seciter != secend; ++seciter) {
-  if (seciter->sls_tab->mt_flags&KSHMTAB_FLAG_W) {
+  if (kshmregion_getflags(seciter->sls_region)&KSHMREGION_FLAG_WRITE) {
    // Force unmap writable sections (Due to copy-on-write,
    // they may have been re-mapped. - An operation we can't track)
-#if KCONFIG_HAVE_SHM2
-   kshm_unmap(&self->p_shm,
+   kshm_unmap(kproc_getshm(self),
              (void *)((uintptr_t)base+seciter->sls_albase),
              (seciter->sls_base-seciter->sls_albase)+
-             (seciter->sls_tab->mt_pages),
+              kshmregion_getpages(seciter->sls_region),
               KSHMUNMAP_FLAG_NONE);
-#else
-   kshm_munmap(&self->p_shm,(void *)((uintptr_t)base+seciter->sls_albase),
-              (seciter->sls_base-seciter->sls_albase)+
-              (seciter->sls_tab->mt_pages*PAGESIZE),0);
-#endif
   } else {
-#if KCONFIG_HAVE_SHM2
-   kshm_unmapregion(&self->p_shm,
+   kshm_unmapregion(kproc_getshm(self),
                    (void *)((uintptr_t)base+seciter->sls_albase),
-                    seciter->sls_tab);
-#else
-   struct kshmtabentry *addrentry;
-   addrentry = kshm_getentry(&self->p_shm,(void *)((uintptr_t)base+seciter->sls_albase));
-   // Make sure the SHM entry is still mapped, and also to
-   // the same TAB as that described by the module section.
-   if __unlikely(addrentry && addrentry->te_tab == seciter->sls_tab) {
-    kshm_delslot(&self->p_shm,addrentry);
-    // Drop the reference to the section's tab
-    // previously held by the process's SHM manager.
-    // ('kshm_delslot' doesn't drop that reference for us...)
-    kshmtab_decref(seciter->sls_tab);
-   }
-#endif
+                    seciter->sls_region);
   }
  }
 }
@@ -200,7 +152,7 @@ kproc_find_base_for_module(struct kproc *__restrict self,
  // L: lib
  // A: application
  if (addr_hi <= addr_lo) return (void *)(uintptr_t)-1;
- return kpagedir_findfreerange(self->p_shm.sm_pd,
+ return kpagedir_findfreerange(kproc_getpagedir(self),
                                ceildiv(addr_hi-addr_lo,PAGESIZE),
                                KPAGEDIR_MAPANY_HINT_LIBS);
 }
@@ -263,8 +215,6 @@ kproc_insmod_single_unlocked(struct kproc *__restrict self,
                   self->p_pid,modtab->pm_base);
  error = kproc_loadmodsections(self,module,modtab->pm_base);
  if __unlikely(KE_ISERR(error)) goto err_module;
- // Relocate the module
- //kreloc_exec(&module->sh_reloc,&self->p_shm,self,modtab);
  assertf(modtab->pm_loadc != 0,"Invalid module load counter");
  return error;
 err_module:
@@ -373,7 +323,8 @@ static void kproc_modrelocate(struct kproc *self, kmodid_t modid, kmodid_t start
  for (; iter != end; ++iter) kproc_modrelocate(self,*iter,start_modid);
  if (!(module->pm_flags&KPROCMODULE_FLAG_RELOC)) {
   // Relocate the module (Make sure every module is only relocated _ONCE_)
-  kreloc_exec(&module->pm_lib->sh_reloc,&self->p_shm,self,module,
+  kreloc_exec(&module->pm_lib->sh_reloc,
+              kproc_getshm(self),self,module,
               &self->p_modules.pms_modv[start_modid]);
   // Must set the reloc flag _AFTER_ we did it, as otherwise
   // the module might try to load its own non-relocated symbols...

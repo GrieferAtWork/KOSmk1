@@ -34,7 +34,6 @@
 #include <kos/kernel/object.h>
 #include <kos/kernel/paging.h>
 #include <kos/kernel/types.h>
-#include <kos/kernel/shm.h>
 
 __DECL_BEGIN
 
@@ -202,10 +201,10 @@ kreloc_exec(struct kreloc *__restrict self,
             struct kprocmodule *__restrict start_module);
 
 
-struct kshmtab;
+struct kshmregion;
 struct kshlibsection {
  // Loaded data of a shared library
- __ref struct kshmtab    *sls_tab;       /*< [1..1] Shared memory tab. */
+ __ref struct kshmregion *sls_region;    /*< [1..1] Shared memory region. */
  __pagealigned ksymaddr_t sls_albase;    /*< Starting symbol address (page-aligned). */
  ksymaddr_t               sls_base;      /*< Starting symbol address. */
  __size_t                 sls_size;      /*< Exact size of the memory tab in bytes. */

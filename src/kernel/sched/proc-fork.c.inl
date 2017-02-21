@@ -96,7 +96,7 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc) {
  if __unlikely(KE_ISERR(error)) goto err_shlib;
 
  if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) goto err_fd;
- error = kshm_initcopy(&result->p_shm,&proc->p_shm,0);
+ error = kshm_initfork(&result->p_shm,&proc->p_shm);
  kproc_unlock(proc,KPROC_LOCK_SHM);
  if __unlikely(KE_ISERR(error)) goto err_fd;
 
@@ -152,7 +152,7 @@ ktask_copy4fork(struct ktask *__restrict self,
  if __unlikely((result = omalloc(struct ktask)) == NULL) goto err_procref;
  if __unlikely(KE_ISERR(ktlspt_initcopy(&result->t_tls,&self->t_tls))) goto err_free;
  kobject_init(result,KOBJECT_MAGIC_TASK);
- result->t_userpd      = kproc_pagedir(proc);
+ result->t_userpd      = kproc_getpagedir(proc);
  result->t_refcnt      = 1;
  result->t_locks       = 0;
  result->t_newstate    = KTASK_STATE_RUNNING;
@@ -185,8 +185,7 @@ ktask_copy4fork(struct ktask *__restrict self,
  // >> That is good! So now lets manually allocate a new stack
  kstacksize = ktask_getkstacksize(self);
  // Map linear memory for the kernel stack
-#if KCONFIG_HAVE_SHM2
- if __unlikely(KE_ISERR(kshm_mapram_linear(&proc->p_shm,
+ if __unlikely(KE_ISERR(kshm_mapram_linear(kproc_getshm(proc),
                                            &result->t_kstack,
                                            &result->t_kstackvp,
                                             ceildiv(kstacksize,PAGESIZE),
@@ -194,12 +193,6 @@ ktask_copy4fork(struct ktask *__restrict self,
                                            KSHMREGION_FLAG_LOSEONFORK|
                                            KSHMREGION_FLAG_RESTRICTED
                ))) goto err_tls;
-#else
- result->t_kstackvp = kshm_mmap_linear(&proc->p_shm,KPAGEDIR_MAPANY_HINT_KSTACK,kstacksize,
-                                       PROT_READ|PROT_WRITE|KSHMTAB_FLAG_K,MAP_PRIVATE,
-                                       &result->t_kstack);
- if __unlikely(result->t_kstackvp == MAP_FAIL) goto err_tls;
-#endif
  result->t_kstackend  = (__kernel void *)((uintptr_t)result->t_kstack+kstacksize);
  // Make sure the linear memory was allocated correctly
  assert(kstacksize == ktask_getkstacksize(result));
@@ -257,23 +250,14 @@ ktask_copy4fork(struct ktask *__restrict self,
  if __unlikely(result->t_parid == (size_t)-1) goto err_kstack;
  if __unlikely(KE_ISERR(kproc_addtask(proc,result))) goto err_parid;
 
- //kshmbranch_print(proc->p_shm.s_map.m_root,
- //             KSHMBRANCH_ADDRSEMI_INIT,
- //             KSHMBRANCH_ADDRLEVEL_INIT);
- //kpagedir_print(proc->p_shm.s_pd);
-
  return result;
 err_parid:
  ktask_lock(self,KTASK_LOCK_CHILDREN);
  asserte(ktasklist_erase(&self->t_children,result->t_parid) == result);
  ktask_unlock(self,KTASK_LOCK_CHILDREN);
-#if KCONFIG_HAVE_SHM2
 err_kstack:  kshm_unmap(&proc->p_shm,result->t_kstackvp,
                         ceildiv(kstacksize,PAGESIZE),
                         KSHMUNMAP_FLAG_RESTRICTED);
-#else
-err_kstack:  kshm_munmap(&proc->p_shm,result->t_kstackvp,kstacksize,1);
-#endif
 err_tls:     ktlspt_quit(&result->t_tls);
 err_free:    free(result);
 err_procref: kproc_decref(proc);
@@ -331,14 +315,9 @@ __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *
        offset_eip < sec_iter->sls_base+sec_iter->sls_size) {
     /* Found the section the given EIP. */
     /* #1: Make sure that the memory tab was declared as executable and read-only. */
-#if 1 /* FIXME: Due to a bug, everything must currently be writable. */
-    if ((sec_iter->sls_tab->mt_flags&(KSHMTAB_FLAG_X)) !=
-                                     (KSHMTAB_FLAG_X))
-#else
-    if ((sec_iter->sls_tab->mt_flags&(KSHMTAB_FLAG_W|KSHMTAB_FLAG_X)) !=
-                                     (KSHMTAB_FLAG_X))
-#endif
-    {
+    if ((kshmregion_getflags(sec_iter->sls_region)&
+        (KSHMREGION_FLAG_WRITE|KSHMREGION_FLAG_EXEC)) !=
+                              (KSHMREGION_FLAG_EXEC)) {
      k_syslogf_prefixfile(KLOG_WARN,iter->pm_lib->sh_file
                          ,"[ROOT-FORK] Denying root-fork request from non-executable "
                           "address %p in memory tab %p..%p (%Iu bytes)\n"
@@ -353,7 +332,7 @@ __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *
     {
      x86_pde used_pde; x86_pte used_pte;
      kassertobj(self);
-     used_pde = self->p_shm.sm_pd->d_entries[X86_VPTR_GET_PDID(eip)];
+     used_pde = kproc_getpagedir(self)->d_entries[X86_VPTR_GET_PDID(eip)];
      if __unlikely(!used_pde.present) goto cont; /* Page table not present */
      used_pte = x86_pde_getpte(&used_pde)[X86_VPTR_GET_PTID(eip)];
      if __unlikely(!used_pte.present) goto cont; /* Page table entry not present */

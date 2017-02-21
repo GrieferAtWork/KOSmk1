@@ -42,24 +42,6 @@ __local void kproc_delmods(struct kproc *self) {
  }
 }
 
-#if !KCONFIG_HAVE_SHM2
-__local void kshm_delusertabs(struct kshm *self, __user void *keeper_stack) {
- struct kshmtabentry *entry; size_t i;
- for (i = 0; i < self->sm_tabc;) {
-  entry = &self->sm_tabv[i];
-  kassert_kshmtab(entry->te_tab);
-  if (entry->te_map != keeper_stack &&
-    !(entry->te_tab->mt_flags&KSHMTAB_FLAG_K)) {
-   struct kshmtab *tab = entry->te_tab;
-   kshm_delslot(self,entry);
-   kshmtab_decref(tab);
-  } else {
-   ++i;
-  }
- }
-}
-#endif
-
 #ifdef __DEBUG__
 #define CLOSE_IF_CLOEXEC(x) \
  if ((x)->fd_flag&KFD_FLAG_CLOEXEC) {\
@@ -169,23 +151,17 @@ kproc_exec(struct kshlib *__restrict exec_main,
  //    have to worry about failing to allocate a new one below.
  // >> This also gives user-level code more control by allowing them
  //    to specify a custom stack to be used for exec-ed processes.
-#if KCONFIG_HAVE_SHM2
- kshm_unmap(&self->p_shm,NULL,((size_t)caller_thread->t_ustackvp)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
- kshm_unmap(&self->p_shm,
-            (void *)((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz),
-            ((uintptr_t)0-((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz))/PAGESIZE,
+ kshm_unmap(kproc_getshm(self),NULL,((size_t)caller_thread->t_ustackvp)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
+ kshm_unmap(kproc_getshm(self),
+           (void *)((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz),
+           ((uintptr_t)0-((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz))/PAGESIZE,
             KSHMUNMAP_FLAG_NONE);
- assertf(kpagedir_ismapped(self->p_shm.s_pd,caller_thread->t_ustackvp,
+ assertf(kpagedir_ismapped(kproc_getpagedir(self),caller_thread->t_ustackvp,
                            ceildiv(ktask_getustacksize(caller_thread),PAGESIZE)),
          "Be we explicitly excluded the user-stack...");
- assertf(kpagedir_ismapped(self->p_shm.s_pd,caller_thread->t_kstackvp,
+ assertf(kpagedir_ismapped(kproc_getpagedir(self),caller_thread->t_kstackvp,
                            ceildiv(ktask_getkstacksize(caller_thread),PAGESIZE)),
          "But the kernel stack should have been restricted...");
-#else
- kshm_delusertabs(&self->p_shm,
-                 (caller_thread->t_flags&KTASK_FLAG_OWNSUSTACK)
-                  ? caller_thread->t_ustackvp : NULL);
-#endif
 
  // Clear TLS Variables (I don't know if we really need to do this, but it feels right...)
  ktlsman_clear(&self->p_tlsman);

@@ -149,10 +149,11 @@ struct kproc {
 #define kproc_locks(self,lock)     kmmutex_locks(&(self)->p_lock,lock)
 #define kproc_unlocks(self,lock)   kmmutex_unlocks(&(self)->p_lock,lock)
 
-#define kproc_fdman(self)  (&(self)->p_fdman)
-#define kproc_uid(self)       0 /*< TODO */
-#define kproc_gid(self)       0 /*< TODO */
-#define kproc_pagedir(self)  (self)->p_shm.sm_pd
+#define kproc_getfdman(self)   (&(self)->p_fdman)
+#define kproc_getuid(self)        0 /*< TODO */
+#define kproc_getgid(self)        0 /*< TODO */
+#define kproc_getshm(self)     (&(self)->p_shm)
+#define kproc_getpagedir(self)  ((self)->p_shm.s_pd)
 
 #define __kassert_kproc(self) kassert_object(self,KOBJECT_MAGIC_PROC)
 __local KOBJECT_DEFINE_INCREF(kproc_incref,struct kproc,p_refcnt,kassert_kproc);
@@ -163,7 +164,7 @@ __local KOBJECT_DEFINE_DECREF(kproc_decref,struct kproc,p_refcnt,kassert_kproc,k
 extern struct kproc __kproc_kernel;
 #define kproc_kernel()  (&__kproc_kernel)
 
-#define kpagedir_user()            kproc_pagedir(kproc_self())
+#define kpagedir_user()            kproc_getpagedir(kproc_self())
 #define kpagedir_ismappedu_ro(p,s) kpagedir_ismappedex_b(kpagedir_user(),p,s,PAGEDIR_FLAG_USER,PAGEDIR_FLAG_USER)
 #define kpagedir_ismappedu_rw(p,s) kpagedir_ismappedex_b(kpagedir_user(),p,s,PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE,PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE)
 
@@ -802,47 +803,6 @@ kproclist_enumproc(__ref struct kproc **__restrict procv, __size_t procc);
 extern void kernel_initialize_process(void);
 extern void kernel_finalize_process(void);
 #endif /* __MAIN_C__ */
-
-#ifndef __INTELLISENSE__
-#if !KCONFIG_HAVE_SHM2
-#define kshm_kernel() (&kproc_kernel()->p_shm)
-__local __nonnull((1,3)) __size_t
-__kshm_memcpy_k2u_fast(struct kshm const *__restrict self, __user void *dst,
-                       __kernel void const *__restrict src, __size_t bytes) {
- if (self == kshm_kernel()) return __kpagedir_memcpy_k2k(dst,src,bytes);
- return __kshm_memcpy_k2u(self,dst,src,bytes);
-}
-__local __wunused __nonnull((1,2)) __size_t
-__kshm_memcpy_u2k_fast(struct kshm const *__restrict self, __kernel void *__restrict dst,
-                       __user void const *src, __size_t bytes) {
- if (self == kshm_kernel()) return __kpagedir_memcpy_k2k(dst,src,bytes);
- return __kshm_memcpy_u2k(self,dst,src,bytes);
-}
-__local __nonnull((1)) __size_t
-__kshm_memcpy_u2u_fast(struct kshm const *__restrict self, __user void *dst,
-                       __user void const *src, __size_t bytes) {
- if (self == kshm_kernel()) return __kpagedir_memcpy_k2k(dst,src,bytes);
- return __kshm_memcpy_u2u(self,dst,src,bytes);
-}
-__local __wunused __nonnull((1,3)) __kernel void *
-__kshm_translate_1_fast(struct kshm const *__restrict self, __user void const *addr,
-                        __size_t *__restrict max_bytes, int read_write) {
- if (self == kshm_kernel()) { *max_bytes = (__size_t)-1; return (void *)addr; }
- return __kshm_translate_1(self,addr,max_bytes,read_write);
-}
-__local __wunused __nonnull((1,3)) __kernel void *
-__kshm_translate_u_fast(struct kshm const *__restrict self, __user void const *addr,
-                        __size_t *__restrict max_bytes, int read_write) {
- if (self == kshm_kernel()) return (void *)addr;
- return __kshm_translate_u(self,addr,max_bytes,read_write);
-}
-#define kshm_memcpy_k2u  __kshm_memcpy_k2u_fast
-#define kshm_memcpy_u2k  __kshm_memcpy_u2k_fast
-#define kshm_memcpy_u2u  __kshm_memcpy_u2u_fast
-#define kshm_translate_1 __kshm_translate_1_fast
-#define kshm_translate_u __kshm_translate_u_fast
-#endif /* !KCONFIG_HAVE_SHM2 */
-#endif
 
 #ifndef __INTELLISENSE__
 #ifndef __ksymhash_of_defined

@@ -37,7 +37,7 @@
 #include <kos/kernel/paging.h>
 #include <kos/kernel/proc.h>
 #include <kos/kernel/serial.h>
-#include <kos/kernel/shm2.h>
+#include <kos/kernel/shm.h>
 #include <kos/kernel/task.h>
 #include <kos/kernel/time.h>
 #include <kos/kernel/tty.h>
@@ -223,9 +223,7 @@ void kernel_main(void) {
  kernel_initialize_keyboard();
  kernel_initialize_fpu();
  kernel_initialize_cmos();
-#if KCONFIG_HAVE_SHM2
  kernel_initialize_copyonwrite();
-#endif
  kernel_initialize_process();
  kernel_initialize_paging();
  kernel_initialize_filesystem();

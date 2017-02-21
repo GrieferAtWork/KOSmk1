@@ -83,9 +83,6 @@
 // Not fully implemented yet: copy-on-write fork() paging
 #define KCONFIG_HAVE_SHM_COPY_ON_WRITE 0
 
-/* Use the new SHM engine. */
-#define KCONFIG_HAVE_SHM2 1
-
 
 
 #ifdef __INTELLISENSE__

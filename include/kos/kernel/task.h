@@ -570,13 +570,13 @@ struct ktask {
   *  - This is a user-level address
   *  - In a suspended task, this is the address to return to
   *  - 't_userpd' describes the last active page directory of the task,
-  *    and usually is either kpagedir_kernel(), or kproc_pagedir(t_proc).
+  *    and usually is either kpagedir_kernel(), or kproc_getpagedir(t_proc).
   *  - 't_esp' must be mapped according to 't_userpd' */
  __user void                 *t_esp;
  struct kpagedir             *t_userpd;
  __user void                 *t_esp0; /*< [1..1][const] This task's ESP0 mapped pointer.
                                            NOTE: This property has no effect in kernel tasks.
-                                           NOTE: This pointer is __always__ mapped with 'kproc_pagedir(t_proc)' */
+                                           NOTE: This pointer is __always__ mapped with 'kproc_getpagedir(t_proc)' */
  __u32                        t_refcnt; /*< Reference counter. */
  __u8                         t_locks;  /*< Task locks (Set of 'KTASK_LOCK_*'). */
 #define KTASK_LOCK_STATE    0x01
@@ -897,7 +897,7 @@ extern __nonnull((1,2,3)) void ktask_setupuser(struct ktask *self,
 #define ktask_setupuser(self,useresp,eip) \
  __xblock({ struct ktask *const __ktsuself = (self);\
             ktask_setupuserex(__ktsuself,useresp,eip\
-                             ,kproc_pagedir(__ktsuself->t_proc));\
+                             ,kproc_getpagedir(__ktsuself->t_proc));\
             (void)0;\
  })
 #endif

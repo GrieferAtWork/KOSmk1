@@ -185,7 +185,7 @@ void update_prompt(void) {
 
 void usage(int fd, char *name) {
  dprintf(fd
-        ,"USAGE: %s [-VirS] [-s LV] [-c CMD]\n"
+        ,"USAGE: %s [-irvS] [-s LV] [-c CMD]\n"
          "\t-c|--command CMD   Parse, execute and exit with CMD.\n"
          "\t-i|--interactive   Create an interactive shell. (default)\n"
          "\t-r|--restricted    Create a restricted shell.\n"
@@ -209,11 +209,15 @@ static struct option const longopts[] = {
 };
 
 __attribute_thread int foo = 42;
+__attribute_thread int bar = 84;
 
 int main(int argc, char *argv[]) {
  int error; struct rline *r; int optc;
- //(void)foo;
- //printf("thread_local foo at: %p (%d)\n",&foo,foo);
+ // movl	%gs:0, %eax
+ // movl	foo@ntpoff(%eax), %eax
+ //int x = foo;
+ //int y = bar;
+ //printf("thread_local %d %d\n",x,y);
 
  while ((optc = getopt_long(argc,argv,"c:irvSs:h",longopts,NULL)) != -1) {
   switch (optc) {

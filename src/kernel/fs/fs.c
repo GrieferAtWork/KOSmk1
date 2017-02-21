@@ -1389,8 +1389,8 @@ __crit kerrno_t kfspathenv_inituser(struct kfspathenv *__restrict self) {
   self->env_root = entry.fd_dirent;
  } else goto err_entry2;
  self->env_flags = 0;
- self->env_uid = kproc_uid(caller);
- self->env_gid = kproc_gid(caller);
+ self->env_uid = kproc_getuid(caller);
+ self->env_gid = kproc_getgid(caller);
  self->env_lnk = 0;
 end: return error;
 err_nofile2: kdirent_decref(self->env_cwd); goto err_nofile;

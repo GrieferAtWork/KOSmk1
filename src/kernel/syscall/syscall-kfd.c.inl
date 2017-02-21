@@ -57,8 +57,8 @@ SYSCALL(sys_kfd_open) {
  env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
  if __unlikely(!env.env_root) { kdirent_decref(env.env_cwd); error = KE_NOROOT; goto end; }
  env.env_flags = mode;
- env.env_uid   = kproc_uid(ctx);
- env.env_gid   = kproc_gid(ctx);
+ env.env_uid   = kproc_getuid(ctx);
+ env.env_gid   = kproc_getgid(ctx);
  kfspathenv_initcommon(&env);
  if (env.env_flags&O_CREAT) {
   union kinodeattr attr[3];
@@ -105,8 +105,8 @@ SYSCALL(sys_kfd_open2) {
  env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
  if __unlikely(!env.env_root) { kdirent_decref(env.env_cwd); error = KE_NOROOT; goto end; }
  env.env_flags = mode;
- env.env_uid   = kproc_uid(ctx);
- env.env_gid   = kproc_gid(ctx);
+ env.env_uid   = kproc_getuid(ctx);
+ env.env_gid   = kproc_getgid(ctx);
  kfspathenv_initcommon(&env);
  if (env.env_flags&O_CREAT) {
   union kinodeattr attr[3];

@@ -55,7 +55,6 @@ SYSCALL(sys_kmem_map) {
        int   ,K(fd),
        __u64 ,K(offset));
 #endif
-#if KCONFIG_HAVE_SHM2
  struct kproc *procself = kproc_self();
  __ref struct kshmregion *region; size_t pages; kerrno_t error;
  (void)fd,(void)offset; /* TODO? */
@@ -74,12 +73,12 @@ SYSCALL(sys_kmem_map) {
  if __unlikely(KE_ISERR(error)) { hint = (void *)(uintptr_t)-1; goto end; }
  if (!(flags&MAP_FIXED)) {
   /* For non-fixed mappings, find a suitable free range. */
-  hint = kpagedir_findfreerange(procself->p_shm.s_pd,pages,hint);
+  hint = kpagedir_findfreerange(kproc_getpagedir(procself),pages,hint);
   if __unlikely(!hint) goto err_unlock;
  }
  region = kshmregion_newram(pages,prot);
  if __unlikely(!region) goto err_unlock;
- error = kshm_mapfullregion_inherited(&procself->p_shm,hint,region);
+ error = kshm_mapfullregion_inherited(kproc_getshm(procself),hint,region);
  if __unlikely(KE_ISERR(error)) { kshmregion_decref_full(region); goto err_unlock; }
 end_unlock:
  kproc_unlock(procself,KPROC_LOCK_SHM);
@@ -88,19 +87,6 @@ end: KTASK_CRIT_END
 err_unlock:
  hint = (void *)(uintptr_t)-1;
  goto end_unlock;
-#else
- void *result; struct kfile *fp;
- struct kproc *procself = kproc_self();
- if (!hint) hint = KPAGEDIR_MAPANY_HINT_UHEAP;
- else hint = (void *)alignd((uintptr_t)hint,PAGEALIGN);
- prot &= (PROT_READ|PROT_WRITE|PROT_EXEC); /*< Don't reveal the hidden flags. */
- KTASK_CRIT_BEGIN_FIRST
- fp = (flags&MAP_ANONYMOUS) ? NULL : kproc_getfdfile(procself,fd);
- result = kshm_mmap(&procself->p_shm,hint,length,prot,flags,fp,offset);
- if (fp) kfile_decref(fp);
- KTASK_CRIT_END
- RETURN(result);
-#endif
 }
 
 /*< _syscall5(kerrno_t,kmem_mapdev,void **,hint_and_result,__size_t,length,int,prot,int,flags,void *,physptr); */
@@ -110,7 +96,6 @@ SYSCALL(sys_kmem_mapdev) {
        int     ,K(prot),
        int     ,K(flags),
        void   *,K(physptr));
-#if KCONFIG_HAVE_SHM2
  void *hint,*aligned_physptr,*result;
  size_t alignment_offset;
  struct ktask *caller = ktask_self();
@@ -148,11 +133,11 @@ SYSCALL(sys_kmem_mapdev) {
  if __unlikely(KE_ISERR(error)) goto end;
  if (!(flags&MAP_FIXED)) {
   /* For non-fixed mappings, find a suitable free range. */
-  hint = kpagedir_findfreerange(procself->p_shm.s_pd,pages,hint);
+  hint = kpagedir_findfreerange(kproc_getpagedir(procself),pages,hint);
   if __unlikely(!hint) { error = KE_NOSPC; goto end_unlock; }
  }
  result = (void *)((uintptr_t)hint+alignment_offset);
- if __unlikely(kshm_copytouser(&procself->p_shm,
+ if __unlikely(kshm_copytouser(kproc_getshm(procself),
                                hint_and_result,
                                &result,sizeof(void *))) {
   error = KE_FAULT;
@@ -164,30 +149,13 @@ SYSCALL(sys_kmem_mapdev) {
                              prot|KSHMREGION_FLAG_NOCOPY);
  if __unlikely(!region) { error = KE_NOMEM; goto end_unlock; }
  /* Map the new region of memory within the calling process. */
- error = kshm_mapfullregion_inherited(&procself->p_shm,hint,region);
+ error = kshm_mapfullregion_inherited(kproc_getshm(procself),hint,region);
  if __unlikely(KE_ISERR(error)) kshmregion_decref_full(region);
 
 end_unlock:
  kproc_unlock(procself,KPROC_LOCK_SHM);
 end: KTASK_CRIT_END
  RETURN(error);
-#else
- void *result; kerrno_t error;
- struct kproc *procself = kproc_self();
- if __unlikely(copy_from_user(&result,hint_and_result,sizeof(result))) RETURN(KE_FAULT);
- if (!result) result = KPAGEDIR_MAPANY_HINT_UDEV;
- else result = (void *)alignd((uintptr_t)result,PAGEALIGN);
- prot &= (PROT_READ|PROT_WRITE|PROT_EXEC); /*< Don't reveal the hidden flags. */
- KTASK_CRIT_BEGIN_FIRST
- error = kshm_mmapdev(&procself->p_shm,&result,length,prot,flags,physptr);
- if (__likely(KE_ISOK(error)) &&
-     __unlikely(copy_to_user(hint_and_result,&result,sizeof(result)))) {
-  kshm_munmap(&procself->p_shm,result,length,0);
-  error = KE_FAULT;
- }
- KTASK_CRIT_END
- RETURN(error);
-#endif
 }
 
 
@@ -196,23 +164,18 @@ SYSCALL(sys_kmem_unmap) {
  LOAD2(void *,K(addr),
        size_t,K(length));
  kerrno_t error;
+ uintptr_t aligned_start,aligned_length;
  struct kproc *procself = kproc_self();
+ aligned_start = alignd((uintptr_t)addr,PAGEALIGN);
+ aligned_length = length+((uintptr_t)addr-aligned_start);
  KTASK_CRIT_BEGIN_FIRST
  error = kproc_lock(procself,KPROC_LOCK_SHM);
  if __unlikely(KE_ISERR(error)) goto end;
  /* REMINDER: Don't allow unmapping of kernel SHM branches. */
-#if KCONFIG_HAVE_SHM2
- {
-  uintptr_t aligned_start = alignd((uintptr_t)addr,PAGEALIGN);
-  uintptr_t aligned_length = length+((uintptr_t)addr-aligned_start);
-  error = kshm_unmap(&procself->p_shm,
-                    (__user void *)aligned_start,
-                     ceildiv(aligned_length,PAGESIZE),
-                     KSHMUNMAP_FLAG_NONE);
- }
-#else
- error = kshm_munmap(&procself->p_shm,addr,length,0);
-#endif
+ error = kshm_unmap(kproc_getshm(procself),
+                   (__user void *)aligned_start,
+                    ceildiv(aligned_length,PAGESIZE),
+                    KSHMUNMAP_FLAG_NONE);
  kproc_unlock(procself,KPROC_LOCK_SHM);
 end:
  KTASK_CRIT_END
@@ -234,12 +197,12 @@ SYSCALL(sys_kmem_validate) {
   //printf("CHECKING: %p + %Iu (%p + %Iu) (%Iu pages)\n",
   //       pageaddr,alignedsize,addr,bytes,
   //       ceildiv(alignedsize,PAGESIZE));
-  if __unlikely(!kpagedir_ismapped(procself->p_shm.sm_pd,pageaddr,ceildiv(alignedsize,PAGESIZE))) {
+  if __unlikely(!kpagedir_ismapped(kproc_getpagedir(procself),pageaddr,ceildiv(alignedsize,PAGESIZE))) {
    error = KE_FAULT;
   } else {
    assert(ceildiv(alignedsize,PAGESIZE) < 2 ||
-          kpagedir_ismapped(procself->p_shm.sm_pd,(void *)((uintptr_t)pageaddr+PAGESIZE),1));
-   addr = kpagedir_translate(procself->p_shm.sm_pd,addr);
+          kpagedir_ismapped(kproc_getpagedir(procself),(void *)((uintptr_t)pageaddr+PAGESIZE),1));
+   addr = kpagedir_translate(kproc_getpagedir(procself),addr);
    error = kmem_validate(addr,bytes);
   }
   kproc_unlock(procself,KPROC_LOCK_SHM);

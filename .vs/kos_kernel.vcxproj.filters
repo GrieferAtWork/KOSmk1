@@ -264,9 +264,6 @@
     <ClInclude Include="..\src\misc\histd_8x8.h">
       <Filter>src\misc</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\kos\kernel\shm2.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\kos\kernel\panic.h">
       <Filter>include</Filter>
     </ClInclude>
@@ -312,9 +309,6 @@
       <Filter>src\kernel</Filter>
     </ClCompile>
     <ClCompile Include="..\src\kernel\sysconf.c">
-      <Filter>src\kernel</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\kernel\shm.c">
       <Filter>src\kernel</Filter>
     </ClCompile>
     <ClCompile Include="..\src\kernel\linker.c">
@@ -377,7 +371,7 @@
     <ClCompile Include="..\src\kernel\fs\vfs-proc.c">
       <Filter>src\kernel\fs</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\kernel\shm2.c">
+    <ClCompile Include="..\src\kernel\shm.c">
       <Filter>src\kernel</Filter>
     </ClCompile>
   </ItemGroup>
@@ -641,10 +635,10 @@
     <None Include="..\src\kernel\shm-ldt.c.inl">
       <Filter>src\kernel</Filter>
     </None>
-    <None Include="..\src\kernel\shm2-map.c.inl">
+    <None Include="..\src\kernel\shm-map.c.inl">
       <Filter>src\kernel</Filter>
     </None>
-    <None Include="..\src\kernel\shm2-ldt.c.inl">
+    <None Include="..\src\kernel\shm-translate.c.inl">
       <Filter>src\kernel</Filter>
     </None>
   </ItemGroup>

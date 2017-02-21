@@ -35,14 +35,18 @@ __DECL_BEGIN
 #endif
 
 #if defined(STRN) && defined(STRI)
+#undef _strinwcmp
 __public int _strinwcmp(char const *__restrict str, size_t maxstr,
                         char const *__restrict wildpattern, size_t maxpattern)
 #elif defined(STRN)
+#undef _strnwcmp
 __public int _strnwcmp(char const *__restrict str, size_t maxstr,
                        char const *__restrict wildpattern, size_t maxpattern)
 #elif defined(STRI)
+#undef _striwcmp
 __public int _striwcmp(char const *__restrict str, char const *__restrict wildpattern)
 #else
+#undef _strwcmp
 __public int _strwcmp(char const *__restrict str, char const *__restrict wildpattern)
 #endif
 {
