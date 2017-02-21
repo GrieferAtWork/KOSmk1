@@ -37,7 +37,8 @@ struct kfile;
 struct kproc;
 
 /* Do syslog output, as written by 'caller'.
- * Don't perform checks if the caller is allowed to, or even should log with the given level. */
+ * Don't perform checks if the caller is allowed to, or even should log with the given level.
+ * WARNING: An overwritten EPD for the given 's' pointer is ignored! */
 extern kerrno_t k_dosyslog_u(struct kproc *caller, int level, __user char const *s, __size_t maxlen);
 
 extern void k_dosyslog(int level, void (*print_prefix)(int,void *), void *closure, __kernel char const *s, __size_t maxlen);

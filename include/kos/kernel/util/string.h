@@ -27,6 +27,7 @@
 #ifdef __KERNEL__
 #include <kos/compiler.h>
 #include <kos/types.h>
+#include <kos/kernel/task.h>
 
 __DECL_BEGIN
 
@@ -42,9 +43,12 @@ extern __nonnull((2)) __wunused __size_t copy_in_user(__user void *dst, __user v
 extern __crit __nonnull((2)) __wunused __size_t __copy_from_user_c(__kernel void *dst, __user void const *__restrict src, __size_t bytes);
 extern __crit __nonnull((2)) __wunused __size_t __copy_to_user_c(__user void *dst, __kernel void const *__restrict src, __size_t bytes);
 extern __crit __nonnull((2)) __wunused __size_t __copy_in_user_c(__user void *dst, __user void const *__restrict src, __size_t bytes);
-#define copy_from_user(dst,src,bytes) KTASK_CRIT(__copy_from_user_c(dst,src,bytes))
-#define copy_to_user(dst,src,bytes)   KTASK_CRIT(__copy_to_user_c(dst,src,bytes))
-#define copy_in_user(dst,src,bytes)   KTASK_CRIT(__copy_in_user_c(dst,src,bytes))
+#define __copy_from_user(dst,src,bytes) KTASK_CRIT(__copy_from_user_c(dst,src,bytes))
+#define __copy_to_user(dst,src,bytes)   KTASK_CRIT(__copy_to_user_c(dst,src,bytes))
+#define __copy_in_user(dst,src,bytes)   KTASK_CRIT(__copy_in_user_c(dst,src,bytes))
+#define copy_from_user(dst,src,bytes)  (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : __copy_from_user(dst,src,bytes))
+#define copy_to_user(dst,src,bytes)    (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : __copy_to_user(dst,src,bytes))
+#define copy_in_user(dst,src,bytes)    (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : __copy_in_user(dst,src,bytes))
 #endif
 
 
@@ -60,10 +64,14 @@ extern __crit __wunused __user void *__user_memchr_c(__user void const *p, int n
 extern __crit __wunused __size_t __user_strlen_c(__user char const *s);
 extern __crit __wunused __size_t __user_strnlen_c(__user char const *s, __size_t maxchars);
 extern __crit __wunused __malloccall __kernel char *__user_strndup_c(__user char const *s, __size_t maxchars);
-#define user_memchr(p,needle,bytes) KTASK_CRIT(__user_memchr_c(p,needle,bytes))
-#define user_strlen(s)              KTASK_CRIT(__user_strlen_c(s))
-#define user_strnlen(s,maxchars)    KTASK_CRIT(__user_strnlen_c(s,maxchars))
-#define user_strndup(s,maxchars)    KTASK_CRIT(__user_strndup_c(s,maxchars))
+#define __user_memchr(p,needle,bytes) KTASK_CRIT(__user_memchr_c(p,needle,bytes))
+#define __user_strlen(s)              KTASK_CRIT(__user_strlen_c(s))
+#define __user_strnlen(s,maxchars)    KTASK_CRIT(__user_strnlen_c(s,maxchars))
+#define __user_strndup(s,maxchars)    KTASK_CRIT(__user_strndup_c(s,maxchars))
+#define user_memchr(p,needle,bytes) (KTASK_ISKEPD_P ? memchr(p,needle,bytes) : __user_memchr(p,needle,bytes))
+#define user_strlen(s)              (KTASK_ISKEPD_P ? strlen(s) : __user_strlen(s))
+#define user_strnlen(s,maxchars)    (KTASK_ISKEPD_P ? strnlen(s,maxchars) : __user_strnlen(s,maxchars))
+#define user_strndup(s,maxchars)    (KTASK_ISKEPD_P ? strndup(s,maxchars) : __user_strndup(s,maxchars))
 #endif
 
 

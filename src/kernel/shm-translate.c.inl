@@ -29,12 +29,12 @@ __DECL_BEGIN
 
 #ifdef WRITEABLE
 __crit __nomp __kernel void *
-__kshm_translateuser_w_impl(struct kshm const *__restrict self, __user void *addr,
-                            __size_t *__restrict rwbytes)
+__kshm_translateuser_w_impl(struct kshm const *__restrict self, struct kpagedir const *epd,
+                            __user void *addr, __size_t *__restrict rwbytes)
 #else
 __crit __nomp __kernel void *
-__kshm_translateuser_impl(struct kshm const *self, __user void const *addr,
-                          size_t *__restrict rwbytes, int writeable)
+__kshm_translateuser_impl(struct kshm const *self, struct kpagedir const *epd,
+                          __user void const *addr, size_t *__restrict rwbytes, int writeable)
 #endif
 {
  __kernel void *result;
@@ -47,11 +47,11 @@ __kshm_translateuser_impl(struct kshm const *self, __user void const *addr,
  rw_request = *rwbytes;
 again:
 #ifdef WRITEABLE
- result = kpagedir_translate_u(self->s_pd,addr,rwbytes,1);
- if __likely(result)
+ result = kpagedir_translate_u(epd,addr,rwbytes,1);
+ if __likely(result || epd != self->s_pd)
 #else
- result = kpagedir_translate_u(self->s_pd,addr,rwbytes,writeable);
- if __likely(result || !writeable)
+ result = kpagedir_translate_u(epd,addr,rwbytes,writeable);
+ if __likely(result || !writeable || epd != self->s_pd)
 #endif
  {
 #if 0

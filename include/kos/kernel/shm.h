@@ -761,9 +761,9 @@ struct kshm {
   * NOTE: Access to this structure is not thread-safe and therefor
   *       protected by the 'KPROC_LOCK_SHM' lock in kproc. */
  KOBJECT_HEAD
- struct kpagedir *s_pd;  /*< [1..1][owned] Per-process page directory (NOTE: May contain more mappings than those of 's_map', though not less!). */
- struct kshmmap   s_map; /*< Map used for mapping a given user-space pointer to a mapped region of memory. */
- struct kldt      s_ldt; /*< The per-process local descriptor table. */
+ struct kpagedir       *s_pd;  /*< [1..1][owned] Per-process page directory (NOTE: May contain more mappings than those of 's_map', though not less!). */
+ struct kshmmap         s_map; /*< Map used for mapping a given user-space pointer to a mapped region of memory. */
+ struct kldt            s_ldt; /*< The per-process local descriptor table. */
 };
 #define KSHM_INIT(pagedir,gdtid) \
  {KOBJECT_INIT(KOBJECT_MAGIC_SHM) pagedir,KSHMMAP_INIT,KLDT_INIT(gdtid)}
@@ -1066,9 +1066,10 @@ extern __crit __nomp __wunused __nonnull((1,3)) __size_t kshm_copytouser_w(struc
 //                       to the user, NULL is returned and '*rwbytes' is set to ZERO(0).
 // @return: * :       The physical counterpart to the given virtual address.
 // @return: NULL :    '*rwbytes' was set to ZERO(0) because the given pointer isn't mapped.
-extern __crit __nomp __wunused __nonnull((1,4)) __kernel void *
-kshm_translateuser(struct kshm const *__restrict self, __user void const *addr,
-                   __size_t maxbytes, __size_t *__restrict rwbytes, int writeable);
+extern __crit __nomp __wunused __nonnull((1,2,5)) __kernel void *
+kshm_translateuser(struct kshm const *__restrict self, struct kpagedir const *epd,
+                   __user void const *addr, __size_t maxbytes,
+                   __size_t *__restrict rwbytes, int writeable);
 
 //////////////////////////////////////////////////////////////////////////
 // Same 'kshm_translateuser', but allows write-access to otherwise
@@ -1078,21 +1079,22 @@ kshm_translateuser(struct kshm const *__restrict self, __user void const *addr,
 //          the intended restrictions of read-only memory, such as
 //          '.text' sections, yet is required during processes,
 //          such as dynamic relocations.
-extern __crit __nomp __wunused __nonnull((1,4)) __kernel void *
-kshm_translateuser_w(struct kshm const *__restrict self, __user void *addr,
-                     __size_t maxbytes, __size_t *__restrict rwbytes);
+extern __crit __nomp __wunused __nonnull((1,2,5)) __kernel void *
+kshm_translateuser_w(struct kshm const *__restrict self, struct kpagedir const *epd,
+                     __user void *addr, __size_t maxbytes,
+                     __size_t *__restrict rwbytes);
 #else
-#define kshm_translateuser(self,addr,maxbytes,rwbytes,writeable) \
- (*(rwbytes) = (maxbytes),__kshm_translateuser_impl(self,addr,rwbytes,writeable))
-#define kshm_translateuser_w(self,addr,maxbytes,rwbytes) \
- (*(rwbytes) = (maxbytes),__kshm_translateuser_w_impl(self,addr,rwbytes))
+#define kshm_translateuser(self,epd,addr,maxbytes,rwbytes,writeable) \
+ (*(rwbytes) = (maxbytes),__kshm_translateuser_impl(self,epd,addr,rwbytes,writeable))
+#define kshm_translateuser_w(self,epd,addr,maxbytes,rwbytes) \
+ (*(rwbytes) = (maxbytes),__kshm_translateuser_w_impl(self,epd,addr,rwbytes))
 #endif
-extern __crit __nomp __wunused __nonnull((1,3)) __kernel void *
-__kshm_translateuser_impl(struct kshm const *__restrict self, __user void const *addr,
-                          __size_t *__restrict rwbytes, int writeable);
-extern __crit __nomp __wunused __nonnull((1,3)) __kernel void *
-__kshm_translateuser_w_impl(struct kshm const *__restrict self, __user void *addr,
-                            __size_t *__restrict rwbytes);
+extern __crit __nomp __wunused __nonnull((1,2,4)) __kernel void *
+__kshm_translateuser_impl(struct kshm const *__restrict self, struct kpagedir const *epd,
+                          __user void const *addr, __size_t *__restrict rwbytes, int writeable);
+extern __crit __nomp __wunused __nonnull((1,2,4)) __kernel void *
+__kshm_translateuser_w_impl(struct kshm const *__restrict self, struct kpagedir const *epd,
+                            __user void *addr, __size_t *__restrict rwbytes);
 
 
 //////////////////////////////////////////////////////////////////////////

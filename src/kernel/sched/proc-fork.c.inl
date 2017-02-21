@@ -152,6 +152,7 @@ ktask_copy4fork(struct ktask *__restrict self,
  if __unlikely((result = omalloc(struct ktask)) == NULL) goto err_procref;
  if __unlikely(KE_ISERR(ktlspt_initcopy(&result->t_tls,&self->t_tls))) goto err_free;
  kobject_init(result,KOBJECT_MAGIC_TASK);
+ result->t_epd         =
  result->t_userpd      = kproc_getpagedir(proc);
  result->t_refcnt      = 1;
  result->t_locks       = 0;
@@ -209,9 +210,6 @@ ktask_copy4fork(struct ktask *__restrict self,
 #if KCONFIG_HAVE_TASK_STATS
  ktaskstat_init(&result->t_stats);
 #endif /* KCONFIG_HAVE_TASK_STATS */
-
- //kpagedir_print(self->t_userpd);
- //kpagedir_print(result->t_userpd);
 
  // Setup the stack pointer to point to the new kernel stack
  result->t_esp = (__user void *)((uintptr_t)result->t_kstackvp+kstacksize);

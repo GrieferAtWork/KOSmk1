@@ -35,37 +35,65 @@ __crit size_t
 __copy_from_user_c(__kernel void *__restrict dst,
                    __user void const *src,
                    size_t bytes) {
- size_t result;
- struct kproc *proc = kproc_self();
+ size_t copy_max; __kernel void *ksrc;
+ struct ktask *caller = ktask_self();
+ struct kproc *proc = ktask_getproc(caller);
  KTASK_CRIT_MARK
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) return 0;
- result = kshm_copyfromuser(kproc_getshm(proc),dst,src,bytes);
- kproc_unlock(proc,KPROC_LOCK_SHM);
- return result;
+ if __likely(KE_ISOK(kproc_lock(proc,KPROC_LOCK_SHM))) {
+  while ((ksrc = kshm_translateuser(kproc_getshm(proc),caller->t_epd,
+                                    src,bytes,&copy_max,0)
+          ) != NULL) {
+   assert(copy_max <= bytes);
+   memcpy(dst,ksrc,copy_max);
+   if ((bytes -= copy_max) == 0) break;
+   *(uintptr_t *)&dst += copy_max;
+   *(uintptr_t *)&src += copy_max;
+  }
+  kproc_unlock(proc,KPROC_LOCK_SHM);
+ }
+ return bytes;
 }
 __crit size_t
 __copy_to_user_c(__user void *dst,
                  __kernel void const *__restrict src,
                  size_t bytes) {
- size_t result;
- struct kproc *caller = kproc_self();
+ size_t copy_max; __kernel void *kdst;
+ struct ktask *caller = ktask_self();
+ struct kproc *proc = ktask_getproc(caller);
  KTASK_CRIT_MARK
- if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return 0;
- result = kshm_copytouser(kproc_getshm(caller),dst,src,bytes);
- kproc_unlock(caller,KPROC_LOCK_SHM);
- return result;
+ if __likely(KE_ISOK(kproc_lock(proc,KPROC_LOCK_SHM))) {
+  while ((kdst = kshm_translateuser(kproc_getshm(proc),caller->t_epd,
+                                    dst,bytes,&copy_max,1)
+          ) != NULL) {
+   assert(copy_max <= bytes);
+   memcpy(kdst,src,copy_max);
+   if ((bytes -= copy_max) == 0) break;
+   *(uintptr_t *)&dst += copy_max;
+   *(uintptr_t *)&src += copy_max;
+  }
+  kproc_unlock(proc,KPROC_LOCK_SHM);
+ }
+ return bytes;
 }
 __crit size_t
 __copy_in_user_c(__user void *dst,
                  __user void const *__restrict src,
                  size_t bytes) {
- size_t result;
- struct kproc *caller = kproc_self();
+ size_t max_dst,max_src; __kernel void *kdst,*ksrc;
+ struct ktask *caller = ktask_self();
+ struct kproc *proc = ktask_getproc(caller);
  KTASK_CRIT_MARK
- if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return 0;
- result = kshm_copyinuser(kproc_getshm(caller),dst,src,bytes);
- kproc_unlock(caller,KPROC_LOCK_SHM);
- return result;
+ if __likely(KE_ISOK(kproc_lock(proc,KPROC_LOCK_SHM))) {
+  while ((kdst = kshm_translateuser(kproc_getshm(proc),caller->t_epd,dst,bytes,&max_dst,1)) != NULL &&
+         (ksrc = kshm_translateuser(kproc_getshm(proc),caller->t_epd,src,max_dst,&max_src,0)) != NULL) {
+   memcpy(kdst,ksrc,max_src);
+   if ((bytes -= max_src) == 0) break;
+   *(uintptr_t *)&dst += max_src;
+   *(uintptr_t *)&src += max_src;
+  }
+  kproc_unlock(proc,KPROC_LOCK_SHM);
+ }
+ return bytes;
 }
 
 
@@ -74,10 +102,11 @@ __crit __user void *
 __user_memchr_c(__user void const *p, int needle, size_t bytes) {
  size_t bytes_max; __kernel void *kp;
  __user void *result = NULL,*iter = (void *)p;
- struct kproc *caller = kproc_self();
+ struct ktask *caller = ktask_self();
+ struct kproc *proc = ktask_getproc(caller);
  KTASK_CRIT_MARK
- if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return NULL;
- while ((kp = kshm_translateuser(kproc_getshm(caller),iter,bytes,&bytes_max,0)) != NULL) {
+ if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) return NULL;
+ while ((kp = kshm_translateuser(kproc_getshm(proc),caller->t_epd,iter,bytes,&bytes_max,0)) != NULL) {
   assert(bytes_max <= bytes);
   if ((result = memchr(kp,needle,bytes_max)) != NULL) {
    /* Convert the kernel-pointer into a user-pointer. */
@@ -87,7 +116,7 @@ __user_memchr_c(__user void const *p, int needle, size_t bytes) {
   if ((bytes -= bytes_max) == 0) break;
   *(uintptr_t *)&iter += bytes_max;
  }
- kproc_unlock(caller,KPROC_LOCK_SHM);
+ kproc_unlock(proc,KPROC_LOCK_SHM);
  return result;
 }
 
@@ -120,12 +149,14 @@ __user_strndup_c(__user char const *s, size_t maxchars) {
 
 
 __crit size_t __user_strlen_c(__user char const *s) {
- struct kproc *caller = kproc_self();
+ struct ktask *caller = ktask_self();
+ struct kproc *proc = ktask_getproc(caller);
  size_t result = 0,partmaxsize,partsize; char *addr;
  KTASK_CRIT_MARK
- if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return 0;
+ if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) return 0;
  for (;;) {
-  addr = (char *)kshm_translateuser(kproc_getshm(caller),s,PAGESIZE,&partmaxsize,0);
+  addr = (char *)kshm_translateuser(kproc_getshm(proc),caller->t_epd,
+                                    s,PAGESIZE,&partmaxsize,0);
   if __unlikely(!addr) break; /* FAULT */
   partmaxsize /= sizeof(char);
   partsize = strnlen(addr,partmaxsize);
@@ -133,16 +164,18 @@ __crit size_t __user_strlen_c(__user char const *s) {
   if (partmaxsize != partsize) break;
   *(uintptr_t *)&s += partmaxsize;
  }
- kproc_unlock(caller,KPROC_LOCK_SHM);
+ kproc_unlock(proc,KPROC_LOCK_SHM);
  return result;
 }
 __crit size_t __user_strnlen_c(__user char const *s, size_t maxchars) {
- struct kproc *caller = kproc_self();
+ struct ktask *caller = ktask_self();
+ struct kproc *proc = ktask_getproc(caller);
  size_t result = 0,partmaxsize,partsize; char *addr;
  KTASK_CRIT_MARK
- if __unlikely(KE_ISERR(kproc_lock(caller,KPROC_LOCK_SHM))) return 0;
+ if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) return 0;
  for (;;) {
-  addr = (char *)kshm_translateuser(kproc_getshm(caller),s,maxchars,&partmaxsize,0);
+  addr = (char *)kshm_translateuser(kproc_getshm(proc),caller->t_epd,
+                                    s,maxchars,&partmaxsize,0);
   if __unlikely(!addr) break; /* FAULT */
   partmaxsize /= sizeof(char);
   partsize = strnlen(addr,min(maxchars,partmaxsize))*sizeof(char);
@@ -152,7 +185,7 @@ __crit size_t __user_strnlen_c(__user char const *s, size_t maxchars) {
   *(uintptr_t *)&s += partmaxsize;
   maxchars -= partsize;
  }
- kproc_unlock(caller,KPROC_LOCK_SHM);
+ kproc_unlock(proc,KPROC_LOCK_SHM);
  return result/sizeof(char);
 }
 

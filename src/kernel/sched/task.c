@@ -93,6 +93,7 @@ struct ktask __ktask_zero = {
  /* t_esp         */stack_top,
  /* t_userpd      */(struct kpagedir *)kpagedir_kernel(),
  /* t_esp0        */NULL,
+ /* t_epd         */kpagedir_kernel(),
  /* t_refcnt      */0xffff,
  /* t_locks       */0,
  /* t_state       */KTASK_STATE_RUNNING,
@@ -285,6 +286,7 @@ ktask_newkernel(struct ktask *__restrict parent,
  result->t_esp0        = NULL; /*< The TSS isn't used by kernel tasks. */
  result->t_ustackvp    = NULL;
  result->t_ustacksz    = 0;
+ result->t_epd         =
  result->t_userpd      = (struct kpagedir *)kpagedir_kernel();
  result->t_kstackend   = (void *)((uintptr_t)result->t_kstack+kstacksize);
  result->t_esp         = result->t_kstackend;
@@ -392,6 +394,7 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  result->t_ustacksz    = ustacksize;
  result->t_esp         = (__user void *)((uintptr_t)result->t_kstackvp+kstacksize);
  result->t_esp0        = result->t_esp;
+ result->t_epd         =
  result->t_userpd      = kproc_getpagedir(proc);
  result->t_kstackend   = (void *)((uintptr_t)result->t_kstack+kstacksize);
  result->t_proc        = proc; // Inherit reference

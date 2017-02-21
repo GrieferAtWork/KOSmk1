@@ -205,7 +205,7 @@ void kernel_main(void) {
  // TODO: Kernel modules
  // TODO: Create a /proc file system
  // TODO: ELF thread-local memory
- 
+
  // TODO: Fix the mess that is user-kernel pointer translation.
  //      !YOU CAN'T JUST CONVERT A USER-POINTER TO KERNEL-SPACE!
  //    >> The idea of doing so completely clashes with with the

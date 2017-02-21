@@ -2010,12 +2010,12 @@ __crit __nomp size_t
 kshm_copyinuser_w(struct kshm const *self, __user void *dst,
                   __user void const *src, size_t bytes) {
  size_t max_dst,max_src; __kernel void *kdst,*ksrc;
- while ((kdst = kshm_translateuser_w(self,dst,bytes,&max_dst)) != NULL &&
-        (ksrc = kshm_translateuser(self,src,max_dst,&max_src,0)) != NULL) {
+ while ((kdst = kshm_translateuser_w(self,self->s_pd,dst,bytes,&max_dst)) != NULL &&
+        (ksrc = kshm_translateuser(self,self->s_pd,src,max_dst,&max_src,0)) != NULL) {
   memcpy(kdst,ksrc,max_src);
   if ((bytes -= max_src) == 0) break;
-  *(uintptr_t *)&src += max_src;
   *(uintptr_t *)&dst += max_src;
+  *(uintptr_t *)&src += max_src;
  }
  return bytes;
 }
@@ -2023,12 +2023,12 @@ __crit __nomp size_t
 kshm_copytouser_w(struct kshm const *self, __user void *dst,
                   __kernel void const *src, size_t bytes) {
  size_t copy_max; __kernel void *kdst;
- while ((kdst = kshm_translateuser_w(self,dst,bytes,&copy_max)) != NULL) {
+ while ((kdst = kshm_translateuser_w(self,self->s_pd,dst,bytes,&copy_max)) != NULL) {
   assert(copy_max <= bytes);
   memcpy(kdst,src,copy_max);
   if ((bytes -= copy_max) == 0) break;
-  *(uintptr_t *)&src += copy_max;
   *(uintptr_t *)&dst += copy_max;
+  *(uintptr_t *)&src += copy_max;
  }
  return bytes;
 }
@@ -2036,12 +2036,12 @@ __crit __nomp size_t
 kshm_copyinuser(struct kshm const *self, __user void *dst,
                 __user void const *src, size_t bytes) {
  size_t max_dst,max_src; __kernel void *kdst,*ksrc;
- while ((kdst = kshm_translateuser(self,dst,bytes,&max_dst,1)) != NULL &&
-        (ksrc = kshm_translateuser(self,src,max_dst,&max_src,0)) != NULL) {
+ while ((kdst = kshm_translateuser(self,self->s_pd,dst,bytes,&max_dst,1)) != NULL &&
+        (ksrc = kshm_translateuser(self,self->s_pd,src,max_dst,&max_src,0)) != NULL) {
   memcpy(kdst,ksrc,max_src);
   if ((bytes -= max_src) == 0) break;
-  *(uintptr_t *)&src += max_src;
   *(uintptr_t *)&dst += max_src;
+  *(uintptr_t *)&src += max_src;
  }
  return bytes;
 }
@@ -2049,12 +2049,12 @@ __crit __nomp size_t
 kshm_copytouser(struct kshm const *self, __user void *dst,
                 __kernel void const *src, size_t bytes) {
  size_t copy_max; __kernel void *kdst;
- while ((kdst = kshm_translateuser(self,dst,bytes,&copy_max,1)) != NULL) {
+ while ((kdst = kshm_translateuser(self,self->s_pd,dst,bytes,&copy_max,1)) != NULL) {
   assert(copy_max <= bytes);
   memcpy(kdst,src,copy_max);
   if ((bytes -= copy_max) == 0) break;
-  *(uintptr_t *)&src += copy_max;
   *(uintptr_t *)&dst += copy_max;
+  *(uintptr_t *)&src += copy_max;
  }
  return bytes;
 }
@@ -2062,12 +2062,12 @@ __crit __nomp size_t
 kshm_copyfromuser(struct kshm const *self, __kernel void *dst,
                   __user void const *src, size_t bytes) {
  size_t copy_max; __kernel void *ksrc;
- while ((ksrc = kshm_translateuser(self,src,bytes,&copy_max,0)) != NULL) {
+ while ((ksrc = kshm_translateuser(self,self->s_pd,src,bytes,&copy_max,0)) != NULL) {
   assert(copy_max <= bytes);
   memcpy(dst,ksrc,copy_max);
   if ((bytes -= copy_max) == 0) break;
-  *(uintptr_t *)&src += copy_max;
   *(uintptr_t *)&dst += copy_max;
+  *(uintptr_t *)&src += copy_max;
  }
  return bytes;
 }

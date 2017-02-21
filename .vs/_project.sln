@@ -84,7 +84,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "include", "include", "{FC82
 		..\include\termios.h = ..\include\termios.h
 		..\include\time.h = ..\include\time.h
 		..\include\traceback.h = ..\include\traceback.h
-		..\include\type_traits = ..\include\type_traits
 		..\include\uchar.h = ..\include\uchar.h
 		..\include\unistd.h = ..\include\unistd.h
 		..\include\utime.h = ..\include\utime.h
