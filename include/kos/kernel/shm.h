@@ -143,7 +143,7 @@ typedef __u16 kshm_flag_t; /*< Set of 'KSHMREGION_FLAG_*' */
 
 /* Returns TRUE(1) if the given set of flags either requires the
  * use of COW semantics, or to perform hard copies during fork().
- * >> Basically just: Is is writeable and not shared memory.
+ * >> Basically just: Is is writable and not shared memory.
  * NOTE: As a special addition: nocopy-pages implicitly behave as shared. */
 #define KSHMREGION_FLAG_USECOW(flags) \
  (((flags)&(KSHMREGION_FLAG_WRITE)) && \
@@ -1057,7 +1057,7 @@ extern __crit __nomp __wunused __nonnull((1,3)) __size_t kshm_copytouser_w(struc
 //                    of linear bytes available for operations.
 //                    NOTE: In all situations, it can be assumed that
 //                          upon return this value is '<= maxbytes'.
-// @param: writeable: When non-ZERO, perform translation with the intent
+// @param: writable: When non-ZERO, perform translation with the intent
 //                    of writing to the returned pointer upon success.
 //                    >> If the user-space address is part of an uncopied copy-on-write page,
 //                       that page is copied the same way a page-fault would when ring-#3
@@ -1069,12 +1069,12 @@ extern __crit __nomp __wunused __nonnull((1,3)) __size_t kshm_copytouser_w(struc
 extern __crit __nomp __wunused __nonnull((1,2,5)) __kernel void *
 kshm_translateuser(struct kshm const *__restrict self, struct kpagedir const *epd,
                    __user void const *addr, __size_t maxbytes,
-                   __size_t *__restrict rwbytes, int writeable);
+                   __size_t *__restrict rwbytes, int writable);
 
 //////////////////////////////////////////////////////////////////////////
 // Same 'kshm_translateuser', but allows write-access to otherwise
 // read-only regions, using the same semantics as though they were
-// mapped as writeable.
+// mapped as writable.
 // WARNING: This should only be used by the kernel, as it bypasses
 //          the intended restrictions of read-only memory, such as
 //          '.text' sections, yet is required during processes,
@@ -1084,14 +1084,14 @@ kshm_translateuser_w(struct kshm const *__restrict self, struct kpagedir const *
                      __user void *addr, __size_t maxbytes,
                      __size_t *__restrict rwbytes);
 #else
-#define kshm_translateuser(self,epd,addr,maxbytes,rwbytes,writeable) \
- (*(rwbytes) = (maxbytes),__kshm_translateuser_impl(self,epd,addr,rwbytes,writeable))
+#define kshm_translateuser(self,epd,addr,maxbytes,rwbytes,writable) \
+ (*(rwbytes) = (maxbytes),__kshm_translateuser_impl(self,epd,addr,rwbytes,writable))
 #define kshm_translateuser_w(self,epd,addr,maxbytes,rwbytes) \
  (*(rwbytes) = (maxbytes),__kshm_translateuser_w_impl(self,epd,addr,rwbytes))
 #endif
 extern __crit __nomp __wunused __nonnull((1,2,4)) __kernel void *
 __kshm_translateuser_impl(struct kshm const *__restrict self, struct kpagedir const *epd,
-                          __user void const *addr, __size_t *__restrict rwbytes, int writeable);
+                          __user void const *addr, __size_t *__restrict rwbytes, int writable);
 extern __crit __nomp __wunused __nonnull((1,2,4)) __kernel void *
 __kshm_translateuser_w_impl(struct kshm const *__restrict self, struct kpagedir const *epd,
                             __user void *addr, __size_t *__restrict rwbytes);

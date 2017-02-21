@@ -123,7 +123,7 @@ int builtin_rootfork(int argc, char *argv[]) {
   perror("task_rootfork");
   return EXIT_FAILURE;
  }
- return EXIT_SUCCESS;
+ return (int)exitcode;
 }
 
 

@@ -77,7 +77,7 @@ __copy_to_user_c(__user void *dst,
 }
 __crit size_t
 __copy_in_user_c(__user void *dst,
-                 __user void const *__restrict src,
+                 __user void const *src,
                  size_t bytes) {
  size_t max_dst,max_src; __kernel void *kdst,*ksrc;
  struct ktask *caller = ktask_self();

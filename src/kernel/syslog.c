@@ -102,8 +102,8 @@ char const *k_sysloglevel_mnemonic(int level) {
 
 static void print_file_name(int level, struct kfile *file) {
  char filename[PATH_MAX];
- if (KE_ISERR(kfile_getattr(file,KATTR_FS_PATHNAME,filename,sizeof(filename),NULL)) &&
-     KE_ISERR(kfile_getattr(file,KATTR_FS_FILENAME,filename,sizeof(filename),NULL))
+ if (KE_ISERR(kfile_kernel_getattr(file,KATTR_FS_PATHNAME,filename,sizeof(filename),NULL)) &&
+     KE_ISERR(kfile_kernel_getattr(file,KATTR_FS_FILENAME,filename,sizeof(filename),NULL))
      ) strcpy(filename,"??" "?");
  else filename[PATH_MAX-1] = '\0';
  k_writesyslog(level,"['",2);

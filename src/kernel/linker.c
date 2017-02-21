@@ -238,7 +238,7 @@ __local kerrno_t kshmtab_loaddata(struct kshmregion *self, size_t filesz,
   addr = kshmregion_getphysaddr_s(self,offset,&maxbytes);
   copysize = min(maxbytes,filesz);
   offset += copysize,filesz -= copysize;
-  error = kfile_readall(fp,addr,copysize);
+  error = kfile_kernel_readall(fp,addr,copysize);
   if __unlikely(KE_ISERR(error)) return error;
   if __unlikely(!filesz) break;
  }
@@ -443,7 +443,7 @@ kerrno_t kshlib_load_elf32_symtable(struct kshlib *self, Elf32_Shdr const *strta
   strtable_size = strtab->sh_size;
   strtable = (char *)malloc(strtable_size+sizeof(char));
   if __unlikely(!strtable) return KE_NOMEM;
-  error = kfile_preadall(elf_file,strtab->sh_offset,
+  error = kfile_kernel_preadall(elf_file,strtab->sh_offset,
                          strtable,strtable_size);
   if __unlikely(KE_ISERR(error)) goto end_strtable;
   strtable[strtable_size/sizeof(char)] = '\0';
@@ -454,7 +454,7 @@ kerrno_t kshlib_load_elf32_symtable(struct kshlib *self, Elf32_Shdr const *strta
  if (!symtable_size) return KE_OK;
  symtable = (Elf32_Sym *)malloc(symtable_size);
  if __unlikely(!symtable) { error = KE_NOMEM; goto end_strtable; }
- error = kfile_preadall(elf_file,symtab->sh_offset,symtable,symtable_size);
+ error = kfile_kernel_preadall(elf_file,symtab->sh_offset,symtable,symtable_size);
  if __unlikely(KE_ISERR(error)) goto end_symtable;
  sym_end = (Elf32_Sym *)((uintptr_t)symtable+symtable_size);
  private_count = public_count = weak_count = 0;
@@ -575,7 +575,7 @@ kshlib_parse_needed(struct kshlib *self, struct kfile *elf_file,
  __ref struct kshlib **dependencies,**dep_iter,*dep;
  strtable = (char *)malloc(strtable_size+sizeof(char));
  if __unlikely(!strtable) return KE_NOMEM;
- error = kfile_preadall(elf_file,strtable_header->sh_offset,
+ error = kfile_kernel_preadall(elf_file,strtable_header->sh_offset,
                         strtable,strtable_size);
  if __unlikely(KE_ISERR(error)) {
   k_syslogf_prefixfile(KLOG_ERROR,elf_file,"Failed to load DT_NEEDED string table from %I64u|%Iu\n",
@@ -664,7 +664,7 @@ kshlib_load_elf32_pheaders(struct kshlib *self,
   size_t phsize = (size_t)ehdr->e_phnum*ehdr->e_phentsize;
   phdr = (Elf32_Phdr *)malloc(phsize);
   if __unlikely(!phdr) { error = KE_NOMEM; goto err_deps; }
-  error = kfile_preadall(elf_file,ehdr->e_phoff,phdr,phsize);
+  error = kfile_kernel_preadall(elf_file,ehdr->e_phoff,phdr,phsize);
   if __unlikely(KE_ISERR(error)) {__err_pheaders: free(phdr); goto err_deps; }
   error = ksecdata_init(&self->sh_data,phdr,ehdr->e_phnum,ehdr->e_phentsize,elf_file);
   if __unlikely(KE_ISERR(error)) goto __err_pheaders;
@@ -677,7 +677,7 @@ kshlib_load_elf32_pheaders(struct kshlib *self,
    case PT_DYNAMIC: // Dynamic header
     dhdr = (Elf32_Dyn *)malloc(phdr_iter->p_filesz);
     if __unlikely(!dhdr) { error = KE_NOMEM; err_pheaders: free(phdr); goto err_data; }
-    error = kfile_preadall(elf_file,phdr_iter->p_offset,dhdr,
+    error = kfile_kernel_preadall(elf_file,phdr_iter->p_offset,dhdr,
                            phdr_iter->p_filesz);
     if __unlikely(KE_ISERR(error)) {err_dhdr: free(dhdr); goto err_pheaders; }
     dend = dhdr+(phdr_iter->p_filesz/sizeof(Elf32_Dyn));
@@ -826,7 +826,7 @@ kshlib_load_elf32_rel(struct kshlib *self,
  }
  rel_data = (Elf32_Rel *)malloc(relsize);
  if __unlikely(!rel_data) return KE_NOMEM;
- error = kfile_preadall(elf_file,shdr->sh_offset,
+ error = kfile_kernel_preadall(elf_file,shdr->sh_offset,
                         rel_data,relsize);
  if __unlikely(KE_ISERR(error)) goto end_reldata;
  newreloc = (struct krelocvec *)realloc(self->sh_reloc.r_vecv,
@@ -869,7 +869,7 @@ kshlib_load_elf32_sheaders(struct kshlib *self,
  shsize = (size_t)ehdr->e_shnum*ehdr->e_shentsize;
  shdr = (Elf32_Shdr *)malloc(shsize);
  if __unlikely(!shdr) return KE_NOMEM;
- error = kfile_preadall(elf_file,ehdr->e_shoff,shdr,shsize);
+ error = kfile_kernel_preadall(elf_file,ehdr->e_shoff,shdr,shsize);
  if __unlikely(KE_ISERR(error)) goto end_sheaders;
  // String table for section names
  if (ehdr->e_shstrndx < ehdr->e_shnum &&
@@ -888,7 +888,7 @@ kshlib_load_elf32_sheaders(struct kshlib *self,
  } else {
   strtable = (char *)malloc(sh_strtable_size+sizeof(char));
   if __unlikely(!strtable) { error = KE_NOMEM; goto end_sheaders; }
-  error = kfile_preadall(elf_file,sh_strtable_addr,strtable,sh_strtable_size);
+  error = kfile_kernel_preadall(elf_file,sh_strtable_addr,strtable,sh_strtable_size);
   if __unlikely(KE_ISERR(error)) {err_strtab_data: free(strtable); goto end_sheaders; }
   strtable[sh_strtable_size/sizeof(char)] = '\0';
  }
@@ -967,7 +967,7 @@ __crit kerrno_t kshlib_new_elf32(__ref struct kshlib **result, struct kfile *elf
  kobject_init(lib,KOBJECT_MAGIC_SHLIB);
  lib->sh_refcnt = 1;
  lib->sh_flags = KSHLIB_FLAG_NONE;
- error = kfile_readall(elf_file,&ehdr,sizeof(ehdr));
+ error = kfile_kernel_readall(elf_file,&ehdr,sizeof(ehdr));
  if __unlikely(KE_ISERR(error)) goto err_lib;
  if __unlikely(ehdr.ehrd_magic[0] != ELFMAG0 || ehdr.ehrd_magic[1] != ELFMAG1
             || ehdr.ehrd_magic[2] != ELFMAG2 || ehdr.ehrd_magic[3] != ELFMAG3
@@ -1173,7 +1173,7 @@ get_true_path(char *buf, size_t bufsize,
 static kerrno_t check_exec_permissions(struct kfile *fp) {
  mode_t mode; kerrno_t error;
  /* TODO: Check different bits based on filesystem UID/GID. */
- error = kfile_getattr(fp,KATTR_FS_PERM,&mode,sizeof(mode),NULL);
+ error = kfile_kernel_getattr(fp,KATTR_FS_PERM,&mode,sizeof(mode),NULL);
  if __unlikely(KE_ISERR(error)) return error;
  if (!(mode&(S_IXUSR|S_IXGRP|S_IXOTH)))
   return KE_NOEXEC; /* Don't allow execution without these bits. */
@@ -1229,7 +1229,7 @@ again_true_root:
   * on the file we just opened, then use that to lookup the cache again!
   * NOTE: It wasn't perfect because it can't handle '.' and '..' references. */
 again_true_root2:
- error = __kfile_getpathname_fromdirent(fp,kfs_getroot(),trueroot,
+ error = __kfile_kernel_getpathname_fromdirent(fp,kfs_getroot(),trueroot,
                                         trueroot_size,&trueroot_reqsize);
  /* NOTE: Not all files may be able to actually have a path associated
   *       with them. We still allow those files to be loaded if they

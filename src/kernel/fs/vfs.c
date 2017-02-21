@@ -160,35 +160,35 @@ void kvproxyfile_quit(struct kfile *__restrict self) {
 kerrno_t kvproxyfile_read(struct kfile *__restrict self,
                           void *__restrict buf, size_t bufsize,
                           size_t *__restrict rsize) {
- return kfile_read(((struct kvproxyfile *)self)->pf_used,buf,bufsize,rsize);
+ return kfile_kernel_read(((struct kvproxyfile *)self)->pf_used,buf,bufsize,rsize);
 }
 kerrno_t kvproxyfile_write(struct kfile *__restrict self,
                            void const *__restrict buf, size_t bufsize,
                            size_t *__restrict wsize) {
- return kfile_write(((struct kvproxyfile *)self)->pf_used,buf,bufsize,wsize);
+ return kfile_kernel_write(((struct kvproxyfile *)self)->pf_used,buf,bufsize,wsize);
 }
 kerrno_t kvproxyfile_ioctl(struct kfile *__restrict self,
                            kattr_t cmd, __user void *arg) {
- return kfile_ioctl(((struct kvproxyfile *)self)->pf_used,cmd,arg);
+ return kfile_kernel_ioctl(((struct kvproxyfile *)self)->pf_used,cmd,arg);
 }
 kerrno_t kvproxyfile_getattr(struct kfile const *__restrict self,
                              kattr_t attr, void *__restrict buf,
                              size_t bufsize, size_t *__restrict reqsize) {
- return kfile_getattr(((struct kvproxyfile *)self)->pf_used,attr,buf,bufsize,reqsize);
+ return kfile_kernel_getattr(((struct kvproxyfile *)self)->pf_used,attr,buf,bufsize,reqsize);
 }
 kerrno_t kvproxyfile_setattr(struct kfile *__restrict self, kattr_t attr,
                              void const *__restrict buf, size_t bufsize) {
- return kfile_setattr(((struct kvproxyfile *)self)->pf_used,attr,buf,bufsize);
+ return kfile_kernel_setattr(((struct kvproxyfile *)self)->pf_used,attr,buf,bufsize);
 }
 kerrno_t kvproxyfile_pread(struct kfile *__restrict self, __pos_t pos,
                            void *__restrict buf, size_t bufsize,
                            size_t *__restrict rsize) {
- return kfile_pread(((struct kvproxyfile *)self)->pf_used,pos,buf,bufsize,rsize);
+ return kfile_kernel_pread(((struct kvproxyfile *)self)->pf_used,pos,buf,bufsize,rsize);
 }
 kerrno_t kvproxyfile_pwrite(struct kfile *__restrict self, __pos_t pos,
                             void const *__restrict buf, size_t bufsize,
                             size_t *__restrict wsize) {
- return kfile_pwrite(((struct kvproxyfile *)self)->pf_used,pos,buf,bufsize,wsize);
+ return kfile_kernel_pwrite(((struct kvproxyfile *)self)->pf_used,pos,buf,bufsize,wsize);
 }
 kerrno_t kvproxyfile_seek(struct kfile *__restrict self, __off_t off,
                           int whence, __pos_t *__restrict newpos) {

@@ -185,18 +185,20 @@ extern __crit __ref struct kproc *kproc_newroot(void);
 //     user-space with the given set of registers.
 //   - 'ktask_fork' requires the calling task to not be a kernel-task.
 //   - The returned task will be suspended at first
-// @return: NULL: Failed to copy the task context (assume out-of-memory)
-extern __crit __ref struct ktask *
-ktask_fork(__u32 flags, struct kirq_userregisters const *__restrict userregs);
-extern __crit __ref struct kproc *
-kproc_copy4fork(__u32 flags, struct kproc *__restrict proc);
+extern __crit kerrno_t
+ktask_fork(__u32 flags, struct kirq_userregisters const *__restrict userregs,
+           __ref struct ktask **presult);
+extern __crit kerrno_t kproc_copy4fork(__u32 flags, struct kproc *__restrict proc,
+                                       __user void *eip, __ref struct kproc **presult);
 
 //////////////////////////////////////////////////////////////////////////
-// @return: KE_OK:     The given process and EIP can perform a root fork.
-// @return: KE_NOENT:  The given EIP is not associated with any module/memory tab.
-// @return: KE_NOEXEC: The given EIP is not part of an executable section.
-// @return: KE_EXISTS: Memory at the given EIP was modified since module loading.
-// @return: KE_ACCES:  The associated module does not have the SETUID bit enabled.
+// @return: KE_OK:       The given process and EIP can perform a root fork.
+// @return: KE_NOENT:    The given EIP is not associated with any module/memory tab.
+// @return: KE_NOEXEC:   The given EIP is not part of an executable section.
+// @return: KE_CHANGED:  Memory at the given EIP was modified since module loading.
+// @return: KE_EXISTS:   No SHM region is associated with the given EIP.
+// @return: KE_WRITABLE: The SHM mapping of the given EIP indicates writable.
+// @return: KE_ACCES:    The associated module's file does not have the SETUID bit enabled.
 extern __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *eip);
 #define kproc_canrootfork(self,eip) KTASK_CRIT(kproc_canrootfork_c(self,eip))
 
@@ -443,43 +445,80 @@ kproc_equalfd(struct kproc const *__restrict self, int fda, int fdb);
 
 
 
-extern __crit __wunused __nonnull((1,3,5))   kerrno_t kproc_readfd_c(struct kproc *__restrict self, int fd, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
-extern __crit __wunused __nonnull((1,3,5))   kerrno_t kproc_writefd_c(struct kproc *__restrict self, int fd, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
-extern __crit __wunused __nonnull((1,4,6))   kerrno_t kproc_preadfd_c(struct kproc *__restrict self, int fd, __pos_t pos, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
-extern __crit __wunused __nonnull((1,4,6))   kerrno_t kproc_pwritefd_c(struct kproc *__restrict self, int fd, __pos_t pos, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
-extern __crit __wunused __nonnull((1))       kerrno_t kproc_seekfd_c(struct kproc *__restrict self, int fd, __off_t off, int whence, __pos_t *newpos);
+extern __crit __wunused __nonnull((1,3,5))   kerrno_t kproc_user_readfd_c(struct kproc *__restrict self, int fd, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern __crit __wunused __nonnull((1,3,5))   kerrno_t kproc_user_writefd_c(struct kproc *__restrict self, int fd, __user void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern __crit __wunused __nonnull((1,4,6))   kerrno_t kproc_user_preadfd_c(struct kproc *__restrict self, int fd, __pos_t pos, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern __crit __wunused __nonnull((1,4,6))   kerrno_t kproc_user_pwritefd_c(struct kproc *__restrict self, int fd, __pos_t pos, __user void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern __crit __wunused __nonnull((1))       kerrno_t kproc_user_fcntlfd_c(struct kproc *__restrict self, int fd, int cmd, __user void *arg);
+extern __crit __wunused __nonnull((1))       kerrno_t kproc_user_ioctlfd_c(struct kproc *__restrict self, int fd, kattr_t cmd, __user void *arg);
+extern __crit __wunused __nonnull((1,4))     kerrno_t kproc_user_getattrfd_c(struct kproc *__restrict self, int fd, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __crit __wunused __nonnull((1,4))     kerrno_t kproc_user_setattrfd_c(struct kproc *__restrict self, int fd, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+
+#ifdef __INTELLISENSE__
+extern __crit __wunused __nonnull((1,3,5))   kerrno_t kproc_kernel_readfd_c(struct kproc *__restrict self, int fd, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern __crit __wunused __nonnull((1,3,5))   kerrno_t kproc_kernel_writefd_c(struct kproc *__restrict self, int fd, __kernel void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern __crit __wunused __nonnull((1,4,6))   kerrno_t kproc_kernel_preadfd_c(struct kproc *__restrict self, int fd, __pos_t pos, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern __crit __wunused __nonnull((1,4,6))   kerrno_t kproc_kernel_pwritefd_c(struct kproc *__restrict self, int fd, __pos_t pos, __kernel void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern __crit __wunused __nonnull((1))       kerrno_t kproc_kernel_fcntlfd_c(struct kproc *__restrict self, int fd, int cmd, __kernel void *arg);
+extern __crit __wunused __nonnull((1))       kerrno_t kproc_kernel_ioctlfd_c(struct kproc *__restrict self, int fd, kattr_t cmd, __kernel void *arg);
+extern __crit __wunused __nonnull((1,4))     kerrno_t kproc_kernel_getattrfd_c(struct kproc *__restrict self, int fd, kattr_t attr, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __crit __wunused __nonnull((1,4))     kerrno_t kproc_kernel_setattrfd_c(struct kproc *__restrict self, int fd, kattr_t attr, __kernel void const *__restrict buf, __size_t bufsize);
+#else
+#define kproc_kernel_readfd_c(self,fd,buf,bufsize,rsize)           KTASK_KEPD(kproc_user_readfd_c(self,fd,buf,bufsize,rsize))
+#define kproc_kernel_writefd_c(self,fd,buf,bufsize,wsize)          KTASK_KEPD(kproc_user_writefd_c(self,fd,buf,bufsize,wsize))
+#define kproc_kernel_preadfd_c(self,fd,pos,buf,bufsize,rsize)      KTASK_KEPD(kproc_user_preadfd_c(self,fd,pos,buf,bufsize,rsize))
+#define kproc_kernel_pwritefd_c(self,fd,pos,buf,bufsize,wsize)     KTASK_KEPD(kproc_user_pwritefd_c(self,fd,pos,buf,bufsize,wsize))
+#define kproc_kernel_fcntlfd_c(self,fd,cmd,arg)                    KTASK_KEPD(kproc_user_fcntlfd_c(self,fd,cmd,arg))
+#define kproc_kernel_ioctlfd_c(self,fd,cmd,arg)                    KTASK_KEPD(kproc_user_ioctlfd_c(self,fd,cmd,arg))
+#define kproc_kernel_getattrfd_c(self,fd,attr,buf,bufsize,reqsize) KTASK_KEPD(kproc_user_getattrfd_c(self,fd,attr,buf,bufsize,reqsize))
+#define kproc_kernel_setattrfd_c(self,fd,attr,buf,bufsize)         KTASK_KEPD(kproc_user_setattrfd_c(self,fd,attr,buf,bufsize))
+#endif
+
+extern __crit __wunused __nonnull((1))       kerrno_t kproc_seekfd_c(struct kproc *__restrict self, int fd, __off_t off, int whence, __kernel __pos_t *newpos);
 extern __crit __wunused __nonnull((1))       kerrno_t kproc_truncfd_c(struct kproc *__restrict self, int fd, __pos_t size);
-extern __crit __wunused __nonnull((1))       kerrno_t kproc_fcntlfd_c(struct kproc *__restrict self, int fd, int cmd, __user void *arg);
-extern __crit __wunused __nonnull((1))       kerrno_t kproc_ioctlfd_c(struct kproc *__restrict self, int fd, kattr_t cmd, __user void *arg);
 extern __crit __wunused __nonnull((1))       kerrno_t kproc_flushfd_c(struct kproc *__restrict self, int fd);
-extern __crit __wunused __nonnull((1,4))     kerrno_t kproc_getattrfd_c(struct kproc *__restrict self, int fd, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern __crit __wunused __nonnull((1,4))     kerrno_t kproc_setattrfd_c(struct kproc *__restrict self, int fd, kattr_t attr, void const *__restrict buf, __size_t bufsize);
 extern __crit __wunused __nonnull((1,3,4,5)) kerrno_t kproc_readdirfd_c(struct kproc *__restrict self, int fd, __ref struct kinode **__restrict inode,
                                                                         struct kdirentname **__restrict name, __ref struct kfile **__restrict fp, __u32 flags);
 #ifdef __INTELLISENSE__
-extern __wunused __nonnull((1,3,5))   kerrno_t kproc_readfd(struct kproc *__restrict self, int fd, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
-extern __wunused __nonnull((1,3,5))   kerrno_t kproc_writefd(struct kproc *__restrict self, int fd, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
-extern __wunused __nonnull((1,4,6))   kerrno_t kproc_preadfd(struct kproc *__restrict self, int fd, __pos_t pos, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
-extern __wunused __nonnull((1,4,6))   kerrno_t kproc_pwritefd(struct kproc *__restrict self, int fd, __pos_t pos, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
+extern __wunused __nonnull((1,3,5))   kerrno_t kproc_user_readfd(struct kproc *__restrict self, int fd, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern __wunused __nonnull((1,3,5))   kerrno_t kproc_user_writefd(struct kproc *__restrict self, int fd, __user void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern __wunused __nonnull((1,4,6))   kerrno_t kproc_user_preadfd(struct kproc *__restrict self, int fd, __pos_t pos, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern __wunused __nonnull((1,4,6))   kerrno_t kproc_user_pwritefd(struct kproc *__restrict self, int fd, __pos_t pos, __user void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern __wunused __nonnull((1))       kerrno_t kproc_user_fcntlfd(struct kproc *__restrict self, int fd, int cmd, __user void *arg);
+extern __wunused __nonnull((1))       kerrno_t kproc_user_ioctlfd(struct kproc *__restrict self, int fd, kattr_t cmd, __user void *arg);
+extern __wunused __nonnull((1,4))     kerrno_t kproc_user_getattrfd(struct kproc *__restrict self, int fd, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,4))     kerrno_t kproc_user_setattrfd(struct kproc *__restrict self, int fd, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3,5))   kerrno_t kproc_kernel_readfd(struct kproc *__restrict self, int fd, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern __wunused __nonnull((1,3,5))   kerrno_t kproc_kernel_writefd(struct kproc *__restrict self, int fd, __kernel void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern __wunused __nonnull((1,4,6))   kerrno_t kproc_kernel_preadfd(struct kproc *__restrict self, int fd, __pos_t pos, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern __wunused __nonnull((1,4,6))   kerrno_t kproc_kernel_pwritefd(struct kproc *__restrict self, int fd, __pos_t pos, __kernel void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern __wunused __nonnull((1))       kerrno_t kproc_kernel_fcntlfd(struct kproc *__restrict self, int fd, int cmd, __kernel void *arg);
+extern __wunused __nonnull((1))       kerrno_t kproc_kernel_ioctlfd(struct kproc *__restrict self, int fd, kattr_t cmd, __kernel void *arg);
+extern __wunused __nonnull((1,4))     kerrno_t kproc_kernel_getattrfd(struct kproc *__restrict self, int fd, kattr_t attr, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,4))     kerrno_t kproc_kernel_setattrfd(struct kproc *__restrict self, int fd, kattr_t attr, __kernel void const *__restrict buf, __size_t bufsize);
 extern __wunused __nonnull((1))       kerrno_t kproc_seekfd(struct kproc *__restrict self, int fd, __off_t off, int whence, __pos_t *newpos);
 extern __wunused __nonnull((1))       kerrno_t kproc_truncfd(struct kproc *__restrict self, int fd, __pos_t size);
-extern __wunused __nonnull((1))       kerrno_t kproc_fcntlfd(struct kproc *__restrict self, int fd, int cmd, __user void *arg);
-extern __wunused __nonnull((1))       kerrno_t kproc_ioctlfd(struct kproc *__restrict self, int fd, kattr_t cmd, __user void *arg);
 extern __wunused __nonnull((1))       kerrno_t kproc_flushfd(struct kproc *__restrict self, int fd);
-extern __wunused __nonnull((1,4))     kerrno_t kproc_getattrfd(struct kproc *__restrict self, int fd, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,4))     kerrno_t kproc_setattrfd(struct kproc *__restrict self, int fd, kattr_t attr, void const *__restrict buf, __size_t bufsize);
 #else
-#define kproc_readfd(self,fd,buf,bufsize,rsize)           KTASK_CRIT(kproc_readfd_c(self,fd,buf,bufsize,rsize))
-#define kproc_writefd(self,fd,buf,bufsize,wsize)          KTASK_CRIT(kproc_writefd_c(self,fd,buf,bufsize,wsize))
-#define kproc_preadfd(self,fd,pos,buf,bufsize,rsize)      KTASK_CRIT(kproc_preadfd_c(self,fd,pos,buf,bufsize,rsize))
-#define kproc_pwritefd(self,fd,pos,buf,bufsize,wsize)     KTASK_CRIT(kproc_pwritefd_c(self,fd,pos,buf,bufsize,wsize))
-#define kproc_seekfd(self,fd,off,whence,newpos)           KTASK_CRIT(kproc_seekfd_c(self,fd,off,whence,newpos))
-#define kproc_truncfd(self,fd,size)                       KTASK_CRIT(kproc_truncfd_c(self,fd,size))
-#define kproc_fcntlfd(self,fd,cmd,arg)                    KTASK_CRIT(kproc_fcntlfd_c(self,fd,cmd,arg))
-#define kproc_ioctlfd(self,fd,cmd,arg)                    KTASK_CRIT(kproc_ioctlfd_c(self,fd,cmd,arg))
-#define kproc_flushfd(self,fd)                            KTASK_CRIT(kproc_flushfd_c(self,fd))
-#define kproc_getattrfd(self,fd,attr,buf,bufsize,reqsize) KTASK_CRIT(kproc_getattrfd_c(self,fd,attr,buf,bufsize,reqsize))
-#define kproc_setattrfd(self,fd,attr,buf,bufsize)         KTASK_CRIT(kproc_setattrfd_c(self,fd,attr,buf,bufsize))
+#define kproc_user_readfd(self,fd,buf,bufsize,rsize)             KTASK_CRIT(kproc_user_readfd_c(self,fd,buf,bufsize,rsize))
+#define kproc_user_writefd(self,fd,buf,bufsize,wsize)            KTASK_CRIT(kproc_user_writefd_c(self,fd,buf,bufsize,wsize))
+#define kproc_user_preadfd(self,fd,pos,buf,bufsize,rsize)        KTASK_CRIT(kproc_user_preadfd_c(self,fd,pos,buf,bufsize,rsize))
+#define kproc_user_pwritefd(self,fd,pos,buf,bufsize,wsize)       KTASK_CRIT(kproc_user_pwritefd_c(self,fd,pos,buf,bufsize,wsize))
+#define kproc_user_fcntlfd(self,fd,cmd,arg)                      KTASK_CRIT(kproc_user_fcntlfd_c(self,fd,cmd,arg))
+#define kproc_user_ioctlfd(self,fd,cmd,arg)                      KTASK_CRIT(kproc_user_ioctlfd_c(self,fd,cmd,arg))
+#define kproc_user_getattrfd(self,fd,attr,buf,bufsize,reqsize)   KTASK_CRIT(kproc_user_getattrfd_c(self,fd,attr,buf,bufsize,reqsize))
+#define kproc_user_setattrfd(self,fd,attr,buf,bufsize)           KTASK_CRIT(kproc_user_setattrfd_c(self,fd,attr,buf,bufsize))
+#define kproc_kernel_readfd(self,fd,buf,bufsize,rsize)           KTASK_CRIT(kproc_kernel_readfd_c(self,fd,buf,bufsize,rsize))
+#define kproc_kernel_writefd(self,fd,buf,bufsize,wsize)          KTASK_CRIT(kproc_kernel_writefd_c(self,fd,buf,bufsize,wsize))
+#define kproc_kernel_preadfd(self,fd,pos,buf,bufsize,rsize)      KTASK_CRIT(kproc_kernel_preadfd_c(self,fd,pos,buf,bufsize,rsize))
+#define kproc_kernel_pwritefd(self,fd,pos,buf,bufsize,wsize)     KTASK_CRIT(kproc_kernel_pwritefd_c(self,fd,pos,buf,bufsize,wsize))
+#define kproc_kernel_fcntlfd(self,fd,cmd,arg)                    KTASK_CRIT(kproc_kernel_fcntlfd_c(self,fd,cmd,arg))
+#define kproc_kernel_ioctlfd(self,fd,cmd,arg)                    KTASK_CRIT(kproc_kernel_ioctlfd_c(self,fd,cmd,arg))
+#define kproc_kernel_getattrfd(self,fd,attr,buf,bufsize,reqsize) KTASK_CRIT(kproc_kernel_getattrfd_c(self,fd,attr,buf,bufsize,reqsize))
+#define kproc_kernel_setattrfd(self,fd,attr,buf,bufsize)         KTASK_CRIT(kproc_kernel_setattrfd_c(self,fd,attr,buf,bufsize))
+#define kproc_seekfd(self,fd,off,whence,newpos)                  KTASK_CRIT(kproc_seekfd_c(self,fd,off,whence,newpos))
+#define kproc_truncfd(self,fd,size)                              KTASK_CRIT(kproc_truncfd_c(self,fd,size))
+#define kproc_flushfd(self,fd)                                   KTASK_CRIT(kproc_flushfd_c(self,fd))
 #endif
 
 //////////////////////////////////////////////////////////////////////////

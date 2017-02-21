@@ -132,24 +132,24 @@ __public int getchar(void) {
 __public size_t fread(void *__restrict buf, size_t size,
                       size_t count, FILE *fp) {
  size_t result;
- if __unlikely(KE_ISERR(kfile_read(fp,buf,size*count,&result))) return 0;
+ if __unlikely(KE_ISERR(kfile_kernel_read(fp,buf,size*count,&result))) return 0;
  return result;
 }
 __public size_t fwrite(const void *__restrict buf, size_t size,
                        size_t count, FILE *fp) {
  size_t result;
- if __unlikely(KE_ISERR(kfile_write(fp,buf,size*count,&result))) return 0;
+ if __unlikely(KE_ISERR(kfile_kernel_write(fp,buf,size*count,&result))) return 0;
  return result;
 }
 __public int fgetc(FILE *fp) {
  char ch; size_t rc;
- if __unlikely(KE_ISERR(kfile_read(fp,&ch,sizeof(ch),&rc)) ||
+ if __unlikely(KE_ISERR(kfile_kernel_read(fp,&ch,sizeof(ch),&rc)) ||
                !rc) return EOF;
  return (int)ch;
 }
 __public int fputc(int c, FILE *fp) {
  kerrno_t error; size_t wc; char ch = (char)c;
- if __unlikely(KE_ISERR(error = kfile_write(fp,&ch,sizeof(ch),&wc))) return EOF;
+ if __unlikely(KE_ISERR(error = kfile_kernel_write(fp,&ch,sizeof(ch),&wc))) return EOF;
  return wc ? c : EOF;
 }
 __public char *fgets(char *__restrict buf, int bufsize, FILE *fp) {
@@ -159,7 +159,7 @@ __public char *fgets(char *__restrict buf, int bufsize, FILE *fp) {
  if __unlikely(!bufsize) return NULL;
  end = (iter = buf)+(bufsize-1);
  while (iter != end) {
-  if __unlikely(KE_ISERR(error = kfile_read(fp,&temp,1,&rc))) return NULL;
+  if __unlikely(KE_ISERR(error = kfile_kernel_read(fp,&temp,1,&rc))) return NULL;
   if __unlikely(!rc) break;
   *iter++ = temp;
   if (temp == '\n') break;
@@ -169,18 +169,18 @@ __public char *fgets(char *__restrict buf, int bufsize, FILE *fp) {
 }
 __public int fputs(char const *s, FILE *fp) {
  size_t wc; kerrno_t error;
- if __unlikely(KE_ISERR(error = kfile_write(fp,s,strlen(s),&wc))) return error;
+ if __unlikely(KE_ISERR(error = kfile_kernel_write(fp,s,strlen(s),&wc))) return error;
  return (int)wc;
 }
 __public int getw(FILE *fp) {
  int w; size_t rc;
- if __unlikely(KE_ISERR(kfile_read(fp,&w,sizeof(w),&rc)) ||
+ if __unlikely(KE_ISERR(kfile_kernel_read(fp,&w,sizeof(w),&rc)) ||
                rc < sizeof(int)) return EOF;
  return w;
 }
 __public int putw(int w, FILE *fp) {
  kerrno_t error; size_t wc;
- if __unlikely(KE_ISERR(error = kfile_write(fp,&w,sizeof(w),&wc))) return EOF;
+ if __unlikely(KE_ISERR(error = kfile_kernel_write(fp,&w,sizeof(w),&wc))) return EOF;
  return wc == sizeof(w) ? w : EOF;
 }
 __public int fseek64(FILE *fp, __s64 off, int whence) {
@@ -196,7 +196,7 @@ static int stdio_file_formatprinter(char const *data,
                                     FILE *fp) {
  size_t wsize; kerrno_t error;
  maxchars = strnlen(data,maxchars);
- error = kfile_write(fp,data,maxchars,&wsize);
+ error = kfile_kernel_write(fp,data,maxchars,&wsize);
  if __unlikely(KE_ISERR(error)) return error;
  return wsize == maxchars ? KE_OK : KE_NOSPC;
 }
@@ -207,7 +207,7 @@ static int fscanf_scanner(int *__restrict ch,
                           FILE *__restrict fp) {
  char rch;
  size_t rsize; kerrno_t error;
- if __unlikely(KE_ISERR(error = kfile_read(fp,&rch,sizeof(char),&rsize))) return error;
+ if __unlikely(KE_ISERR(error = kfile_kernel_read(fp,&rch,sizeof(char),&rsize))) return error;
  *ch = rsize ? (int)rch : -1;
  return 0;
 }

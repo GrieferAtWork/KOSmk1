@@ -34,7 +34,7 @@ __kshm_translateuser_w_impl(struct kshm const *__restrict self, struct kpagedir 
 #else
 __crit __nomp __kernel void *
 __kshm_translateuser_impl(struct kshm const *self, struct kpagedir const *epd,
-                          __user void const *addr, size_t *__restrict rwbytes, int writeable)
+                          __user void const *addr, size_t *__restrict rwbytes, int writable)
 #endif
 {
  __kernel void *result;
@@ -47,11 +47,16 @@ __kshm_translateuser_impl(struct kshm const *self, struct kpagedir const *epd,
  rw_request = *rwbytes;
 again:
 #ifdef WRITEABLE
+ /* NOTE: Don't set the dirty bit here. - This one's mean
+  *       for writing to restricted pages and can't be
+  *       invoked randomly by usercode. */
  result = kpagedir_translate_u(epd,addr,rwbytes,1);
  if __likely(result || epd != self->s_pd)
 #else
- result = kpagedir_translate_u(epd,addr,rwbytes,writeable);
- if __likely(result || !writeable || epd != self->s_pd)
+ /* TODO: When writing, set the 'dirty' bit on all affected pages.
+  *    >> Otherwise we can't use it to track root-fork privileges. */
+ result = kpagedir_translate_u(epd,addr,rwbytes,writable);
+ if __likely(result || !writable || epd != self->s_pd)
 #endif
  {
 #if 0

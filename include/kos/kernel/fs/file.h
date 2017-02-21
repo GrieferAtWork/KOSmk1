@@ -32,6 +32,8 @@
 #include <kos/kernel/closelock.h>
 #include <kos/kernel/debug.h>
 #include <kos/kernel/object.h>
+#include <kos/kernel/task.h>
+#include <kos/kernel/proc.h>
 #include <kos/types.h>
 
 __DECL_BEGIN
@@ -61,14 +63,14 @@ struct kfiletype {
  void     (*ft_quit)(struct kfile *__restrict self);
  kerrno_t (*ft_open)(struct kfile *__restrict self, struct kdirent *__restrict dirent,
                      struct kinode *__restrict inode, __openmode_t mode);
- kerrno_t (*ft_read)(struct kfile *__restrict self, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
- kerrno_t (*ft_write)(struct kfile *__restrict self, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
+ kerrno_t (*ft_read)(struct kfile *__restrict self, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+ kerrno_t (*ft_write)(struct kfile *__restrict self, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
  kerrno_t (*ft_ioctl)(struct kfile *__restrict self, kattr_t cmd, __user void *arg);
- kerrno_t (*ft_getattr)(struct kfile const *__restrict self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize); /* NOTE: 'reqsize' may be NULL. */
- kerrno_t (*ft_setattr)(struct kfile *__restrict self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
- kerrno_t (*ft_pread)(struct kfile *__restrict self, __pos_t pos, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
- kerrno_t (*ft_pwrite)(struct kfile *__restrict self, __pos_t pos, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
- kerrno_t (*ft_seek)(struct kfile *__restrict self, __off_t off, int whence, __pos_t *__restrict newpos); /* NOTE: 'newpos' may be NULL. */
+ kerrno_t (*ft_getattr)(struct kfile const *__restrict self, kattr_t attr, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict reqsize); /* NOTE: 'reqsize' may be NULL. */
+ kerrno_t (*ft_setattr)(struct kfile *__restrict self, kattr_t attr, __user void const *buf, __size_t bufsize);
+ kerrno_t (*ft_pread)(struct kfile *__restrict self, __pos_t pos, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+ kerrno_t (*ft_pwrite)(struct kfile *__restrict self, __pos_t pos, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+ kerrno_t (*ft_seek)(struct kfile *__restrict self, __off_t off, int whence, __kernel __pos_t *__restrict newpos); /* NOTE: 'newpos' may be NULL. */
  kerrno_t (*ft_trunc)(struct kfile *__restrict self, __pos_t size); /*< Set the current end-of-file marker to 'size' */
  kerrno_t (*ft_flush)(struct kfile *__restrict self);
  kerrno_t (*ft_readdir)(struct kfile *__restrict self, __ref struct kinode **__restrict inode, struct kdirentname **__restrict name, __u32 flags); /*< Returns KS_EMPTY when the end is reached. */
@@ -116,17 +118,22 @@ kfile_opennode(struct kdirent *__restrict dent, struct kinode *__restrict node,
 // Perform various operations on a given file
 // @return: * : File-specific error
 // @return: KE_DESTROYED: File was already closed
-extern        __wunused __nonnull((1,4))   kerrno_t kfile_read(struct kfile *__restrict self, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
-extern        __wunused __nonnull((1,4))   kerrno_t kfile_write(struct kfile *__restrict self, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
-extern        __wunused __nonnull((1))     kerrno_t kfile_seek(struct kfile *__restrict self, __off_t off, int whence, __pos_t *newpos);
+extern        __wunused __nonnull((1,4))   kerrno_t kfile_user_read(struct kfile *__restrict self, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern        __wunused __nonnull((1,4))   kerrno_t kfile_user_write(struct kfile *__restrict self, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern        __wunused __nonnull((1))     kerrno_t kfile_user_ioctl(struct kfile *__restrict self, kattr_t cmd, __user void *arg);
+extern        __wunused __nonnull((1))     kerrno_t kfile_user_getattr(struct kfile const *__restrict self, kattr_t attr, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern        __wunused __nonnull((1))     kerrno_t kfile_user_setattr(struct kfile *__restrict self, kattr_t attr, __user void const *buf, __size_t bufsize);
+extern        __wunused __nonnull((1,4))   kerrno_t kfile_kernel_read(struct kfile *__restrict self, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern        __wunused __nonnull((1,4))   kerrno_t kfile_kernel_write(struct kfile *__restrict self, __kernel void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern        __wunused __nonnull((1))     kerrno_t kfile_kernel_ioctl(struct kfile *__restrict self, kattr_t cmd, __kernel void *arg);
+extern        __wunused __nonnull((1))     kerrno_t kfile_kernel_getattr(struct kfile const *__restrict self, kattr_t attr, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern        __wunused __nonnull((1))     kerrno_t kfile_kernel_setattr(struct kfile *__restrict self, kattr_t attr, __kernel void const *__restrict buf, __size_t bufsize);
+extern        __wunused __nonnull((1))     kerrno_t kfile_seek(struct kfile *__restrict self, __off_t off, int whence, __kernel __pos_t *newpos);
 extern        __wunused __nonnull((1))     kerrno_t kfile_trunc(struct kfile *__restrict self, __pos_t size);
-extern        __wunused __nonnull((1))     kerrno_t kfile_ioctl(struct kfile *__restrict self, kattr_t cmd, __user void *arg);
 extern        __wunused __nonnull((1))     kerrno_t kfile_flush(struct kfile *__restrict self);
-extern        __wunused __nonnull((1))     kerrno_t kfile_getattr(struct kfile const *__restrict self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern        __wunused __nonnull((1))     kerrno_t kfile_setattr(struct kfile *__restrict self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
 extern __crit __wunused __nonnull((1,2,3)) kerrno_t kfile_readdir(struct kfile *__restrict self, __ref struct kinode **__restrict inode, struct kdirentname **__restrict name, __u32 flags);
 #else
-#define kfile_read(self,buf,bufsize,rsize) \
+#define kfile_user_read(self,buf,bufsize,rsize) \
  __xblock({ struct kfile *const __kfrself = (self);\
             kassert_kfile(__kfrself);\
             __xreturn       __kfrself->f_type->ft_read\
@@ -134,13 +141,37 @@ extern __crit __wunused __nonnull((1,2,3)) kerrno_t kfile_readdir(struct kfile *
                            *__kfrself->f_type->ft_read)(__kfrself,buf,bufsize,rsize)\
              : KE_NOSYS;\
  })
-#define kfile_write(self,buf,bufsize,wsize) \
+#define kfile_user_write(self,buf,bufsize,wsize) \
  __xblock({ struct kfile *const __kfwself = (self);\
             kassert_kfile(__kfwself);\
             __xreturn       __kfwself->f_type->ft_write\
              ? (kassertbyte(__kfwself->f_type->ft_write),\
                            *__kfwself->f_type->ft_write)(__kfwself,buf,bufsize,wsize)\
              : KE_NOSYS;\
+ })
+#define kfile_user_ioctl(self,cmd,arg) \
+ __xblock({ struct kfile *const __kficself = (self);\
+            kassert_kfile(__kficself);\
+            __xreturn       __kficself->f_type->ft_ioctl\
+             ? (kassertbyte(__kficself->f_type->ft_ioctl),\
+                           *__kficself->f_type->ft_ioctl)(__kficself,cmd,arg)\
+             : KE_NOSYS;\
+ })
+#define kfile_user_getattr(self,attr,buf,bufsize,reqsize) \
+ __xblock({ struct kfile *const __kfgaself = (self);\
+            kassert_kfile(__kfgaself);\
+            __xreturn       __kfgaself->f_type->ft_getattr\
+             ? (kassertbyte(__kfgaself->f_type->ft_getattr),\
+                           *__kfgaself->f_type->ft_getattr)(__kfgaself,attr,buf,bufsize,reqsize)\
+                                   : kfile_generic_getattr (__kfgaself,attr,buf,bufsize,reqsize);\
+ })
+#define kfile_user_setattr(self,attr,buf,bufsize) \
+ __xblock({ struct kfile *const __kfsaself = (self);\
+            kassert_kfile(__kfsaself);\
+            __xreturn       __kfsaself->f_type->ft_setattr\
+             ? (kassertbyte(__kfsaself->f_type->ft_setattr),\
+                           *__kfsaself->f_type->ft_setattr)(__kfsaself,attr,buf,bufsize)\
+                                   : kfile_generic_setattr (__kfsaself,attr,buf,bufsize);\
  })
 #define kfile_seek(self,off,whence,newpos) \
  __xblock({ struct kfile *const __kfsself = (self);\
@@ -158,14 +189,6 @@ extern __crit __wunused __nonnull((1,2,3)) kerrno_t kfile_readdir(struct kfile *
                            *__kftself->f_type->ft_trunc)(__kftself,size)\
              : KE_NOSYS;\
  })
-#define kfile_ioctl(self,cmd,arg) \
- __xblock({ struct kfile *const __kficself = (self);\
-            kassert_kfile(__kficself);\
-            __xreturn       __kficself->f_type->ft_ioctl\
-             ? (kassertbyte(__kficself->f_type->ft_ioctl),\
-                           *__kficself->f_type->ft_ioctl)(__kficself,cmd,arg)\
-             : KE_NOSYS;\
- })
 #define kfile_flush(self) \
  __xblock({ struct kfile *const __kffself = (self);\
             kassert_kfile(__kffself);\
@@ -173,22 +196,6 @@ extern __crit __wunused __nonnull((1,2,3)) kerrno_t kfile_readdir(struct kfile *
              ? (kassertbyte(__kffself->f_type->ft_flush),\
                            *__kffself->f_type->ft_flush)(__kffself)\
              : KE_NOSYS;\
- })
-#define kfile_getattr(self,attr,buf,bufsize,reqsize) \
- __xblock({ struct kfile *const __kfgaself = (self);\
-            kassert_kfile(__kfgaself);\
-            __xreturn       __kfgaself->f_type->ft_getattr\
-             ? (kassertbyte(__kfgaself->f_type->ft_getattr),\
-                           *__kfgaself->f_type->ft_getattr)(__kfgaself,attr,buf,bufsize,reqsize)\
-                                   : kfile_generic_getattr (__kfgaself,attr,buf,bufsize,reqsize);\
- })
-#define kfile_setattr(self,attr,buf,bufsize) \
- __xblock({ struct kfile *const __kfsaself = (self);\
-            kassert_kfile(__kfsaself);\
-            __xreturn       __kfsaself->f_type->ft_setattr\
-             ? (kassertbyte(__kfsaself->f_type->ft_setattr),\
-                           *__kfsaself->f_type->ft_setattr)(__kfsaself,attr,buf,bufsize)\
-                                   : kfile_generic_setattr (__kfsaself,attr,buf,bufsize);\
  })
 #define kfile_readdir(self,inode,name,flags) \
  __xblock({ struct kfile *const __kfrdself = (self);\
@@ -198,12 +205,28 @@ extern __crit __wunused __nonnull((1,2,3)) kerrno_t kfile_readdir(struct kfile *
                            *__kfrdself->f_type->ft_readdir)(__kfrdself,inode,name,flags)\
              : KE_NOSYS;\
  })
+#define kfile_kernel_read(self,buf,bufsize,rsize)           KTASK_KEPD(kfile_user_read(self,buf,bufsize,rsize))
+#define kfile_kernel_write(self,buf,bufsize,wsize)          KTASK_KEPD(kfile_user_write(self,buf,bufsize,wsize))
+#define kfile_kernel_ioctl(self,cmd,arg)                    KTASK_KEPD(kfile_user_ioctl(self,cmd,arg))
+#define kfile_kernel_getattr(self,attr,buf,bufsize,reqsize) KTASK_KEPD(kfile_user_getattr(self,attr,buf,bufsize,reqsize))
+#define kfile_kernel_setattr(self,attr,buf,bufsize)         KTASK_KEPD(kfile_user_setattr(self,attr,buf,bufsize))
 #endif
 
-extern __wunused __nonnull((1,5)) kerrno_t kfile_pread(struct kfile *__restrict self, __pos_t pos, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
-extern __wunused __nonnull((1,5)) kerrno_t kfile_pwrite(struct kfile *__restrict self, __pos_t pos, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
-extern __wunused __nonnull((1,5)) kerrno_t kfile_fast_pread(struct kfile *__restrict self, __pos_t pos, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
-extern __wunused __nonnull((1,5)) kerrno_t kfile_fast_pwrite(struct kfile *__restrict self, __pos_t pos, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
+extern __wunused __nonnull((1,5)) kerrno_t kfile_user_pread(struct kfile *__restrict self, __pos_t pos, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern __wunused __nonnull((1,5)) kerrno_t kfile_user_pwrite(struct kfile *__restrict self, __pos_t pos, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern __wunused __nonnull((1,5)) kerrno_t kfile_user_fast_pread(struct kfile *__restrict self, __pos_t pos, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern __wunused __nonnull((1,5)) kerrno_t kfile_user_fast_pwrite(struct kfile *__restrict self, __pos_t pos, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,5)) kerrno_t kfile_kernel_pread(struct kfile *__restrict self, __pos_t pos, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern __wunused __nonnull((1,5)) kerrno_t kfile_kernel_pwrite(struct kfile *__restrict self, __pos_t pos, __kernel void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern __wunused __nonnull((1,5)) kerrno_t kfile_kernel_fast_pread(struct kfile *__restrict self, __pos_t pos, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern __wunused __nonnull((1,5)) kerrno_t kfile_kernel_fast_pwrite(struct kfile *__restrict self, __pos_t pos, __kernel void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+#else
+#define kfile_kernel_pread(self,pos,buf,bufsize,rsize)       KTASK_KEPD(kfile_user_pread(self,pos,buf,bufsize,rsize))
+#define kfile_kernel_pwrite(self,pos,buf,bufsize,wsize)      KTASK_KEPD(kfile_user_pwrite(self,pos,buf,bufsize,wsize))
+#define kfile_kernel_fast_pread(self,pos,buf,bufsize,rsize)  KTASK_KEPD(kfile_user_fast_pread(self,pos,buf,bufsize,rsize))
+#define kfile_kernel_fast_pwrite(self,pos,buf,bufsize,wsize) KTASK_KEPD(kfile_user_fast_pwrite(self,pos,buf,bufsize,wsize))
+#endif
 
 #define kfile_rewind(self)     kfile_seek(self,0,SEEK_SET,NULL)
 #define kfile_tell(self,pos)   kfile_seek(self,0,SEEK_CUR,pos)
@@ -211,25 +234,44 @@ extern __wunused __nonnull((1,5)) kerrno_t kfile_fast_pwrite(struct kfile *__res
 
 //////////////////////////////////////////////////////////////////////////
 // Read/Write all data, returning 'KE_NOSPC' is not all could be read/written
-extern __wunused __nonnull((1,2)) kerrno_t kfile_readall(struct kfile *__restrict self, void *__restrict buf, __size_t bufsize);
-extern __wunused __nonnull((1,2)) kerrno_t kfile_writeall(struct kfile *__restrict self, void const *__restrict buf, __size_t bufsize);
-extern __wunused __nonnull((1,3)) kerrno_t kfile_preadall(struct kfile *__restrict self, __pos_t pos, void *__restrict buf, __size_t bufsize);
-extern __wunused __nonnull((1,3)) kerrno_t kfile_pwriteall(struct kfile *__restrict self, __pos_t pos, void const *__restrict buf, __size_t bufsize);
-extern __wunused __nonnull((1,3)) kerrno_t kfile_fast_preadall(struct kfile *__restrict self, __pos_t pos, void *__restrict buf, __size_t bufsize);
-extern __wunused __nonnull((1,3)) kerrno_t kfile_fast_pwriteall(struct kfile *__restrict self, __pos_t pos, void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,2)) kerrno_t kfile_user_readall(struct kfile *__restrict self, __user void *buf, __size_t bufsize);
+extern __wunused __nonnull((1,2)) kerrno_t kfile_user_writeall(struct kfile *__restrict self, __user void const *buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kfile_user_preadall(struct kfile *__restrict self, __pos_t pos, __user void *buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kfile_user_pwriteall(struct kfile *__restrict self, __pos_t pos, __user void const *buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kfile_user_fast_preadall(struct kfile *__restrict self, __pos_t pos, __user void *buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kfile_user_fast_pwriteall(struct kfile *__restrict self, __pos_t pos, __user void const *buf, __size_t bufsize);
+
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,2)) kerrno_t kfile_kernel_readall(struct kfile *__restrict self, __kernel void *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,2)) kerrno_t kfile_kernel_writeall(struct kfile *__restrict self, __kernel void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kfile_kernel_preadall(struct kfile *__restrict self, __pos_t pos, __kernel void *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kfile_kernel_pwriteall(struct kfile *__restrict self, __pos_t pos, __kernel void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kfile_kernel_fast_preadall(struct kfile *__restrict self, __pos_t pos, __kernel void *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kfile_kernel_fast_pwriteall(struct kfile *__restrict self, __pos_t pos, __kernel void const *__restrict buf, __size_t bufsize);
+#else
+#define kfile_kernel_readall(self,buf,bufsize)            KTASK_KEPD(kfile_user_readall(self,buf,bufsize))
+#define kfile_kernel_writeall(self,buf,bufsize)           KTASK_KEPD(kfile_user_writeall(self,buf,bufsize))
+#define kfile_kernel_preadall(self,pos,buf,bufsize)       KTASK_KEPD(kfile_user_preadall(self,pos,buf,bufsize))
+#define kfile_kernel_pwriteall(self,pos,buf,bufsize)      KTASK_KEPD(kfile_user_pwriteall(self,pos,buf,bufsize))
+#define kfile_kernel_fast_preadall(self,pos,buf,bufsize)  KTASK_KEPD(kfile_user_fast_preadall(self,pos,buf,bufsize))
+#define kfile_kernel_fast_pwriteall(self,pos,buf,bufsize) KTASK_KEPD(kfile_user_fast_pwriteall(self,pos,buf,bufsize))
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the filename/absolute path of a given directory entry
 // @return: KE_NOSYS: No dirent is associated with the given file.
-extern __wunused __nonnull((1)) kerrno_t
-__kfile_getfilename_fromdirent(struct kfile const *__restrict self, char *__restrict buf,
-                               __size_t bufsize, __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,2)) kerrno_t
-__kfile_getpathname_fromdirent(struct kfile const *__restrict self, struct kdirent *__restrict root,
-                               char *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
+extern __wunused __nonnull((1))   kerrno_t __kfile_user_getfilename_fromdirent(struct kfile const *__restrict self, __user char *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,2)) kerrno_t __kfile_user_getpathname_fromdirent(struct kfile const *__restrict self, struct kdirent *__restrict root, __user char *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1))   kerrno_t __kfile_kernel_getfilename_fromdirent(struct kfile const *__restrict self, __kernel char *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,2)) kerrno_t __kfile_kernel_getpathname_fromdirent(struct kfile const *__restrict self, struct kdirent *__restrict root, __kernel char *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+#else
+#define __kfile_kernel_getfilename_fromdirent(self,buf,bufsize,reqsize)      KTASK_KEPD(__kfile_user_getfilename_fromdirent(self,buf,bufsize,reqsize))
+#define __kfile_kernel_getpathname_fromdirent(self,root,buf,bufsize,reqsize) KTASK_KEPD(__kfile_user_getpathname_fromdirent(self,root,buf,bufsize,reqsize))
+#endif
 
 
-extern __crit __malloccall __wunused __nonnull((1)) char *
+extern __crit __malloccall __wunused __nonnull((1)) __kernel char *
 kfile_getmallname(struct kfile *__restrict fp);
 
 
@@ -266,14 +308,14 @@ extern __crit __nonnull((1)) __ref struct kdirent *kfile_getdirent(struct kfile 
 // >> When overwriting ioctl, getattr or setattr, you should
 //    call these functions for attributes you don't know.
 extern __wunused __nonnull((1)) kerrno_t kfile_generic_ioctl(struct kfile *__restrict self, kattr_t cmd, __user void *arg);
-extern __wunused __nonnull((1)) kerrno_t kfile_generic_getattr(struct kfile const *__restrict self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern __wunused __nonnull((1)) kerrno_t kfile_generic_setattr(struct kfile *__restrict self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1)) kerrno_t kfile_generic_getattr(struct kfile const *__restrict self, kattr_t attr, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1)) kerrno_t kfile_generic_setattr(struct kfile *__restrict self, kattr_t attr, __user void const *buf, __size_t bufsize);
 
 extern kerrno_t kfile_generic_open(struct kfile *__restrict self, struct kdirent *__restrict dirent, struct kinode *__restrict inode, __openmode_t mode);
-extern kerrno_t kfile_generic_read_isdir(struct kfile *__restrict self, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
-extern kerrno_t kfile_generic_write_isdir(struct kfile *__restrict self, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
-extern kerrno_t kfile_generic_readat_isdir(struct kfile *__restrict self, __pos_t pos, void *__restrict buf, __size_t bufsize, __size_t *__restrict rsize);
-extern kerrno_t kfile_generic_writeat_isdir(struct kfile *__restrict self, __pos_t pos, void const *__restrict buf, __size_t bufsize, __size_t *__restrict wsize);
+extern kerrno_t kfile_generic_read_isdir(struct kfile *__restrict self, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern kerrno_t kfile_generic_write_isdir(struct kfile *__restrict self, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern kerrno_t kfile_generic_readat_isdir(struct kfile *__restrict self, __pos_t pos, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern kerrno_t kfile_generic_writeat_isdir(struct kfile *__restrict self, __pos_t pos, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
 #endif /* !__ASSEMBLY__ */
 
 __DECL_END

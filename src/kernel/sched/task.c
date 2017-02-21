@@ -362,7 +362,7 @@ ktask_newuser(struct ktask *__restrict parent, struct kproc *__restrict ctx,
 
 __crit __ref struct ktask *
 ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
-                __pagealigned __user void *__restrict ustackaddr, __size_t ustacksize,
+                __pagealigned __user void *ustackaddr, __size_t ustacksize,
                 __size_t kstacksize, __u16 flags) {
  struct ktask *result;
  KTASK_CRIT_MARK

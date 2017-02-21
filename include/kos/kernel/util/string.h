@@ -27,7 +27,10 @@
 #ifdef __KERNEL__
 #include <kos/compiler.h>
 #include <kos/types.h>
+#ifndef __INTELLISENSE__
 #include <kos/kernel/task.h>
+#include <kos/kernel/proc.h>
+#endif
 
 __DECL_BEGIN
 
@@ -36,13 +39,13 @@ __DECL_BEGIN
 // @return: 0 : Memory was successfully copied.
 // @return: * : Amount of bytes that could not be copied.
 #ifdef __INTELLISENSE__
-extern __nonnull((2)) __wunused __size_t copy_from_user(__kernel void *dst, __user void const *__restrict src, __size_t bytes);
+extern __nonnull((2)) __wunused __size_t copy_from_user(__kernel void *dst, __user void const *src, __size_t bytes);
 extern __nonnull((2)) __wunused __size_t copy_to_user(__user void *dst, __kernel void const *__restrict src, __size_t bytes);
-extern __nonnull((2)) __wunused __size_t copy_in_user(__user void *dst, __user void const *__restrict src, __size_t bytes);
+extern __nonnull((2)) __wunused __size_t copy_in_user(__user void *dst, __user void const *src, __size_t bytes);
 #else
-extern __crit __nonnull((2)) __wunused __size_t __copy_from_user_c(__kernel void *dst, __user void const *__restrict src, __size_t bytes);
+extern __crit __nonnull((2)) __wunused __size_t __copy_from_user_c(__kernel void *dst, __user void const *src, __size_t bytes);
 extern __crit __nonnull((2)) __wunused __size_t __copy_to_user_c(__user void *dst, __kernel void const *__restrict src, __size_t bytes);
-extern __crit __nonnull((2)) __wunused __size_t __copy_in_user_c(__user void *dst, __user void const *__restrict src, __size_t bytes);
+extern __crit __nonnull((2)) __wunused __size_t __copy_in_user_c(__user void *dst, __user void const *src, __size_t bytes);
 #define __copy_from_user(dst,src,bytes) KTASK_CRIT(__copy_from_user_c(dst,src,bytes))
 #define __copy_to_user(dst,src,bytes)   KTASK_CRIT(__copy_to_user_c(dst,src,bytes))
 #define __copy_in_user(dst,src,bytes)   KTASK_CRIT(__copy_in_user_c(dst,src,bytes))

@@ -201,7 +201,7 @@ procpid_fdentry_readlink(struct kinode *self,
  char *newdynbuf,*dynbuf = buffer;
  size_t reqbufsize,bufsize = sizeof(buffer);
 getattr_again:
- error = kfdentry_getattr(fdentry,KATTR_FS_PATHNAME,dynbuf,bufsize,&reqbufsize);
+ error = kfdentry_kernel_getattr(fdentry,KATTR_FS_PATHNAME,dynbuf,bufsize,&reqbufsize);
  if __unlikely(KE_ISERR(error)) goto end_buf;
  if (reqbufsize > bufsize) {
   newdynbuf = (char *)((dynbuf == buffer) ? realloc(dynbuf,reqbufsize) : malloc(reqbufsize));

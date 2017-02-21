@@ -371,8 +371,8 @@ __crit kerrno_t kproc_dupfdh_c(struct kproc *__restrict self, int oldfd, int hin
 
 
 __crit kerrno_t
-kproc_fcntlfd_c(struct kproc *__restrict self, int fd,
-                int cmd, __user void *arg) {
+kproc_user_fcntlfd_c(struct kproc *__restrict self, int fd,
+                     int cmd, __user void *arg) {
  kerrno_t error;
  kassert_kproc(self);
  switch (cmd) {
@@ -496,52 +496,92 @@ end:
 
 
 __crit kerrno_t
-kproc_readfd_c(struct kproc *__restrict self, int fd,
-               void *__restrict buf, size_t bufsize, size_t *__restrict rsize) {
+kproc_user_readfd_c(struct kproc *__restrict self, int fd,
+                    __user void *__restrict buf, size_t bufsize,
+                    __kernel size_t *__restrict rsize) {
  kerrno_t error; struct kfdentry fdentry;
  KTASK_CRIT_MARK
  if __likely(KE_ISOK(error = kproc_getfd(self,fd,&fdentry))) {
-  error = kfdentry_read(&fdentry,buf,bufsize,rsize);
+  error = kfdentry_user_read(&fdentry,buf,bufsize,rsize);
   kfdentry_quit(&fdentry);
  }
  return error;
 }
 __crit kerrno_t
-kproc_writefd_c(struct kproc *__restrict self, int fd,
-                void const *__restrict buf, size_t bufsize, size_t *__restrict wsize) {
+kproc_user_writefd_c(struct kproc *__restrict self, int fd,
+                     __user void const *__restrict buf, size_t bufsize,
+                     __kernel size_t *__restrict wsize) {
  kerrno_t error; struct kfdentry fdentry;
  KTASK_CRIT_MARK
  if __likely(KE_ISOK(error = kproc_getfd(self,fd,&fdentry))) {
-  error = kfdentry_write(&fdentry,buf,bufsize,wsize);
+  error = kfdentry_user_write(&fdentry,buf,bufsize,wsize);
   kfdentry_quit(&fdentry);
  }
  return error;
 }
 __crit kerrno_t
-kproc_preadfd_c(struct kproc *__restrict self, int fd, pos_t pos,
-                void *__restrict buf, size_t bufsize, size_t *__restrict rsize) {
+kproc_user_preadfd_c(struct kproc *__restrict self, int fd, pos_t pos,
+                     __user void *__restrict buf, size_t bufsize,
+                     __kernel size_t *__restrict rsize) {
  kerrno_t error; struct kfdentry fdentry;
  KTASK_CRIT_MARK
  if __likely(KE_ISOK(error = kproc_getfd(self,fd,&fdentry))) {
-  error = kfdentry_pread(&fdentry,pos,buf,bufsize,rsize);
+  error = kfdentry_user_pread(&fdentry,pos,buf,bufsize,rsize);
   kfdentry_quit(&fdentry);
  }
  return error;
 }
 __crit kerrno_t
-kproc_pwritefd_c(struct kproc *__restrict self, int fd, pos_t pos,
-                 void const *__restrict buf, size_t bufsize, size_t *__restrict wsize) {
+kproc_user_pwritefd_c(struct kproc *__restrict self, int fd, pos_t pos,
+                      __user void const *__restrict buf, size_t bufsize,
+                      __kernel size_t *__restrict wsize) {
  kerrno_t error; struct kfdentry fdentry;
  KTASK_CRIT_MARK
  if __likely(KE_ISOK(error = kproc_getfd(self,fd,&fdentry))) {
-  error = kfdentry_pwrite(&fdentry,pos,buf,bufsize,wsize);
+  error = kfdentry_user_pwrite(&fdentry,pos,buf,bufsize,wsize);
   kfdentry_quit(&fdentry);
  }
  return error;
 }
+__crit kerrno_t
+kproc_user_ioctlfd_c(struct kproc *__restrict self, int fd,
+                     kattr_t cmd, __user void *arg) {
+ kerrno_t error; struct kfdentry fdentry;
+ KTASK_CRIT_MARK
+ if __likely(KE_ISOK(error = kproc_getfd(self,fd,&fdentry))) {
+  error = kfdentry_user_ioctl(&fdentry,cmd,arg);
+  kfdentry_quit(&fdentry);
+ }
+ return error;
+}
+__crit kerrno_t
+kproc_user_getattrfd_c(struct kproc *__restrict self, int fd, kattr_t attr,
+                       __user void *__restrict buf, size_t bufsize,
+                       __kernel size_t *__restrict reqsize) {
+ kerrno_t error; struct kfdentry fdentry;
+ KTASK_CRIT_MARK
+ if __likely(KE_ISOK(error = kproc_getfd(self,fd,&fdentry))) {
+  error = kfdentry_user_getattr(&fdentry,attr,buf,bufsize,reqsize);
+  kfdentry_quit(&fdentry);
+ }
+ return error;
+}
+__crit kerrno_t
+kproc_user_setattrfd_c(struct kproc *__restrict self, int fd, kattr_t attr,
+                       __user void const *__restrict buf, size_t bufsize) {
+ kerrno_t error; struct kfdentry fdentry;
+ KTASK_CRIT_MARK
+ if __likely(KE_ISOK(error = kproc_getfd(self,fd,&fdentry))) {
+  error = kfdentry_user_setattr(&fdentry,attr,buf,bufsize);
+  kfdentry_quit(&fdentry);
+ }
+ return error;
+}
+
+
 __crit kerrno_t
 kproc_seekfd_c(struct kproc *__restrict self, int fd, __off_t off,
-               int whence, pos_t *__restrict newpos) {
+               int whence, __kernel pos_t *__restrict newpos) {
  kerrno_t error; struct kfdentry fdentry;
  KTASK_CRIT_MARK
  if __likely(KE_ISOK(error = kproc_getfd(self,fd,&fdentry))) {
@@ -561,44 +601,11 @@ kproc_truncfd_c(struct kproc *__restrict self, int fd, pos_t size) {
  return error;
 }
 __crit kerrno_t
-kproc_ioctlfd_c(struct kproc *__restrict self, int fd,
-              kattr_t cmd, __user void *arg) {
- kerrno_t error; struct kfdentry fdentry;
- KTASK_CRIT_MARK
- if __likely(KE_ISOK(error = kproc_getfd(self,fd,&fdentry))) {
-  error = kfdentry_ioctl(&fdentry,cmd,arg);
-  kfdentry_quit(&fdentry);
- }
- return error;
-}
-__crit kerrno_t
 kproc_flushfd_c(struct kproc *__restrict self, int fd) {
  kerrno_t error; struct kfdentry fdentry;
  KTASK_CRIT_MARK
  if __likely(KE_ISOK(error = kproc_getfd(self,fd,&fdentry))) {
   error = kfdentry_flush(&fdentry);
-  kfdentry_quit(&fdentry);
- }
- return error;
-}
-__crit kerrno_t
-kproc_getattrfd_c(struct kproc *__restrict self, int fd, kattr_t attr,
-                  void *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
- kerrno_t error; struct kfdentry fdentry;
- KTASK_CRIT_MARK
- if __likely(KE_ISOK(error = kproc_getfd(self,fd,&fdentry))) {
-  error = kfdentry_getattr(&fdentry,attr,buf,bufsize,reqsize);
-  kfdentry_quit(&fdentry);
- }
- return error;
-}
-__crit kerrno_t
-kproc_setattrfd_c(struct kproc *__restrict self, int fd, kattr_t attr,
-                  void const *__restrict buf, size_t bufsize) {
- kerrno_t error; struct kfdentry fdentry;
- KTASK_CRIT_MARK
- if __likely(KE_ISOK(error = kproc_getfd(self,fd,&fdentry))) {
-  error = kfdentry_setattr(&fdentry,attr,buf,bufsize);
   kfdentry_quit(&fdentry);
  }
  return error;

@@ -100,16 +100,21 @@ void kfile_destroy(struct kfile *__restrict self) {
  free(self);
 }
 
-kerrno_t __kfile_getfilename_fromdirent(struct kfile const *__restrict self, char *__restrict buf,
-                                        size_t bufsize, size_t *__restrict reqsize) {
+kerrno_t
+__kfile_user_getfilename_fromdirent(struct kfile const *__restrict self,
+                                    __user char *__restrict buf, size_t bufsize,
+                                    __kernel size_t *__restrict reqsize) {
  __ref struct kdirent *__restrict dent;
  if __unlikely((dent = kfile_getdirent((struct kfile *)self)) == NULL) return KE_NOSYS;
  kdirent_getfilename(dent,buf,bufsize,reqsize);
  kdirent_decref(dent);
  return KE_OK;
 }
-kerrno_t __kfile_getpathname_fromdirent(struct kfile const *__restrict self, struct kdirent *__restrict root,
-                                        char *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
+kerrno_t
+__kfile_user_getpathname_fromdirent(struct kfile const *__restrict self,
+                                    struct kdirent *__restrict root,
+                                    __user char *__restrict buf, size_t bufsize,
+                                    __kernel size_t *__restrict reqsize) {
  __ref struct kdirent *__restrict dent;
  if (root) kassert_kdirent(root);
  if __unlikely((dent = kfile_getdirent((struct kfile *)self)) == NULL) return KE_NOSYS;
@@ -118,8 +123,9 @@ kerrno_t __kfile_getpathname_fromdirent(struct kfile const *__restrict self, str
  return KE_OK;
 }
 
-kerrno_t kfile_pread(struct kfile *__restrict self, pos_t pos, void *__restrict buf,
-                     size_t bufsize, size_t *__restrict rsize) {
+kerrno_t kfile_user_pread(struct kfile *__restrict self, pos_t pos,
+                          __user void *buf, size_t bufsize,
+                          __kernel size_t *__restrict rsize) {
  kerrno_t(*callback)(struct kfile *,pos_t,void *,size_t,size_t *);
  kerrno_t error; kassert_kfile(self);
  if ((callback = self->f_type->ft_pread) != NULL) {
@@ -130,14 +136,15 @@ kerrno_t kfile_pread(struct kfile *__restrict self, pos_t pos, void *__restrict 
   error = kfile_seek(self,0,SEEK_CUR,&oldpos);
   if __likely(KE_ISOK(error)) {
    error = kfile_seek(self,*(off_t *)&pos,SEEK_SET,NULL);
-   if __likely(KE_ISOK(error)) error = kfile_read(self,buf,bufsize,rsize);
+   if __likely(KE_ISOK(error)) error = kfile_user_read(self,buf,bufsize,rsize);
    __evalexpr(kfile_seek(self,*(off_t *)&oldpos,SEEK_SET,NULL));
   }
  }
  return error;
 }
-kerrno_t kfile_pwrite(struct kfile *__restrict self, pos_t pos, void const *__restrict buf,
-                      size_t bufsize, size_t *__restrict wsize) {
+kerrno_t kfile_user_pwrite(struct kfile *__restrict self, pos_t pos,
+                           __user void const *buf, size_t bufsize,
+                           __kernel size_t *__restrict wsize) {
  kerrno_t(*callback)(struct kfile *,pos_t,void const *,size_t,size_t *);
  kerrno_t error; kassert_kfile(self);
  if ((callback = self->f_type->ft_pwrite) != NULL) {
@@ -148,14 +155,15 @@ kerrno_t kfile_pwrite(struct kfile *__restrict self, pos_t pos, void const *__re
   error = kfile_seek(self,0,SEEK_CUR,&oldpos);
   if __likely(KE_ISOK(error)) {
    error = kfile_seek(self,*(off_t *)&pos,SEEK_SET,NULL);
-   if __likely(KE_ISOK(error)) error = kfile_write(self,buf,bufsize,wsize);
+   if __likely(KE_ISOK(error)) error = kfile_user_write(self,buf,bufsize,wsize);
    __evalexpr(kfile_seek(self,*(off_t *)&oldpos,SEEK_SET,NULL));
   }
  }
  return error;
 }
-kerrno_t kfile_fast_pread(struct kfile *__restrict self, pos_t pos, void *__restrict buf,
-                          size_t bufsize, size_t *__restrict rsize) {
+kerrno_t kfile_user_fast_pread(struct kfile *__restrict self, pos_t pos,
+                               __user void *buf, size_t bufsize,
+                               __kernel size_t *__restrict rsize) {
  kerrno_t(*callback)(struct kfile *,pos_t,void *,size_t,size_t *);
  kerrno_t error; kassert_kfile(self);
  if ((callback = self->f_type->ft_pread) != NULL) {
@@ -163,12 +171,13 @@ kerrno_t kfile_fast_pread(struct kfile *__restrict self, pos_t pos, void *__rest
   error = (*callback)(self,pos,buf,bufsize,rsize);
  } else {
   error = kfile_seek(self,*(off_t *)&pos,SEEK_SET,NULL);
-  if __likely(KE_ISOK(error)) error = kfile_read(self,buf,bufsize,rsize);
+  if __likely(KE_ISOK(error)) error = kfile_user_read(self,buf,bufsize,rsize);
  }
  return error;
 }
-kerrno_t kfile_fast_pwrite(struct kfile *__restrict self, pos_t pos, void const *__restrict buf,
-                           size_t bufsize, size_t *__restrict wsize) {
+kerrno_t kfile_user_fast_pwrite(struct kfile *__restrict self, pos_t pos,
+                                __user void const *buf, size_t bufsize,
+                                __kernel size_t *__restrict wsize) {
  kerrno_t(*callback)(struct kfile *,pos_t,void const *,size_t,size_t *);
  kerrno_t error; kassert_kfile(self);
  if ((callback = self->f_type->ft_pwrite) != NULL) {
@@ -176,17 +185,17 @@ kerrno_t kfile_fast_pwrite(struct kfile *__restrict self, pos_t pos, void const 
   error = (*callback)(self,pos,buf,bufsize,wsize);
  } else {
   error = kfile_seek(self,*(off_t *)&pos,SEEK_SET,NULL);
-  if __likely(KE_ISOK(error)) error = kfile_write(self,buf,bufsize,wsize);
+  if __likely(KE_ISOK(error)) error = kfile_user_write(self,buf,bufsize,wsize);
  }
  return error;
 }
 
-kerrno_t kfile_readall(struct kfile *__restrict self,
-                       void *__restrict buf, size_t bufsize) {
+kerrno_t kfile_user_readall(struct kfile *__restrict self,
+                            __user void *buf, size_t bufsize) {
  kerrno_t error; size_t rsize;
  kassert_kfile(self);
  kassertmem(buf,bufsize);
- while __likely(KE_ISOK(error = kfile_read(self,buf,bufsize,&rsize))) {
+ while __likely(KE_ISOK(error = kfile_user_read(self,buf,bufsize,&rsize))) {
   assert(rsize <= bufsize);
   if __likely(rsize == bufsize) break;
   if __unlikely(!rsize) return KE_NOSPC;
@@ -195,12 +204,12 @@ kerrno_t kfile_readall(struct kfile *__restrict self,
  }
  return error;
 }
-kerrno_t kfile_writeall(struct kfile *__restrict self,
-                        void const *__restrict buf, size_t bufsize) {
+kerrno_t kfile_user_writeall(struct kfile *__restrict self,
+                             __user void const *buf, size_t bufsize) {
  kerrno_t error; size_t wsize;
  kassert_kfile(self);
  kassertmem(buf,bufsize);
- while __likely(KE_ISOK(error = kfile_write(self,buf,bufsize,&wsize))) {
+ while __likely(KE_ISOK(error = kfile_user_write(self,buf,bufsize,&wsize))) {
   assert(wsize <= bufsize);
   if __likely(wsize == bufsize) break;
   if __unlikely(!wsize) return KE_NOSPC;
@@ -210,12 +219,12 @@ kerrno_t kfile_writeall(struct kfile *__restrict self,
  return error;
 }
 
-kerrno_t kfile_preadall(struct kfile *__restrict self, pos_t pos,
-                        void *__restrict buf, size_t bufsize) {
+kerrno_t kfile_user_preadall(struct kfile *__restrict self, pos_t pos,
+                             __user void *buf, size_t bufsize) {
  kerrno_t error; size_t rsize;
  kassert_kfile(self);
  kassertmem(buf,bufsize);
- while __likely(KE_ISOK(error = kfile_pread(self,pos,buf,bufsize,&rsize))) {
+ while __likely(KE_ISOK(error = kfile_user_pread(self,pos,buf,bufsize,&rsize))) {
   assertf(rsize <= bufsize,"Invalid read size: %Iu > %Iu",rsize,bufsize);
   if __likely(rsize == bufsize) break;
   if __unlikely(!rsize) return KE_NOSPC;
@@ -225,12 +234,12 @@ kerrno_t kfile_preadall(struct kfile *__restrict self, pos_t pos,
  }
  return error;
 }
-kerrno_t kfile_pwriteall(struct kfile *__restrict self, pos_t pos,
-                         void const *__restrict buf, size_t bufsize) {
+kerrno_t kfile_user_pwriteall(struct kfile *__restrict self, pos_t pos,
+                              __user void const *buf, size_t bufsize) {
  kerrno_t error; size_t wsize;
  kassert_kfile(self);
  kassertmem(buf,bufsize);
- while __likely(KE_ISOK(error = kfile_pwrite(self,pos,buf,bufsize,&wsize))) {
+ while __likely(KE_ISOK(error = kfile_user_pwrite(self,pos,buf,bufsize,&wsize))) {
   assertf(wsize <= bufsize,"Invalid write size: %Iu > %Iu",wsize,bufsize);
   if __likely(wsize == bufsize) break;
   if __unlikely(!wsize) return KE_NOSPC;
@@ -240,12 +249,12 @@ kerrno_t kfile_pwriteall(struct kfile *__restrict self, pos_t pos,
  }
  return error;
 }
-kerrno_t kfile_fast_preadall(struct kfile *__restrict self, pos_t pos,
-                             void *__restrict buf, size_t bufsize) {
+kerrno_t kfile_user_fast_preadall(struct kfile *__restrict self, pos_t pos,
+                                  __user void *buf, size_t bufsize) {
  kerrno_t error; size_t rsize;
  kassert_kfile(self);
  kassertmem(buf,bufsize);
- while __likely(KE_ISOK(error = kfile_fast_pread(self,pos,buf,bufsize,&rsize))) {
+ while __likely(KE_ISOK(error = kfile_user_fast_pread(self,pos,buf,bufsize,&rsize))) {
   assert(rsize <= bufsize);
   if __likely(rsize == bufsize) break;
   if __unlikely(!rsize) return KE_NOSPC;
@@ -255,12 +264,12 @@ kerrno_t kfile_fast_preadall(struct kfile *__restrict self, pos_t pos,
  }
  return error;
 }
-kerrno_t kfile_fast_pwriteall(struct kfile *__restrict self, pos_t pos,
-                              void const *__restrict buf, size_t bufsize) {
+kerrno_t kfile_user_fast_pwriteall(struct kfile *__restrict self, pos_t pos,
+                                   __user void const *buf, size_t bufsize) {
  kerrno_t error; size_t wsize;
  kassert_kfile(self);
  kassertmem(buf,bufsize);
- while __likely(KE_ISOK(error = kfile_fast_pwrite(self,pos,buf,bufsize,&wsize))) {
+ while __likely(KE_ISOK(error = kfile_user_fast_pwrite(self,pos,buf,bufsize,&wsize))) {
   assert(wsize <= bufsize);
   if __likely(wsize == bufsize) break;
   if __unlikely(!wsize) return KE_NOSPC;
@@ -281,44 +290,44 @@ kfile_generic_open(struct kfile *__restrict __unused(self),
 }
 kerrno_t
 kfile_generic_read_isdir(struct kfile *__restrict __unused(self),
-                         void *__restrict __unused(buf),
+                         __user void *__unused(buf),
                          size_t __unused(bufsize),
-                         size_t *__restrict __unused(rsize)) {
+                         __kernel size_t *__restrict __unused(rsize)) {
  return KE_ISDIR;
 }
 kerrno_t
 kfile_generic_write_isdir(struct kfile *__restrict __unused(self),
-                          void const *__restrict __unused(buf),
+                          __user void const *__unused(buf),
                           size_t __unused(bufsize),
-                          size_t *__restrict __unused(wsize)) {
+                          __kernel size_t *__restrict __unused(wsize)) {
  return KE_ISDIR;
 }
 kerrno_t
 kfile_generic_readat_isdir(struct kfile *__restrict __unused(self),
                            pos_t __unused(pos),
-                           void *__restrict __unused(buf),
+                           __user void *__unused(buf),
                            size_t __unused(bufsize),
-                           size_t *__restrict __unused(rsize)) {
+                           __kernel size_t *__restrict __unused(rsize)) {
  return KE_ISDIR;
 }
 kerrno_t
 kfile_generic_writeat_isdir(struct kfile *__restrict __unused(self),
                             pos_t __unused(pos),
-                            void const *__restrict __unused(buf),
+                            __user void const *__unused(buf),
                             size_t __unused(bufsize),
-                            size_t *__restrict __unused(wsize)) {
+                            __kernel size_t *__restrict __unused(wsize)) {
  return KE_ISDIR;
 }
 
 
-__crit char *kfile_getmallname(struct kfile *fp) {
+__crit __kernel char *kfile_getmallname(struct kfile *fp) {
  char *result,*newresult; size_t bufsize,reqsize; kerrno_t error;
  KTASK_CRIT_MARK
  result = (char *)malloc(bufsize = (PATH_MAX+1)*sizeof(char));
  if __unlikely(!result) result = (char *)malloc((bufsize = 2*sizeof(char)));
  if __unlikely(!result) return NULL;
 again:
- error = kfile_getattr(fp,KATTR_FS_PATHNAME,result,bufsize,&reqsize);
+ error = kfile_kernel_getattr(fp,KATTR_FS_PATHNAME,result,bufsize,&reqsize);
  if __unlikely(KE_ISERR(error)) goto err_res;
  if (reqsize != bufsize) {
   newresult = (char *)realloc(result,bufsize = reqsize);

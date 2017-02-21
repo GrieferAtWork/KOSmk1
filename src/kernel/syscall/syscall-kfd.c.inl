@@ -171,7 +171,7 @@ SYSCALL(sys_kfd_read) {
        size_t *,U(rsize));
  kerrno_t error;
  KTASK_CRIT_BEGIN_FIRST
- error = kproc_readfd(kproc_self(),fd,buf,bufsize,rsize);
+ error = kproc_kernel_readfd(kproc_self(),fd,buf,bufsize,rsize);
  KTASK_CRIT_END
  RETURN(error);
 }
@@ -182,7 +182,7 @@ SYSCALL(sys_kfd_write) {
        void const *,U(buf),
        size_t      ,K(bufsize),
        size_t     *,U(wsize));
- RETURN(KTASK_CRIT(kproc_writefd(kproc_self(),fd,buf,bufsize,wsize)));
+ RETURN(KTASK_CRIT(kproc_kernel_writefd(kproc_self(),fd,buf,bufsize,wsize)));
 }
 
 /*< _syscall{5|6}(kerrno_t,kfd_pread,int,fd,{__u64,pos|__u32,poshi,__u32,poslo},void *,buf,size_t,bufsize,size_t *,rsize); */
@@ -200,7 +200,7 @@ SYSCALL(sys_kfd_pread) {
        size_t  ,K(bufsize),
        size_t *,U(rsize));
 #endif
- RETURN(KTASK_CRIT(kproc_preadfd(kproc_self(),fd,pos,buf,bufsize,rsize)));
+ RETURN(KTASK_CRIT(kproc_kernel_preadfd(kproc_self(),fd,pos,buf,bufsize,rsize)));
 }
 
 /*< _syscall{5|6}(kerrno_t,kfd_pwrite,int,fd,{__u64,pos|__u32,poshi,__u32,poslo},void const *,buf,size_t,bufsize,size_t *,wsize); */
@@ -218,7 +218,7 @@ SYSCALL(sys_kfd_pwrite) {
        size_t      ,K(bufsize),
        size_t     *,U(wsize));
 #endif
- RETURN(KTASK_CRIT(kproc_pwritefd(kproc_self(),fd,pos,buf,bufsize,wsize)));
+ RETURN(KTASK_CRIT(kproc_kernel_pwritefd(kproc_self(),fd,pos,buf,bufsize,wsize)));
 }
 
 /*< _syscall1(kerrno_t,kfd_flush,int,fd); */
@@ -244,7 +244,7 @@ SYSCALL(sys_kfd_fcntl) {
  LOAD3(int   ,K(fd),
        int   ,K(cmd),
        void *,K(arg));
- RETURN(KTASK_CRIT(kproc_fcntlfd(kproc_self(),fd,cmd,arg)));
+ RETURN(KTASK_CRIT(kproc_user_fcntlfd(kproc_self(),fd,cmd,arg)));
 }
 
 /*< _syscall3(kerrno_t,kfd_ioctl,int,fd,kattr_t,attr,void *,cmd); */
@@ -252,7 +252,7 @@ SYSCALL(sys_kfd_ioctl) {
  LOAD3(int    ,K(fd),
        kattr_t,K(cmd),
        void  *,K(arg));
- RETURN(KTASK_CRIT(kproc_ioctlfd(kproc_self(),fd,cmd,arg)));
+ RETURN(KTASK_CRIT(kproc_user_ioctlfd(kproc_self(),fd,cmd,arg)));
 }
 
 /*< _syscall5(kerrno_t,kfd_getattr,int,fd,kattr_t,attr,void *,buf,size_t,bufsize,size_t *,reqsize); */
@@ -262,7 +262,7 @@ SYSCALL(sys_kfd_getattr) {
        void   *,U (buf),
        size_t  ,K (bufsize),
        size_t *,U0(reqsize));
- RETURN(KTASK_CRIT(kproc_getattrfd(kproc_self(),fd,attr,buf,bufsize,reqsize)));
+ RETURN(KTASK_CRIT(kproc_kernel_getattrfd(kproc_self(),fd,attr,buf,bufsize,reqsize)));
 }
 
 /*< _syscall4(kerrno_t,kfd_setattr,int,fd,kattr_t,attr,void const *,buf,size_t,bufsize); */
@@ -271,7 +271,7 @@ SYSCALL(sys_kfd_setattr) {
        kattr_t ,K(attr),
        void   *,U(buf),
        size_t  ,K(bufsize));
- RETURN(KTASK_CRIT(kproc_setattrfd(kproc_self(),fd,attr,buf,bufsize)));
+ RETURN(KTASK_CRIT(kproc_kernel_setattrfd(kproc_self(),fd,attr,buf,bufsize)));
 }
 
 /*< _syscall3(kerrno_t,kfd_readdir,int,fd,struct kfddirent *,dent,__u32,flags); */

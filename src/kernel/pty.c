@@ -737,7 +737,7 @@ kptyfile_slave_write(struct kfile *__restrict self, void const *__restrict buf,
 }
 static kerrno_t
 kptyfile_ioctl(struct kfile *__restrict self, kattr_t cmd,
-               __user void *__restrict arg) {
+               __user void *arg) {
  return kpty_ioctl(&SELF->pf_pty->fp_pty,cmd,arg);
 }
 #undef SELF

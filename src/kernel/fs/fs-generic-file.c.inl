@@ -57,16 +57,16 @@ kerrno_t kfile_generic_setattr(struct kfile *__restrict self, kattr_t attr,
 #ifdef GETATTR
    if (attr == KATTR_FS_FILENAME) {
 getfilename:
-    return __kfile_getfilename_fromdirent(self,(char *)buf,bufsize,reqsize);
+    return __kfile_kernel_getfilename_fromdirent(self,(char *)buf,bufsize,reqsize);
    }
    if (attr == KATTR_FS_PATHNAME) {
     kerrno_t error; struct kdirent *rootdirent;
     rootdirent = kproc_getfddirent(kproc_self(),KFD_ROOT);
     if __unlikely(!rootdirent) {
      // Return at least ~some~ information...
-     return __kfile_getfilename_fromdirent(self,(char *)buf,bufsize,reqsize);
+     return __kfile_kernel_getfilename_fromdirent(self,(char *)buf,bufsize,reqsize);
     }
-    error = __kfile_getpathname_fromdirent(self,rootdirent,(char *)buf,bufsize,reqsize);
+    error = __kfile_kernel_getpathname_fromdirent(self,rootdirent,(char *)buf,bufsize,reqsize);
     kdirent_decref(rootdirent);
     return error;
    }

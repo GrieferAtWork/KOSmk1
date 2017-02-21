@@ -51,7 +51,7 @@ __crit kerrno_t kshlib_new(struct kshlib **__restrict result,
  size_t magic_max; struct slloader *loader = slloaders;
  kerrno_t error;
  KTASK_CRIT_MARK
- error = kfile_read(exe_file,magic,sizeof(magic),&magic_max);
+ error = kfile_kernel_read(exe_file,magic,sizeof(magic),&magic_max);
  if __unlikely(KE_ISERR(error)) return error;
  error = kfile_seek(exe_file,-(__off_t)sizeof(magic),SEEK_CUR,NULL); // rewind the file.
  if __unlikely(KE_ISERR(error)) return error;

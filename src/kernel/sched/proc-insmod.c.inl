@@ -39,7 +39,7 @@ __DECL_BEGIN
 __local __crit kerrno_t
 kproc_loadmodsections(struct kproc *__restrict self,
                       struct kshlib *__restrict module,
-                      __pagealigned __user void *__restrict base) {
+                      __pagealigned __user void *base) {
  struct kshlibsection *iter,*end; kerrno_t error;
  KTASK_CRIT_MARK
  end = (iter = module->sh_data.ed_secv)+module->sh_data.ed_secc;
@@ -70,7 +70,7 @@ err_seciter:
 __local __crit void
 kproc_unloadmodsections(struct kproc *__restrict self,
                         struct kshlib *__restrict module,
-                        __pagealigned __user void *__restrict base) {
+                        __pagealigned __user void *base) {
  struct kshlibsection *seciter,*secend;
  KTASK_CRIT_MARK
  assert(isaligned((uintptr_t)base,PAGEALIGN));

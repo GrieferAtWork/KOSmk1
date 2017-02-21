@@ -48,24 +48,24 @@ end:
  return error;
 }
 
-static ssize_t __unix_read(int fd, __user void *__restrict buf, size_t count) {
+static ssize_t __unix_read(int fd, __user void *buf, size_t count) {
  ssize_t error; size_t rsize;
  if (count > SSIZE_MAX) count = SSIZE_MAX;
  KTASK_CRIT_BEGIN_FIRST
  if __unlikely(!kpagedir_ismappedu_rw(buf,count)) { error = KE_FAULT; goto end; }
- error = kproc_readfd(kproc_self(),fd,buf,count,&rsize);
+ error = kproc_kernel_readfd(kproc_self(),fd,buf,count,&rsize);
  if __likely(KE_ISOK(error)) error = (ssize_t)rsize;
 end:
  KTASK_CRIT_END
  return error;
 }
 
-static ssize_t __unix_write(int fd, __user void const *__restrict buf, size_t count) {
+static ssize_t __unix_write(int fd, __user void const *buf, size_t count) {
  ssize_t error; size_t rsize;
  if (count > SSIZE_MAX) count = SSIZE_MAX;
  KTASK_CRIT_BEGIN_FIRST
  if __unlikely(!kpagedir_ismappedu_ro(buf,count)) { error = KE_FAULT; goto end; }
- error = kproc_writefd(kproc_self(),fd,buf,count,&rsize);
+ error = kproc_kernel_writefd(kproc_self(),fd,buf,count,&rsize);
  if __likely(KE_ISOK(error)) error = (ssize_t)rsize;
 end:
  KTASK_CRIT_END

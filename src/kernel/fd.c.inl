@@ -32,6 +32,7 @@
 #include <kos/kernel/fs/fs.h>
 #include <kos/kernel/task.h>
 #include <kos/kernel/proc.h>
+#include <kos/kernel/util/string.h>
 
 __DECL_BEGIN
 
@@ -67,56 +68,48 @@ __crit void kfdentry_quitex(kfdtype_t type, void *__restrict data) {
  }
 }
 
-kerrno_t kfdentry_read(struct kfdentry *__restrict self, void *__restrict buf,
-                       size_t bufsize, size_t *__restrict rsize) {
- if (self->fd_type == KFDTYPE_FILE) return kfile_read(self->fd_file,buf,bufsize,rsize);
+kerrno_t kfdentry_user_read(struct kfdentry *__restrict self,
+                            __user void *__restrict buf, size_t bufsize,
+                            __kernel size_t *__restrict rsize) {
+ if (self->fd_type == KFDTYPE_FILE) return kfile_user_read(self->fd_file,buf,bufsize,rsize);
  return KE_NOSYS;
 }
-kerrno_t kfdentry_write(struct kfdentry *__restrict self, void const *__restrict buf,
-                        size_t bufsize, size_t *__restrict wsize) {
- if (self->fd_type == KFDTYPE_FILE) return kfile_write(self->fd_file,buf,bufsize,wsize);
+kerrno_t kfdentry_user_write(struct kfdentry *__restrict self,
+                             __user void const *__restrict buf, size_t bufsize,
+                             __kernel size_t *__restrict wsize) {
+ if (self->fd_type == KFDTYPE_FILE) return kfile_user_write(self->fd_file,buf,bufsize,wsize);
  return KE_NOSYS;
 }
-kerrno_t kfdentry_pread(struct kfdentry *__restrict self, __pos_t pos,
-                        void *__restrict buf, size_t bufsize, size_t *__restrict rsize) {
- if (self->fd_type == KFDTYPE_FILE) return kfile_pread(self->fd_file,pos,buf,bufsize,rsize);
+kerrno_t kfdentry_user_pread(struct kfdentry *__restrict self, __pos_t pos,
+                             __user void *__restrict buf, size_t bufsize,
+                             __kernel size_t *__restrict rsize) {
+ if (self->fd_type == KFDTYPE_FILE) return kfile_user_pread(self->fd_file,pos,buf,bufsize,rsize);
  return KE_NOSYS;
 }
-kerrno_t kfdentry_pwrite(struct kfdentry *__restrict self, __pos_t pos,
-                         void const *__restrict buf, size_t bufsize, size_t *__restrict wsize) {
- if (self->fd_type == KFDTYPE_FILE) return kfile_pwrite(self->fd_file,pos,buf,bufsize,wsize);
+kerrno_t kfdentry_user_pwrite(struct kfdentry *__restrict self, __pos_t pos,
+                              __user void const *__restrict buf, size_t bufsize,
+                              __kernel size_t *__restrict wsize) {
+ if (self->fd_type == KFDTYPE_FILE) return kfile_user_pwrite(self->fd_file,pos,buf,bufsize,wsize);
  return KE_NOSYS;
 }
-kerrno_t kfdentry_seek(struct kfdentry *__restrict self, __off_t off,
-                       int whence, __pos_t *__restrict newpos) {
- if (self->fd_type == KFDTYPE_FILE) return kfile_seek(self->fd_file,off,whence,newpos);
+kerrno_t kfdentry_user_ioctl(struct kfdentry *__restrict self, kattr_t cmd, __user void *arg) {
+ if (self->fd_type == KFDTYPE_FILE) return kfile_user_ioctl(self->fd_file,cmd,arg);
  return KE_NOSYS;
 }
-kerrno_t kfdentry_trunc(struct kfdentry *__restrict self, __pos_t size) {
- if (self->fd_type == KFDTYPE_FILE) return kfile_trunc(self->fd_file,size);
- return KE_NOSYS;
-}
-kerrno_t kfdentry_ioctl(struct kfdentry *__restrict self, kattr_t cmd, __user void *arg) {
- if (self->fd_type == KFDTYPE_FILE) return kfile_ioctl(self->fd_file,cmd,arg);
- return KE_NOSYS;
-}
-kerrno_t kfdentry_flush(struct kfdentry *__restrict self) {
- if (self->fd_type == KFDTYPE_FILE) return kfile_flush(self->fd_file);
- return KE_NOSYS;
-}
-kerrno_t kfdentry_getattr(struct kfdentry *__restrict self, kattr_t attr,
-                          void *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
+kerrno_t kfdentry_user_getattr(struct kfdentry *__restrict self, kattr_t attr,
+                               __user void *__restrict buf, size_t bufsize,
+                               __kernel size_t *__restrict reqsize) {
  switch (self->fd_type) {
-  case KFDTYPE_FILE:   return kfile_getattr(self->fd_file,attr,buf,bufsize,reqsize);
-  case KFDTYPE_TASK:   return ktask_getattr(self->fd_task,attr,buf,bufsize,reqsize);
-  case KFDTYPE_PROC:   return kproc_getattr(self->fd_proc,attr,buf,bufsize,reqsize);
-  case KFDTYPE_INODE:  return kinode_getattr_legacy(self->fd_inode,attr,buf,bufsize,reqsize);
+  case KFDTYPE_FILE:  return kfile_user_getattr(self->fd_file,attr,buf,bufsize,reqsize);
+  case KFDTYPE_TASK:  return ktask_getattr(self->fd_task,attr,buf,bufsize,reqsize); /* TODO: 'ktask_user_getattr' */
+  case KFDTYPE_PROC:  return kproc_getattr(self->fd_proc,attr,buf,bufsize,reqsize); /* TODO: 'kproc_user_getattr' */
+  case KFDTYPE_INODE: return kinode_getattr_legacy(self->fd_inode,attr,buf,bufsize,reqsize); /* TODO: 'kinode_user_getattr_legacy' */
   {
    struct kinode *dirnode; kerrno_t error;
   case KFDTYPE_DIRENT:
    KTASK_CRIT_BEGIN
    if __unlikely((dirnode = kdirent_getnode(self->fd_dirent)) == NULL) error = KE_DESTROYED;
-   else {
+   else { /* TODO: 'kinode_user_getattr_legacy' */
     error = kinode_getattr_legacy(dirnode,attr,buf,bufsize,reqsize);
     kinode_decref(dirnode);
    }
@@ -128,19 +121,19 @@ kerrno_t kfdentry_getattr(struct kfdentry *__restrict self, kattr_t attr,
  }
  return KE_NOSYS;
 }
-kerrno_t kfdentry_setattr(struct kfdentry *__restrict self, kattr_t attr,
-                          void const *__restrict buf, size_t bufsize) {
+kerrno_t kfdentry_user_setattr(struct kfdentry *__restrict self, kattr_t attr,
+                               __user void const *__restrict buf, size_t bufsize) {
  switch (self->fd_type) {
-  case KFDTYPE_FILE:   return kfile_setattr(self->fd_file,attr,buf,bufsize);
-  case KFDTYPE_TASK:   return ktask_setattr(self->fd_task,attr,buf,bufsize);
-  case KFDTYPE_PROC:   return kproc_setattr(self->fd_proc,attr,buf,bufsize);
-  case KFDTYPE_INODE:  return kinode_setattr_legacy(self->fd_inode,attr,buf,bufsize);
+  case KFDTYPE_FILE:  return kfile_user_setattr(self->fd_file,attr,buf,bufsize);
+  case KFDTYPE_TASK:  return ktask_setattr(self->fd_task,attr,buf,bufsize); /* TODO: 'ktask_user_setattr' */
+  case KFDTYPE_PROC:  return kproc_setattr(self->fd_proc,attr,buf,bufsize); /* TODO: 'kproc_user_setattr' */
+  case KFDTYPE_INODE: return kinode_setattr_legacy(self->fd_inode,attr,buf,bufsize); /* TODO: 'kinode_user_setattr_legacy' */
   {
    struct kinode *dirnode; kerrno_t error;
   case KFDTYPE_DIRENT:
    KTASK_CRIT_BEGIN
    if __unlikely((dirnode = kdirent_getnode(self->fd_dirent)) == NULL) error = KE_DESTROYED;
-   else {
+   else { /* TODO: 'kinode_user_setattr_legacy' */
     error = kinode_setattr_legacy(dirnode,attr,buf,bufsize);
     kinode_decref(dirnode);
    }
@@ -150,6 +143,22 @@ kerrno_t kfdentry_setattr(struct kfdentry *__restrict self, kattr_t attr,
   case KFDTYPE_DEVICE: return kdev_setattr(self->fd_dev,attr,buf,bufsize);
   default: break;
  }
+ return KE_NOSYS;
+}
+
+
+
+kerrno_t kfdentry_seek(struct kfdentry *__restrict self, __off_t off,
+                       int whence, __pos_t *__restrict newpos) {
+ if (self->fd_type == KFDTYPE_FILE) return kfile_seek(self->fd_file,off,whence,newpos);
+ return KE_NOSYS;
+}
+kerrno_t kfdentry_trunc(struct kfdentry *__restrict self, __pos_t size) {
+ if (self->fd_type == KFDTYPE_FILE) return kfile_trunc(self->fd_file,size);
+ return KE_NOSYS;
+}
+kerrno_t kfdentry_flush(struct kfdentry *__restrict self) {
+ if (self->fd_type == KFDTYPE_FILE) return kfile_flush(self->fd_file);
  return KE_NOSYS;
 }
 
@@ -311,10 +320,10 @@ __crit kerrno_t kfdentry_opentask(struct kfdentry *__restrict self, size_t id,
  return KE_NOSYS;
 }
 
-kerrno_t kfdentry_enumtasks(struct kfdentry *__restrict self,
-                            size_t *__restrict idv, size_t idc,
-                            size_t *__restrict reqidc) {
- kerrno_t error; size_t *iditer,*idend;
+kerrno_t kfdentry_user_enumtasks(struct kfdentry *__restrict self,
+                                 __user size_t *__restrict idv, size_t idc,
+                                 __kernel size_t *__restrict reqidc) {
+ kerrno_t error; __user size_t *iditer,*idend;
  struct ktask **iter,**end,*elem;
  idend = (iditer = idv)+idc;
  switch (self->fd_type) {
@@ -326,14 +335,20 @@ kerrno_t kfdentry_enumtasks(struct kfdentry *__restrict self,
    end = (iter = task->t_children.t_taskv)+task->t_children.t_taska;
    for (; iter != end; ++iter) {
     if ((elem = *iter) != NULL && katomic_load(elem->t_refcnt)) {
-     if (iditer < idend) *iditer = elem->t_parid;
+     if (iditer < idend) {
+      if __unlikely(copy_to_user(iditer,&elem->t_parid,sizeof(size_t))) {
+       error = KE_FAULT;
+       goto end_task;
+      }
+     }
      ++iditer;
     }
    }
-   ktask_unlock(task,KTASK_LOCK_CHILDREN);
+   error = KE_OK;
+end_task: ktask_unlock(task,KTASK_LOCK_CHILDREN);
 done:
    if (reqidc) *reqidc = (size_t)(iditer-idv);
-   return KE_OK;
+   return error;
   }
   {
    struct kproc *ctx;
@@ -344,10 +359,17 @@ done:
    end = (iter = ctx->p_threads.t_taskv)+ctx->p_threads.t_taska;
    for (; iter != end; ++iter) {
     if ((elem = *iter) != NULL && katomic_load(elem->t_refcnt)) {
-     if (iditer < idend) *iditer = elem->t_tid;
+     if (iditer < idend) {
+      if __unlikely(copy_to_user(iditer,&elem->t_tid,sizeof(size_t))) {
+       error = KE_FAULT;
+       goto end_proc;
+      }
+     }
      ++iditer;
     }
    }
+   error = KE_OK;
+end_proc:
    kproc_unlock(ctx,KPROC_LOCK_THREADS);
    goto done;
   }

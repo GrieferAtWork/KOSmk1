@@ -837,7 +837,7 @@ ktask_newuser(struct ktask *__restrict parent, struct kproc *__restrict ctx,
               __user void **__restrict useresp, __size_t ustacksize, __size_t kstacksize);
 extern __crit __wunused __nonnull((1,2)) __ref struct ktask *
 ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict ctx,
-                __pagealigned __user void *__restrict ustackaddr,
+                __pagealigned __user void *ustackaddr,
                 __size_t ustacksize, __size_t kstacksize, __u16 flags);
 
 #ifdef __INTELLISENSE__
@@ -1253,12 +1253,21 @@ REGION_DEFINE(ISNOINTR);
 #endif
 
 #define __ktask_region_kepd_is()    (ktask_self()->t_epd == kpagedir_kernel())
+#define __ktask_region_kepd_tryenter(did_not_enter) \
+ do{ register struct ktask *const __ktself = ktask_self();\
+     if __likely(__ktself->t_epd == kpagedir_kernel()) {\
+      (did_not_enter) = 1;\
+     } else {\
+      __ktself->t_epd = kpagedir_kernel();\
+      (did_not_enter) = 0;\
+     }\
+ }while(0)
 #define __ktask_region_kepd_enter() (ktask_self()->t_epd = kpagedir_kernel())
 #define __ktask_region_kepd_leave() \
  { register struct ktask *const __ktepdself = ktask_self();\
    __ktepdself->t_epd = kproc_getpagedir(ktask_getproc(__ktepdself)); }
 
-#define KTASK_KEPD_BEGIN       REGION_ENTER(ISKEPD,__ktask_region_kepd_is,__ktask_region_kepd_enter)
+#define KTASK_KEPD_BEGIN       REGION_TRYENTER(ISKEPD,__ktask_region_kepd_is,__ktask_region_kepd_tryenter)
 #define KTASK_KEPD_BEGIN_FIRST REGION_ENTER_FIRST(ISKEPD,__ktask_region_kepd_is,__ktask_region_kepd_enter)
 #define KTASK_KEPD_BREAK       REGION_BREAK(ISKEPD,__ktask_region_kepd_leave)
 #define KTASK_KEPD_END         REGION_LEAVE(ISKEPD,__ktask_region_kepd_leave)
@@ -1307,6 +1316,14 @@ extern int ktask_isnointr(void);
             KTASK_CRIT_BEGIN\
             __ktcres = (expr);\
             KTASK_CRIT_END\
+            __xreturn __ktcres;\
+ })
+
+#define KTASK_KEPD(expr) \
+ __xblock({ __typeof__(expr) __ktcres;\
+            KTASK_KEPD_BEGIN\
+            __ktcres = (expr);\
+            KTASK_KEPD_END\
             __xreturn __ktcres;\
  })
 

@@ -132,8 +132,8 @@ do_cache_prefix:
        if __unlikely(!root_lib) {
 err_appname: strcpy(appname,"??" "?");
        } else {
-        if (KE_ISERR(kfile_getattr(root_lib->sh_file,KATTR_FS_PATHNAME,appname,PATH_MAX*sizeof(char),NULL)) &&
-            KE_ISERR(kfile_getattr(root_lib->sh_file,KATTR_FS_FILENAME,appname,PATH_MAX*sizeof(char),NULL))
+        if (KE_ISERR(kfile_kernel_getattr(root_lib->sh_file,KATTR_FS_PATHNAME,appname,PATH_MAX*sizeof(char),NULL)) &&
+            KE_ISERR(kfile_kernel_getattr(root_lib->sh_file,KATTR_FS_FILENAME,appname,PATH_MAX*sizeof(char),NULL))
             ) goto err_appname;
         kshlib_decref(root_lib);
        }

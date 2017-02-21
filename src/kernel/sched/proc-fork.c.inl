@@ -33,6 +33,8 @@
 #include <kos/kernel/task.h>
 #include <kos/kernel/pageframe.h>
 #include <kos/kernel/linker.h>
+#include <kos/kernel/shm.h>
+#include <kos/kernel/fs/file.h>
 #include <kos/errno.h>
 #include <malloc.h>
 #include <kos/syslog.h>
@@ -75,27 +77,27 @@ kprocsand_initcopy(struct kprocsand *__restrict self,
 }
 
 __local void kprocsand_quit(struct kprocsand *self);
-__crit __ref struct kproc *
-kproc_copy4fork(__u32 flags, struct kproc *__restrict proc) {
+__crit kerrno_t
+kproc_copy4fork(__u32 flags, struct kproc *__restrict proc,
+                __user void *eip, __ref struct kproc **presult) {
  __ref struct kproc *result; kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kproc(proc);
- if __unlikely((result = omalloc(struct kproc)) == NULL) return NULL;
+ if __unlikely((result = omalloc(struct kproc)) == NULL) return KE_NOMEM;
  kobject_init(result,KOBJECT_MAGIC_PROC);
  result->p_refcnt = 1;
  memcpy(&result->p_regs,&proc->p_regs,sizeof(struct kprocregs));
-
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_MODS))) goto err_free;
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_MODS))) goto err_free;
  error = kprocmodules_initcopy(&result->p_modules,&proc->p_modules);
  kproc_unlock(proc,KPROC_LOCK_MODS);
  if __unlikely(KE_ISERR(error)) goto err_free;
 
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_FDMAN))) goto err_shlib;
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_FDMAN))) goto err_shlib;
  error = kfdman_initcopy(&result->p_fdman,&proc->p_fdman);
  kproc_unlock(proc,KPROC_LOCK_FDMAN);
  if __unlikely(KE_ISERR(error)) goto err_shlib;
 
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) goto err_fd;
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_SHM))) goto err_fd;
  error = kshm_initfork(&result->p_shm,&proc->p_shm);
  kproc_unlock(proc,KPROC_LOCK_SHM);
  if __unlikely(KE_ISERR(error)) goto err_fd;
@@ -104,18 +106,18 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc) {
   /* Perform a root-fork (grant all permissions to new process). */
   error = kprocsand_initroot(&result->p_sand);
  } else {
-  if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SAND))) goto err_shm;
+  if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_SAND))) goto err_shm;
   error = kprocsand_initfork(&result->p_sand,&proc->p_sand);
   kproc_unlock(proc,KPROC_LOCK_SAND);
  }
  if __unlikely(KE_ISERR(error)) goto err_shm;
 
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_TLSMAN))) goto err_sand;
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_TLSMAN))) goto err_sand;
  error = ktlsman_initcopy(&result->p_tlsman,&proc->p_tlsman);
  kproc_unlock(proc,KPROC_LOCK_TLSMAN);
  if __unlikely(KE_ISERR(error)) goto err_sand;
 
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_ENVIRON))) goto err_sand;
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_ENVIRON))) goto err_sand;
  error = kprocenv_initcopy(&result->p_environ,&proc->p_environ);
  kproc_unlock(proc,KPROC_LOCK_ENVIRON);
  if __unlikely(KE_ISERR(error)) goto err_tls;
@@ -123,8 +125,22 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc) {
  assert(result->p_fdman.fdm_cnt <= result->p_fdman.fdm_fda);
  ktasklist_init(&result->p_threads);
  kmmutex_init(&result->p_lock);
+
+ /* Check for root-fork permissions _AFTER_ we've already
+  * created the process, just so we can ensure that there
+  * are no race-conditions that would allow modification
+  * of code allowed to perform a root-fork after we would
+  * have otherwise checked for that permission.
+  * >> Now that we've copied all memory (including the text memory),
+  *    we can check if the calling code was modified, which would
+  *    indicate that it was either modified before, or after we
+  *    copied it, thus fixing all possible race conditions.
+  */
+ if ((flags&KTASK_NEW_FLAG_ROOTFORK) &&
+     KE_ISERR(error = kproc_canrootfork(proc,eip))) goto err_env;
  if __unlikely(KE_ISERR(kproclist_addproc(result))) goto err_env;
- return result;
+ *presult = result;
+ return error;
 err_env:   kprocenv_quit(&result->p_environ);
 err_tls:   ktlsman_quit(&result->p_tlsman);
 err_sand:  kprocsand_quit(&result->p_sand);
@@ -132,7 +148,7 @@ err_shm:   kshm_quit(&result->p_shm);
 err_fd:    kfdman_quit(&result->p_fdman);
 err_shlib: kprocmodules_quit(&result->p_modules);
 err_free:  free(result);
- return NULL;
+ return error;
 }
 
 __local __crit __ref struct ktask *
@@ -247,7 +263,6 @@ ktask_copy4fork(struct ktask *__restrict self,
  ktask_unlock(self,KTASK_LOCK_CHILDREN);
  if __unlikely(result->t_parid == (size_t)-1) goto err_kstack;
  if __unlikely(KE_ISERR(kproc_addtask(proc,result))) goto err_parid;
-
  return result;
 err_parid:
  ktask_lock(self,KTASK_LOCK_CHILDREN);
@@ -262,14 +277,16 @@ err_procref: kproc_decref(proc);
 err_taskref: ktask_decref(self);
  return NULL;
 }
-__crit __ref struct ktask *
-ktask_fork(__u32 flags, struct kirq_userregisters const *__restrict userregs) {
- __ref struct kproc *newproc;
+__crit kerrno_t
+ktask_fork(__u32 flags, struct kirq_userregisters const *__restrict userregs,
+           __ref struct ktask **presult) {
+ kerrno_t error; __ref struct kproc *newproc;
  struct ktask *newtask,*task_self = ktask_self();
  KTASK_CRIT_MARK
- newproc = kproc_copy4fork(flags,ktask_getproc(task_self));
- if __unlikely(!newproc) return NULL;
- if __unlikely(KE_ISERR(kproc_lock(newproc,KPROC_LOCK_SHM))) goto err_proc;
+ error = kproc_copy4fork(flags,ktask_getproc(task_self),
+                        (__user void *)userregs->eip,&newproc);
+ if __unlikely(KE_ISERR(error)) return error;
+ if __unlikely(KE_ISERR(error = kproc_lock(newproc,KPROC_LOCK_SHM))) goto err_proc;
  if (flags&KTASK_NEW_FLAG_UNREACHABLE) {
   /* Spawn the task as unreachable */
   if (flags&KTASK_NEW_FLAG_ROOTFORK) {
@@ -279,7 +296,7 @@ ktask_fork(__u32 flags, struct kirq_userregisters const *__restrict userregs) {
    /* Spawn it off of the setmem barrier. */
    struct ktask *parent = kproc_getbarrier_r(ktask_getproc(task_self),
                                              KSANDBOX_BARRIER_NOSETMEM);
-   if __unlikely(!parent) goto err_proc_unlock;
+   if __unlikely(!parent) { error = KE_DESTROYED; goto err_proc_unlock; }
    newtask = ktask_copy4fork(task_self,parent,newproc,userregs);
    ktask_decref(parent);
   }
@@ -287,18 +304,19 @@ ktask_fork(__u32 flags, struct kirq_userregisters const *__restrict userregs) {
   newtask = ktask_copy4fork(task_self,task_self,newproc,userregs);
  }
  kproc_unlock(newproc,KPROC_LOCK_SHM);
- if __unlikely(!newtask) goto err_proc;
+ if __unlikely(!newtask) { error = KE_NOMEM; goto err_proc; }
  assert(newtask != ktask_self());
  kproc_decref(newproc);
- return newtask;
+ *presult = newtask;
+ return error;
 err_proc_unlock: kproc_unlock(newproc,KPROC_LOCK_SHM);
 err_proc: kproc_decref(newproc);
- return NULL;
+ return error;
 }
 
 
 __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *eip) {
- kerrno_t error;
+ kerrno_t error = KE_NOENT;
  struct kprocmodule *iter,*end;
  struct kshlibsection *sec_iter,*sec_end;
  kassert_kproc(self);
@@ -326,6 +344,7 @@ __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *
      error = KE_NOEXEC;
      goto end;
     }
+    
     /* Make sure that the memory wasn't modified. */
     {
      x86_pde used_pde; x86_pte used_pte;
@@ -335,16 +354,46 @@ __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *
      used_pte = x86_pde_getpte(&used_pde)[X86_VPTR_GET_PTID(eip)];
      if __unlikely(!used_pte.present) goto cont; /* Page table entry not present */
      if (used_pte.dirty) {
-      k_syslogf_prefixfile(KLOG_WARN,iter->pm_lib->sh_file
-                          ,"[ROOT-FORK] Denying root-fork request by modified address %p\n",eip);
-      error = KE_EXISTS;
+      k_syslogf_prefixfile(KLOG_WARN,iter->pm_lib->sh_file,
+                           "[ROOT-FORK] Denying root-fork request by modified address %p\n",eip);
+      error = KE_CHANGED;
       goto end;
      }
     }
-    /* Finally, make sure that the module has the SETUID bit set. */
+
+    /* Make sure that the memory associated with EIP isn't writable,
+     * as otherwise we can't guaranty that the code we've granting
+     * root-access to will remain unmodified. */
     {
-     __mode_t module_bits;
-     error = kfile_getattr(iter->pm_lib->sh_file,KATTR_FS_PERM,&module_bits,sizeof(__mode_t),NULL);
+     struct kshmbranch *branch;
+     branch = kshmmap_locate(&self->p_shm.s_map,(uintptr_t)eip);
+     if (!branch) {
+      /* If we don't know this branch. */
+      k_syslogf_prefixfile(KLOG_WARN,iter->pm_lib->sh_file
+                          ,"[ROOT-FORK] Denying root-fork request at %p "
+                           "(No associated SHM region)\n"
+                          ,eip,branch->sb_map_min,branch->sb_map_max);
+      error = KE_EXISTS;
+      goto end;
+     }
+     kassertobj(branch);
+     kassert_kshmregion(branch->sb_region);
+     if ((kshmregion_getflags(branch->sb_region) &
+         (KSHMREGION_FLAG_WRITE)) == (KSHMREGION_FLAG_WRITE)) {
+      /* The SHM mapping of the calling EIP is writable. */
+      k_syslogf_prefixfile(KLOG_WARN,iter->pm_lib->sh_file
+                          ,"[ROOT-FORK] Denying root-fork request at %p "
+                          "(shared-writable SHM mapping %p..%p)\n"
+                          ,eip,branch->sb_map_min,branch->sb_map_max);
+      error = KE_WRITABLE;
+      goto end;
+     }
+    }
+
+    /* Make sure that the module has the SETUID bit set. */
+    {
+     mode_t module_bits;
+     error = kfile_kernel_getattr(iter->pm_lib->sh_file,KATTR_FS_PERM,&module_bits,sizeof(__mode_t),NULL);
      if __unlikely(KE_ISERR(error)) goto end;
      if (!(module_bits&S_ISUID)) {
       k_syslogf_prefixfile(KLOG_WARN,iter->pm_lib->sh_file
@@ -353,16 +402,17 @@ __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *
       goto end;
      }
     }
-    /* Yes, you are allowed to! */
+
+    /* Yes. Everything checks out and you're allowed to root-fork()! */
     error = KE_OK;
     goto end;
    }
   }
 cont:;
  }
- error = KE_NOENT;
 end:
  kproc_unlocks(self,KPROC_LOCK_SHM|KPROC_LOCK_MODS);
+ printf("HERE: %d %d\n",__LINE__,error);
  return error;
 }
 

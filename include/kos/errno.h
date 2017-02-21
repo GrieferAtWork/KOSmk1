@@ -73,6 +73,8 @@ typedef int kerrno_t;
 #define KE_NOFILE      (-31) /*< ERROR: Expected a file, but got a descriptor of a different type. */
 #define KE_NOLNK       (-32) /*< ERROR: Expected a link, but the given file isn't one. */
 #define KE_NAMETOOLONG (-33) /*< ERROR: A given filename, or part of one is too long for a selected technology. */
+#define KE_WRITABLE    (-34) /*< ERROR: The SHM mapping associated with an EIP during a root-fork is mapped as writable. */
+#define KE_CHANGED     (-35) /*< ERROR: A file or a specific area of memory was changed. */
 
 // NOTE: Signal codes should not be considered errors.
 //       They tell the caller about some special state a given object may be in,
