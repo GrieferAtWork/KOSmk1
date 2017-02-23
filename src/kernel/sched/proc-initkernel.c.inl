@@ -39,20 +39,52 @@
 
 __DECL_BEGIN
 
+extern struct kdirfile __kproc_kernel_root;
 struct kdirfile __kproc_kernel_root = KDIRFILE_INIT(&__kfs_root,NULL);
 struct kproc __kproc_kernel = {
  KOBJECT_INIT(KOBJECT_MAGIC_PROC)
- /* p_refcnt  */0xffff,
- /* p_pid     */0,
- /* p_lock    */KMMUTEX_INIT,
- /* p_shm     */KSHM_INIT((struct kpagedir *)kpagedir_kernel(),KSEG_KERNELLDT),
- /* p_regs    */KPROCREGS_INIT(KSEG_KERNEL_CODE,KSEG_KERNEL_DATA),
- /* p_modules */KPROCMODULES_INIT,
- /* p_fdman   */KFDMAN_INITROOT((struct kfile *)&__kproc_kernel_root),
- /* p_sand    */KPROCSAND_INITROOT,
- /* p_tlsman  */KTLSMAN_INITROOT,
- /* p_threads */KTASKLIST_INIT,
- /* p_environ */KPROCENV_INIT_ROOT,
+ /* p_refcnt               */0xffff,
+ /* p_pid                  */0,
+ /* p_lock                 */KMMUTEX_INIT,
+ /* p_shm                  */{KOBJECT_INIT(KOBJECT_MAGIC_SHM)
+ /* p_shm.s_pd             */(struct kpagedir *)kpagedir_kernel(),
+ /* p_shm.s_map            */{
+ /* p_shm.s_map.m_root     */NULL},
+ /* p_shm.s_ldt            */{
+ /* p_shm.s_ldt.ldt_gdtid  */KSEG_KERNELLDT,
+ /* p_shm.s_ldt.ldt_limit  */0,
+ /* p_shm.s_ldt.ldt_base   */NULL,
+ /* p_shm.s_ldt.ldt_vector */NULL}},
+ /* p_regs                 */{
+ /* p_regs.pr_cs           */KSEG_KERNEL_CODE,
+ /* p_regs.pr_ds           */KSEG_KERNEL_DATA},
+ /* p_modules              */{KOBJECT_INIT(KOBJECT_MAGIC_PROCMODULES)
+ /* p_modules.pms_moda     */0,
+ /* p_modules.pms_modv     */NULL},
+ /* p_fdman                */{KOBJECT_INIT(KOBJECT_MAGIC_FDMAN)
+ /* p_fdman.fdm_cnt        */0,
+ /* p_fdman.fdm_max        */KFDMAN_FDMAX_TECHNICAL_MAXIMUM,
+ /* p_fdman.fdm_fre        */0,
+ /* p_fdman.fdm_fda        */0,
+ /* p_fdman.fdm_fdv        */NULL,
+ /* p_fdman.fdm_root       */KFDENTRY_INIT_FILE((struct kfile *)&__kproc_kernel_root),
+ /* p_fdman.fdm_cwd        */KFDENTRY_INIT_FILE((struct kfile *)&__kproc_kernel_root)},
+ /* p_sand                 */{
+ /* p_sand.ts_gpbarrier    */ktask_zero(),
+ /* p_sand.ts_spbarrier    */ktask_zero(),
+ /* p_sand.ts_gmbarrier    */ktask_zero(),
+ /* p_sand.ts_smbarrier    */ktask_zero(),
+ /* p_sand.ts_priomin      */KTASKPRIO_MIN,
+ /* p_sand.ts_priomax      */KTASKPRIO_MAX,
+#if KCONFIG_HAVE_TASK_NAMES
+ /* p_sand.ts_namemax      */(size_t)-1,
+#endif
+ /* p_sand.ts_pipemax      */(size_t)-1,
+ /* p_sand.ts_flags        */0xffffffff,
+ /* p_sand.ts_state        */KPROCSTATE_FLAG_NONE},
+ /* p_tlsman               */KTLSMAN_INITROOT,
+ /* p_threads              */KTASKLIST_INIT,
+ /* p_environ              */KPROCENV_INIT_ROOT,
 };
 
 #if !KCONFIG_HAVE_TASK_STATS_START

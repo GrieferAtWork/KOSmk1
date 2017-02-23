@@ -41,7 +41,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
-#include <term/term.h>
+#include <lib/term.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
@@ -289,7 +289,7 @@ static void invert_all(void) {
 }
 
 
-static void TERM_CALL term_putc(struct term *__unused(term), char ch) {
+static void TERM_CALL term_putc(struct term *__unused(t), char ch) {
  /* v This introducing lag is actually something that's currently intended. */
  //k_syslogf(KLOG_MSG,"%c",ch);
  BEGIN_MOVE_CUR()
@@ -363,19 +363,19 @@ static uint8_t const vga_box_chars[] = {
  196,196,196,196,195,180,193,194,179,243,242,220
 };
 
-static void TERM_CALL term_putb(struct term *__unused(term), char ch) {
+static void TERM_CALL term_putb(struct term *__unused(t), char ch) {
  assert(ch >= 'a' && ch <= 'z');
  ch = vga_box_chars[ch-'a'];
  /*if (ch)*/ term_putc(NULL,ch);
 }
 
 static void TERM_CALL
-term_set_color(struct term *__unused(term),
+term_set_color(struct term *__unused(t),
                struct term_rgba fg,
                struct term_rgba bg) {
  vga_attrib = (vga_color(fg) | vga_color(bg) << 4) << 8;
 }
-static void TERM_CALL term_set_cursor(struct term *__unused(term), coord_t x, coord_t y) {
+static void TERM_CALL term_set_cursor(struct term *__unused(t), coord_t x, coord_t y) {
  if (x >= VGA_WIDTH)  x = *(__s32 *)&x < 0 ? 0 : VGA_WIDTH-1;
  if (y >= VGA_HEIGHT) y = *(__s32 *)&y < 0 ? 0 : VGA_HEIGHT-1;
  BEGIN_MOVE_CUR()
@@ -388,18 +388,18 @@ static void TERM_CALL term_set_cursor(struct term *__unused(term), coord_t x, co
 #endif
  END_MOVE_CUR()
 }
-static void TERM_CALL term_get_cursor(struct term *__unused(term), coord_t *x, coord_t *y) {
+static void TERM_CALL term_get_cursor(struct term *__unused(t), coord_t *x, coord_t *y) {
  *x = GET_CUR_X();
  *y = GET_CUR_Y();
 }
-static void TERM_CALL term_show_cursor(struct term *__unused(term), int cmd) {
+static void TERM_CALL term_show_cursor(struct term *__unused(t), int cmd) {
  if (cmd == TERM_SHOWCURSOR_YES) {
   cursor_enable();
  } else {
   cursor_disable();
  }
 }
-static void TERM_CALL term_cls(struct term *__unused(term), int mode) {
+static void TERM_CALL term_cls(struct term *__unused(t), int mode) {
  cell_t *begin,*end,*iter,filler = SPACE;
  switch (mode) {
   case TERM_CLS_BEFORE: begin = vga_buf; end = vga_bufpos; break;
@@ -409,7 +409,7 @@ static void TERM_CALL term_cls(struct term *__unused(term), int mode) {
  for (iter = begin; iter != end; ++iter) *iter = filler;
  BLIT_CNT(begin-vga_buf,end-begin);
 }
-static void TERM_CALL term_el(struct term *__unused(term), int mode) {
+static void TERM_CALL term_el(struct term *__unused(t), int mode) {
  cell_t *begin,*end,*iter,filler = SPACE;
  switch (mode) {
   case TERM_EL_BEFORE: begin = CUR_LINE(); end = vga_bufpos; break;
@@ -419,7 +419,7 @@ static void TERM_CALL term_el(struct term *__unused(term), int mode) {
  for (iter = begin; iter != end; ++iter) *iter = filler;
  BLIT_CNT(begin-vga_buf,end-begin);
 }
-static void TERM_CALL term_scroll(struct term *__unused(term), offset_t offset) {
+static void TERM_CALL term_scroll(struct term *__unused(t), offset_t offset) {
  cell_t filler = SPACE;
  cell_t *new_begin,*new_end;
  size_t copycells;

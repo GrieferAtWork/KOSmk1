@@ -113,7 +113,7 @@ typedef void *(*task_threadfunc) __P((void *closure));
 extern __nonnull((1)) task_t task_newthread __P((task_threadfunc __thread_main,
                                                  void *__closure, __u32 __flags));
 
-/* Returns child thread descriptor in parent; 0 in child process; -1 on error. */
+/* Returns non-ZERO child thread descriptor in parent; 0 in child process; -1 on error. */
 /* '__flags' is a set of 'TASK_NEWTHREAD_*' __flags. */
 /* NOTE: The returned thread is part of a different process, that
          can then be accessed through use of 'task_openproc'. */

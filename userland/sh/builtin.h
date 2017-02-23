@@ -23,12 +23,17 @@
 #ifndef __BUILTIN_H__
 #define __BUILTIN_H__ 1
 
+#include <stddef.h>
+#include <kos/compiler.h>
+
 #define CONFIG_HAVE_IO 1
 
 struct shcmd {
  char const *name; /*< [1..1][oef(NULL)] CMD name, or NULL for end of list. */
+ size_t      size; /*< strlen of 'name'. */
  int       (*main)(int argc, char *argv[]); /*< Command main() function. */
 };
+#define SHCMD(name,main) {name,__compiler_STRINGSIZE(name),main}
 
 /* List of builtin commands. */
 extern struct shcmd const shbuiltin[];

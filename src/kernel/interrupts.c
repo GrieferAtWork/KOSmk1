@@ -42,8 +42,11 @@
 #include <kos/kernel/gdt.h>
 #include <kos/kernel/task.h>
 #include <kos/kernel/proc.h>
-#include <disasm/disasm.h>
+#include <lib/disasm.h>
 #include <kos/kernel/shm.h>
+#include <kos/kernel/linker.h>
+#include <limits.h>
+#include <kos/kernel/fs/file.h>
 
 __DECL_BEGIN
 
@@ -167,6 +170,7 @@ void kernel_initialize_interrupts(void) {
  outb_p(0xA1,ICW4       );
  outb_p(0x21,0x00       );
  outb_p(0xA1,0x00       );
+
  for (unsigned int i = 0; i < __compiler_ARRAYSIZE(idt); ++i) {
   __u8 flags = IDTFLAG_PRESENT|IDTTYPE_80386_32_INTERRUPT_GATE|IDTFLAG_DPL(3);
   make_idt_entry(&idt[i],idt_functions[i],KSEG_KERNEL_CODE,flags);
@@ -244,9 +248,50 @@ void __kirq_default_handler(struct kirq_registers *regs) {
    struct kpagedir *pd = NULL;
    if ((kmem_validateob(caller) == KE_OK) &&
        (kmem_validateob(ktask_getproc(caller)) == KE_OK)) {
+    struct kprocmodule *iter,*end;
+    uintptr_t eip = regs->regs.eip;
+    end = (iter = caller->t_proc->p_modules.pms_modv)+caller->t_proc->p_modules.pms_moda;
+    for (; iter != end; ++iter) if (iter->pm_lib && eip >= (uintptr_t)iter->pm_base) {
+     size_t libsize = (iter->pm_lib->sh_data.ed_end-iter->pm_lib->sh_data.ed_begin);
+     if (eip-(uintptr_t)iter->pm_base < libsize) {
+      struct ksymbol const *symbols[3],*symbol;
+      uintptr_t diff,newdiff;
+      char buffer[PATH_MAX];
+      eip -= (uintptr_t)iter->pm_base;
+      serial_print (SERIAL_01,"########### Associated Module Information:\n");
+      serial_printf(SERIAL_01,"Module ID:              %Iu\n",iter-caller->t_proc->p_modules.pms_modv);
+      serial_printf(SERIAL_01,"Module EIP:             %p\n",eip);
+      serial_printf(SERIAL_01,"Module load base:       %p\n",iter->pm_base);
+      serial_printf(SERIAL_01,"Module load begin:      %p\n",(uintptr_t)iter->pm_base+iter->pm_lib->sh_data.ed_begin);
+      serial_printf(SERIAL_01,"Module load end:        %p\n",(uintptr_t)iter->pm_base+iter->pm_lib->sh_data.ed_end);
+      kfile_kernel_getattr(iter->pm_lib->sh_file,KATTR_FS_PATHNAME,
+                           buffer,sizeof(buffer),NULL);
+      serial_printf(SERIAL_01,"Module Path:            %.*q\n",(unsigned)sizeof(buffer),buffer);
+      symbols[0] = ksymtable_lookupaddr(&iter->pm_lib->sh_privatesym,eip);
+      symbols[1] = ksymtable_lookupaddr(&iter->pm_lib->sh_publicsym,eip);
+      symbols[2] = ksymtable_lookupaddr(&iter->pm_lib->sh_weaksym,eip);
+                   symbol = symbols[0];
+      if (!symbol) symbol = symbols[1];
+      if (!symbol) symbol = symbols[2];
+      if (symbol) {
+       diff = eip-symbol->s_addr;
+#define BETTER(x) if (x) { newdiff = eip-(x)->s_addr; if (newdiff < diff) { diff = newdiff; symbol = (x); } }
+       BETTER(symbols[1]);
+       BETTER(symbols[2]);
+#undef BETTER
+      }
+      serial_printf(SERIAL_01,"Closest symbol:         %q (%p)\n",symbol ? symbol->s_name : NULL,symbol ? symbol->s_addr : 0);
+      serial_printf(SERIAL_01,"Closest private symbol: %q (%p)\n",symbols[0] ? symbols[0]->s_name : NULL,symbols[0] ? symbols[0]->s_addr : 0);
+      serial_printf(SERIAL_01,"Closest public symbol:  %q (%p)\n",symbols[1] ? symbols[1]->s_name : NULL,symbols[1] ? symbols[1]->s_addr : 0);
+      serial_printf(SERIAL_01,"Closest weak symbol:    %q (%p)\n",symbols[2] ? symbols[2]->s_name : NULL,symbols[2] ? symbols[2]->s_addr : 0);
+      break;
+     }
+    }
     if ((pd = kproc_getpagedir(ktask_getproc(caller))) != NULL &&
         (kmem_validateob(pd) == KE_OK)) {
+     serial_print(SERIAL_01,"########### Page directory:\n");
      kpagedir_print(pd);
+     serial_print(SERIAL_01,"########### SHM Mappings:\n");
      kshmbranch_print(kproc_getshm(ktask_getproc(caller))->s_map.m_root,
                       KSHMBRANCH_ADDRSEMI_INIT,
                       KSHMBRANCH_ADDRLEVEL_INIT);
@@ -325,7 +370,6 @@ static struct kirq_siginfo const __irq_siginfo_data[] = {
    {NULL,     NULL},
    {"-",      "Triple Fault"},
 };
-enum{x=__compiler_ARRAYSIZE(__irq_siginfo_data)};
 
 struct kirq_siginfo const *kirq_getsiginfo(kirq_t signum) {
  struct kirq_siginfo const *result;

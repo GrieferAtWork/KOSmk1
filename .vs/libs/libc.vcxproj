@@ -20,6 +20,7 @@
     <ClCompile Include="..\..\libs\libc\getopt.c" />
     <ClCompile Include="..\..\libs\libc\itos.c" />
     <ClCompile Include="..\..\libs\libc\malloc.c" />
+    <ClCompile Include="..\..\libs\libc\mod.c" />
     <ClCompile Include="..\..\libs\libc\proc.c" />
     <ClCompile Include="..\..\libs\libc\pty.c" />
     <ClCompile Include="..\..\libs\libc\signal.c" />

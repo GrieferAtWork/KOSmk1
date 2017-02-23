@@ -24,10 +24,12 @@
 #define __SH_C__ 1
 
 #include "sh.h"
+#include "cmd.h"
 #include "builtin.h"
 #include <errno.h>
 #include <proc.h>
-#include <rline/rline.h>
+#include <lib/cmd.h>
+#include <lib/rline.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -162,13 +164,18 @@ int joinproc(int p) {
 
 
 int do_system(char *cmd) {
+#if 0
+ return (int)shcmd_system(cmd,strlen(cmd));
+#else
  // TODO: Logic operator: cmda && cmdb, cmda || cmdb, !cmda
  // TODO: Expand environment variables: $FOO, ${FOO}
  // TODO: Run and insert stdout of process: `echo foo`, $(echo foo)
  // TODO: Expand '*' paths: "/dir/f*" --> "/dir/file1 /dir/file2 /dir/file42"
  // TODO: Redirect/duplicate descriptors: cmd > foo.txt, cmd < bar.txt, cmd 2>&1
  return exec_system(cmd);
+#endif
 }
+
 
 
 
@@ -263,6 +270,7 @@ int main(int argc, char *argv[]) {
    do_system(rline_text(r));
   }
  }
+ cmd_engine_quit(&shcmd_engine);
  rline_delete(r);
  free(prompt);
  return error == RLINE_EOF ? EXIT_SUCCESS : EXIT_FAILURE;

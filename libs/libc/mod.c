@@ -20,29 +20,47 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __DISASM_DISASM_H__
-#define __DISASM_DISASM_H__ 1
+#ifndef __MOD_C__
+#define __MOD_C__ 1
 
-#include <kos/compiler.h>
-
-#ifndef __ASSEMBLY__
-#include <stdint.h>
+#include <kos/config.h>
+#ifndef __KERNEL__
+#include <mod.h>
+#include <kos/mod.h>
+#include <errno.h>
 #include <stddef.h>
-#include <format-printer.h>
 
 __DECL_BEGIN
 
-
-#define DISASM_FLAG_NONE 0x00000000
-#define DISASM_FLAG_ADDR 0x00000001 /*< Print the address offset on line starts. */
-
-extern int disasm_x86(void const *__restrict text, size_t text_size,
-                      pformatprinter printer, void *closure,
-                      uint32_t flags);
-
+__public mod_t mod_open(char const *name) {
+ mod_t result; kerrno_t error;
+ error = kmod_open(name,(size_t)-1,&result,KMOD_OPEN_FLAG_NONE);
+ if __likely(KE_ISOK(error)) return result;
+ __set_errno(-error);
+ return MOD_ERR;
+}
+__public mod_t mod_fopen(int fd) {
+ mod_t result; kerrno_t error;
+ error = kmod_fopen(fd,&result,KMOD_OPEN_FLAG_NONE);
+ if __likely(KE_ISOK(error)) return result;
+ __set_errno(-error);
+ return MOD_ERR;
+}
+__public int mod_close(mod_t mod) {
+ kerrno_t error;
+ error = kmod_close(mod);
+ if __likely(KE_ISOK(error)) return 0;
+ __set_errno(-error);
+ return -1;
+}
+__public void *mod_sym(mod_t mod, char const *symname) {
+ void *result = kmod_sym(mod,symname,(size_t)-1);
+ if __unlikely(!result) __set_errno(ENOENT);
+ return result;
+}
 
 
 __DECL_END
-#endif /* !__ASSEMBLY__ */
+#endif /* !__KERNEL__ */
 
-#endif /* !__DISASM_DISASM_H__ */
+#endif /* !__MOD_C__ */

@@ -13,10 +13,12 @@
   <ItemGroup>
     <ClCompile Include="..\..\userland\sh\builtin-sysio.c" />
     <ClCompile Include="..\..\userland\sh\builtin.c" />
+    <ClCompile Include="..\..\userland\sh\cmd.c" />
     <ClCompile Include="..\..\userland\sh\sh.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\userland\sh\builtin.h" />
+    <ClInclude Include="..\..\userland\sh\cmd.h" />
     <ClInclude Include="..\..\userland\sh\sh.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

@@ -9,8 +9,12 @@
 [project = userland:rmdir]        [diskfile = /bin/rmdir]        { ./rmdir.c; }
 [project = userland:true]         [diskfile = /bin/true]         [no(libc)] { ./true.c; }
 [project = userland:false]        [diskfile = /bin/false]        [no(libc)] { ./false.c; }
-[project = userland:sh]           [diskfile = /bin/sh]           [libs(rline)] { ./sh/*.c; }
+[project = userland:sh]           [diskfile = /bin/sh]           [libs(rline,cmd)] { ./sh/*.c; }
 [project = userland:terminal-vga] [diskfile = /bin/terminal-vga] [libs(term)] { ./terminal-vga.c; }
+[project = userland:snake]        [diskfile = /bin/snake]        { ./snake.c; }
+# [project = userland:pe-test] [diskfile = /bin/pe-test] \
+[linker = ld-pe] [compiler = c-pe] [no(libc)] \
+{ ./pe-test.c; }
 
 # Nano
 #[project = userland:nano][diskfile = /bin/nano][libs(curses)] \

@@ -28,6 +28,7 @@
 #include <kos/kernel/features.h>
 #include <kos/kernel/interrupts.h>
 #include <kos/kernel/shm.h>
+#include <stdio.h>
 
 __DECL_BEGIN
 
@@ -61,19 +62,19 @@ again:
  assert(branch->sb_map_min <= branch->sb_map_max);
  assert(branch->sb_map_min >= KSHMBRANCH_MAPMIN(addr_semi,level));
  assert(branch->sb_map_max <= KSHMBRANCH_MAPMAX(addr_semi,level));
- if (branch->sb_min) {
-  if (branch->sb_max) {
-   new_semi = addr_semi,new_level = level;
-   KSHMBRANCH_WALKMAX(new_semi,new_level);
-   kshmbranch_print(branch->sb_max,new_semi,new_level);
-  }
-  KSHMBRANCH_WALKMIN(addr_semi,level);
-  branch = branch->sb_min;
-  goto again;
- }
  if (branch->sb_max) {
+  if (branch->sb_min) {
+   new_semi = addr_semi,new_level = level;
+   KSHMBRANCH_WALKMIN(new_semi,new_level);
+   kshmbranch_print(branch->sb_min,new_semi,new_level);
+  }
   KSHMBRANCH_WALKMAX(addr_semi,level);
   branch = branch->sb_max;
+  goto again;
+ }
+ if (branch->sb_min) {
+  KSHMBRANCH_WALKMIN(addr_semi,level);
+  branch = branch->sb_min;
   goto again;
  }
 }

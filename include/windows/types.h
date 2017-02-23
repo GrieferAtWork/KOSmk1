@@ -20,27 +20,46 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __SH_H__
-#define __SH_H__ 1
+#ifndef __WINDOWNS_TYPES_H__
+#define __WINDOWNS_TYPES_H__ 1
 
-extern int   verbose;          /* Log every system()-style call. */
-extern int   interactive;
-extern int   restricted_shell;
-extern int   sani_descriptors; /*< Do descriptor sanitization, as described in unistd.h:_isafile */
-extern int   fork_sandlevel;   /*< (0..4) Sandbox-level to put spawned tasks into. */
-extern char *prompt;
+#include <kos/config.h>
+#include <kos/compiler.h>
+#include <kos/types.h>
 
-extern void term_setunbuffered(void);
-extern void term_setbuffered(void);
+__DECL_BEGIN
 
-extern int exec_fork(char *exe, char **argv);
-extern char **split_argv(char *cmd);
-extern int exec_unistd(char *exe, char **argv);
-extern int exec_system(char *cmd);
-extern int joinproc(int p);
-extern int do_system(char *cmd);
+/* NOTE: Always use fixed-length integral types to keep this consistent.
+ *    >> Even if it says 'LONG', doesn't mean it'll equal sizeof(long)!
+ */
+typedef __u8  UCHAR,*PUCHAR,*LPUCHAR;
+typedef __u16 USHORT,*PUSHORT,*LPUSHORT;
+typedef __u32 ULONG,*PULONG,*LPULONG;
+typedef __s32 LONG,*PLONG,*LPLONG;
+typedef __s64 LONGLONG,*PLONGLONG,*LPLONGLONG;
+typedef __u64 ULONGLONG,*PULONGLONG,*LPULONGLONG;
 
-extern void update_prompt(void);
-extern void usage(int fd, char *name);
+typedef __s32 BOOL,*PBOOL,*LPBOOL;
 
-#endif /* !__SH_H__ */
+typedef __u8  BYTE,*PBYTE,*LPBYTE;
+typedef __u16 WORD,*PWORD,*LPWORD;
+typedef __u32 DWORD,*PDWORD,*LPDWORD;
+typedef float FLOAT,*PFLOAT,*LPFLOAT;
+typedef __s32 INT,*PINT,*LPINT;
+typedef __u32 UINT,*PUINT,*LPUINT;
+typedef void *LPVOID;
+typedef void const *LPCVOID;
+
+typedef __uintptr_t UINT_PTR;
+#if __SIZEOF_LONG__ == __SIZEOF_POINTER__
+typedef long        LONG_PTR;
+#else
+typedef __intptr_t  LONG_PTR;
+#endif
+
+typedef LPVOID HANDLE;
+
+
+__DECL_END
+
+#endif /* !__WINDOWNS_TYPES_H__ */

@@ -65,24 +65,29 @@ local rebuild_on_dot_sources_changed = false;
 local max_compilers_processes = 8;
 
 // Paths
-local executables = dict {
 #ifdef __WINDOWS__
-	.asm       = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc.exe",
-	.c         = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc.exe",
-	.ar        = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ar.exe",
-	.ld        = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ld.exe",
-	.cxx       = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-g++.exe",
+#define EXE(x) x ".exe"
+#else
+#define EXE(x) x
+#endif
+local executables = dict {
+	"asm"          : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc"),
+	"c"            : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc"),
+	"ar"           : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ar"),
+	"ld"           : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ld"),
+	"cxx"          : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-g++"),
+	"addr2line"    : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-addr2line"),
+	"asm-pe"       : EXE("binutils/build-binutils-"+arch_toolchain+"-cygwin/bin/"+arch_toolchain+"-cygwin-gcc"),
+	"c-pe"         : EXE("binutils/build-binutils-"+arch_toolchain+"-cygwin/bin/"+arch_toolchain+"-cygwin-gcc"),
+	"ar-pe"        : EXE("binutils/build-binutils-"+arch_toolchain+"-cygwin/bin/"+arch_toolchain+"-cygwin-ar"),
+	"ld-pe"        : EXE("binutils/build-binutils-"+arch_toolchain+"-cygwin/bin/"+arch_toolchain+"-cygwin-ld"),
+	"cxx-pe"       : EXE("binutils/build-binutils-"+arch_toolchain+"-cygwin/bin/"+arch_toolchain+"-cygwin-g++"),
+	"addr2line-pe" : EXE("binutils/build-binutils-"+arch_toolchain+"-cygwin/bin/"+arch_toolchain+"-cygwin-addr2line"),
+#ifdef __WINDOWS__
 	.mkisofs   = "binutils/build-mkisofs-md5-2.01/mkisofs.exe",
-	.addr2line = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-addr2line.exe",
 	.qemu      = "D:\\qemu\\qemu-system-i386.exe",
 #else
-	.asm       = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc",
-	.c         = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc",
-	.ar        = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ar",
-	.ld        = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ld",
-	.cxx       = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-g++",
 	.mkisofs   = "mkisofs",
-	.addr2line = "binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-addr2line",
 	.qemu      = "qemu-system-i386",
 #endif
 };
@@ -711,6 +716,7 @@ function compile_shared_library(name,proj) {
 	local output = "bin/libs/lib"+name+".so";
 	local libs = proj.libs;
 	local no = proj.options.get("no",[]);
+	local linker = proj.options.get("linker","ld");
 	if ("libc" !in no) {
 		libs.remove("c");
 		if (name != "c") libs.append("c");
@@ -738,7 +744,7 @@ do_compile_sharedlib:
 	local libpaths = proj.libpaths;
 	if ("bin/libs" !in libpaths) libpaths.append("bin/libs");
 	libpaths.append("binutils/build-gcc-i686-elf/i686-elf/libgcc");
-	local p = process(executables["ld"],[
+	local p = process(executables[linker],[
 		(for (local l: libpaths) "-L"+l)...,
 		//"-static-libgcc",(optimize ? ["-O2"] : [])...,
 		"-nostdlib","-shared","-o",output,

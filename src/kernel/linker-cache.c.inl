@@ -234,7 +234,7 @@ end:
 
 
 __crit __ref struct kshlib *
-kshlibcache_fgetlib(struct kfile *fp) {
+kshlibcache_fgetlib(struct kfile *__restrict fp) {
  __ref struct kshlib *result; char *filename;
  KTASK_CRIT_MARK
  filename = kfile_getmallname(fp);

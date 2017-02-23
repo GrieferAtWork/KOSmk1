@@ -78,6 +78,11 @@ struct ksymbol {
  //char          s_zero;     /*< Ensure zero-termination of 's_name'. */
 };
 
+extern __crit __wunused __malloccall __nonnull((1))
+struct ksymbol *ksymbol_new(char const *__restrict name);
+#define ksymbol_delete   free
+
+
 struct ksymlist {
  __size_t         sl_symc; /*< Amount of symbols. */
  struct ksymbol **sl_symv; /*< [0..1][0..sl_symc][owned] Vector of symbols. */
@@ -155,8 +160,25 @@ ksymtable_lookupaddr(struct ksymtable const *self, ksymaddr_t addr);
 // @return: KE_OK:    The table was rehashed to use 'bucketcount' buckets.
 // @return: KE_NOMEM: Rehashing failed due to not enough memory being available.
 extern __nonnull((1)) kerrno_t
-ksymtable_rehash(struct ksymtable *self, __size_t bucketcount);
+ksymtable_rehash(struct ksymtable *__restrict self,
+                 __size_t bucketcount);
 
+//////////////////////////////////////////////////////////////////////////
+// Insert a given symbol and its address into the symbol table.
+// NOTE: The Symbol table will always try to keep at least as many
+//       buckets as it has symbols. aka:
+//       >> if (st_mapa < st_size+1) ksymtable_rehash(st_size+1);
+//       So to speed up this function, call 'ksymtable_rehash' yourself
+//       beforehand to reduce processing time otherwise required to
+//       constantly reallocate the symbol table.
+//      (With try I mean that a failure to rehash is silently ignored)
+// NOTE: The caller is responsible to prevent KSYM_INVALID addresses from being inserted.
+// @return: KE_OK:        The given symbol was successfully inserted.
+// @return: KE_NOMEM:     Not enough available memory (can still
+//                        happen if the entry cannot be allocated)
+extern __wunused __nonnull((1,2)) kerrno_t
+ksymtable_insert_inherited(struct ksymtable *__restrict self,
+                           struct ksymbol *__restrict sym);
 
 
 
@@ -188,6 +210,7 @@ extern __nonnull((1)) void kreloc_init(struct kreloc *__restrict self);
 extern __nonnull((1)) void kreloc_quit(struct kreloc *__restrict self);
 
 struct kshm;
+struct kproc;
 struct kprocmodule;
 
 //////////////////////////////////////////////////////////////////////////
@@ -226,11 +249,15 @@ struct ksecdata {
 // @param: pheaderc: Amount of program headers. (Elf32_Ehdr::e_phnum)
 // @param: pheadersize: Size of a single header. (Elf32_Ehdr::e_phentsize)
 extern __wunused __nonnull((1,2,5)) kerrno_t
-ksecdata_init(struct ksecdata *__restrict self,
-              Elf32_Phdr const *__restrict pheaderv,
-              __size_t pheaderc, __size_t pheadersize,
-              struct kfile *__restrict elf_file);
+ksecdata_elf32_init(struct ksecdata *__restrict self,
+                    Elf32_Phdr const *__restrict pheaderv,
+                    __size_t pheaderc, __size_t pheadersize,
+                    struct kfile *__restrict elf_file);
 extern __nonnull((1)) void ksecdata_quit(struct ksecdata *__restrict self);
+
+//////////////////////////////////////////////////////////////////////////
+// Calculate the 'ed_begin'/'ed_end' cache.
+extern void ksecdata_cacheminmax(struct ksecdata *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
 // Translate a given address into its physical counterpart.
@@ -326,7 +353,7 @@ extern __crit __wunused __nonnull((1,2)) kerrno_t
 kshlib_new(struct kshlib **__restrict result,
            struct kfile *__restrict elf_file);
 extern __crit __wunused __nonnull((1,2)) kerrno_t
-kshlib_new_elf32(struct kshlib **__restrict result,
+kshlib_elf32_new(struct kshlib **__restrict result,
                  struct kfile *__restrict elf_file);
 
 //////////////////////////////////////////////////////////////////////////
@@ -416,7 +443,8 @@ kshlib_openfileenv(struct kfspathenv const *pathenv,
                    __ref struct kshlib **__restrict result,
                    int require_exec_permissions);
 extern __crit __wunused __nonnull((1,2)) kerrno_t
-kshlib_fopenfile(struct kfile *fp, __ref struct kshlib **__restrict result);
+kshlib_fopenfile(struct kfile *__restrict fp,
+                 __ref struct kshlib **__restrict result);
 
 // TODO: These compiler-settings should be turned
 //       into process-local debug flags.
@@ -459,7 +487,7 @@ extern __crit void kshlibcache_dellib(struct kshlib *__restrict lib);
 // @return: NULL: No library with the given path was cached.
 // @return: * :   A new reference to a cached shared library.
 extern __crit __ref struct kshlib *kshlibcache_getlib(char const *__restrict absolute_path);
-extern __crit __ref struct kshlib *kshlibcache_fgetlib(struct kfile *fp);
+extern __crit __ref struct kshlib *kshlibcache_fgetlib(struct kfile *__restrict fp);
 
 
 

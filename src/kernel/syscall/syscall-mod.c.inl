@@ -26,6 +26,7 @@
 #include "syscall-common.h"
 #include <kos/kernel/linker.h>
 #include <kos/kernel/proc.h>
+#include <kos/kernel/fs/file.h>
 #include <kos/kernel/util/string.h>
 
 __DECL_BEGIN

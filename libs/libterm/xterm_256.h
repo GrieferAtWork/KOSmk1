@@ -24,7 +24,7 @@
 #define __XTERM_256_H__ 1
 
 #include <kos/compiler.h>
-#include <term/term.h>
+#include <lib/term.h>
 
 __DECL_BEGIN
 

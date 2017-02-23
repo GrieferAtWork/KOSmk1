@@ -20,8 +20,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __WIN_SYSCALL_H__
-#define __WIN_SYSCALL_H__ 1
+#ifndef __WINDOWS_SYSCALL_H__
+#define __WINDOWS_SYSCALL_H__ 1
 
 #include <kos/config.h>
 #ifdef __KOS_HAVE_NTSYSCALL
@@ -526,4 +526,4 @@ __DECL_BEGIN
 __DECL_END
 #endif /* __KOS_HAVE_NTSYSCALL */
 
-#endif /* !__WIN_SYSCALL_H__ */
+#endif /* !__WINDOWS_SYSCALL_H__ */

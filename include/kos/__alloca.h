@@ -27,7 +27,7 @@
 
 #ifndef __ASSEMBLY__
 #if !defined(__GNUC__) && !__has_builtin(__builtin_alloca)
-#if defined(__GNUC__) /* TODO: Other compilers that support inline assembly. */
+#if !defined(__NO_xblock) && defined(__GNUC__) /* TODO: Other compilers that support inline assembly. */
 // Alloca implemented using inline assembly
 // NOTE: When it can be used, this version is faster as it doesn'
 //       have to step around arguments and the return address.
@@ -55,11 +55,15 @@ __DECL_END
 __DECL_BEGIN
 extern void debug_checkalloca_d __P((__size_t bytes __LIBC_DEBUG__PARAMS));
 __DECL_END
+#ifndef __NO_xblock
 #define __alloca(s) \
  __xblock({ __size_t const __alloca_s = (s); \
             debug_checkalloca_d(__alloca_s __LIBC_DEBUG__ARGS);\
             __xreturn __builtin_alloca(__alloca_s);\
  })
+#else
+#define __alloca(s) (debug_checkalloca_d(s __LIBC_DEBUG__ARGS),__builtin_alloca(s))
+#endif
 #endif /* __KERNEL_HAVE_DEBUG_STACKCHECKS */
 #endif /* __KERNEL__ */
 

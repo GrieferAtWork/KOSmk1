@@ -74,7 +74,6 @@
 #define __LIBC_DEBUG_FILE         __file
 #define __LIBC_DEBUG_LINE         __line
 #define __LIBC_DEBUG_FUNC         __func
-#define __LIBC_HAVE_DEBUG_ABORT   /* abort() */
 #define __LIBC_HAVE_DEBUG_MALLOC  /* malloc(), calloc(), realloc(), free(), strdup() */
 #define __LIBC_HAVE_DEBUG_MEMCHECKS
 #ifdef __KERNEL__
@@ -97,8 +96,6 @@
 #define __LIBC_DEBUG_FILE         (char const *)0
 #define __LIBC_DEBUG_LINE         (int)-1
 #define __LIBC_DEBUG_FUNC         (char const *)0
-#define __LIBC_HAVE_DEBUG_ABORT   /* abort() */
-#define __LIBC_HAVE_DEBUG_MALLOC  /* malloc(), calloc(), realloc(), free(), strdup() */
 #endif
 
 #ifndef __LIBC_HAVE_DEBUG_MEMCHECKS

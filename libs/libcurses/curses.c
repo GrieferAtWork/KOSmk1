@@ -556,8 +556,10 @@ static int init_screen_info(SCREEN *self) {
           strerror(errno));
   return ERR;
  }
- print("\033[s" // Save cursor position
-       "\033[4096;4096H"); /* Move the cursor to some high position. */
+ print("\033[s"          /* Save cursor position */
+       "\033[4096;4096H" /* Move the cursor to some high position. */
+       "\033[n"          /* Query cursor position. */
+       );
  rsize = read(self->d_ifd,answer,sizeof(answer));
  if (rsize < 0) return -1;
  if (rsize == 0) {

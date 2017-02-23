@@ -73,7 +73,7 @@ void ktime_getnoworcpu(struct timespec *__restrict tmval) {
 
 
 
-int century_register = 0x00; // Set by ACPI table parsing code if possible
+static int century_register = 0x00; // Set by ACPI table parsing code if possible
 #define cmos_isupdating()       (outb(CMOS_IOPORT_CODE,0x0A),(inb(CMOS_IOPORT_DATA)&0x80)!=0)
 #define cmos_getregister(reg)   (outb(CMOS_IOPORT_CODE,reg),inb(CMOS_IOPORT_DATA))
 #define cmos_setregister(reg,v) (outb(CMOS_IOPORT_CODE,reg),outb(v,CMOS_IOPORT_DATA))

@@ -20,27 +20,23 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __SH_H__
-#define __SH_H__ 1
+#ifndef __WINDOWNS_PE_H__
+#define __WINDOWNS_PE_H__ 1
 
-extern int   verbose;          /* Log every system()-style call. */
-extern int   interactive;
-extern int   restricted_shell;
-extern int   sani_descriptors; /*< Do descriptor sanitization, as described in unistd.h:_isafile */
-extern int   fork_sandlevel;   /*< (0..4) Sandbox-level to put spawned tasks into. */
-extern char *prompt;
+#include <kos/compiler.h>
+#include <kos/types.h>
+#include <windows/ms_pe.h>
 
-extern void term_setunbuffered(void);
-extern void term_setbuffered(void);
+__DECL_BEGIN
 
-extern int exec_fork(char *exe, char **argv);
-extern char **split_argv(char *cmd);
-extern int exec_unistd(char *exe, char **argv);
-extern int exec_system(char *cmd);
-extern int joinproc(int p);
-extern int do_system(char *cmd);
+typedef IMAGE_DOS_HEADER   Pe32_DosHeader;
+typedef IMAGE_DOS_HEADER   Pe64_DosHeader;
+typedef IMAGE_NT_HEADERS32 Pe32_FileHeader;
+typedef IMAGE_NT_HEADERS64 Pe64_FileHeader;
 
-extern void update_prompt(void);
-extern void usage(int fd, char *name);
+#define PE_FILE_SIGNATURE  0x00004550 /*< "PE\0\0" (In Pe*_FileHeader::Signature). */
 
-#endif /* !__SH_H__ */
+
+__DECL_END
+
+#endif /* !__WINDOWNS_PE_H__ */

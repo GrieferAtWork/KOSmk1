@@ -351,6 +351,13 @@ __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *
     
     /* Make sure that the memory wasn't modified. */
     {
+	 /* TODO: Just to be sure, we should check all pages of all RO SHM sections for modifications.
+	  *       While there should really be no way of user-code modifying memory once its been
+	  *       mapped as read-only (in the spirit of the KOS design of permissions only be losable),
+	  *       we can't exclude the possibility that once there are kernel modules, some ~genius~
+	  *       might write a backdoor that allows usercode to write memory using the same utilities
+	  *       relocations use for modifying read-only (aka. text) memory during dynamic library loading.
+	  */
      x86_pde used_pde; x86_pte used_pte;
      kassertobj(self);
      used_pde = kproc_getpagedir(self)->d_entries[X86_VPTR_GET_PDID(eip)];

@@ -168,8 +168,9 @@ typedef __uintptr_t kshmregion_cluster_t;
 #ifndef __ASSEMBLY__
 struct kshmpart {
  /* WARNING: Individual pages are only allocated when the reference counter of the associated chunk is non-ZERO. */
+ /* TODO: When swapping gets, we'll have to add some kind of token system that can live here (union-style w/ sp_frame). */
  __pagealigned struct kpageframe *sp_frame; /*< [1..sp_pages][const] Physical starting address of this part. */
- kshmregion_page_t                sp_start; /*< [const] Page index of the start of this part (aka. 'sum(sp_pages)' of all preceiding parts). */
+ kshmregion_page_t                sp_start; /*< [const] Page index of the start of this part (aka. 'sum(sp_pages)' of all preceding parts). */
  __size_t                         sp_pages; /*< [!0][const] Amount of linear pages associated with this part. */
 };
 #endif /* !__ASSEMBLY__ */
@@ -281,6 +282,21 @@ kshmregion_getphysaddr_s(struct kshmregion *__restrict self,
                          kshmregion_addr_t address_offset,
                          __size_t *__restrict max_bytes);
 
+struct kfile;
+//////////////////////////////////////////////////////////////////////////
+// Fill an SHM region with data read from the given file.
+// NOTE: Data not read from the file will be filled with ZERO(0),
+//       making these functions perfect for use during the linker
+//       loading process.
+extern __wunused __nonnull((1,3)) kerrno_t
+kshmregion_ploaddata(struct kshmregion *__restrict self,
+                     __uintptr_t offset, struct kfile *__restrict fp,
+                     __size_t filesz, __pos_t pos);
+extern __wunused __nonnull((1,3)) kerrno_t
+kshmregion_loaddata(struct kshmregion *__restrict self,
+                    __uintptr_t offset, struct kfile *__restrict fp,
+                    __size_t filesz);
+
 
 //////////////////////////////////////////////////////////////////////////
 // Create various kinds of SHM memory chunks.
@@ -321,13 +337,8 @@ extern __crit __wunused __malloccall __ref struct kshmregion *kshmregion_newphys
 //    >> Like all other region-allocators the returned region
 //       will be initialized with 'sre_branches' set to ZERO(1),
 //       as well as all associated clusters initialized to ONE(1).
-//  - Neither of the given regions must have all of its clusters
-//    alive, meaning that either is allowed to contain ZERO-reference
-//    clusters of parts that may potentially be excluded from the
-//    final returned region.
-//    Note though that this freedom should not be confused with
-//    the requirement of the branch-counter being equal to ONE(1),
-//    as described below.
+//  - Both regions must be fully allocated, as easily deducible
+//    by asserting 'sre_clustera == sre_clusterc' on both of them.
 // WARNING: The caller is responsible to ensure that both regions
 //          share the same chunk-flags, as well as be unique
 //          (that is: the caller is the only owner of references,
@@ -336,10 +347,6 @@ extern __crit __wunused __malloccall __ref struct kshmregion *kshmregion_newphys
 // WARNING: Due to cluster alignment, the actual cluster count
 //          of the returned region may not necessarily be the
 //          sum of clusters from the given regions.
-// NOTE: A return value of 'NULL' is very rare, as the algorithm
-//       will attempt to re-use memory from the given regions,
-//       as well as free up more, thus allowing further reduction
-//       of expensive calls to malloc() and friends.
 // @return: * :   A new region controller for both of the
 //                given regions, initialized as described above.
 // @return: NULL: Not enough available memory to allocate the new region controller.
@@ -680,7 +687,6 @@ kshmbranch_fillfork(struct kshmbranch **__restrict proot, struct kpagedir *__res
 struct kshmmap {
  struct kshmbranch *m_root; /*< [0..1][owned] Root branch. */
 };
-#define KSHMMAP_INIT       {NULL}
 #define kshmmap_init(self) (void)((self)->m_root = NULL)
 #define kshmmap_quit(self) ((self)->m_root ? kshmbranch_deltree((self)->m_root) : (void)0)
 
@@ -742,7 +748,6 @@ struct __packed kldt {
  __pagealigned __kernel struct ksegment *ldt_vector; /*< [0..1][owned] Physical address of the LDT vector. */
 };
 __COMPILER_PACK_POP
-#define KLDT_INIT(gdtid)  {gdtid,0,NULL,NULL}
 #endif /* !__ASSEMBLY__ */
 
 
@@ -944,6 +949,26 @@ extern __crit __nomp __nonnull((1)) __size_t
 kshm_touch(struct kshm *__restrict self,
            __pagealigned __user void *address,
            __size_t touch_pages, kshm_flag_t req_flags);
+
+//////////////////////////////////////////////////////////////////////////
+// Similar to 'kshm_touch', but capable of touching all pages
+// from all branches within the given area of memory.
+// @return: * : The amount of successfully touched pages (sum).
+extern __crit __nomp __nonnull((1)) __size_t
+kshm_touchall(struct kshm *__restrict self,
+              __pagealigned __user void *address,
+              __size_t touch_pages, kshm_flag_t req_flags);
+
+//////////////////////////////////////////////////////////////////////////
+// Similar to 'kshm_touch', but allows for finer control
+// over what pages in which branch should be touched.
+// @return: * : The amount of successfully touched pages.
+extern __crit __nomp __nonnull((1,2)) __size_t
+kshm_touchex(struct kshm *__restrict self,
+             struct kshmbranch **__restrict pbranch,
+             __uintptr_t addr_semi,
+             kshmregion_page_t min_page,
+             kshmregion_page_t max_page);
 
 
 

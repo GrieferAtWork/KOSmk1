@@ -20,27 +20,20 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __SH_H__
-#define __SH_H__ 1
+#ifndef __PE_TEST_C__
+#define __PE_TEST_C__ 1
 
-extern int   verbose;          /* Log every system()-style call. */
-extern int   interactive;
-extern int   restricted_shell;
-extern int   sani_descriptors; /*< Do descriptor sanitization, as described in unistd.h:_isafile */
-extern int   fork_sandlevel;   /*< (0..4) Sandbox-level to put spawned tasks into. */
-extern char *prompt;
+#include <stddef.h>
+#include <kos/task.h>
+#include <kos/syslog.h>
 
-extern void term_setunbuffered(void);
-extern void term_setbuffered(void);
+void _start(void) {
 
-extern int exec_fork(char *exe, char **argv);
-extern char **split_argv(char *cmd);
-extern int exec_unistd(char *exe, char **argv);
-extern int exec_system(char *cmd);
-extern int joinproc(int p);
-extern int do_system(char *cmd);
+ k_syslog(KLOG_INFO,"System log entry from PE file!\n",(size_t)-1);
 
-extern void update_prompt(void);
-extern void usage(int fd, char *name);
+ kproc_exit(0);
+ /* We should never get here! */
+ __builtin_unreachable();
+}
 
-#endif /* !__SH_H__ */
+#endif /* !__PE_TEST_C__ */

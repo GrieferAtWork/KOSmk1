@@ -32,22 +32,22 @@
 #include <string.h>
 
 struct shcmd const shbuiltin[] = {
- {"cd",&builtin_cd},
- {"exit",&builtin_exit},
- {"color",&builtin_color},
- {"sand",&builtin_sand},
- {"rootfork",&builtin_rootfork},
+ SHCMD("cd",&builtin_cd),
+ SHCMD("exit",&builtin_exit),
+ SHCMD("color",&builtin_color),
+ SHCMD("sand",&builtin_sand),
+ SHCMD("rootfork",&builtin_rootfork),
 #if CONFIG_HAVE_IO
- {"sys.open",&builtin_sys_open},
- {"sys.open2",&builtin_sys_open2},
- {"sys.close",&builtin_sys_close},
- {"sys.read",&builtin_sys_read},
- {"sys.seek",&builtin_sys_seek},
- {"sys.write",&builtin_sys_write},
- {"sys.dup",&builtin_sys_dup},
- {"sys.dup2",&builtin_sys_dup2},
+ SHCMD("sys.open",&builtin_sys_open),
+ SHCMD("sys.open2",&builtin_sys_open2),
+ SHCMD("sys.close",&builtin_sys_close),
+ SHCMD("sys.read",&builtin_sys_read),
+ SHCMD("sys.seek",&builtin_sys_seek),
+ SHCMD("sys.write",&builtin_sys_write),
+ SHCMD("sys.dup",&builtin_sys_dup),
+ SHCMD("sys.dup2",&builtin_sys_dup2),
 #endif /* CONFIG_HAVE_IO */
- {NULL,NULL}
+ {NULL,0,NULL}
 };
 #include <stdint.h>
 #include <proc.h>

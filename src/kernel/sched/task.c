@@ -494,6 +494,22 @@ extern void ktask_schedule(struct scheddata *state) {
  // WARNING: This function is called without an up-to-date ktask_self register!
  struct kcpu *cpuself = kcpu_self();
  struct ktask *prevtask,*currtask;
+
+#if 0
+ {
+  static int curr = 0;
+  static struct timespec lasttime;
+  struct timespec tm;
+  ktime_getnoworcpu(&tm);
+  ++curr;
+  if (tm.tv_sec != lasttime.tv_sec) {
+   k_syslogf(KLOG_TRACE,"QUANTUM after %d\n",curr);
+   curr = 0;
+   lasttime = tm;
+  }
+ }
+#endif
+
  if (!kcpu_trylock(cpuself,KCPU_LOCK_TASKS)) return;
  if (cpuself->c_flags&KCPU_FLAG_NOIRQ) {
   kcpu_unlock(cpuself,KCPU_LOCK_TASKS);
@@ -1341,8 +1357,6 @@ reschedule_running:
  katomic_store(self->t_state,newstate);
  return error;
 }
-
-#define KTASK_UNSCHEDULE_NOIRQ_IMPLIES_CRIT
 
 kerrno_t __SCHED_CALL
 ktask_unschedule_ex(struct ktask *__restrict self, __u8 newstate, void *__restrict arg,

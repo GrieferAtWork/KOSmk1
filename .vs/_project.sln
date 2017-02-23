@@ -64,6 +64,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "include", "include", "{FC82
 		..\include\malloc.h = ..\include\malloc.h
 		..\include\math.h = ..\include\math.h
 		..\include\memory.h = ..\include\memory.h
+		..\include\mod.h = ..\include\mod.h
 		..\include\proc.h = ..\include\proc.h
 		..\include\pthread.h = ..\include\pthread.h
 		..\include\pty.h = ..\include\pty.h
@@ -151,7 +152,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "linux", "linux", "{ABB98500
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "windows", "windows", "{CE636388-191E-48B5-9171-57B5A8163395}"
 	ProjectSection(SolutionItems) = preProject
+		..\include\windows\ms_pe.h = ..\include\windows\ms_pe.h
+		..\include\windows\pe.h = ..\include\windows\pe.h
 		..\include\windows\syscall.h = ..\include\windows\syscall.h
+		..\include\windows\types.h = ..\include\windows\types.h
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "arch", "arch", "{41A312AB-6D0F-4D85-B1C7-E9E08720D741}"
@@ -200,21 +204,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "false", "userland\false.vcx
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "true", "userland\true.vcxproj", "{04F5DB17-0D6F-4708-9B28-2C3178AF9193}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "rline", "rline", "{9C060120-B8A5-457A-984C-E007D17CD708}"
-	ProjectSection(SolutionItems) = preProject
-		..\include\rline\rline.h = ..\include\rline\rline.h
-	EndProjectSection
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "librline", "libs\librline.vcxproj", "{CB22AEDE-D309-4BFA-886D-4526954B3D65}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sh", "userland\sh.vcxproj", "{E9B676DE-BFF3-44AB-9386-0FCBE338C0CE}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "terminal-vga", "userland\terminal-vga.vcxproj", "{5817AC4F-0DF5-476F-A591-6D8EAF746BFD}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "term", "term", "{C2025DF0-F573-4139-B54B-80028BD05DE6}"
-	ProjectSection(SolutionItems) = preProject
-		..\include\term\term.h = ..\include\term\term.h
-	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libterm", "libs\libterm.vcxproj", "{CFE0241A-3332-48A2-9D6A-0B39C045A37B}"
 EndProject
@@ -222,10 +216,17 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libcurses", "libs\libcurses
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libdisasm", "libs\libdisasm.vcxproj", "{554D79C5-C397-406A-A108-8CF705747E4C}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "disasm", "disasm", "{1B17C581-0732-44B6-9861-D272E2EE8AE3}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "snake", "userland\snake.vcxproj", "{D69707FA-42E7-4A30-9551-211019E3726F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "lib", "lib", "{79BE4F16-35EA-4BC9-868F-01AE5F1D733E}"
 	ProjectSection(SolutionItems) = preProject
-		..\include\disasm\disasm.h = ..\include\disasm\disasm.h
+		..\include\lib\cmd.h = ..\include\lib\cmd.h
+		..\include\lib\disasm.h = ..\include\lib\disasm.h
+		..\include\lib\rline.h = ..\include\lib\rline.h
+		..\include\lib\term.h = ..\include\lib\term.h
 	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libcmd", "libs\libcmd.vcxproj", "{43B74335-6A24-4D76-BC6F-1258633E466D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -321,6 +322,14 @@ Global
 		{554D79C5-C397-406A-A108-8CF705747E4C}.Debug|Win32.Build.0 = Debug|Win32
 		{554D79C5-C397-406A-A108-8CF705747E4C}.Release|Win32.ActiveCfg = Release|Win32
 		{554D79C5-C397-406A-A108-8CF705747E4C}.Release|Win32.Build.0 = Release|Win32
+		{D69707FA-42E7-4A30-9551-211019E3726F}.Debug|Win32.ActiveCfg = Debug|Win32
+		{D69707FA-42E7-4A30-9551-211019E3726F}.Debug|Win32.Build.0 = Debug|Win32
+		{D69707FA-42E7-4A30-9551-211019E3726F}.Release|Win32.ActiveCfg = Release|Win32
+		{D69707FA-42E7-4A30-9551-211019E3726F}.Release|Win32.Build.0 = Release|Win32
+		{43B74335-6A24-4D76-BC6F-1258633E466D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{43B74335-6A24-4D76-BC6F-1258633E466D}.Debug|Win32.Build.0 = Debug|Win32
+		{43B74335-6A24-4D76-BC6F-1258633E466D}.Release|Win32.ActiveCfg = Release|Win32
+		{43B74335-6A24-4D76-BC6F-1258633E466D}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -349,14 +358,14 @@ Global
 		{055EF5C8-C1C4-4C97-9393-7DC7B463C48F} = {9430368A-404E-4917-982A-DABD0023453A}
 		{6EECFB5F-FBA8-4F89-A514-CA709BB99BD6} = {9430368A-404E-4917-982A-DABD0023453A}
 		{04F5DB17-0D6F-4708-9B28-2C3178AF9193} = {9430368A-404E-4917-982A-DABD0023453A}
-		{9C060120-B8A5-457A-984C-E007D17CD708} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
 		{CB22AEDE-D309-4BFA-886D-4526954B3D65} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
 		{E9B676DE-BFF3-44AB-9386-0FCBE338C0CE} = {9430368A-404E-4917-982A-DABD0023453A}
 		{5817AC4F-0DF5-476F-A591-6D8EAF746BFD} = {9430368A-404E-4917-982A-DABD0023453A}
-		{C2025DF0-F573-4139-B54B-80028BD05DE6} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
 		{CFE0241A-3332-48A2-9D6A-0B39C045A37B} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
 		{E7DEA996-55E1-4544-AB9B-530678C0FCB4} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
 		{554D79C5-C397-406A-A108-8CF705747E4C} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
-		{1B17C581-0732-44B6-9861-D272E2EE8AE3} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
+		{D69707FA-42E7-4A30-9551-211019E3726F} = {9430368A-404E-4917-982A-DABD0023453A}
+		{79BE4F16-35EA-4BC9-868F-01AE5F1D733E} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
+		{43B74335-6A24-4D76-BC6F-1258633E466D} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
 	EndGlobalSection
 EndGlobal

@@ -20,8 +20,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __TERM_TERM_H__
-#define __TERM_TERM_H__ 1
+#ifndef __LIB_TERM_H__
+#define __LIB_TERM_H__ 1
 
 #include <kos/compiler.h>
 #include <endian.h>
@@ -251,7 +251,6 @@ extern __nonnull((1)) void term_voutf(struct term *self, char const *fmt, va_lis
 #define ANSIBOX_LLCORNER  'm' /* 0x6D: \- */
 #define ANSIBOX_LRCORNER  'j' /* 0x6A: -/ */
 
-
 __DECL_END
 
-#endif /* !__TERM_TERM_H__ */
+#endif /* !__LIB_TERM_H__ */

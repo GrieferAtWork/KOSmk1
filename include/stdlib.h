@@ -91,6 +91,14 @@ extern __nonnull((1)) int unsetenv __P((char const *__restrict __name));
 extern int clearenv __P((void));
 extern __wunused __nonnull((1)) char *getenv __P((char const *__restrict __name));
 
+//////////////////////////////////////////////////////////////////////////
+// strn-style environment string routines.
+extern __wunused __nonnull((1)) char *_getnenv __P((char const *__restrict __name, __size_t __maxname));
+extern __wunused __nonnull((1,3)) int _setnenv __P((char const *__restrict __name, __size_t __maxname,
+                                                     char const *__value, __size_t __maxvalue,
+                                                     int __overwrite));
+extern __wunused __nonnull((1)) int _unsetnenv __P((char const *__restrict __name, __size_t __maxname));
+
 // NOTE: The given string will not be used in the
 //       environment, but instead libc uses a copy of it.
 //    >> The parameter isn't made constant for compatibility

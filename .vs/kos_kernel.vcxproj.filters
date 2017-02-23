@@ -267,6 +267,9 @@
     <ClInclude Include="..\include\kos\kernel\panic.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\kernel\linker-elf32.h">
+      <Filter>src\kernel</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.c">
@@ -644,5 +647,9 @@
     <None Include="..\src\kernel\iobuf-writeimpl.c.inl">
       <Filter>src\kernel</Filter>
     </None>
+    <None Include="..\src\kernel\linker-elf32.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\magic.dee" />
   </ItemGroup>
 </Project>

@@ -25,7 +25,7 @@
 
 #include <kos/compiler.h>
 #include <format-printer.h>
-#include <disasm/disasm.h>
+#include <lib/disasm.h>
 #include <assert.h>
 #include <sys/types.h>
 

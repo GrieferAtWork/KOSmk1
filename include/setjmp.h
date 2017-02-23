@@ -32,7 +32,9 @@
 __DECL_BEGIN
 
 struct __jmp_buf { void *ptr[5]; };
-typedef __jmp_buf jmp_buf[1];
+typedef struct __jmp_buf jmp_buf[1];
+
+#define _JMP_BUF_STATIC_INIT  {{{NULL,NULL,NULL,NULL,NULL}}}
 
 #ifdef __INTELLISENSE__
 extern             int setjmp(jmp_buf buf);

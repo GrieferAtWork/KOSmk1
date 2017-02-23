@@ -77,6 +77,7 @@
     <ClInclude Include="..\include\kos\kernel\tty.h" />
     <ClInclude Include="..\include\kos\kernel\types.h" />
     <ClInclude Include="..\include\kos\kernel\util\string.h" />
+    <ClInclude Include="..\src\kernel\linker-elf32.h" />
     <ClInclude Include="..\src\kernel\syscall\syscall-common.h" />
     <ClInclude Include="..\src\kernel\syscall\syscall-groups.h" />
     <ClInclude Include="..\src\misc\font2_8x16.h" />
@@ -121,6 +122,7 @@
     <ClCompile Include="..\src\main.c" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\magic.dee" />
     <None Include="..\src\.sources" />
     <None Include="..\src\kernel\arch\x86\boot.S" />
     <None Include="..\src\kernel\arch\x86\linker.ld" />
@@ -158,6 +160,7 @@
     <None Include="..\src\kernel\iobuf-readimpl.c.inl" />
     <None Include="..\src\kernel\iobuf-writeimpl.c.inl" />
     <None Include="..\src\kernel\linker-cache.c.inl" />
+    <None Include="..\src\kernel\linker-elf32.c.inl" />
     <None Include="..\src\kernel\linker-recent.c.inl" />
     <None Include="..\src\kernel\linker-relocate.c.inl" />
     <None Include="..\src\kernel\linker-slloaders.c.inl" />

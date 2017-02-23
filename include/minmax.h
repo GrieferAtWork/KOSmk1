@@ -54,6 +54,9 @@ template<class Tx, class Ty> auto _min(Tx x, Ty y) -> decltype(1 ? x : y);
 template<class Tx, class Ty> auto _max(Tx x, Ty y) -> decltype(1 ? x : y);
 
 }
+#elif defined(__NO_xblock)
+#define _min(x,y) ((x) < (y) ? (x) : (y))
+#define _max(x,y) ((x) > (y) ? (x) : (y))
 #else
 #define _min(x,y) \
  __xblock({ __typeof__(x) const __mx = (x);\

@@ -384,6 +384,11 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #   define __compiler_barrier() (void)0
 #endif
 
+/* Marks a region of code containing only, or partially code
+ * neither written, nor claimed by my (GrieferAtWork). */
+#define __NOCLAIM_BEGIN(who)
+#define __NOCLAIM_END
+
 
 #ifndef __physicaladdr
 #define __physicaladdr /* Physical memory address. */

@@ -11,11 +11,11 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\libs\libcurses\curses.c" />
+    <ClCompile Include="..\..\userland\snake.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{E7DEA996-55E1-4544-AB9B-530678C0FCB4}</ProjectGuid>
-    <RootNamespace>libcurses</RootNamespace>
+    <ProjectGuid>{D69707FA-42E7-4A30-9551-211019E3726F}</ProjectGuid>
+    <RootNamespace>snake</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -63,7 +63,8 @@
     </NMakeCleanCommandLine>
     <NMakeForcedIncludes>$(SolutionDir)..\include\__intellisense_fix.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
     <AdditionalOptions>/TP</AdditionalOptions>
-    <NMakePreprocessorDefinitions>__BUILDING_LIBCURSES__=1</NMakePreprocessorDefinitions>
+    <NMakePreprocessorDefinitions>
+    </NMakePreprocessorDefinitions>
     <NMakeOutput>
     </NMakeOutput>
     <NMakeIncludeSearchPath>
@@ -74,8 +75,8 @@
     <OutDir>$(SolutionDir)..\</OutDir>
     <IncludePath>$(SolutionDir)..\include</IncludePath>
     <IntDir>$(SolutionDir)..\build\.vs\$(ProjectName)\$(Platform)-$(Configuration)\</IntDir>
-    <NMakeReBuildCommandLine>rundll</NMakeReBuildCommandLine>
-    <NMakeBuildCommandLine>rundll</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>rundll32</NMakeReBuildCommandLine>
+    <NMakeBuildCommandLine>rundll32</NMakeBuildCommandLine>
     <ReferencePath>
     </ReferencePath>
     <LibraryPath>
@@ -89,7 +90,8 @@
     </NMakeCleanCommandLine>
     <NMakeForcedIncludes>$(SolutionDir)..\include\__intellisense_fix.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
     <AdditionalOptions>/TP</AdditionalOptions>
-    <NMakePreprocessorDefinitions>__BUILDING_LIBCURSES__=1</NMakePreprocessorDefinitions>
+    <NMakePreprocessorDefinitions>
+    </NMakePreprocessorDefinitions>
     <NMakeOutput>
     </NMakeOutput>
     <NMakeIncludeSearchPath>

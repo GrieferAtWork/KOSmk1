@@ -41,7 +41,7 @@ __DECL_BEGIN
 #undef coord_t
 #undef pair_t
 #undef flag_t
-#ifndef __BUILTIN_LIBCURSES__
+#ifndef __BUILDING_LIBCURSES__
 #define point   __cur_point
 #define screen  __cur_curdev
 #define window  __cur_window
@@ -164,7 +164,7 @@ struct window {
     int             w_delay;  /*< Delay using during blocking reads. */
 };
 
-#ifdef __BUILTIN_LIBCURSES__
+#ifdef __BUILDING_LIBCURSES__
 #define W_DEFAULT (W_IDCOK|W_NODELAY)
 #define W_NONE     __CURSES_WINDOWFLAG_NONE
 #define W_SCRLOK   __CURSES_WINDOWFLAG_SCRLOK
@@ -536,7 +536,7 @@ extern int wgetscrreg (WINDOW const *win, int *, int *);
 */
 
 
-#ifndef __BUILTIN_LIBCURSES__
+#ifndef __BUILDING_LIBCURSES__
 #undef point
 #undef curdev
 #undef window

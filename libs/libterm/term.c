@@ -24,7 +24,7 @@
 #define __TERM_C__ 1
 
 #include <kos/compiler.h>
-#include <term/term.h>
+#include <lib/term.h>
 #include <malloc.h>
 #include <errno.h>
 #include <format-printer.h>
@@ -34,6 +34,8 @@
 #include <stdio.h>
 #include <kos/atomic.h>
 #include <kos/task.h>
+#include <kos/syslog.h>
+#include <math.h>
 
 #include "xterm_256.h"
 
@@ -77,7 +79,6 @@ term_palettes[TERM_PALETTES] = {
   UNDEF,UNDEF,C(144,238,144),C(225,255,224),C(173,216,230),UNDEF,C(224,255,255),UNDEF,
  }},
 };
-#include <math.h>
 
 #define COORD_MAX  UINT32_MAX
 
@@ -543,6 +544,7 @@ enter_escape_mode:
      coord_t x,y;
     case ANSI_DSR:
      GET_CURSOR(x,y);
+     k_syslogf(KLOG_INFO,"Requested cursor position %d;%d\n",y,x);
      sprintf(buf,ANSI_ESCAPE_S "[%d;%dR",y+1,x+1);
      OUTPUT(buf);
      break;

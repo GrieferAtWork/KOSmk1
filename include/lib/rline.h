@@ -20,8 +20,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __RLINE_RLINE_H__
-#define __RLINE_RLINE_H__ 1
+#ifndef __LIB_RLINE_H__
+#define __LIB_RLINE_H__ 1
 
 #include <kos/compiler.h>
 #include <stddef.h>
@@ -96,4 +96,4 @@ extern char *freadline(char const *prompt, int infd, int outfd);
 
 __DECL_END
 
-#endif /* !__RLINE_RLINE_H__ */
+#endif /* !__LIB_RLINE_H__ */

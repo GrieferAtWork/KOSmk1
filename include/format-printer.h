@@ -177,6 +177,36 @@ format_quote __P((pformatprinter __printer, void *__closure,
 #define FORMAT_QUOTE_FLAG_UPPERSUF 0x00000040 /*< Use uppercase characters for hex (e.g.: '\xAB'). */
 
 
+
+struct stringprinter {
+ char *sp_bufpos; /*< [1..1][>= sp_buffer][<= sp_bufend] . */
+ char *sp_buffer; /*< [1..1] Allocate buffer base pointer. */
+ char *sp_bufend; /*< [1..1] Buffer end (Pointer to currently allocated '\0'-character). */
+};
+
+//////////////////////////////////////////////////////////////////////////
+// Helper functions for using any pformatprinter-style
+// function to print into a dynamically allocated string.
+// >> struct stringprinter printer; int error; char *text;
+// >> if (stringprinter_init(&printer,0)) handle_error();
+// >> if (format_printf(&stringprinter_print,&printer,"Hello %s","dynamic world")) {
+// >>   stringprinter_quit(&printer);
+// >>   handle_error();
+// >> } else {
+// >>   text = stringprinter_pack(&printer,NULL);
+// >>   //stringprinter_quit(&printer); // No-op after pack has been called
+// >> }
+// >> ...
+// >> free(text);
+// @param: HINT: A hint as to how big the initial buffer should be allocated as (Pass ZERO if unknown).
+extern              __nonnull((1)) int   stringprinter_init __P((struct stringprinter *__restrict __self, __size_t __hint));
+extern __retnonnull __nonnull((1)) char *stringprinter_pack __P((struct stringprinter *__restrict __self, __size_t *__length));
+extern              __nonnull((1)) void  stringprinter_quit __P((struct stringprinter *__restrict __self));
+extern int stringprinter_print __P((char const *__restrict __data, __size_t __maxchars, void *__closure));
+ 
+
+
+
 __DECL_END
 #endif /* !__ASSEMBLY__ */
 

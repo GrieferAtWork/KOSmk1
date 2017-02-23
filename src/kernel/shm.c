@@ -451,19 +451,106 @@ kshmregion_newphys(__pagealigned __kernel void *addr,
 __crit __ref struct kshmregion *
 kshmregion_merge(__ref struct kshmregion *min_region,
                  __ref struct kshmregion *max_region) {
+ __ref struct kshmregion *result;
+ size_t total_pages,total_clusters,total_parts;
+ struct kshmpart *minpart_max,*maxpart_min;
+ struct kshmpart *partvec,*iter,*end;
+ struct kshmcluster *citer,*cend;
+ kshmregion_page_t part_start;
  kassert_kshmregion(min_region);
  kassert_kshmregion(max_region);
  assert(min_region->sre_branches == 1);
  assert(max_region->sre_branches == 1);
  assert(min_region->sre_chunk.sc_partc);
- assert(min_region->sre_clustera);
  assert(min_region->sre_clusterc);
  assert(max_region->sre_chunk.sc_partc);
- assert(max_region->sre_clustera);
  assert(max_region->sre_clusterc);
-
- /* TODO: Merge the given regions into one. */
-
+ assert(min_region->sre_chunk.sc_flags ==
+        max_region->sre_chunk.sc_flags);
+ assert(min_region->sre_clustera == min_region->sre_clusterc);
+ assert(max_region->sre_clustera == max_region->sre_clusterc);
+#ifdef __DEBUG__
+ {
+  /* Although this should already be asserted by 'sre_clustera == sre_clusterc',
+   * and 'sre_branches == 1', we also check all cluster reference counters to
+   * equal one as well. */
+  cend = (citer = min_region->sre_clusterv)+min_region->sre_clusterc;
+  for (; citer != cend; ++citer) assert(citer->sc_refcnt == 1);
+  cend = (citer = max_region->sre_clusterv)+max_region->sre_clusterc;
+  for (; citer != cend; ++citer) assert(citer->sc_refcnt == 1);
+ }
+#endif
+ /* Merge the given regions into one. */
+ total_pages = min_region->sre_chunk.sc_pages+
+               max_region->sre_chunk.sc_pages;
+ total_clusters = ceildiv(total_pages,KSHM_CLUSTERSIZE);
+ assert(total_clusters <= min_region->sre_clusterc+max_region->sre_clusterc);
+ result = (__ref struct kshmregion *)malloc(SIZEOF_KSHMREGION(total_clusters));
+ if __unlikely(!result) return NULL;
+ kobject_init(result,KOBJECT_MAGIC_SHMREGION);
+ kobject_init(&result->sre_chunk,KOBJECT_MAGIC_SHMCHUNK);
+ result->sre_chunk.sc_flags = min_region->sre_chunk.sc_flags;
+ result->sre_chunk.sc_pages = total_pages;
+ result->sre_clustera       = total_clusters;
+ result->sre_clusterc       = total_clusters;
+ result->sre_branches       = 1;
+ minpart_max = &min_region->sre_chunk.sc_partv[min_region->sre_chunk.sc_partc-1];
+ maxpart_min = &max_region->sre_chunk.sc_partv[0];
+ total_parts = min_region->sre_chunk.sc_partc+
+               max_region->sre_chunk.sc_partc;
+ /* Page start of the max-region. */
+ part_start = minpart_max->sp_start+minpart_max->sp_pages;
+ if (minpart_max->sp_start+minpart_max->sp_pages == maxpart_min->sp_start) {
+  /* Can combine the last and first parts of the given regions (one less part). */
+  --total_parts;
+  partvec = (struct kshmpart *)malloc(total_parts*sizeof(struct kshmpart));
+  if __unlikely(!partvec) goto err_r;
+  result->sre_chunk.sc_partv = partvec;
+  memcpy(partvec,min_region->sre_chunk.sc_partv,
+                 min_region->sre_chunk.sc_partc*
+                 sizeof(struct kshmpart));
+  partvec += min_region->sre_chunk.sc_partc-1;
+  /* Extend the last part of the min-region. */
+  partvec->sp_pages += maxpart_min->sp_pages;
+  /* Copy all remaining parts. */
+  memcpy(partvec+1,(max_region->sre_chunk.sc_partv+1),
+                   (max_region->sre_chunk.sc_partc-1)*
+                    sizeof(struct kshmpart));
+  /* Update the start offsets of all remaining parts (NOTE: There may not be any remaining). */
+  iter = partvec+1,end = partvec+max_region->sre_chunk.sc_partc;
+  for (assert(iter <= end); iter != end; ++iter) {
+   iter->sp_start = part_start;
+   part_start += iter->sp_pages;
+  }
+ } else {
+  /* Regular part merge */
+  partvec = (struct kshmpart *)malloc(total_parts*sizeof(struct kshmpart));
+  if __unlikely(!partvec) goto err_r;
+  result->sre_chunk.sc_partv = partvec;
+  memcpy(partvec,min_region->sre_chunk.sc_partv,
+                 min_region->sre_chunk.sc_partc*
+                 sizeof(struct kshmpart));
+  partvec += min_region->sre_chunk.sc_partc;
+  memcpy(partvec,max_region->sre_chunk.sc_partv,
+                 max_region->sre_chunk.sc_partc*
+                 sizeof(struct kshmpart));
+  part_start = partvec->sp_start+partvec->sp_pages;
+  end = (iter = partvec)+max_region->sre_chunk.sc_partc;
+  assert(iter < end);
+  assertf(!iter->sp_start,"First part of max-region must start at ZERO(0)");
+  do iter->sp_start += part_start;
+  while (++iter != end);
+ }
+ result->sre_chunk.sc_partc = total_parts;
+ /* The chunk and all of its parts are now fully initialized.
+  * Since part of this function's contract is both regions
+  * being fully allocated, this is trivial as we can simply
+  * initialize all clusters the normal way and set their
+  * reference counters to ONE(1).
+  */
+ kshmregion_setup_clusters(result);
+ return result;
+err_r: free(result);
  return NULL;
 }
 
@@ -1310,6 +1397,7 @@ kshmbranch_fillfork(struct kshmbranch **__restrict proot, struct kpagedir *__res
  struct kshmbranch *newbranch;
  kshm_flag_t source_flags;
  kerrno_t error = KE_OK;
+again:
  kassertobj(proot);
  kassertobj(source);
  kassert_kshmregion(source->sb_region);
@@ -1361,12 +1449,16 @@ ok:
           ) == KE_OK);
  }
  if (source->sb_min) {
-  error = kshmbranch_fillfork(proot,self_pd,source->sb_min,source_pd);
-  if __unlikely(KE_ISERR(error)) return error;
+  if (source->sb_max) {
+   error = kshmbranch_fillfork(proot,self_pd,source->sb_max,source_pd);
+   if __unlikely(KE_ISERR(error)) return error;
+  }
+  source = source->sb_min;
+  goto again;
  }
  if (source->sb_max) {
-  error = kshmbranch_fillfork(proot,self_pd,source->sb_max,source_pd);
-  if __unlikely(KE_ISERR(error)) return error;
+  source = source->sb_max;
+  goto again;
  }
  return error;
 }
@@ -1543,26 +1635,15 @@ kshm_mapregion(struct kshm *__restrict self,
 }
 
 
-/* Automatically merge branches
- * >> s.a. long comment atop of the large
- *    AUTOMERGE_BRANCHES block near the end of kshm_touch. */
-#define AUTOMERGE_BRANCHES 1
-
 __crit __nomp size_t
 kshm_touch(struct kshm *__restrict self,
            __pagealigned __user void *address,
            size_t touch_pages, kshm_flag_t req_flags) {
  struct kshmbranch **pbranch,*branch;
- struct kshmregion *region,*subregion;
- kerrno_t          error;
+ struct kshmregion *region;
  uintptr_t         addr_semi;
  kshmregion_page_t min_page;
  kshmregion_page_t max_page;
-#if AUTOMERGE_BRANCHES
- struct kshmbranch **new_branch,**pneighbor;
- uintptr_t         new_addr_semi,neighbor_semi;
- int did_min_split,did_max_split;
-#endif /* AUTOMERGE_BRANCHES */
  KTASK_CRIT_MARK
  kassert_kshm(self);
  assert(isaligned((uintptr_t)address,PAGEALIGN));
@@ -1595,6 +1676,103 @@ kshm_touch(struct kshm *__restrict self,
  min_page  = ((uintptr_t)address-(uintptr_t)branch->sb_map)/PAGESIZE;
  min_page += branch->sb_rstart;
  max_page  = min_page+touch_pages;
+
+ return kshm_touchex(self,pbranch,addr_semi,min_page,max_page);
+}
+
+
+static __crit __nomp size_t
+kshmbranch_touchall(struct kshm *__restrict self,
+                    struct kshmbranch **__restrict proot,
+                    __pagealigned uintptr_t addr_min,
+                                  uintptr_t addr_max,
+                    uintptr_t addr_semi, unsigned int addr_level,
+                    kshmunmap_flag_t req_flags) {
+ struct kshmbranch *root;
+ size_t result = 0;
+ uintptr_t new_semi;
+ unsigned int new_level;
+ kassertobj(proot);
+ root = *proot;
+ kassertobj(root);
+ kassert_kshmregion(root->sb_region);
+ assert(isaligned(addr_min,PAGEALIGN));
+ assert(addr_min < addr_max);
+ if (addr_min <= root->sb_map_max &&
+     addr_max >= root->sb_map_min) {
+  kshmregion_page_t min_page,max_page; /* Found a matching entry. */
+  if __unlikely((root->sb_region->sre_chunk.sc_flags&req_flags) == req_flags) {
+   if (addr_min <= root->sb_map_min) min_page = 0;
+   else min_page = (addr_min-root->sb_map_min)/PAGESIZE;
+   if (addr_max >= root->sb_map_max) max_page = root->sb_rpages;
+   else max_page = root->sb_rpages-((root->sb_map_max-addr_max)/PAGESIZE);
+   min_page += root->sb_rstart;
+   max_page += root->sb_rstart;
+   result   += kshm_touchex(self,proot,addr_semi,min_page,max_page);
+  }
+ }
+ /* Continue searching. */
+ /* todo: If recursion isn't required ('root' only has one branch),
+  *       continue searching inline without calling our own function again. */
+ if (addr_min < addr_semi && root->sb_min) {
+  /* Recursively continue searching left. */
+  new_semi = addr_semi,new_level = addr_level;
+  KSHMBRANCH_WALKMIN(new_semi,new_level);
+  result += kshmbranch_touchall(self,&root->sb_min,addr_min,addr_max,
+                                new_semi,new_level,req_flags);
+ }
+ if (addr_max >= addr_semi && root->sb_max) {
+  /* Recursively continue searching right. */
+  new_semi = addr_semi,new_level = addr_level;
+  KSHMBRANCH_WALKMAX(new_semi,new_level);
+  result += kshmbranch_touchall(self,&root->sb_max,addr_min,addr_max,
+                                new_semi,new_level,req_flags);
+ }
+ return result;
+}
+
+__crit __nomp __size_t
+kshm_touchall(struct kshm *__restrict self,
+              __pagealigned __user void *address,
+              __size_t touch_pages, kshm_flag_t req_flags) {
+ kassert_kshm(self);
+ assert(touch_pages);
+ return kshmbranch_touchall(self,&self->s_map.m_root,
+                           (uintptr_t)address,
+                           (uintptr_t)address+(touch_pages*PAGESIZE)-1,
+                            KSHMBRANCH_ADDRSEMI_INIT,
+                            KSHMBRANCH_ADDRLEVEL_INIT,
+                            req_flags);
+}
+
+
+/* Automatically merge branches
+ * >> s.a. long comment atop of the large
+ *    AUTOMERGE_BRANCHES block near the end of kshm_touch. */
+#define AUTOMERGE_BRANCHES 1
+
+__crit __nomp size_t
+kshm_touchex(struct kshm *__restrict self,
+             struct kshmbranch **__restrict pbranch,
+             uintptr_t addr_semi,
+             kshmregion_page_t min_page,
+             kshmregion_page_t max_page) {
+ struct kshmbranch *branch;
+ struct kshmregion *region,*subregion;
+ kerrno_t          error;
+#if AUTOMERGE_BRANCHES
+ struct kshmbranch **new_branch,**pneighbor;
+ uintptr_t         new_addr_semi,neighbor_semi;
+ int did_min_split,did_max_split;
+#endif /* AUTOMERGE_BRANCHES */
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ kassertobj(pbranch);
+ assert(max_page >= min_page);
+ branch = *pbranch;
+ kassertobj(branch);
+ region = branch->sb_region;
+ kassert_kshmregion(region);
  /* In order to prevent entire clusters being copied more than once
   * because only a page at a time is being accessed from them, align
   * the page numbers we just figured out by cluster-borders. */
@@ -1664,8 +1842,8 @@ true_shared_access:;
  } else {
   /* Must split the branch at 'min_page'! */
   error = kshmbrach_putsplit(pbranch,NULL,NULL,
-                            &pbranch,&addr_semi,
-                             min_page,addr_semi);
+                            (struct kshmbranch ***)&pbranch,
+                             &addr_semi,min_page,addr_semi);
   if __unlikely(KE_ISERR(error)) {
    k_syslogf(KLOG_ERROR,"[SHM] Failed to split min-branch: %d\n",error);
    return 0;
@@ -1706,8 +1884,8 @@ true_shared_access:;
 #endif /* AUTOMERGE_BRANCHES */
  } else {
   error = kshmbrach_putsplit(pbranch,
-                            &pbranch,&addr_semi,
-                             NULL,NULL,
+                            (struct kshmbranch ***)&pbranch,
+                             &addr_semi,NULL,NULL,
                              max_page+1,addr_semi);
   if __unlikely(KE_ISERR(error)) {
    /* todo: We should probably clean up the first split, although
@@ -1844,8 +2022,9 @@ true_shared_access:;
 #undef CHECK_MIN_NEIGHBOR
 
 end_success:
- k_syslogf(KLOG_TRACE,"[COW] Touched %Iu SHM pages near address %p\n",
-          (max_page-min_page)+1,address);
+ k_syslogf(KLOG_TRACE,"[COW] Touched %Iu SHM pages at address %p\n",
+          (max_page-min_page)+1,
+          (uintptr_t)branch->sb_map+min_page*PAGESIZE);
  /* Tell the caller how many pages we actually touched. */
  return (max_page-min_page)+1;
 }

@@ -23,15 +23,15 @@
 #ifndef __RLINE_C__
 #define __RLINE_C__ 1
 
-#include <rline/rline.h>
-#include <string.h>
-#include <errno.h>
-#include <unistd.h>
-#include <stdio.h>
 #include <assert.h>
-#include <termios.h>
-#include <term/term.h>
 #include <ctype.h>
+#include <errno.h>
+#include <lib/rline.h>
+#include <lib/term.h>
+#include <stdio.h>
+#include <string.h>
+#include <termios.h>
+#include <unistd.h>
 
 __DECL_BEGIN
 

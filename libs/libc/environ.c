@@ -246,10 +246,9 @@ no_mem:
  return -1;
 }
 
-__public int unsetenv(char const *__restrict name) {
- char **iter,**end,*line; size_t name_size;
- if __unlikely(!name) { __set_errno(EINVAL); return -1; }
- name_size = strlen(name);
+static int unsetenvl(char const *__restrict name,
+                     size_t name_size) {
+ char **iter,**end,*line;
  ENV_LOCK;
  end = (iter = __environ_v)+__environ_c;
  for (; iter != end; ++iter) if ((line = *iter) != NULL) {
@@ -271,7 +270,10 @@ __public int unsetenv(char const *__restrict name) {
  ENV_UNLOCK;
  return 0;
 }
-
+__public int unsetenv(char const *__restrict name) {
+ if __unlikely(!name) { __set_errno(EINVAL); return -1; }
+ return unsetenvl(name,strlen(name));
+}
 
 __public int setenv(char const *__restrict name,
                     char const *value, int overwrite) {
@@ -280,25 +282,42 @@ __public int setenv(char const *__restrict name,
  return __setenv(name,strlen(name),value,strlen(value),overwrite);
 }
 
-__public char *getenv(char const *__restrict name) {
- char *e,**iter,*result; size_t namelen;
- if __unlikely(!name) return NULL;
- namelen = strlen(name);
- result = NULL;
+static char *getenvl(char const *__restrict name,
+                     size_t namesize) {
+ char *e,**iter,*result = NULL;
  ENV_LOCK;
  assert((__environ_v != __env_default) == (__environ_c != 0));
  iter = __environ_v;
  while ((e = *iter++) != NULL) {
-  if (strlen(e) > namelen &&
-      memcmp(e,name,namelen) == 0 &&
-      e[namelen] == '=') {
-   result = e+(namelen+1);
+  if (strlen(e) > namesize &&
+      memcmp(e,name,namesize) == 0 &&
+      e[namesize] == '=') {
+   result = e+(namesize+1);
    break;
   }
  }
  ENV_UNLOCK;
  return result;
 }
+
+__public char *getenv(char const *__restrict name) {
+ return name ? getenvl(name,strlen(name)) : NULL;
+}
+
+__public char *_getnenv(char const *__restrict name, size_t maxname) {
+ return getenvl(name,strnlen(name,maxname));
+}
+__public int _setnenv(char const *__restrict name, size_t maxname,
+                      char const *value, size_t maxvalue,
+                      int overwrite) {
+ return __setenv(name,strnlen(name,maxname),
+                 value,strnlen(value,maxvalue),
+                 overwrite);
+}
+__public int _unsetnenv(char const *__restrict name, size_t maxname) {
+ return unsetenvl(name,strnlen(name,maxname));
+}
+
 
 __public int putenv(char *string) {
  char *equals = strchr(string,'=');

@@ -20,27 +20,29 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __SH_H__
-#define __SH_H__ 1
+#ifndef __LIB_DISASM_H__
+#define __LIB_DISASM_H__ 1
 
-extern int   verbose;          /* Log every system()-style call. */
-extern int   interactive;
-extern int   restricted_shell;
-extern int   sani_descriptors; /*< Do descriptor sanitization, as described in unistd.h:_isafile */
-extern int   fork_sandlevel;   /*< (0..4) Sandbox-level to put spawned tasks into. */
-extern char *prompt;
+#include <kos/compiler.h>
 
-extern void term_setunbuffered(void);
-extern void term_setbuffered(void);
+#ifndef __ASSEMBLY__
+#include <stdint.h>
+#include <stddef.h>
+#include <format-printer.h>
 
-extern int exec_fork(char *exe, char **argv);
-extern char **split_argv(char *cmd);
-extern int exec_unistd(char *exe, char **argv);
-extern int exec_system(char *cmd);
-extern int joinproc(int p);
-extern int do_system(char *cmd);
+__DECL_BEGIN
 
-extern void update_prompt(void);
-extern void usage(int fd, char *name);
 
-#endif /* !__SH_H__ */
+#define DISASM_FLAG_NONE 0x00000000
+#define DISASM_FLAG_ADDR 0x00000001 /*< Print the address offset on line starts. */
+
+extern int disasm_x86(void const *__restrict text, size_t text_size,
+                      pformatprinter printer, void *closure,
+                      uint32_t flags);
+
+
+
+__DECL_END
+#endif /* !__ASSEMBLY__ */
+
+#endif /* !__LIB_DISASM_H__ */

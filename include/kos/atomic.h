@@ -40,6 +40,9 @@ typedef enum {
 } memory_order;
 #endif
 
+
+
+
 #define katomic_x_load(x,order)                          __atomic_load_n(&(x),order)
 #define katomic_x_store(x,v,order)                       __atomic_store_n(&(x),v,order)
 #define katomic_x_xch(x,v,order)                         __atomic_exchange_n(&(x),v,order)

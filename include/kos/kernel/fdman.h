@@ -37,10 +37,10 @@ __DECL_BEGIN
 #ifndef __ASSEMBLY__
 struct kfdman {
  KOBJECT_HEAD
- // NOTE: The following are int, because the FD number (an int) is
- //       used as index, meaning that INT_MAX is the absolute
- //       maximum amount of usable file descriptors by any fdman.
- //    >> The unsigned was simply added to prevent illegal states.
+ /* NOTE: The following are int, because the FD number (an int) is
+  *       used as index, meaning that INT_MAX is the absolute
+  *       maximum amount of usable file descriptors by any fdman.
+  *    >> The unsigned was simply added to prevent illegal states. */
  unsigned int     fdm_cnt;  /*< Amount of valid file descriptors. */
  unsigned int     fdm_max;  /*< Max amount of allowed file descriptors. */
  unsigned int     fdm_fre;  /*< Index of the last free FD slot (Ring-index; used to speed up locating free entries). */
@@ -55,10 +55,6 @@ struct kfdman {
 do{callback(&(self)->fdm_root);\
    callback(&(self)->fdm_cwd);\
 }while(0)
-
-#define KFDMAN_INITROOT(rootfp) \
- {KOBJECT_INIT(KOBJECT_MAGIC_FDMAN) 0,KFDMAN_FDMAX_TECHNICAL_MAXIMUM\
- ,0,0,NULL,KFDENTRY_INIT_FILE(rootfp),KFDENTRY_INIT_FILE(rootfp)}
 
 #ifdef __INTELLISENSE__
 extern __nonnull((1)) void kfdman_init(struct kfdman *__restrict self,

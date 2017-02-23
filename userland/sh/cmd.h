@@ -20,27 +20,21 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __SH_H__
-#define __SH_H__ 1
+#ifndef GUARD_CMD_H
+#define GUARD_CMD_H 1
 
-extern int   verbose;          /* Log every system()-style call. */
-extern int   interactive;
-extern int   restricted_shell;
-extern int   sani_descriptors; /*< Do descriptor sanitization, as described in unistd.h:_isafile */
-extern int   fork_sandlevel;   /*< (0..4) Sandbox-level to put spawned tasks into. */
-extern char *prompt;
+#include <lib/cmd.h>
 
-extern void term_setunbuffered(void);
-extern void term_setbuffered(void);
+extern int shcmd_exec(struct cmd_engine *engine, struct cmd const *cmd, uintptr_t *exitcode);
+extern int shcmd_syntax_error(struct cmd_engine *engine, int code);
+extern struct cmd_operations const shcmd_operations;
+extern struct cmd_engine           shcmd_engine;
 
-extern int exec_fork(char *exe, char **argv);
-extern char **split_argv(char *cmd);
-extern int exec_unistd(char *exe, char **argv);
-extern int exec_system(char *cmd);
-extern int joinproc(int p);
-extern int do_system(char *cmd);
+#define SH_LASTERROR   (shcmd_engine.ce_lasterr)
 
-extern void update_prompt(void);
-extern void usage(int fd, char *name);
+/* Execute a top-level (stdlib:system()-style) command.
+ * NOTE: 'command_size' is the exact amount of characters to parse. */
+extern uintptr_t shcmd_system(char const *command, size_t command_size);
 
-#endif /* !__SH_H__ */
+
+#endif /* !GUARD_CMD_H */

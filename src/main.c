@@ -46,6 +46,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <kos/kernel/panic.h>
+#include <ctype.h>
 
 
 void run_init(void) {
@@ -199,6 +200,7 @@ void test_realmode(void) {
 }
 
 
+
 void kernel_main(void) {
 
  // TODO: Parse explicit environ input in exec
@@ -232,6 +234,10 @@ void kernel_main(void) {
  kernel_initialize_syscall();
  assert(!karch_irq_enabled());
  karch_irq_enable();
+
+
+ //k_sysloglevel = KLOG_TRACE;
+ //ktask_suspend(ktask_self());
 
 #define RUN(x) extern void x(void); x()
  //RUN(test_interrupts);

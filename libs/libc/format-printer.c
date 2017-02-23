@@ -27,6 +27,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <format-printer.h>
+#include <malloc.h>
 #include <itos.h>
 #include <kos/compiler.h>
 #include <kos/config.h>
@@ -873,6 +874,67 @@ next:
 end:
  if (iter != flush_start) print(flush_start,(size_t)(iter-flush_start));
  if (!(flags&FORMAT_QUOTE_FLAG_PRINTRAW)) print("\"",1);
+ return 0;
+}
+
+
+__public int stringprinter_init(struct stringprinter *__restrict self, size_t hint) {
+ kassertobj(self);
+ if (!hint) hint = 4*sizeof(void *);
+ self->sp_buffer = (char *)malloc(hint*sizeof(char));
+ if __unlikely(!self->sp_buffer) return -1;
+ self->sp_bufpos = self->sp_buffer;
+ self->sp_bufend = self->sp_buffer+(hint-1);
+ self->sp_bufend[0] = '\0';
+ return 0;
+}
+__public char *stringprinter_pack(struct stringprinter *__restrict self, size_t *length) {
+ char *result; size_t result_size;
+ kassertobj(self);
+ assert(self->sp_bufpos >= self->sp_buffer);
+ assert(self->sp_bufpos <= self->sp_bufend);
+ if (self->sp_bufpos != self->sp_bufend) {
+  result_size = (size_t)(self->sp_bufpos-self->sp_buffer);
+  result = (char *)realloc(self->sp_buffer,(result_size+1)*sizeof(char));
+  if __unlikely(!result) result = self->sp_buffer;
+ } else {
+  result = self->sp_buffer;
+ }
+ result[result_size] = '\0';
+ self->sp_buffer = NULL;
+ if (length) *length = result_size;
+ return result;
+}
+__public void stringprinter_quit(struct stringprinter *__restrict self) {
+ kassertobj(self);
+ free(self->sp_buffer);
+}
+__public int stringprinter_print(char const *__restrict data,
+                                 size_t maxchars, void *closure) {
+ struct stringprinter *self = (struct stringprinter *)closure;
+ size_t size_avail,newsize,reqsize;
+ char *new_buffer;
+ kassertobj(self);
+ assert(self->sp_bufpos >= self->sp_buffer);
+ assert(self->sp_bufpos <= self->sp_bufend);
+ maxchars = strnlen(data,maxchars);
+ size_avail = (size_t)(self->sp_bufend-self->sp_bufpos);
+ if __unlikely(size_avail < maxchars) {
+  newsize = (size_t)(self->sp_bufend-self->sp_buffer);
+  assert(newsize);
+  reqsize = newsize+(maxchars-size_avail);
+  ++newsize;
+  while (newsize < reqsize) newsize *= 2;
+  new_buffer = (char *)realloc(self->sp_buffer,newsize*sizeof(char));
+  if __unlikely(!new_buffer) return -1;
+  --newsize;
+  self->sp_bufpos = new_buffer+(self->sp_bufpos-self->sp_buffer);
+  self->sp_bufend = new_buffer+newsize;
+  self->sp_buffer = new_buffer;
+ }
+ memcpy(self->sp_bufpos,data,maxchars);
+ self->sp_bufpos += maxchars;
+ assert(self->sp_bufpos <= self->sp_bufend);
  return 0;
 }
 

@@ -317,6 +317,7 @@ __struct_fwd(termios);
 __struct_fwd(winsize);
 
 // TODO: DOC
+// NOTE: pipefd[0] is reader; pipefd[1] is writer.
 __local _syscall2(kerrno_t,kfd_pipe,int *,pipefd,int,flags);
 __local _syscall5(kerrno_t,kfd_openpty,int *,amaster,int *,aslave,char *,name,
                   struct termios const *,termp,struct winsize const *,winp);

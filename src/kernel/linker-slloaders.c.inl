@@ -41,7 +41,7 @@ struct slloader {
 };
 
 static struct slloader slloaders[] = {
- /* ELF32 */{&kshlib_new_elf32,{ELFMAG0,ELFMAG1,ELFMAG2,ELFMAG3},4},
+ /* ELF32 */{&kshlib_elf32_new,{ELFMAG0,ELFMAG1,ELFMAG2,ELFMAG3},4},
  {NULL,{0,},0}, // Sentinal
 };
 

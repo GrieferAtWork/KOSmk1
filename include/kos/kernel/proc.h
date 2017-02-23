@@ -92,10 +92,6 @@ struct kprocsand {
                                                  NOTE: The process may only log with levels >= this value. */
  __atomic __u32       ts_state;   /*< [atomic] Process-specific state flags. */
 };
-#define KPROCSAND_INITROOT \
- {ktask_zero(),ktask_zero(),ktask_zero(),ktask_zero()\
- ,KTASKPRIO_MIN,KTASKPRIO_MAX,(__size_t)-1,(__size_t)-1,0xffffffff\
- ,KPROCSTATE_FLAG_NONE}
 extern __crit kerrno_t kprocsand_initroot(struct kprocsand *self);
 #endif /* !__ASSEMBLY__ */
 
@@ -108,7 +104,6 @@ struct kprocregs {
  __u16 pr_cs;  /*< [const] Code-segment used for new threads. (Usually an index within the LDT) */
  __u16 pr_ds;  /*< [const] Data-segment used for new threads. (Usually an index within the LDT) */
 };
-#define KPROCREGS_INIT(cs,ds) {cs,ds}
 #endif /* !__ASSEMBLY__ */
 
 

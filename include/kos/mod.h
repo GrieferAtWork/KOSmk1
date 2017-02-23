@@ -54,19 +54,24 @@ typedef __kmodid_t kmodid_t;
 //////////////////////////////////////////////////////////////////////////
 // Opens a module within the calling process,
 // as designated through the given 'name'.
-// - Unlike many other APIs, 'kmod_open' is not restricted by
-//   chroot prisons, always resolving the given name in origin
-//   to the true filesystem root.
+// - Unlike many other APIs, 'kmod_open' is not restricted by chroot prisons,
+//   always resolving the given name in origin to the true filesystem root
+//  (if it doesn't contain any slashes; i.e. is just the filename).
 // - This does however not pose a security risk, as loading
-//   a module is a read-only operation from start to finish.
-// - I should also mention, that this only applies to resolution
-//   of previously set module paths. - doing calling something like:
+//   a module is a read-only operation from start to finish,
+//   with library that have the SETUID flag set being responsible
+//   to prevent abuse by never returning to non-privileged code
+//   after having done a rootfork().
+// - doing calling something like:
 //   >> open2(KFD_ROOT,"/home");
 //   >> kmod_open("/usr/lib/libc.so",...);
-//   will fail, but something like this won't, assuming "/usr/lib"
-//   was part of the search path set when the process was started:
+//   will fail, but something like this won't:
 //   >> open2(KFD_ROOT,"/home");
 //   >> kmod_open("libc.so",...);
+//   NOTE: The list of special prison-privileged library
+//         paths is currently hard-coded as "/lib:/usr/lib",
+//         though a way of setting this will be added
+//        (and also require root privileges).
 // Plus: Wouldn't make much sense to trap a program if doing
 //       so prevents it from running all-together...
 // - Though 'name' usually isn't absolute in any case, and
@@ -111,9 +116,9 @@ typedef __kmodid_t kmodid_t;
 // @return: KE_OVERFLOW:  A reference counter would have overflown (the library is loaded too often)
 // @return: KE_FAULT:     A faulty pointer was given.
 // @return: KE_ISERR(*):  Some other, possibly file-specific error has occurred
-_syscall4(kerrno_t,kmod_open,char const *,name,
-          __size_t,namemax,kmodid_t *,modid,__u32,flags);
-_syscall3(kerrno_t,kmod_fopen,int,fd,kmodid_t *,modid,__u32,flags);
+__local _syscall4(kerrno_t,kmod_open,char const *,name,
+                  __size_t,namemax,kmodid_t *,modid,__u32,flags);
+__local _syscall3(kerrno_t,kmod_fopen,int,fd,kmodid_t *,modid,__u32,flags);
 #define KMOD_OPEN_FLAG_NONE 0x00000000
 
 //////////////////////////////////////////////////////////////////////////
@@ -128,8 +133,8 @@ _syscall3(kerrno_t,kmod_fopen,int,fd,kmodid_t *,modid,__u32,flags);
 //          to you, your application will SEGFAULT.
 // @param: modid: A valid module id obtained from 'kmod_open' or 'kmod_fopen'.
 //                Because there is ~some~ sense to it, you can specify 'KMODID_*',
-//                though I'd really recommend not doing so as a call like:
-//               'kmod_close(KMODID_ALL)', because that's just asking for trouble...
+//                though I'd really recommend not doing a call like
+//               'kmod_close(KMODID_ALL)', because that just makes too much sense...
 //               (I guess it would be useful if you need to cover your tracks,
 //                but then again, why isn't whoever you're running from just
 //                suspending you?)
@@ -137,7 +142,7 @@ _syscall3(kerrno_t,kmod_fopen,int,fd,kmodid_t *,modid,__u32,flags);
 // @return: KE_INVAL:     Invalid/already closed module id.
 // @return: KS_UNCHANGED: The module load counter was decreased, but didn't hit zero.
 //                        -> The module remains loaded because of multiple calls to 'kmod_fopen'
-_syscall1(kerrno_t,kmod_close,kmodid_t,modid);
+__local _syscall1(kerrno_t,kmod_close,kmodid_t,modid);
 
 //////////////////////////////////////////////////////////////////////////
 // Load a symbol from a given module, given its name.
@@ -151,8 +156,8 @@ _syscall1(kerrno_t,kmod_close,kmodid_t,modid);
 // @param: name:  The name of a given symbol. Together with
 //                'namemax', it describes an strnlen-style string.
 // @return: NULL: Something went wrong (probably just doesn't export the given symbol)
-_syscall3(void *,kmod_sym,kmodid_t,modid,
-          char const *,name,__size_t,namemax);
+__local _syscall3(void *,kmod_sym,kmodid_t,modid,
+                  char const *,name,__size_t,namemax);
 #endif /* !__NO_PROTOTYPES */
 
 
@@ -214,8 +219,8 @@ struct kmodinfo {
 // @return: KE_INVAL: Invalid/already closed module id.
 // @return: KE_NOSYS: An unsupported bit was set in 'flags'.
 // @return: KE_FAULT: A faulty pointer was given.
-_syscall5(kerrno_t,kmod_info,kmodid_t,modid,struct kmodinfo *,buf,
-          __size_t,bufsize,__size_t *,reqsize,__u32,flags);
+__local _syscall5(kerrno_t,kmod_info,kmodid_t,modid,struct kmodinfo *,buf,
+                  __size_t,bufsize,__size_t *,reqsize,__u32,flags);
 #endif /* !__NO_PROTOTYPES */
 
 #define KMOD_INFO_FLAG_NONE 0x0000

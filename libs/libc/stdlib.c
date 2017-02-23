@@ -36,6 +36,7 @@
 #include <kos/kernel/tty.h>
 #else
 #include <assert.h>
+#include <mod.h>
 #include <errno.h>
 #include <kos/atomic.h>
 #include <malloc.h>
@@ -144,8 +145,38 @@ __public int system(char const *command) {
  (void)command; // TOOD
  return 0;
 #else
- uintptr_t exitcode;
- int error,childfd;
+ typedef int (*pcmd_system)(char const *text, size_t size, uintptr_t *errorcode);
+ static mod_t stored_module = MOD_ALL;
+ static pcmd_system stored_cmd_system = NULL;
+ uintptr_t exitcode; int error,childfd;
+ pcmd_system cmd_system;
+ /* Lazily load libcmd to get ahold of the system executor.
+  * >> If that fails, fall back to executing 'sh -c' */
+ if ((cmd_system = katomic_load(stored_cmd_system)) == NULL) {
+  mod_t module2,module = katomic_load(stored_module);
+  if (module == MOD_ALL) {
+   module = mod_open("libcmd.so");
+   module2 = katomic_cmpxch_val(stored_module,MOD_ALL,module);
+   if (module2 != MOD_ALL) { mod_close(module); module = module2; }
+  }
+  *(void **)&cmd_system = mod_sym(module,"cmd_system");
+  katomic_cmpxch(stored_cmd_system,NULL,cmd_system);
+ }
+
+ if (cmd_system) {
+  error = (*cmd_system)(command,strlen(command),&exitcode);
+  /* Translate errno to bash-errors:
+   * http://www.tldp.org/LDP/abs/html/exitcodes.html
+   */
+  if __unlikely(error == -1) switch (errno) {
+   case ESYNTAX: return 2;
+   case ENOEXEC:
+   case ENODEP : return 126;
+   case ENOENT : return 127;
+   default     : return 1;
+  }
+  return error;
+ }
  if ((childfd = task_fork()) == 0) {
   // Child task
   char *argv[] = {

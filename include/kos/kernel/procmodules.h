@@ -68,8 +68,6 @@ struct kprocmodules {
  struct kprocmodule *pms_modv; /*< [0..pms_moda][owned] Vector of loaded modules. */
 };
 
-#define KPROCMODULES_INIT  {KOBJECT_INIT(KOBJECT_MAGIC_PROCMODULES) 0,NULL}
-
 //////////////////////////////////////////////////////////////////////////
 // Initializes a given process module list as a copy of another.
 // NOTE: This function does not re-setup any modules and should
