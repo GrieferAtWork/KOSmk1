@@ -21,6 +21,10 @@
  * SOFTWARE.
  */
 
+#ifndef __PE__
+#error "Microsoft compilers can only be used in PE-mode. Make sure to pass -D__PE__ on the command line"
+#endif
+
 #ifndef __compiler_FUNCTION
 #define __compiler_FUNCTION()   __FUNCTION__
 #endif

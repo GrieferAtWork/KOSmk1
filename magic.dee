@@ -487,6 +487,41 @@ function parse_wmatch_source(path,attrib,filename,fp_last_changed) {
 	}
 }
 
+function parse_attrib_marker(attrib,marker) {
+	local pe_linker_flag = "-Wl,-e__start";
+	switch (marker) {
+		case "elf":
+			/* Set attributes to compile under ELF mode */
+			local defs = attrib.setdefault("define",dict {});
+			defs["__ELF__"] = "1";
+			defs.pop("__SYMBOL_NEED_UNDERSCORE",none);
+			defs.pop("__USER_LABEL_PREFIX__",none);
+			defs.pop("__PE__",none);
+			attrib["compiler"] = "c";
+			attrib["linker"]   = "ld";
+			local linker_flags = attrib.setdefault("linker_flags",[]);
+			linker_flags.remove(pe_linker_flag);
+			return true;
+			
+		case "pe":
+			/* Set attributes to compile under PE mode */
+			local defs = attrib.setdefault("define",dict {});
+			defs["__PE__"]                   = "1";
+			defs["__SYMBOL_NEED_UNDERSCORE"] = "1";
+			defs["__USER_LABEL_PREFIX__"]    = "_";
+			defs.pop("__ELF__",none);
+			attrib["compiler"] = "c-pe";
+			attrib["linker"]   = "ld-pe";
+			local linker_flags = attrib.setdefault("linker_flags",[]);
+			if (pe_linker_flag !in linker_flags) linker_flags.append(pe_linker_flag);
+			return true;
+		default:
+			break;
+	}
+	return false;
+}
+
+
 function parse_data_block(path,attrib,text,fp_last_changed) {
 	while (text) {
 		local used_attrib = attrib.__deepcopy__();
@@ -519,7 +554,11 @@ function parse_data_block(path,attrib,text,fp_last_changed) {
 				}
 			} catch (...) {
 				local name,none,value = attrib_text.partition("=")...;
-				used_attrib[name.strip()] = value.strip();
+				name = name.strip();
+				value = value.strip();
+				if (value || !parse_attrib_marker(used_attrib,name)) {
+					used_attrib[name] = value;
+				}
 			}
 			text = text[attrib_end+1:].strip();
 		}

@@ -26,10 +26,15 @@
 #include <kos/config.h>
 #include <kos/compiler.h>
 
-#ifdef NEED_UNDERSCORE
-# define __SYM(sym) _##sym
+#if defined(__SYMBOL_NEED_UNDERSCORE) ||\
+    defined(NEED_UNDERSCORE)
+#   define __SYM(sym) _##sym
+#elif defined(__USER_LABEL_PREFIX__)
+#   define __SYM3(x,sym) x##sym
+#   define __SYM2(x,sym) __SYM3(x,sym)
+#   define __SYM(sym)    __SYM2(__USER_LABEL_PREFIX__,sym)
 #else
-# define __SYM(sym)    sym
+#   define __SYM(sym)    sym
 #endif
 
 #ifdef __ASSEMBLY__

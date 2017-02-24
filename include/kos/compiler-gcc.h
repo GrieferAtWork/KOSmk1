@@ -53,6 +53,14 @@
 #ifndef __private
 #define __private       __attribute__((__visibility__("hidden")))
 #endif
+#ifdef __PE__
+#ifndef __export
+#define __export        __attribute__((__dllexport__))
+#endif
+#ifndef __import
+#define __import        __attribute__((__dllimport__))
+#endif
+#endif
 #ifndef __noreturn
 #define __noreturn      __attribute__((__noreturn__))
 #endif

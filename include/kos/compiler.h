@@ -279,6 +279,7 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #endif
 
 // Visibility attributes
+#ifndef __PE__
 #ifdef __public
 #ifndef __export
 #   define __export __public
@@ -287,17 +288,30 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #   define __import __public
 #endif
 #endif /* __public */
+#else /* !__PE__ */
+#ifndef __public
+/* Assuming usage in source files. */
+#   define __public  __export
+#endif
+#ifndef __private
+#   define __private /* nothing */
+#endif
+#endif /* __PE__ */
 
 #ifndef __export
+#   define __NO_export
 #   define __export /* nothing */
 #endif
 #ifndef __import
+#   define __NO_import
 #   define __import /* nothing */
 #endif
 #ifndef __public
+#   define __NO_public
 #   define __public __export
 #endif
 #ifndef __private
+#   define __NO_private
 #   define __private /* nothing */
 #endif
 #ifndef __struct_fwd
