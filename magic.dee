@@ -70,6 +70,12 @@ local max_compilers_processes = 8;
 #else
 #define EXE(x) x
 #endif
+
+// Cygwin 32-bit gcc doesn't like a windows-style absolute path for "argv[0]"
+// >> So we have to include 
+//local old_path = fs::getenv("PATH");
+fs::setenv("PATH",fs::getenv("PATH")+";D:\\cygwin32\\bin");
+
 local executables = dict {
 	"asm"          : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc"),
 	"c"            : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc"),
@@ -77,12 +83,12 @@ local executables = dict {
 	"ld"           : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ld"),
 	"cxx"          : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-g++"),
 	"addr2line"    : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-addr2line"),
-	"asm-pe"       : EXE("binutils/build-binutils-"+arch_toolchain+"-cygwin/bin/"+arch_toolchain+"-cygwin-gcc"),
-	"c-pe"         : EXE("binutils/build-binutils-"+arch_toolchain+"-cygwin/bin/"+arch_toolchain+"-cygwin-gcc"),
-	"ar-pe"        : EXE("binutils/build-binutils-"+arch_toolchain+"-cygwin/bin/"+arch_toolchain+"-cygwin-ar"),
-	"ld-pe"        : EXE("binutils/build-binutils-"+arch_toolchain+"-cygwin/bin/"+arch_toolchain+"-cygwin-ld"),
-	"cxx-pe"       : EXE("binutils/build-binutils-"+arch_toolchain+"-cygwin/bin/"+arch_toolchain+"-cygwin-g++"),
-	"addr2line-pe" : EXE("binutils/build-binutils-"+arch_toolchain+"-cygwin/bin/"+arch_toolchain+"-cygwin-addr2line"),
+	"asm-pe"       : "i686-pc-cygwin-gcc.exe",
+	"c-pe"         : "i686-pc-cygwin-gcc.exe",
+	"ar-pe"        : "i686-pc-cygwin-ar.exe",
+	"ld-pe"        : "i686-pc-cygwin-ld.exe",
+	"cxx-pe"       : "i686-pc-cygwin-g++.exe",
+	"addr2line-pe" : "i686-pc-cygwin-addr2line.exe",
 #ifdef __WINDOWS__
 	.mkisofs   = "binutils/build-mkisofs-md5-2.01/mkisofs.exe",
 	.qemu      = "D:\\qemu\\qemu-system-i386.exe",
@@ -237,10 +243,16 @@ if (args) {
 local _force_changed_files = list {};
 local _mtime_cache = dict {};
 function fast_getmtime(filename) {
+	local result;
 	if (filename in _force_changed_files) return time.years(99999);
 	filename = fs::path::abs(filename).replace("/","\\");
 	try return _mtime_cache[filename]; catch (...);
-	local result = fs::getmtime(filename);
+#ifdef __WINDOWS__
+	try result = fs::getmtime(filename);
+	catch (...) result = fs::getmtime(filename+".exe");
+#else
+	result = fs::getmtime(filename);
+#endif
 	_mtime_cache[filename] = result;
 	return result;
 }
@@ -485,7 +497,9 @@ function parse_data_block(path,attrib,text,fp_last_changed) {
 				local name,value = attrib_text.scanf("%[^(] ( %[^)] )")...;
 				name = name.strip();
 				local group = used_attrib.setdefault(name,[]);
-				for (local part: value.split(",")) {
+				local parts = value.startswith("\"") && value.endswith("\"")
+					? [value.strip("\"")] : value.split(",");
+				for (local part: parts) {
 					if (group is list) {
 						group.append(part);
 						if (name == "no") {
@@ -652,6 +666,7 @@ function compile_userland_app(name,proj) {
 	local output = "bin/userland/"+name;
 	local libs = proj.libs;
 	local no = proj.options.get("no",[]);
+	local linker = proj.options.get("compiler","c");
 	if ("libc" !in no) {
 		libs.remove("_start");
 		libs.remove("c");
@@ -661,8 +676,11 @@ function compile_userland_app(name,proj) {
 		libs.remove("gcc");
 		libs.append("gcc");
 	}
-	if (fs::exists(output) && !any_file_newer_than(
-		objects,fast_getmtime(output))) {
+	if ((fs::exists(output)
+#ifdef __WINDOWS__
+		|| fs::exists(output+".exe")
+#endif
+		) && !any_file_newer_than(objects,fast_getmtime(output))) {
 		for (local l: libs) {
 			if (l in changed_libs) {
 				goto do_compile_userland;
@@ -676,11 +694,12 @@ function compile_userland_app(name,proj) {
 do_compile_userland:
 	local libpaths = proj.libpaths;
 	if ("bin/libs" !in libpaths) libpaths.append("bin/libs");
-	local p = process(executables["c"],[
+	local p = process(executables[linker],[
 		"-static-libgcc",
 		"-o",output,(optimize ? ["-O2"] : [])...,
 		"-nostdlib",
 		(for (local l: libpaths) "-L"+l)...,
+		proj.options.get("linker_flags",[])...,
 		objects...,
 		(for (local l: libs) "-l"+l)...,
 		// "-llibc",
@@ -748,6 +767,7 @@ do_compile_sharedlib:
 		(for (local l: libpaths) "-L"+l)...,
 		//"-static-libgcc",(optimize ? ["-O2"] : [])...,
 		"-nostdlib","-shared","-o",output,
+		proj.options.get("linker_flags",[])...,
 		objects...,
 		(for (local l: libs) "-l"+l)...,
 		]);
@@ -799,6 +819,7 @@ do_compile_kernel:
 				(optimize ? ["-O2"] : [])...,
 				"-nostdlib",
 				(for (local l: libpaths) "-L"+l)...,
+				proj.options.get("flags",[])...,
 				objects...,
 				(for (local l: libs) "-l"+l)...,
 			]);
@@ -843,6 +864,7 @@ if (!run_only) {
 	if (compile_project_single("kernel")) projects_changed = true;
 	if (compile_project_group("userland")) projects_changed = true;
 
+	//fs::setenv("PATH",old_path);
 	wait_all_compilers();
 	if (changed_disk_files) {
 		for (local path,diskname: changed_disk_files) {

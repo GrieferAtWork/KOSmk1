@@ -243,16 +243,6 @@ struct ksecdata {
  ksymaddr_t            ed_end;   /*< Address after the greatest of any valid section, or '0' if 'ed_secc == 0'. */
 };
 
-//////////////////////////////////////////////////////////////////////////
-// Load shared library data from a given file.
-// @param: pheaderv: Vector of program headers. (Elf32_Ehdr::e_phoff)
-// @param: pheaderc: Amount of program headers. (Elf32_Ehdr::e_phnum)
-// @param: pheadersize: Size of a single header. (Elf32_Ehdr::e_phentsize)
-extern __wunused __nonnull((1,2,5)) kerrno_t
-ksecdata_elf32_init(struct ksecdata *__restrict self,
-                    Elf32_Phdr const *__restrict pheaderv,
-                    __size_t pheaderc, __size_t pheadersize,
-                    struct kfile *__restrict elf_file);
 extern __nonnull((1)) void ksecdata_quit(struct ksecdata *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
@@ -320,8 +310,8 @@ struct kshlib {
  // NOTE: Shared libraries are implicitly synchronized, as all members
  //       must be considered constant post initialization.
  KOBJECT_HEAD
- __atomic __u32           sh_refcnt;    /*< Reference counter. */
- __ref struct kfile      *sh_file;      /*< [1..1] Open file to this shared library (Used to retrieve library name/path). */
+ __atomic __u32          sh_refcnt;    /*< Reference counter. */
+ __ref struct kfile     *sh_file;      /*< [1..1] Open file to this shared library (Used to retrieve library name/path). */
 #define KSHLIB_FLAG_NONE   0x00000000
 #define KSHLIB_FLAG_FIXED  0x00000001   /*< The shared library must be loaded at a fixed address (base = NULL). */
 #define KSHLIB_FLAG_LOADED 0x00000002   /*< Set when the library is fully loaded (used to detect cyclic dependencies). */
@@ -355,6 +345,9 @@ kshlib_new(struct kshlib **__restrict result,
 extern __crit __wunused __nonnull((1,2)) kerrno_t
 kshlib_elf32_new(struct kshlib **__restrict result,
                  struct kfile *__restrict elf_file);
+extern __crit __wunused __nonnull((1,2)) kerrno_t
+kshlib_pe32_new(struct kshlib **__restrict result,
+                struct kfile *__restrict pe_file);
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the symbol address of a given file address.

@@ -59,8 +59,8 @@ int shcmd_exec(struct cmd_engine *engine,
                struct cmd const *cmd,
                uintptr_t *exitcode) {
  struct shcmd const *iter; int error;
- if (verbose) dprintf(STDERR_FILENO,"exec: %.*q\n",
-                     (unsigned)cmd->c_esz,cmd->c_exe);
+ //if (verbose) dprintf(STDERR_FILENO,"exec: %.*q\n",
+ //                    (unsigned)cmd->c_esz,cmd->c_exe);
  for (iter = shbuiltin; iter->name; ++iter) {
   if (iter->size == cmd->c_esz &&
      !memcmp(iter->name,cmd->c_exe,cmd->c_esz*sizeof(char))) {
@@ -94,11 +94,11 @@ struct cmd_engine shcmd_engine = CMD_ENGINE_INIT(&shcmd_operations,NULL);
 
 uintptr_t shcmd_system(char const *command, size_t command_size) {
  int error; uintptr_t result;
- cmd_engine_clear(&shcmd_engine);
+ if (verbose) dprintf(STDERR_FILENO,"exec: %.*q\n",(unsigned)command_size,command);
  error = cmd_engine_push(&shcmd_engine,command,command_size,
                          CMD_ENGINE_PUSH_MODE_ALIAS);
  if (error == 0) error = cmd_engine_exec(&shcmd_engine);
- if (error != 0) error = errno;
+ if (error != 0) perror(command),error = errno;
  /* Translate errno to bash-errors:
   * http://www.tldp.org/LDP/abs/html/exitcodes.html
   */

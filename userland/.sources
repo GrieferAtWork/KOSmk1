@@ -12,8 +12,8 @@
 [project = userland:sh]           [diskfile = /bin/sh]           [libs(rline,cmd)] { ./sh/*.c; }
 [project = userland:terminal-vga] [diskfile = /bin/terminal-vga] [libs(term)] { ./terminal-vga.c; }
 [project = userland:snake]        [diskfile = /bin/snake]        { ./snake.c; }
-# [project = userland:pe-test] [diskfile = /bin/pe-test] \
-[linker = ld-pe] [compiler = c-pe] [no(libc)] \
+[project = userland:pe-test] [diskfile = /bin/pe-test] \
+[linker = ld-pe] [compiler = c-pe] [no(libc)] [linker_flags("-Wl,-e__start")]\
 { ./pe-test.c; }
 
 # Nano

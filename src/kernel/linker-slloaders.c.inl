@@ -28,6 +28,7 @@
 #include <kos/kernel/fs/file.h>
 #include <kos/errno.h>
 #include <kos/syslog.h>
+#include <windows/pe.h>
 
 __DECL_BEGIN
 
@@ -36,12 +37,13 @@ typedef kerrno_t (*pslloader)(struct kshlib **__restrict result,
 #define SLLOADER_MAX_MAGIC  4 /*< No supported type has more than 4 bytes of magic. */
 struct slloader {
  pslloader sl_callback; /*< [1..1] Loader function callback. */
- char      sl_magic[SLLOADER_MAX_MAGIC];
+ __u8      sl_magic[SLLOADER_MAX_MAGIC];
  __size_t  sl_magicsz; /*< Use magic size. */
 };
 
 static struct slloader slloaders[] = {
  /* ELF32 */{&kshlib_elf32_new,{ELFMAG0,ELFMAG1,ELFMAG2,ELFMAG3},4},
+ /* PE-32 */{&kshlib_pe32_new,{PE_DOSHEADER_MAGIC_1,PE_DOSHEADER_MAGIC_2},2},
  {NULL,{0,},0}, // Sentinal
 };
 

@@ -20,8 +20,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __CMD_C__
-#define __CMD_C__ 1
+#ifndef GUARD_LIB_CMD_C
+#define GUARD_LIB_CMD_C 1
 
 #include <lib/cmd.h>
 #include <assert.h>
@@ -37,6 +37,7 @@
 #include <errno.h>
 
 #include <stdio.h>
+#include <kos/syslog.h>
 
 __DECL_BEGIN
 
@@ -85,12 +86,19 @@ cmd_parser_yield(struct cmd_parser *__restrict self,
  assert(token);
  assert(isspace('\r'));
  assert(isspace('\n'));
+ assert(self->cp_begin <= self->cp_end);
  iter = self->cp_begin;
  end  = self->cp_end;
 again:
- assert(iter <= end);
+ assertf(iter <= end
+        ,"Iter is out of bounds (%Iu overflow; %p %p)"
+        ,iter-end,iter,end);
  /* Skip whitespace. */
- while (iter != end && (ch = *iter,isspace(ch))) {
+ while (iter != end && (
+  assert(iter >= self->cp_begin),
+  assert(iter <  self->cp_end),
+  ch = *iter,
+  isspace(ch))) {
   ++iter;
   if (ch == '\r') {
    if (iter != end && *iter == '\n') ++iter;
@@ -104,7 +112,6 @@ eol:
  }
  /* Check for EOF-tokens. */
  if __unlikely(iter == end) {
-eof:
   token->ct_kind  = CMD_TOKEN_EOF;
   token->ct_begin = iter;
   token->ct_end   = iter;
@@ -121,48 +128,6 @@ eof:
    while (iter != end && (ch = *iter++,ch != '\n' && ch != '\r'));
    if (iter != end && ch == '\r' && *iter == '\n') ++iter;
    goto again;
-
-  case '$':
-   if (iter == end) goto eof;
-   ch = *iter++;
-   if (ch == '(') {
-    /* Recursive inline command. */
-    token->ct_kind = CMD_TOKEN_INLINE;
-    ch = ')';
-    goto scan_until_ch;
-   } else if (ch == '{') {
-    /* Explicit environment variable. */
-    ch = '}';
-    token->ct_kind = CMD_TOKEN_ENVVAR;
-scan_until_ch:
-    token->ct_begin = iter;
-    while (iter != end && *iter != ch) ++iter;
-    token->ct_end = iter;
-    if (iter != end) ++iter;
-   } else if (isalpha(ch)) {
-    /* Implicit environment variable. */
-    token->ct_kind = CMD_TOKEN_ENVVAR;
-    token->ct_begin = iter-1;
-    while (iter != end && isalnum(*iter)) ++iter;
-    token->ct_end = iter;
-   } else if (isdigit(ch)) {
-    /* Argument reference. */
-    token->ct_kind = CMD_TOKEN_ARG;
-    token->ct_begin = iter-1;
-    while (iter != end && (ch = *iter++,isdigit(ch)));
-    token->ct_end = iter;
-   } else if (ch == '?') {
-    /* Expand errno/last error. */
-    token->ct_kind = CMD_TOKEN_ERRNO;
-   } else if (ch == '*') {
-    /* Expand all arguments. */
-    token->ct_kind = CMD_TOKEN_ARGS;
-   } else {
-    /* Undo (This is just a regular '$'). */
-    --iter;
-    goto def;
-   }
-   break;
 
   case '.':
   case '!':
@@ -196,12 +161,15 @@ end_normal:
    break;
 
   {
-   int has_assign;
+   int has_assign,has_dollar;
   default:def:
-   has_assign = 0;
+   has_assign = ch == '=';
+   has_dollar = ch == '$';
    token->ct_kind = CMD_TOKEN_TEXT;
-   while (iter != end && (ch = *iter++,!isspace(ch))) {
+   while (iter != end && (ch = *iter,!isspace(ch))) {
+    ++iter;
     if (ch == '=') has_assign = 1;
+    if (ch == '$') has_dollar = 1;
     if (ch == '>') {
      if (iter != end && *iter == '>') ++iter;
      if (iter != end && *iter == '&') ++iter;
@@ -213,6 +181,8 @@ end_normal:
    token->ct_end = iter;
    if (has_assign) {
     token->ct_kind = CMD_TOKEN_SETENV;
+   } else if (has_dollar) {
+    token->ct_kind = CMD_TOKEN_ENVTEXT;
    } else {
     check_keyword(token);
     if (token->ct_kind == CMD_TOKEN_KWD_FUNCTION) {
@@ -220,6 +190,7 @@ end_normal:
      /* Parse the actual function name. */
      cmd_parser_yield(self,token);
      token->ct_kind = CMD_TOKEN_KWD_FUNCTION;
+     return CMD_TOKEN_KWD_FUNCTION;
     } else if (token->ct_kind == CMD_TOKEN_TEXT) {
      if (token->ct_end >= token->ct_begin+2 &&
          token->ct_end[-2] == '(' &&
@@ -233,7 +204,13 @@ end_normal:
   } break;
  }
 done:
+ assert(iter >= self->cp_begin &&
+        iter <= self->cp_end);
  self->cp_begin = iter;
+ k_syslogf(KLOG_DEBUG,"TOKEN: %d : %.*q\n",
+           token->ct_kind,
+          (unsigned)(token->ct_end-token->ct_begin),
+           token->ct_begin);
  return token->ct_kind;
 }
 
@@ -268,6 +245,7 @@ cmd_expand(struct cmd_operations const *ops,
       else if (*iter == mode_end) {
        if (!--recursion) break;
       }
+      ++iter;
      }
      text_end = iter;
      if (iter != end) ++iter;
@@ -286,7 +264,9 @@ capture_stdout:
                            ops_closure);
      if __unlikely(error != 0) return error;
     } else {
-     char const *envvar = (*ops->getenv)(text_begin,(size_t)(text_end-text_begin));
+     char const *envvar;
+     assert(ops->getenv);
+     envvar = (*ops->getenv)(text_begin,(size_t)(text_end-text_begin));
      if (envvar) printl(envvar,(size_t)-1);
      else {
       /* Restore the original text if the variable doesn't exist. */
@@ -378,6 +358,8 @@ cmd_capturefd(struct cmd_operations const *__restrict ops,
               void *ops_closure) {
  int pipes[2],error;
  char buffer[256]; ssize_t rsize;
+k_syslogf(KLOG_DEBUG,"Capturing fd %d of %.*q\n",
+          capfd,(unsigned)textsize,text);
  if (pipe(pipes) == -1) return -1;
  error = cmd_capturefdf(ops,text,textsize,capfd,
                         pipes[1],ops_closure);
@@ -415,6 +397,9 @@ default_exec(struct cmd_engine *__unused(engine),
   args.ea_envlenv = NULL;
   kerr = ktask_exec(cmd->c_exe,cmd->c_esz,
                     &args,KTASK_EXEC_FLAG_SEARCHPATH);
+  dprintf(STDERR_FILENO,"exec %.*q: %d: %s\n",
+         (unsigned)cmd->c_esz,cmd->c_exe,
+          -kerr,strerror(-kerr));
   _exit(kerr == KE_NOENT ? 127 : 126);
  }
  if (child_task == -1) return -1;
@@ -461,13 +446,6 @@ cmd_engine_quit(struct cmd_engine *__restrict self) {
  free(self->ce_cmd.c_args.ca_arglenv);
  free(self->ce_stack_v);
 }
-__public void
-cmd_engine_clear(struct cmd_engine *__restrict self) {
- self->ce_cmd.c_args.ca_argc = 0;
- self->ce_cmd.c_exe          = NULL;
- self->ce_cmd.c_fdc          = 0;
- self->ce_cmd.c_detached     = 0;
-}
 
 
 __public int
@@ -475,7 +453,14 @@ cmd_engine_yield(struct cmd_engine *__restrict self) {
  int result;
  assert(self);
 again:
- if (!self->ce_top || self->ce_top < self->ce_stack_v) return CMD_TOKEN_EOF;
+ if (!self->ce_top) return CMD_TOKEN_EOF;
+ assertf(self->ce_top >= self->ce_stack_v &&
+         self->ce_top <  self->ce_stack_v+
+                         self->ce_stack_a
+        ,"Stack top %Id is out of bounds of 0..%Iu (%p %p %p)"
+        ,self->ce_top-self->ce_stack_v
+        ,self->ce_stack_a,self->ce_top
+        ,self->ce_stack_v,self->ce_stack_v+self->ce_stack_a);
  result = cmd_parser_yield(&self->ce_top->cs_parser,
                            &self->ce_token);
  if (result == CMD_TOKEN_EOF) {
@@ -493,19 +478,25 @@ cmd_engine_push(struct cmd_engine *__restrict self,
                 size_t text_size, int mode) {
  struct cmd_stack *newstack; size_t stacksize,stacktop;
  assert(self);
- if (self->ce_top == self->ce_stack_v+ self->ce_stack_a ||
-     self->ce_top == self->ce_stack_v+(self->ce_stack_a-1)) {
+ if (!self->ce_top) self->ce_top = self->ce_stack_v-1;
+ if ((self->ce_top+1) == self->ce_stack_v+self->ce_stack_a) {
   /* Must allocate more space on the stack vector. */
   stacksize = self->ce_stack_a ? self->ce_stack_a*2 : 2;
-  stacktop = (size_t)(self->ce_top-self->ce_stack_v);
-  newstack = (struct cmd_stack *)realloc(self->ce_stack_v,stacksize*
-                                         sizeof(struct cmd_stack));
+  stacktop  = (size_t)(self->ce_top-self->ce_stack_v);
+  newstack  = (struct cmd_stack *)realloc(self->ce_stack_v,stacksize*
+                                          sizeof(struct cmd_stack));
   if __unlikely(!newstack) return -1;
   self->ce_stack_v = newstack;
   self->ce_top     = newstack+stacktop;
   self->ce_stack_a = stacksize;
  }
  newstack = ++self->ce_top;
+ assertf(newstack >= self->ce_stack_v &&
+         newstack <  self->ce_stack_v+
+                     self->ce_stack_a
+        ,"%Id is out-of-bounds of 0..%Iu (%p, %p, %p)"
+        ,newstack-self->ce_stack_v,self->ce_stack_a
+        ,newstack,self->ce_stack_v,self->ce_stack_v+self->ce_stack_a);
  switch (mode) {
   default:
   case CMD_ENGINE_PUSH_MODE_INHERIT:
@@ -584,9 +575,10 @@ cmd_engine_pop(struct cmd_engine *__restrict self) {
 #define SIZE     ((size_t)(self->ce_token.ct_end-self->ce_token.ct_begin))
 #define IS_EMPTY         (!self->ce_cmd.c_exe)
 #define YIELD()            cmd_engine_yield(self)
-#define THROW()            longjmp(self->ce_jmp,1)
+#define THROW(x)           longjmp(self->ce_jmp,x)
 #define SYNTAX_ERROR(x) \
-do{ if ((*self->ce_ops->syntax_error)(self,x)) THROW();\
+do{ int __eno = (*self->ce_ops->syntax_error)(self,x);\
+    if (__eno != 0) THROW(__eno);\
 }while(0)
 
 
@@ -594,6 +586,7 @@ static void cmdrun_exec(struct cmd_engine *__restrict self) {
  int error; uintptr_t errorcode;
  char **iter,**end;
  if (!self->ce_dontexec && self->ce_cmd.c_exe) {
+  assert(self->ce_ops->exec);
   error = (*self->ce_ops->exec)(self,&self->ce_cmd,&errorcode);
   if (error == -1) errorcode = errno == ENOENT ? 127 : 126;
   self->ce_lasterr = errorcode;
@@ -633,11 +626,11 @@ static void cmdrun_addarg(struct cmd_engine *__restrict self,
   new_arga = self->ca_arga ? self->ca_arga*2 : 2;
   newargv = (char const **)realloc(self->ce_cmd.c_args.ca_argv,
                                    new_arga*sizeof(char const *));
-  if __unlikely(!newargv) THROW();
+  if __unlikely(!newargv) THROW(-1);
   self->ce_cmd.c_args.ca_argv = newargv;
   newarglenv = (size_t *)realloc(self->ce_cmd.c_args.ca_arglenv,
                                  new_arga*sizeof(size_t));
-  if __unlikely(!newarglenv) THROW();
+  if __unlikely(!newarglenv) THROW(-1);
   self->ce_cmd.c_args.ca_arglenv = newarglenv;
   self->ca_arga = new_arga;
  }
@@ -655,17 +648,18 @@ cmdrun_addarg_expand(struct cmd_engine *__restrict self,
                      char const *arg, size_t arglen) {
  struct stringprinter printer; int error;
  char *text; size_t text_length;
- if (stringprinter_init(&printer,arglen)) THROW();
+ error = stringprinter_init(&printer,arglen);
+ if (error) THROW(error);
  error = cmd_expand(self->ce_ops,arg,arglen,
                     &stringprinter_print,&printer,
                     self->ce_user);
  if __unlikely(error) {
   stringprinter_quit(&printer);
-  THROW();
+  THROW(error);
  }
  text = stringprinter_pack(&printer,&text_length);
  error = cmdrun_addownedstring(self,text);
- if __unlikely(error) { free(text); THROW(); }
+ if __unlikely(error) { free(text); THROW(error); }
  cmdrun_addarg(self,text,text_length);
 }
 
@@ -677,7 +671,7 @@ struct cmd_fd *cmdrun_allocfd(struct cmd_engine *__restrict self) {
   new_fda = self->ca_fda ? self->ca_fda*2 : 2;
   newfd = (struct cmd_fd *)realloc(self->ce_cmd.c_fdv,
                                    new_fda*sizeof(struct cmd_fd));
-  if __unlikely(!newfd) THROW();
+  if __unlikely(!newfd) THROW(-1);
   self->ce_cmd.c_fdv = newfd;
  } else {
   newfd = self->ce_cmd.c_fdv;
@@ -718,6 +712,9 @@ static void cmdrun_unary(struct cmd_engine *__restrict self) {
    case '!':
     YIELD();
     cmdrun_unary(self);
+    if (!self->ce_dontexec) {
+     self->ce_lasterr = self->ce_lasterr == EXIT_SUCCESS ? EXIT_FAILURE : EXIT_SUCCESS;
+    }
     break;
 
    {
@@ -733,7 +730,7 @@ static void cmdrun_unary(struct cmd_engine *__restrict self) {
      SYNTAX_ERROR(CMD_SYNTAXERROR_EXPECTED_EOL_AFTER_DOT_FILENAME);
     }
     error = cmd_engine_pushfile(self,filename,filesize);
-    if __unlikely(error) THROW();
+    if __unlikely(error) THROW(error);
     YIELD();
     break;
    }
@@ -743,9 +740,10 @@ static void cmdrun_unary(struct cmd_engine *__restrict self) {
    case CMD_TOKEN_SETENV:
     equal_ptr = strnchr(TEXT,SIZE,'=');
     assert(equal_ptr);
+    assert(self->ce_ops->setenv);
     error = (*self->ce_ops->setenv)(TEXT,(size_t)(equal_ptr-TEXT),equal_ptr+1,
                                    (size_t)(TOK.ct_end-(equal_ptr+1)),1);
-    if __unlikely(error) THROW();
+    if __unlikely(error) THROW(error);
     YIELD();
     if (!CMD_TOKEN_ISEOL(KIND)) {
      SYNTAX_ERROR(CMD_SYNTAXERROR_EXPECTED_EOL_AFTER_SETENV);
@@ -795,8 +793,7 @@ redirect_file:
   } break;
 
   case CMD_TOKEN_TEXT_QUOTE:
-  case CMD_TOKEN_ENVVAR:
-  case CMD_TOKEN_INLINE:
+  case CMD_TOKEN_ENVTEXT:
    cmdrun_addarg_expand(self,TEXT,SIZE);
    YIELD();
    break;
@@ -835,18 +832,17 @@ __public int
 cmd_engine_exec(struct cmd_engine *__restrict self) {
  int error;
  assert(self);
- self->ca_arga = 0;
- self->ca_fda  = 0;
- self->ca_owna = 0;
- self->ca_ownc = 0;
- self->ca_ownv = NULL;
+ self->ce_cmd.c_args.ca_argc = 0;
+ self->ce_cmd.c_exe          = NULL;
+ self->ce_cmd.c_fdc          = 0;
+ self->ce_cmd.c_detached     = 0;
  /* Yield the initial token. */
  if (!YIELD()) return 0;
  if ((error = setjmp(self->ce_jmp)) == 0) {
   /* Execute full expressions until EOF is reached. */
   while (KIND) cmdrun_lor(self);
  }
- return error == 1 ? -1 : 0;
+ return error;
 }
 #undef YIELD
 #undef KIND
@@ -868,4 +864,4 @@ __public int cmd_system(char const *text, size_t size,
 
 __DECL_END
 
-#endif /* !__CMD_C__ */
+#endif /* !GUARD_LIB_CMD_C */

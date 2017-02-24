@@ -20,23 +20,43 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __PE_TEST_C__
-#define __PE_TEST_C__ 1
+#include <kos/asm.h>
+#include <kos/config.h>
 
-#include <stddef.h>
-#include <kos/task.h>
-#include <kos/syslog.h>
+/* extern int setjmp(jmp_buf buf); */
+GLOBAL_FUNCTION(setjmp):
+	movI (PS)(%esp), %eax
+	movI %ecx,    (0*PS)(%eax)
+	movI %edx,    (1*PS)(%eax)
+	movI %ebx,    (2*PS)(%eax)
+	movI %esp,    (3*PS)(%eax)
+	movI %ebp,    (4*PS)(%eax)
+	movI %esi,    (5*PS)(%eax)
+	movI %edi,    (6*PS)(%eax)
+	movI 0(%esp), %ebx
+	movI %ebx,    (7*PS)(%eax)
+	mov32 $0, %eax
+	ret
+SYMBOLEND(setjmp)
+// __uintptr_t __jb_ecx,__jb_edx,__jb_ebx,__jb_esp;
+// __uintptr_t __jb_ebp,__jb_esi,__jb_edi,__jb_eip;
+
+/* extern void longjmp(jmp_buf buf, int sig); */
+GLOBAL_FUNCTION(longjmp):
+	movI (1*PS)(%esp), %ecx
+	movI (2*PS)(%esp), %eax
+
+	movI (3*PS)(%ecx), %esp
+	movI (7*PS)(%ecx), %ebx
+	movI %ebx, 0(%esp)
+
+	movI (6*PS)(%ecx), %edi
+	movI (5*PS)(%ecx), %esi
+	movI (4*PS)(%ecx), %ebp
+	movI (2*PS)(%ecx), %ebx
+	movI (1*PS)(%ecx), %edx
+	movI (0*PS)(%ecx), %ecx
+	ret
+SYMBOLEND(longjmp)
 
 
-void _start(void) {
- int i;
- for (i = 0; i < 20; ++i) {
-  k_syslog(KLOG_INFO,"System log entry from PE file!\n",(size_t)-1);
- }
-
- kproc_exit(0);
- /* We should never get here! */
- __builtin_unreachable();
-}
-
-#endif /* !__PE_TEST_C__ */

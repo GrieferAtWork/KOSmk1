@@ -55,7 +55,7 @@ extern __attribute_vaformat(__printf__,2,3) void k_syslogf(int level, char const
 extern __attribute_vaformat(__printf__,2,0) void k_vsyslogf(int level, char const *fmt, va_list args);
 #else
 __local _syscall3(kerrno_t,k_syslog,int,level,char const *,s,__size_t,maxlen);
-static __attribute_unused int __ksyslog_callback(char const *s, __size_t maxlen, void *level) { return k_syslog((int)level,s,maxlen); }
+static __attribute_unused int __ksyslog_callback(char const *s, __size_t maxlen, void *level) { return k_syslog((int)(__uintptr_t)level,s,maxlen); }
 #define k_syslogf(level,...)           format_printf(&__ksyslog_callback,(void *)(__uintptr_t)(level),__VA_ARGS__)
 #define k_vsyslogf(level,format,args) format_vprintf(&__ksyslog_callback,(void *)(__uintptr_t)(level),format,args)
 #endif

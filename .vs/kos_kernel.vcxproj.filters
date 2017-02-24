@@ -270,6 +270,9 @@
     <ClInclude Include="..\src\kernel\linker-elf32.h">
       <Filter>src\kernel</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\kernel\linker-pe32.h">
+      <Filter>src\kernel</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.c">
@@ -651,5 +654,8 @@
       <Filter>src\kernel</Filter>
     </None>
     <None Include="..\magic.dee" />
+    <None Include="..\src\kernel\linker-pe32.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -164,7 +164,7 @@ int joinproc(int p) {
 
 
 int do_system(char *cmd) {
-#if 0
+#if 1
  return (int)shcmd_system(cmd,strlen(cmd));
 #else
  // TODO: Logic operator: cmda && cmdb, cmda || cmdb, !cmda

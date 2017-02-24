@@ -528,7 +528,7 @@ __local _syscall4(kerrno_t,ktask_newthread,ktask_threadfun_t,thread_main,
 // @return: KE_ACCES: The caller is not allowed to spawn any more threads.
 // @return: KE_NOMEM: Not enough available memory.
 // @return: KE_MFILE: Too many open file descriptors.
-__local _syscall5(uintptr_t,ktask_newthreadi,ktask_threadfun_t,thread_main,
+__local _syscall5(__uintptr_t,ktask_newthreadi,ktask_threadfun_t,thread_main,
                   void const *,buf,__size_t,bufsize,__u32,flags,void **,arg);
 
 #endif /* !__NO_PROTOTYPES */
@@ -566,7 +566,7 @@ __local _syscall5(uintptr_t,ktask_newthreadi,ktask_threadfun_t,thread_main,
 //                              If 'KTASK_NEW_FLAG_JOIN' is not set, but 'KTASK_NEW_FLAG_UNREACHABLE'
 //                              is set, this argument is left untouched.
 // @param: flags: A set of 'KTASK_NEW_FLAG_*' flags.
-__local _syscall2(kerrno_t,ktask_fork,uintptr_t *,childfd_or_exitcode,__u32,flags);
+__local _syscall2(kerrno_t,ktask_fork,__uintptr_t *,childfd_or_exitcode,__u32,flags);
 
 __struct_fwd(kexecargs);
 

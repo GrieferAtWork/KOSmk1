@@ -29,10 +29,15 @@
 
 __DECL_BEGIN
 
-typedef IMAGE_DOS_HEADER   Pe32_DosHeader;
-typedef IMAGE_DOS_HEADER   Pe64_DosHeader;
-typedef IMAGE_NT_HEADERS32 Pe32_FileHeader;
-typedef IMAGE_NT_HEADERS64 Pe64_FileHeader;
+typedef IMAGE_DOS_HEADER     Pe32_DosHeader;
+typedef IMAGE_DOS_HEADER     Pe64_DosHeader;
+typedef IMAGE_NT_HEADERS32   Pe32_FileHeader;
+typedef IMAGE_NT_HEADERS64   Pe64_FileHeader;
+typedef IMAGE_SECTION_HEADER Pe32_SectionHeader;
+
+#define PE_DOSHEADER_MAGIC   0x5A4D
+#define PE_DOSHEADER_MAGIC_1 0x4D
+#define PE_DOSHEADER_MAGIC_2 0x5A
 
 #define PE_FILE_SIGNATURE  0x00004550 /*< "PE\0\0" (In Pe*_FileHeader::Signature). */
 

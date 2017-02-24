@@ -28,21 +28,20 @@
 #define _INC_SETJMP 1
 
 #include <kos/compiler.h>
+#include <kos/types.h>
 
 __DECL_BEGIN
 
-struct __jmp_buf { void *ptr[5]; };
+struct __jmp_buf {
+ /* NOTE: EAX is not saved, because it will be set by 'longjmp' */
+ __uintptr_t __jb_ecx,__jb_edx,__jb_ebx,__jb_esp;
+ __uintptr_t __jb_ebp,__jb_esi,__jb_edi,__jb_eip;
+};
+#define _JMP_BUF_STATIC_INIT  {{0,0,0,0,0,0,0,0}}
 typedef struct __jmp_buf jmp_buf[1];
 
-#define _JMP_BUF_STATIC_INIT  {{{NULL,NULL,NULL,NULL,NULL}}}
-
-#ifdef __INTELLISENSE__
-extern             int setjmp(jmp_buf buf);
+extern __attribute__((__returns_twice__)) int setjmp(jmp_buf buf);
 extern __noreturn void longjmp(jmp_buf buf, int sig);
-#else
-#define setjmp  __builtin_setjmp
-#define longjmp __builtin_longjmp
-#endif
 
 __DECL_END
 

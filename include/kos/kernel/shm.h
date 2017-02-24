@@ -124,6 +124,7 @@ __struct_fwd(kpageframe);
 typedef __u32 kshmrefcnt_t;
 #endif /* !__ASSEMBLY__ */
 
+#define KSHMREGION_FLAG_NONE       0x0000
 #define KSHMREGION_FLAG_EXEC       0x0001 /*< Currently unused; later this will work alongside the LDT to control execute permissions. */
 #define KSHMREGION_FLAG_WRITE      0x0002 /*< Memory is mapped as writable from ring-#3 (Unless used with 'KSHMRANGE_FLAG_SHARED' or 'KSHMREGION_FLAG_NOCOPY', this also enables copy-on-write semantics). */
 #define KSHMREGION_FLAG_READ       0x0004 /*< Memory is mapped as readable from ring-#3. */

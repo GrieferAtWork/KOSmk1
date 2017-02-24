@@ -29,11 +29,15 @@
 #include <malloc.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <kos/kernel/fs/vfs-dev.h>
 #include <kos/kernel/util/string.h>
 
 __DECL_BEGIN
 
-struct ksuperblock kpipe_fs;
+//struct ksuperblock kpipe_fs = {
+// KSUPERBLOCK_INIT_HEAD
+// KINODE_INIT()
+//};
 
 #define FIX_MAXSIZE(size) \
  min(size,katomic_load(kproc_self()->p_sand.ts_pipemax))
@@ -101,9 +105,15 @@ __crit __ref struct kpipe *kpipe_new(size_t max_size) {
  __ref struct kpipe *result;
  KTASK_CRIT_MARK
  /* Create the pipe INode. */
+#if 1
+ result = (__ref struct kpipe *)__kinode_alloc((struct ksuperblock *)&kvfs_dev,&kpipe_type,
+                                               &kpipesuper_type,
+                                               S_IFIFO);
+#else
  result = (__ref struct kpipe *)__kinode_alloc(&kpipe_fs,&kpipe_type,
                                                &kpipesuper_type,
                                                S_IFIFO);
+#endif
  if __unlikely(!result) return NULL;
  kiobuf_init_ex(&result->p_iobuf,FIX_MAXSIZE(max_size));
  return result;

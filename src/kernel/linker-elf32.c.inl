@@ -37,7 +37,7 @@
 
 __DECL_BEGIN
 
-kerrno_t
+__crit kerrno_t
 ksecdata_elf32_init(struct ksecdata *__restrict self,
                     Elf32_Phdr const *__restrict pheaderv,
                     size_t pheaderc, size_t pheadersize,
@@ -632,7 +632,8 @@ __crit kerrno_t kshlib_elf32_new(__ref struct kshlib **result, struct kfile *__r
   * use of an always out-of-bounds cache index. */
  if __unlikely(KE_ISERR(error)) {
   lib->sh_cidx = (__size_t)-1;
-  k_syslogf_prefixfile(KLOG_WARN,elf_file,"[LINKER] Failed to cache library file\n");
+  k_syslogf_prefixfile(KLOG_WARN,elf_file,
+                       "[LINKER] Failed to cache library file\n");
  }
 
  dyninfo.dyn_strtable_header.sh_offset  = 0;

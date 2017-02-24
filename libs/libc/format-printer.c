@@ -881,10 +881,10 @@ end:
 __public int stringprinter_init(struct stringprinter *__restrict self, size_t hint) {
  kassertobj(self);
  if (!hint) hint = 4*sizeof(void *);
- self->sp_buffer = (char *)malloc(hint*sizeof(char));
+ self->sp_buffer = (char *)malloc((hint+1)*sizeof(char));
  if __unlikely(!self->sp_buffer) return -1;
  self->sp_bufpos = self->sp_buffer;
- self->sp_bufend = self->sp_buffer+(hint-1);
+ self->sp_bufend = self->sp_buffer+hint;
  self->sp_bufend[0] = '\0';
  return 0;
 }
@@ -893,8 +893,8 @@ __public char *stringprinter_pack(struct stringprinter *__restrict self, size_t 
  kassertobj(self);
  assert(self->sp_bufpos >= self->sp_buffer);
  assert(self->sp_bufpos <= self->sp_bufend);
+ result_size = (size_t)(self->sp_bufpos-self->sp_buffer);
  if (self->sp_bufpos != self->sp_bufend) {
-  result_size = (size_t)(self->sp_bufpos-self->sp_buffer);
   result = (char *)realloc(self->sp_buffer,(result_size+1)*sizeof(char));
   if __unlikely(!result) result = self->sp_buffer;
  } else {
@@ -923,11 +923,9 @@ __public int stringprinter_print(char const *__restrict data,
   newsize = (size_t)(self->sp_bufend-self->sp_buffer);
   assert(newsize);
   reqsize = newsize+(maxchars-size_avail);
-  ++newsize;
   while (newsize < reqsize) newsize *= 2;
-  new_buffer = (char *)realloc(self->sp_buffer,newsize*sizeof(char));
+  new_buffer = (char *)realloc(self->sp_buffer,(newsize+1)*sizeof(char));
   if __unlikely(!new_buffer) return -1;
-  --newsize;
   self->sp_bufpos = new_buffer+(self->sp_bufpos-self->sp_buffer);
   self->sp_bufend = new_buffer+newsize;
   self->sp_buffer = new_buffer;

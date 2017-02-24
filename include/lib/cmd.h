@@ -20,8 +20,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __LIB_CMD_H__
-#define __LIB_CMD_H__ 1
+#ifndef GUARD_LIB_CMD_H
+#define GUARD_LIB_CMD_H 1
 
 #include <kos/compiler.h>
 #include <stddef.h>
@@ -50,8 +50,7 @@ struct cmd_operations;
 #define CMD_TOKEN_LAND        '&'    /*< '&&': Logical and. */
 #define CMD_TOKEN_LOR         '|'    /*< '||': Logical or */
 #define CMD_TOKEN_NOT         '!'    /*< '!': Logical inversion */
-#define CMD_TOKEN_ENVVAR      '$'    /*< '$FOO' / '$(FOO)': Environment variable reference; (token begin/end is variable name). */
-#define CMD_TOKEN_INLINE      'I'    /*< '$(foo)' / '`foo`': Inline-replace stdout text of another command (token begin/end is that other command). */
+#define CMD_TOKEN_ENVTEXT     '$'    /*< '$FOO' / '$(FOO)': Text containing '$'. */
 #define CMD_TOKEN_FUNDEF      'F'    /*< 'function foo', 'foo()': Function definition (token begin/end is function name) */
 #define CMD_TOKEN_ARG         'A'    /*< '$1': Argument reference. */
 #define CMD_TOKEN_ERRNO       '?'    /*< '$?': Errno reference. */
@@ -195,7 +194,6 @@ struct cmd_engine {
  (self)->ce_ops = (ops),(self)->ce_user = (user))
 
 extern __nonnull((1)) void cmd_engine_quit(struct cmd_engine *__restrict self);
-extern __nonnull((1)) void cmd_engine_clear(struct cmd_engine *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
 // Same as 'cmd_parser_yield', but in the event of 'CMD_TOKEN_EOF',
@@ -261,4 +259,4 @@ cmd_capturefdf(struct cmd_operations const *__restrict ops,
 
 __DECL_END
 
-#endif /* !__LIB_CMD_H__ */
+#endif /* !GUARD_LIB_CMD_H */

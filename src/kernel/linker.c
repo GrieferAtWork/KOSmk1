@@ -649,7 +649,7 @@ kshlib_opensearch(struct kfspathenv const *pathenv,
     case KE_DEVICE: return error; /*< A device error occurred. */
     case KE_NOEXEC:
     default:
-     if (last_error == KE_OK) last_error = error;
+     if (last_error == KE_NOENT) last_error = error;
      break;
    }
   }
@@ -761,12 +761,13 @@ end_err:
 __DECL_END
 
 #ifndef __INTELLISENSE__
-#include "procmodules.c.inl"
-#include "linker-slloaders.c.inl"
-#include "linker-relocate.c.inl"
-#include "linker-elf32.c.inl"
 #include "linker-cache.c.inl"
+#include "linker-elf32.c.inl"
+#include "linker-pe32.c.inl"
 #include "linker-recent.c.inl"
+#include "linker-relocate.c.inl"
+#include "linker-slloaders.c.inl"
+#include "procmodules.c.inl"
 #endif
 
 #endif /* !__KOS_KERNEL_LINKER_C__ */

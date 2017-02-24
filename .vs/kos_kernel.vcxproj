@@ -78,6 +78,7 @@
     <ClInclude Include="..\include\kos\kernel\types.h" />
     <ClInclude Include="..\include\kos\kernel\util\string.h" />
     <ClInclude Include="..\src\kernel\linker-elf32.h" />
+    <ClInclude Include="..\src\kernel\linker-pe32.h" />
     <ClInclude Include="..\src\kernel\syscall\syscall-common.h" />
     <ClInclude Include="..\src\kernel\syscall\syscall-groups.h" />
     <ClInclude Include="..\src\misc\font2_8x16.h" />
@@ -161,6 +162,7 @@
     <None Include="..\src\kernel\iobuf-writeimpl.c.inl" />
     <None Include="..\src\kernel\linker-cache.c.inl" />
     <None Include="..\src\kernel\linker-elf32.c.inl" />
+    <None Include="..\src\kernel\linker-pe32.c.inl" />
     <None Include="..\src\kernel\linker-recent.c.inl" />
     <None Include="..\src\kernel\linker-relocate.c.inl" />
     <None Include="..\src\kernel\linker-slloaders.c.inl" />

@@ -34,7 +34,10 @@
 #include <kos/compiler.h>
 #include <kos/kernel/features.h>
 #include <kos/kernel/sched_yield.h>
-#ifdef KCONFIG_HAVE_SINGLECORE
+
+#define REGION_HAVE_RUNTIME_VALIDATION   (defined(__DEBUG__) && 0)
+
+#if REGION_HAVE_RUNTIME_VALIDATION
 #include <assert.h>
 #endif
 
@@ -122,12 +125,18 @@ template<> struct static_if<true> { bool __is_true__(); };
  (__REGION_IN_NESTED(name) == __REGION_NESTED_ONE && \
  !__REGION_IN_RUNTIM(name)))
 
-#if defined(__DEBUG__) && 1
+#if REGION_HAVE_RUNTIME_VALIDATION
 /* Leave this on for a while, and if everything works, disable it! */
-#   define COMPILER_REGION_ASSERT(name,is_inside) \
-        assertf(is_inside(),"The compiler said we were supposed to be inside the region!")
+#   define RUNTIME_REGION_ASSERT(name,is_inside) \
+        assertf(is_inside(),"The compiler said we were supposed to be inside the " #name " region!")
+#   define RUNTIME_REGION_ASSERT_MARK(name,is_inside) \
+        assertf(is_inside(),"Region violation: No actually inside a " #name " region.")
+#   define RUNTIME_REGION_ASSERT_FIRST(name,is_inside) \
+        assertf(!is_inside(),"You're not the first to enter the " #name "region!")
 #else
-#   define COMPILER_REGION_ASSERT(name,is_inside)
+#   define RUNTIME_REGION_ASSERT(name,is_inside)
+#   define RUNTIME_REGION_ASSERT_MARK(name,is_inside)
+#   define RUNTIME_REGION_ASSERT_FIRST(name,is_inside)
 #endif
 
 /* Explicitly mark a region as entered.
@@ -137,7 +146,7 @@ template<> struct static_if<true> { bool __is_true__(); };
 #define COMPILER_REGION_MARK(name,is_inside) \
  enum{__REGION_IN_NESTED(name) = __REGION_IN_NORMAL(name)+1\
      ,__REGION_IN_NORMAL(name) = __REGION_NORMAL_YES};\
- assertf(is_inside(),"Region violation: No actually inside a " #name " region.");
+ RUNTIME_REGION_ASSERT_MARK(is_inside(),name);
 
 
 #define COMPILER_REGION_ENTER(name,is_inside,do_enter) \
@@ -148,7 +157,7 @@ template<> struct static_if<true> { bool __is_true__(); };
     /* Not inside a nested region. - Must deduce region-state at runtime. */\
     __REGION_IN_RUNTIM(name) = is_inside();\
     if __unlikely(!__REGION_IN_RUNTIM(name)) { do_enter(); }\
-   } COMPILER_REGION_ASSERT(name,is_inside);
+   } RUNTIME_REGION_ASSERT(name,is_inside);
 /* void (*try_enter)(bool &did_not_enter); */
 #define COMPILER_REGION_TRYENTER(name,is_inside,try_enter) \
  { enum{__REGION_IN_NESTED(name) = __REGION_IN_NORMAL(name)+1\
@@ -157,7 +166,7 @@ template<> struct static_if<true> { bool __is_true__(); };
    COMPILER_STATIC_IF (__REGION_IN_NESTED(name) == __REGION_NESTED_ONE) {\
     /* Not inside a nested region. - Must deduce region-state at runtime. */\
     {try_enter(__REGION_IN_RUNTIM(name));}\
-   } COMPILER_REGION_ASSERT(name,is_inside);
+   } RUNTIME_REGION_ASSERT(name,is_inside);
 
 /* A special kind of region enter:
  *   This one can be used in-place of the regular enter,
@@ -172,7 +181,7 @@ template<> struct static_if<true> { bool __is_true__(); };
    __STATIC_ASSERT_M(__REGION_IN_NESTED(name) == __REGION_NESTED_ONE,\
                      "You're not the first to enter the region! "\
                      "Even I, the compiler know that.");\
-   assertf(!is_inside(),"You're not the first to enter the region!");\
+   RUNTIME_REGION_ASSERT_FIRST(is_inside,name);\
    {do_enter();};
 
 
@@ -237,7 +246,7 @@ template<> struct static_if<true> { bool __is_true__(); };
     } else {\
      assertef(trylock,"Failed immediate acquisition of lock '" #trylock "'");\
     }
-   } COMPILER_REGION_ASSERT(name,is_inside);
+   } RUNTIME_REGION_ASSERT(name,is_inside);
 #define COMPILER_REGION_ENTER_LOCK_VOLATILE(name,is_inside,do_enter,do_leave,ob,readvolatile,trylock,unlock) \
  { enum{__REGION_IN_NESTED(name) = __REGION_IN_NORMAL(name)+1\
        ,__REGION_IN_NORMAL(name) = __REGION_NORMAL_YES};\
@@ -261,7 +270,7 @@ template<> struct static_if<true> { bool __is_true__(); };
     } else {\
      assertef(trylock,"Failed immediate acquisition of lock '" #trylock "'");\
     }\
-   } COMPILER_REGION_ASSERT(name,is_inside);
+   } RUNTIME_REGION_ASSERT(name,is_inside);
 #else
 #define COMPILER_REGION_ENTER_LOCK(name,is_inside,do_enter,do_leave,trylock) \
  { enum{__REGION_IN_NESTED(name) = __REGION_IN_NORMAL(name)+1\
@@ -282,7 +291,7 @@ template<> struct static_if<true> { bool __is_true__(); };
     } else {\
      while (!(trylock));\
     }\
-   } COMPILER_REGION_ASSERT(name,is_inside);
+   } RUNTIME_REGION_ASSERT(name,is_inside);
 #define COMPILER_REGION_ENTER_LOCK_VOLATILE(name,is_inside,do_enter,do_leave,ob,readvolatile,trylock,unlock) \
  { enum{__REGION_IN_NESTED(name) = __REGION_IN_NORMAL(name)+1\
        ,__REGION_IN_NORMAL(name) = __REGION_NORMAL_YES};\
@@ -306,7 +315,7 @@ template<> struct static_if<true> { bool __is_true__(); };
     } else {\
      while (!(trylock));\
     }\
-   } COMPILER_REGION_ASSERT(name,is_inside);
+   } RUNTIME_REGION_ASSERT(name,is_inside);
 #endif
 
 #if 0
@@ -325,7 +334,7 @@ template<> struct static_if<true> { bool __is_true__(); };
 #define RUNTIME_REGION_FIRST_P(name)    0
 #define RUNTIME_REGION_FIRST(name)    (!__REGION_IN_RUNTIM(name))
 #define RUNTIME_REGION_MARK(name,is_inside) \
- assertf(is_inside(),"Region violation: No actually inside a " #name " region.");
+ RUNTIME_REGION_ASSERT_MARK(name,is_inside);
 #define RUNTIME_REGION_ENTER(name,is_inside,do_enter) \
  { __attribute_unused bool __REGION_IN_RUNTIM(name) = is_inside();\
    if __unlikely(!__REGION_IN_RUNTIM(name)) { do_enter(); };
@@ -339,10 +348,17 @@ template<> struct static_if<true> { bool __is_true__(); };
 #define RUNTIME_REGION_LEAVE(name,do_leave)\
    if __unlikely(!__REGION_IN_RUNTIM(name)) { do_leave(); };\
  }
+#if 1
 #define RUNTIME_REGION_ENTER_FIRST(name,is_inside,do_enter) \
  { enum{__REGION_IN_RUNTIM(name) = true};\
-   assertf(!is_inside(),"You're not the first to enter the region!");\
+   RUNTIME_REGION_ASSERT_FIRST(is_inside,name);\
    {do_enter();};
+#else
+#define RUNTIME_REGION_ENTER_FIRST(name,is_inside,do_enter) \
+ { const bool __REGION_IN_RUNTIM(name) = true;\
+   RUNTIME_REGION_ASSERT_FIRST(is_inside,name);\
+   {do_enter();};
+#endif
 
 #ifdef KCONFIG_HAVE_SINGLECORE
 #define RUNTIME_REGION_ENTER_LOCK(name,is_inside,do_enter,do_leave,trylock) \

@@ -299,14 +299,18 @@ void __kirq_default_handler(struct kirq_registers *regs) {
      printf("INVALID PAGEDIRECTORY (NULL POINTER)\n");
     }
    }
-#if 0
+#if 1
    {
     void *physical_eip;
     size_t disasm_size = 120;
     physical_eip = (void *)regs->regs.eip;
     if (pd) physical_eip = kpagedir_translate(pd,physical_eip);
+#if 1
+    debug_hexdump(physical_eip,disasm_size);
+#else
     disasm_x86((void *)((uintptr_t)physical_eip-(disasm_size/2)),
                disasm_size+1,&print_error,NULL,DISASM_FLAG_ADDR);
+#endif
    }
 #endif
   }

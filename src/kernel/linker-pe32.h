@@ -20,23 +20,27 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __PE_TEST_C__
-#define __PE_TEST_C__ 1
+#ifndef __KOS_KERNEL_LINKER_PE32_H__
+#define __KOS_KERNEL_LINKER_PE32_H__ 1
 
-#include <stddef.h>
-#include <kos/task.h>
-#include <kos/syslog.h>
+#include <kos/config.h>
+#include <kos/compiler.h>
+#include <kos/errno.h>
+#include <kos/types.h>
+#include <windows/pe.h>
+
+__DECL_BEGIN
 
 
-void _start(void) {
- int i;
- for (i = 0; i < 20; ++i) {
-  k_syslog(KLOG_INFO,"System log entry from PE file!\n",(size_t)-1);
- }
+//////////////////////////////////////////////////////////////////////////
+// Load shared library data from a given file.
+extern __crit __wunused __nonnull((1,2,4)) kerrno_t
+ksecdata_pe32_init(struct ksecdata *__restrict self,
+                   Pe32_SectionHeader const *__restrict headerv,
+                   __size_t headerc, struct kfile *__restrict pe_file,
+                   __uintptr_t image_base);
 
- kproc_exit(0);
- /* We should never get here! */
- __builtin_unreachable();
-}
 
-#endif /* !__PE_TEST_C__ */
+__DECL_END
+
+#endif /* !__KOS_KERNEL_LINKER_PE32_H__ */

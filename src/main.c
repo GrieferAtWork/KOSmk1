@@ -46,7 +46,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <kos/kernel/panic.h>
-#include <ctype.h>
 
 
 void run_init(void) {

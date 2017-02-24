@@ -32,6 +32,24 @@ __DECL_BEGIN
 #define __SYSCALL_INTNO  0x69 /*< Huehuehue... */
 
 #ifndef __ASSEMBLY__
+#ifdef _MSC_VER
+#define __ASMSYSCALL0(id,...)                                    __VA_ARGS__; movl eax, id; int __SYSCALL_INTNO;
+#define __ASMSYSCALL1(id,arg1,...)                               __ASMSYSCALL0(id,                movl ebx, arg1; __VA_ARGS__)
+#define __ASMSYSCALL2(id,arg1,arg2,...)                          __ASMSYSCALL1(id,arg1,           movl ecx, arg2; __VA_ARGS__)
+#define __ASMSYSCALL3(id,arg1,arg2,arg3,...)                     __ASMSYSCALL2(id,arg1,arg2,      movl edx, arg3; __VA_ARGS__)
+#define __ASMSYSCALL4(id,arg1,arg2,arg3,arg4,...)                __ASMSYSCALL3(id,arg1,arg2,arg3, pushl ebp; pushl arg4;                                     movl ebp, esp; __VA_ARGS__) addl esp, 4;  popl ebp;
+#define __ASMSYSCALL5(id,arg1,arg2,arg3,arg4,arg5,...)           __ASMSYSCALL3(id,arg1,arg2,arg3, pushl ebp; pushl arg5; pushl arg4;                         movl ebp, esp; __VA_ARGS__) addl esp, 8;  popl ebp;
+#define __ASMSYSCALL6(id,arg1,arg2,arg3,arg4,arg5,arg6,...)      __ASMSYSCALL3(id,arg1,arg2,arg3, pushl ebp; pushl arg6; pushl arg5; pushl arg4;             movl ebp, esp; __VA_ARGS__) addl esp, 12; popl ebp;
+#define __ASMSYSCALL7(id,arg1,arg2,arg3,arg4,arg5,arg6,arg7,...) __ASMSYSCALL3(id,arg1,arg2,arg3, pushl ebp; pushl arg7; pushl arg6; pushl arg5; pushl arg4; movl ebp, esp; __VA_ARGS__) addl esp, 16; popl ebp;
+#define __ASMSYSCALL0_DO(result,id)                                    __asm { __ASMSYSCALL0(id) movl result, eax; }
+#define __ASMSYSCALL1_DO(result,id,arg1)                               __asm { __ASMSYSCALL1(id,arg1) movl result, eax; }
+#define __ASMSYSCALL2_DO(result,id,arg1,arg2)                          __asm { __ASMSYSCALL2(id,arg1,arg2) movl result, eax; }
+#define __ASMSYSCALL3_DO(result,id,arg1,arg2,arg3)                     __asm { __ASMSYSCALL3(id,arg1,arg2,arg3) movl result, eax; }
+#define __ASMSYSCALL4_DO(result,id,arg1,arg2,arg3,arg4)                __asm { __ASMSYSCALL4(id,arg1,arg2,arg3,arg4) movl result, eax; }
+#define __ASMSYSCALL5_DO(result,id,arg1,arg2,arg3,arg4,arg5)           __asm { __ASMSYSCALL5(id,arg1,arg2,arg3,arg4,arg5) movl result, eax; }
+#define __ASMSYSCALL6_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6)      __asm { __ASMSYSCALL6(id,arg1,arg2,arg3,arg4,arg5,arg6) movl result, eax; }
+#define __ASMSYSCALL7_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) __asm { __ASMSYSCALL7(id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) movl result, eax; }
+#else
 #define __ASMSYSCALL0(id,more)                  more "movl $" __PP_STR(id) ", %%eax\nint $" __PP_STR(__SYSCALL_INTNO) "\n"
 #define __ASMSYSCALL1(id,more) __ASMSYSCALL0(id,"movl %1, %%ebx\n" more)
 #define __ASMSYSCALL2(id,more) __ASMSYSCALL1(id,"movl %2, %%ecx\n" more)
@@ -48,14 +66,27 @@ __DECL_BEGIN
 #define __ASMSYSCALL5_CLOBBER __ASMSYSCALL4_CLOBBER
 #define __ASMSYSCALL6_CLOBBER __ASMSYSCALL4_CLOBBER
 #define __ASMSYSCALL7_CLOBBER __ASMSYSCALL4_CLOBBER
+#define __ASMSYSCALL0_DO(result,id)                                    __asm_volatile__(__ASMSYSCALL0(id,"") "movl %%eax, %0" : "=g" (result) : : __ASMSYSCALL0_CLOBBER)
+#define __ASMSYSCALL1_DO(result,id,arg1)                               __asm_volatile__(__ASMSYSCALL1(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1) : __ASMSYSCALL1_CLOBBER)
+#define __ASMSYSCALL2_DO(result,id,arg1,arg2)                          __asm_volatile__(__ASMSYSCALL2(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1), "g" (arg2) : __ASMSYSCALL2_CLOBBER)
+#define __ASMSYSCALL3_DO(result,id,arg1,arg2,arg3)                     __asm_volatile__(__ASMSYSCALL3(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1), "g" (arg2), "g" (arg3) : __ASMSYSCALL3_CLOBBER)
+#define __ASMSYSCALL4_DO(result,id,arg1,arg2,arg3,arg4)                __asm_volatile__(__ASMSYSCALL4(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1), "g" (arg2), "g" (arg3), "g" (arg4) : __ASMSYSCALL4_CLOBBER)
+#define __ASMSYSCALL5_DO(result,id,arg1,arg2,arg3,arg4,arg5)           __asm_volatile__(__ASMSYSCALL5(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1), "g" (arg2), "g" (arg3), "g" (arg4), "g" (arg5) : __ASMSYSCALL5_CLOBBER)
+#define __ASMSYSCALL6_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6)      __asm_volatile__(__ASMSYSCALL6(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1), "g" (arg2), "g" (arg3), "g" (arg4), "g" (arg5), "g" (arg6) : __ASMSYSCALL6_CLOBBER)
+#define __ASMSYSCALL7_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) __asm_volatile__(__ASMSYSCALL7(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1), "g" (arg2), "g" (arg3), "g" (arg4), "g" (arg5), "g" (arg6), "g" (arg7) : __ASMSYSCALL7_CLOBBER)
+#endif
+
 /*[[[deemon
 #include <util>
 const MAX = 8;
 function print_block(x,paste) {
-  print "{ type __r; (void)(id); __asm_volatile__(__ASMSYSCALL"+x+"(id,\"\")",;
-  print " \"movl %%eax, %0\" : \"=g\" (__r) :",;
-  for (local y: util::range(x)) print (y ? "," : "")+" \"g\" (__"+paste+"arg"+(y+1)+")",;
-  print " : __ASMSYSCALL"+x+"_CLOBBER); return __r; }";
+  print "{ type __r; (void)(id); __ASMSYSCALL"+x+"_DO(__r,id",;
+  for (local y: util::range(x)) print ",__"+paste+"arg"+(y+1),;
+  print "); return __r; }";
+  // print "{ type __r; (void)(id); __asm_volatile__(__ASMSYSCALL"+x+"(id,\"\")",;
+  // print " \"movl %%eax, %0\" : \"=g\" (__r) :",;
+  // for (local y: util::range(x)) print (y ? "," : "")+" \"g\" (__"+paste+"arg"+(y+1)+")",;
+  // print " : __ASMSYSCALL"+x+"_CLOBBER); return __r; }";
 }
 print "#ifdef __ANSI_COMPILER__";
 for (local x: util::range(MAX)) {
@@ -80,23 +111,23 @@ for (local x: util::range(MAX)) {
 print "#endif /" "* !__ANSI_COMPILER__ *" "/";
 ]]]*/
 #ifdef __ANSI_COMPILER__
-#define __IDsyscall0(type,name,id) type name(void) { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL0(id,"") "movl %%eax, %0" : "=g" (__r) : : __ASMSYSCALL0_CLOBBER); return __r; }
-#define __IDsyscall1(type,name,id,type1,arg1) type name(type1 __##arg1) { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL1(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__##arg1) : __ASMSYSCALL1_CLOBBER); return __r; }
-#define __IDsyscall2(type,name,id,type1,arg1,type2,arg2) type name(type1 __##arg1, type2 __##arg2) { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL2(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__##arg1), "g" (__##arg2) : __ASMSYSCALL2_CLOBBER); return __r; }
-#define __IDsyscall3(type,name,id,type1,arg1,type2,arg2,type3,arg3) type name(type1 __##arg1, type2 __##arg2, type3 __##arg3) { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL3(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__##arg1), "g" (__##arg2), "g" (__##arg3) : __ASMSYSCALL3_CLOBBER); return __r; }
-#define __IDsyscall4(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4) type name(type1 __##arg1, type2 __##arg2, type3 __##arg3, type4 __##arg4) { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL4(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__##arg1), "g" (__##arg2), "g" (__##arg3), "g" (__##arg4) : __ASMSYSCALL4_CLOBBER); return __r; }
-#define __IDsyscall5(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5) type name(type1 __##arg1, type2 __##arg2, type3 __##arg3, type4 __##arg4, type5 __##arg5) { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL5(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__##arg1), "g" (__##arg2), "g" (__##arg3), "g" (__##arg4), "g" (__##arg5) : __ASMSYSCALL5_CLOBBER); return __r; }
-#define __IDsyscall6(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6) type name(type1 __##arg1, type2 __##arg2, type3 __##arg3, type4 __##arg4, type5 __##arg5, type6 __##arg6) { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL6(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__##arg1), "g" (__##arg2), "g" (__##arg3), "g" (__##arg4), "g" (__##arg5), "g" (__##arg6) : __ASMSYSCALL6_CLOBBER); return __r; }
-#define __IDsyscall7(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6,type7,arg7) type name(type1 __##arg1, type2 __##arg2, type3 __##arg3, type4 __##arg4, type5 __##arg5, type6 __##arg6, type7 __##arg7) { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL7(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__##arg1), "g" (__##arg2), "g" (__##arg3), "g" (__##arg4), "g" (__##arg5), "g" (__##arg6), "g" (__##arg7) : __ASMSYSCALL7_CLOBBER); return __r; }
+#define __IDsyscall0(type,name,id) type name(void) { type __r; (void)(id); __ASMSYSCALL0_DO(__r,id); return __r; }
+#define __IDsyscall1(type,name,id,type1,arg1) type name(type1 __##arg1) { type __r; (void)(id); __ASMSYSCALL1_DO(__r,id,__##arg1); return __r; }
+#define __IDsyscall2(type,name,id,type1,arg1,type2,arg2) type name(type1 __##arg1, type2 __##arg2) { type __r; (void)(id); __ASMSYSCALL2_DO(__r,id,__##arg1,__##arg2); return __r; }
+#define __IDsyscall3(type,name,id,type1,arg1,type2,arg2,type3,arg3) type name(type1 __##arg1, type2 __##arg2, type3 __##arg3) { type __r; (void)(id); __ASMSYSCALL3_DO(__r,id,__##arg1,__##arg2,__##arg3); return __r; }
+#define __IDsyscall4(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4) type name(type1 __##arg1, type2 __##arg2, type3 __##arg3, type4 __##arg4) { type __r; (void)(id); __ASMSYSCALL4_DO(__r,id,__##arg1,__##arg2,__##arg3,__##arg4); return __r; }
+#define __IDsyscall5(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5) type name(type1 __##arg1, type2 __##arg2, type3 __##arg3, type4 __##arg4, type5 __##arg5) { type __r; (void)(id); __ASMSYSCALL5_DO(__r,id,__##arg1,__##arg2,__##arg3,__##arg4,__##arg5); return __r; }
+#define __IDsyscall6(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6) type name(type1 __##arg1, type2 __##arg2, type3 __##arg3, type4 __##arg4, type5 __##arg5, type6 __##arg6) { type __r; (void)(id); __ASMSYSCALL6_DO(__r,id,__##arg1,__##arg2,__##arg3,__##arg4,__##arg5,__##arg6); return __r; }
+#define __IDsyscall7(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6,type7,arg7) type name(type1 __##arg1, type2 __##arg2, type3 __##arg3, type4 __##arg4, type5 __##arg5, type6 __##arg6, type7 __##arg7) { type __r; (void)(id); __ASMSYSCALL7_DO(__r,id,__##arg1,__##arg2,__##arg3,__##arg4,__##arg5,__##arg6,__##arg7); return __r; }
 #else /* __ANSI_COMPILER__ */
-#define __IDsyscall0(type,name,id) type name() { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL0(id,"") "movl %%eax, %0" : "=g" (__r) : : __ASMSYSCALL0_CLOBBER); return __r; }
-#define __IDsyscall1(type,name,id,type1,arg1) type name(__/**/arg1) type1 __/**/arg1; { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL1(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__/**/arg1) : __ASMSYSCALL1_CLOBBER); return __r; }
-#define __IDsyscall2(type,name,id,type1,arg1,type2,arg2) type name(__/**/arg1,__/**/arg2) type1 __/**/arg1; type2 __/**/arg2; { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL2(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__/**/arg1), "g" (__/**/arg2) : __ASMSYSCALL2_CLOBBER); return __r; }
-#define __IDsyscall3(type,name,id,type1,arg1,type2,arg2,type3,arg3) type name(__/**/arg1,__/**/arg2,__/**/arg3) type1 __/**/arg1; type2 __/**/arg2; type3 __/**/arg3; { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL3(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__/**/arg1), "g" (__/**/arg2), "g" (__/**/arg3) : __ASMSYSCALL3_CLOBBER); return __r; }
-#define __IDsyscall4(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4) type name(__/**/arg1,__/**/arg2,__/**/arg3,__/**/arg4) type1 __/**/arg1; type2 __/**/arg2; type3 __/**/arg3; type4 __/**/arg4; { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL4(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__/**/arg1), "g" (__/**/arg2), "g" (__/**/arg3), "g" (__/**/arg4) : __ASMSYSCALL4_CLOBBER); return __r; }
-#define __IDsyscall5(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5) type name(__/**/arg1,__/**/arg2,__/**/arg3,__/**/arg4,__/**/arg5) type1 __/**/arg1; type2 __/**/arg2; type3 __/**/arg3; type4 __/**/arg4; type5 __/**/arg5; { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL5(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__/**/arg1), "g" (__/**/arg2), "g" (__/**/arg3), "g" (__/**/arg4), "g" (__/**/arg5) : __ASMSYSCALL5_CLOBBER); return __r; }
-#define __IDsyscall6(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6) type name(__/**/arg1,__/**/arg2,__/**/arg3,__/**/arg4,__/**/arg5,__/**/arg6) type1 __/**/arg1; type2 __/**/arg2; type3 __/**/arg3; type4 __/**/arg4; type5 __/**/arg5; type6 __/**/arg6; { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL6(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__/**/arg1), "g" (__/**/arg2), "g" (__/**/arg3), "g" (__/**/arg4), "g" (__/**/arg5), "g" (__/**/arg6) : __ASMSYSCALL6_CLOBBER); return __r; }
-#define __IDsyscall7(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6,type7,arg7) type name(__/**/arg1,__/**/arg2,__/**/arg3,__/**/arg4,__/**/arg5,__/**/arg6,__/**/arg7) type1 __/**/arg1; type2 __/**/arg2; type3 __/**/arg3; type4 __/**/arg4; type5 __/**/arg5; type6 __/**/arg6; type7 __/**/arg7; { type __r; (void)(id); __asm_volatile__(__ASMSYSCALL7(id,"") "movl %%eax, %0" : "=g" (__r) : "g" (__/**/arg1), "g" (__/**/arg2), "g" (__/**/arg3), "g" (__/**/arg4), "g" (__/**/arg5), "g" (__/**/arg6), "g" (__/**/arg7) : __ASMSYSCALL7_CLOBBER); return __r; }
+#define __IDsyscall0(type,name,id) type name() { type __r; (void)(id); __ASMSYSCALL0_DO(__r,id); return __r; }
+#define __IDsyscall1(type,name,id,type1,arg1) type name(__/**/arg1) type1 __/**/arg1; { type __r; (void)(id); __ASMSYSCALL1_DO(__r,id,__/**/arg1); return __r; }
+#define __IDsyscall2(type,name,id,type1,arg1,type2,arg2) type name(__/**/arg1,__/**/arg2) type1 __/**/arg1; type2 __/**/arg2; { type __r; (void)(id); __ASMSYSCALL2_DO(__r,id,__/**/arg1,__/**/arg2); return __r; }
+#define __IDsyscall3(type,name,id,type1,arg1,type2,arg2,type3,arg3) type name(__/**/arg1,__/**/arg2,__/**/arg3) type1 __/**/arg1; type2 __/**/arg2; type3 __/**/arg3; { type __r; (void)(id); __ASMSYSCALL3_DO(__r,id,__/**/arg1,__/**/arg2,__/**/arg3); return __r; }
+#define __IDsyscall4(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4) type name(__/**/arg1,__/**/arg2,__/**/arg3,__/**/arg4) type1 __/**/arg1; type2 __/**/arg2; type3 __/**/arg3; type4 __/**/arg4; { type __r; (void)(id); __ASMSYSCALL4_DO(__r,id,__/**/arg1,__/**/arg2,__/**/arg3,__/**/arg4); return __r; }
+#define __IDsyscall5(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5) type name(__/**/arg1,__/**/arg2,__/**/arg3,__/**/arg4,__/**/arg5) type1 __/**/arg1; type2 __/**/arg2; type3 __/**/arg3; type4 __/**/arg4; type5 __/**/arg5; { type __r; (void)(id); __ASMSYSCALL5_DO(__r,id,__/**/arg1,__/**/arg2,__/**/arg3,__/**/arg4,__/**/arg5); return __r; }
+#define __IDsyscall6(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6) type name(__/**/arg1,__/**/arg2,__/**/arg3,__/**/arg4,__/**/arg5,__/**/arg6) type1 __/**/arg1; type2 __/**/arg2; type3 __/**/arg3; type4 __/**/arg4; type5 __/**/arg5; type6 __/**/arg6; { type __r; (void)(id); __ASMSYSCALL6_DO(__r,id,__/**/arg1,__/**/arg2,__/**/arg3,__/**/arg4,__/**/arg5,__/**/arg6); return __r; }
+#define __IDsyscall7(type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6,type7,arg7) type name(__/**/arg1,__/**/arg2,__/**/arg3,__/**/arg4,__/**/arg5,__/**/arg6,__/**/arg7) type1 __/**/arg1; type2 __/**/arg2; type3 __/**/arg3; type4 __/**/arg4; type5 __/**/arg5; type6 __/**/arg6; type7 __/**/arg7; { type __r; (void)(id); __ASMSYSCALL7_DO(__r,id,__/**/arg1,__/**/arg2,__/**/arg3,__/**/arg4,__/**/arg5,__/**/arg6,__/**/arg7); return __r; }
 #endif /* !__ANSI_COMPILER__ */
 //[[[end]]]
 

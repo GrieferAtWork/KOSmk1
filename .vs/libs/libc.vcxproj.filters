@@ -33,6 +33,7 @@
     <None Include="..\..\libs\libc\syscall.S" />
     <None Include="..\..\libs\libc\dlmalloc.inl" />
     <None Include="..\..\libs\libc\string-wmatch.c.inl" />
+    <None Include="..\..\libs\libc\setjmp.S" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="sys">

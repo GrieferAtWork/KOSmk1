@@ -37,9 +37,7 @@
 #include <kos/kernel/interrupts.h>
 #include <kos/timespec.h>
 #include <limits.h>
-#if KCONFIG_HAVE_TASK_CRITICAL
 #include <kos/kernel/region.h>
-#endif /* KCONFIG_HAVE_TASK_CRITICAL */
 #if KCONFIG_HAVE_TASK_STATS
 #ifndef __INTELLISENSE__
 #include <kos/kernel/time.h>
@@ -610,15 +608,11 @@ struct ktask {
 #define KTASK_FLAG_USERTASK   0x01 /*< [const] This task is running in ring 3. */
 #define KTASK_FLAG_OWNSUSTACK 0x02 /*< [const] t_ustackvp is free'd upon task destruction (Requires the 'KTASK_FLAG_USERTASK' flag). */
 #define KTASK_FLAG_MALLKSTACK 0x04 /*< [const] The kernel stack is allocated through malloc, instead of mmap (NOTE: Only allowed for kernel tasks; aka. when 'KTASK_FLAG_USERTASK' isn't set). */
-#if KCONFIG_HAVE_TASK_CRITICAL
 #define KTASK_FLAG_CRITICAL   0x08 /*< [lock(r:KTASK_LOCK_STATE|ktask_self();w:KTASK_LOCK_STATE)] This task is currently running critical code, and may not be terminated directly. */
-#endif /* KCONFIG_HAVE_TASK_CRITICAL */
 #define KTASK_FLAG_TIMEDOUT   0x10 /*< [lock(KTASK_LOCK_STATE)] The task timed out. */
 #define KTASK_FLAG_ALARMED    0x20 /*< [lock(KTASK_LOCK_STATE)] The task may be running, but a 't_abstime' describes a user-defined alarm. */
-#if KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
 #define KTASK_FLAG_WASINTR    0x40 /*< [lock(KTASK_LOCK_STATE)] An interrupt signal was send to a critical task (While set, the signal is still pending). */
 #define KTASK_FLAG_NOINTR     0x80 /*< [lock(r:KTASK_LOCK_STATE|ktask_self();w:KTASK_LOCK_STATE)] Don't send KE_INTR errors to this task when it gets terminated while inside a critical block. */
-#endif /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
  void                        *t_exitcode; /*< [?..?][lock(KTASK_LOCK_STATE)] Exitcode of the task (non-locked & read-only after termination). NOTE: This must not necessarily be a pointer! */
  struct kcpu                 *t_cpu;      /*< [0..1][lock(KTASK_LOCK_STATE)] CPU Hosting the task (Only non-NULL if the state implies 'KTASK_STATE_HASCPU'). */
  __ref struct ktask          *t_prev;     /*< [?..1][lock(t_cpu:KCPU_LOCK_TASKS|KCPU_LOCK_SLEEP)] Previous sleeping/pending task (Only used if a cpu is present). */
@@ -772,12 +766,10 @@ __local KOBJECT_DEFINE_DECREF(ktask_decref,struct ktask,t_refcnt,kassert_ktask,k
 //                        NOTE: This value is never returned for 'ktask_self()'
 //                        NOTE: Due to race-conditions, this should not be considered an error
 // @return: KE_OVERFLOW:  Failed to acquire a new reference to 'self' (needed for timeouts)
-//#if KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT
 // @return: KE_INTR:      After a waiting/suspended unscheduling, a critical
 //                        task was re-awakened due to an attempt at termination.
 //                        >> Not returned if the task is within a task-level nointr block
 //                        Only returned once, but can be reset.
-//#endif /* KCONFIG_HAVE_TASK_CRITICAL_INTERRUPT */
 #define ktask_unschedule(self,newstate,arg) ktask_unschedule_ex(self,newstate,arg,0,NULL)
 extern __wunused __nonnull((1)) kerrno_t __SCHED_CALL
 ktask_unschedule_ex(struct ktask *__restrict self, __u8 newstate, void *__restrict arg,

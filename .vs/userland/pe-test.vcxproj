@@ -11,39 +11,11 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\libs\libc\assert.c" />
-    <ClCompile Include="..\..\libs\libc\atoi.c" />
-    <ClCompile Include="..\..\libs\libc\ctype.c" />
-    <ClCompile Include="..\..\libs\libc\dirent.c" />
-    <ClCompile Include="..\..\libs\libc\environ.c" />
-    <ClCompile Include="..\..\libs\libc\format-printer.c" />
-    <ClCompile Include="..\..\libs\libc\getopt.c" />
-    <ClCompile Include="..\..\libs\libc\itos.c" />
-    <ClCompile Include="..\..\libs\libc\malloc.c" />
-    <ClCompile Include="..\..\libs\libc\mod.c" />
-    <ClCompile Include="..\..\libs\libc\proc.c" />
-    <ClCompile Include="..\..\libs\libc\pty.c" />
-    <ClCompile Include="..\..\libs\libc\signal.c" />
-    <ClCompile Include="..\..\libs\libc\stdio.c" />
-    <ClCompile Include="..\..\libs\libc\stdlib.c" />
-    <ClCompile Include="..\..\libs\libc\string.c" />
-    <ClCompile Include="..\..\libs\libc\sys\io.c" />
-    <ClCompile Include="..\..\libs\libc\sys\socket.c" />
-    <ClCompile Include="..\..\libs\libc\time.c" />
-    <ClCompile Include="..\..\libs\libc\traceback.c" />
-    <ClCompile Include="..\..\libs\libc\unistd.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\libs\libc\dlmalloc.inl" />
-    <None Include="..\..\libs\libc\itos.impl.inl" />
-    <None Include="..\..\libs\libc\setjmp.S" />
-    <None Include="..\..\libs\libc\stdio-file.c.inl" />
-    <None Include="..\..\libs\libc\string-wmatch.c.inl" />
-    <None Include="..\..\libs\libc\syscall.S" />
+    <ClCompile Include="..\..\userland\pe-test.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{A2791917-78D5-45B6-89E4-89AE7D4760D4}</ProjectGuid>
-    <RootNamespace>libc</RootNamespace>
+    <ProjectGuid>{1C200B65-C44E-41C3-B66C-67014189C758}</ProjectGuid>
+    <RootNamespace>pe-test</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -103,8 +75,8 @@
     <OutDir>$(SolutionDir)..\</OutDir>
     <IncludePath>$(SolutionDir)..\include</IncludePath>
     <IntDir>$(SolutionDir)..\build\.vs\$(ProjectName)\$(Platform)-$(Configuration)\</IntDir>
-    <NMakeReBuildCommandLine>rundll</NMakeReBuildCommandLine>
-    <NMakeBuildCommandLine>rundll</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>rundll32</NMakeReBuildCommandLine>
+    <NMakeBuildCommandLine>rundll32</NMakeBuildCommandLine>
     <ReferencePath>
     </ReferencePath>
     <LibraryPath>

@@ -36,9 +36,10 @@
 
 __DECL_BEGIN
 
-__crit int ksignal_trylocks_c(size_t sigc,
-                              struct ksignal *const *__restrict sigv,
-                              __u8 lock) {
+__crit int
+ksignal_trylocks_c(size_t sigc,
+                   struct ksignal *const *__restrict sigv,
+                   __u8 lock) {
  struct ksignal *const *iter,*const *end;
  KTASK_CRIT_MARK
  kassert_ksignals(sigc,sigv);
