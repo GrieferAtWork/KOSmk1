@@ -65,11 +65,11 @@ __crit kerrno_t kshlib_new(struct kshlib **__restrict result,
   ++loader;
  }
  k_syslogf_prefixfile(KLOG_WARN,exe_file
-                  ,"Unrecognized magic: %.2I8x%.2I8x%.2I8x%.2I8x\n"
-                  ,magic_max >= 1 ? magic[0] : 0
-                  ,magic_max >= 2 ? magic[1] : 0
-                  ,magic_max >= 3 ? magic[2] : 0
-                  ,magic_max >= 4 ? magic[3] : 0);
+                     ,"Unrecognized magic: %.2I8x%.2I8x%.2I8x%.2I8x\n"
+                     ,magic_max >= 1 ? magic[0] : 0
+                     ,magic_max >= 2 ? magic[1] : 0
+                     ,magic_max >= 3 ? magic[2] : 0
+                     ,magic_max >= 4 ? magic[3] : 0);
  return KE_NOEXEC;
 }
 

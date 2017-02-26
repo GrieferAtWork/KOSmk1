@@ -13,7 +13,7 @@
 [project = userland:terminal-vga] [diskfile = /bin/terminal-vga] [libs(term)] { ./terminal-vga.c; }
 [project = userland:snake]        [diskfile = /bin/snake]        { ./snake.c; }
 [pe] {
-	[project = userland:pe-test] [diskfile = /bin/pe-test] [no(libc)] { ./pe-test.c; }
+	[project = userland:pe-test] [diskfile = /bin/pe-test] [no(_start)] { ./pe-test.c; }
 }
 
 

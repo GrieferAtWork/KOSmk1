@@ -89,12 +89,13 @@ local executables = dict {
 	"ld-pe"        : "i686-pc-cygwin-ld.exe",
 	"cxx-pe"       : "i686-pc-cygwin-g++.exe",
 	"addr2line-pe" : "i686-pc-cygwin-addr2line.exe",
+	"dlltool"      : "D:\\cygwin32\\bin\\dlltool.exe",
 #ifdef __WINDOWS__
-	.mkisofs   = "binutils/build-mkisofs-md5-2.01/mkisofs.exe",
-	.qemu      = "D:\\qemu\\qemu-system-i386.exe",
+	"mkisofs"      : "binutils/build-mkisofs-md5-2.01/mkisofs.exe",
+	"qemu"         : "D:\\qemu\\qemu-system-i386.exe",
 #else
-	.mkisofs   = "mkisofs",
-	.qemu      = "qemu-system-i386",
+	"mkisofs"      : "mkisofs",
+	"qemu"         : "qemu-system-i386",
 #endif
 };
 
@@ -488,7 +489,7 @@ function parse_wmatch_source(path,attrib,filename,fp_last_changed) {
 }
 
 function parse_attrib_marker(attrib,marker) {
-	local pe_linker_flag = "-Wl,-e__start";
+	local pe_linker_flags = ["-Wl,-e__start"];
 	switch (marker) {
 		case "elf":
 			/* Set attributes to compile under ELF mode */
@@ -497,10 +498,11 @@ function parse_attrib_marker(attrib,marker) {
 			defs.pop("__SYMBOL_NEED_UNDERSCORE",none);
 			defs.pop("__USER_LABEL_PREFIX__",none);
 			defs.pop("__PE__",none);
+			attrib["pe"]       = false;
 			attrib["compiler"] = "c";
 			attrib["linker"]   = "ld";
 			local linker_flags = attrib.setdefault("linker_flags",[]);
-			linker_flags.remove(pe_linker_flag);
+			for (local x: pe_linker_flags) linker_flags.remove(x);
 			return true;
 			
 		case "pe":
@@ -510,10 +512,14 @@ function parse_attrib_marker(attrib,marker) {
 			defs["__SYMBOL_NEED_UNDERSCORE"] = "1";
 			defs["__USER_LABEL_PREFIX__"]    = "_";
 			defs.pop("__ELF__",none);
+			attrib["pe"]       = true;
 			attrib["compiler"] = "c-pe";
 			attrib["linker"]   = "ld-pe";
 			local linker_flags = attrib.setdefault("linker_flags",[]);
-			if (pe_linker_flag !in linker_flags) linker_flags.append(pe_linker_flag);
+			for (local x: pe_linker_flags) {
+				if (x !in linker_flags)
+					linker_flags.append(x);
+			}
 			return true;
 		default:
 			break;
@@ -699,6 +705,51 @@ function updatediskfile(path,diskpath) {
 	return error;
 }
 
+function create_libfromso(sofile) {
+	local p = process("bash",["util/mk_pe_lib.sh",sofile]);
+	p.start();
+	local e = p.join();
+	if (e) throw Error("Process failed: "+repr p+" ("+e+")");
+}
+
+function create_libfile(libpaths,lib) {
+	local compl = list {
+		"lib{name}.so",
+		"lib{name}.dll",
+		"{name}.so",
+		"{name}.dll",
+	};
+	for (local p: libpaths) {
+		for (local c: compl) {
+			local f = fs::path::join(p,c.format({ .name = lib }));
+			if (fs::isfile(f)) {
+				local libfile = fs::path::head(f)+fs::path::file(f)+".lib";
+				if (!fs::isfile(libfile) || fast_getmtime(libfile) <= fast_getmtime(f)) {
+					/* Create missing or outdated .lib file. */
+					create_libfromso(f);
+				}
+				return libfile;
+			}
+		}
+	}
+	//throw Error("Library "+repr lib+" not found in paths "+repr libpaths);
+	/* Fall back to a regular library (Required for '-lgcc') */
+	return "-l"+lib;
+}
+
+function get_proj_libs(libpaths,libs,pe_mode) {
+	if (pe_mode) {
+		/* Must locate the correct .so file & create missing .lib files. */
+		for (local l: libs) {
+			yield create_libfile(libpaths,l);
+		}
+	} else {
+		for (local l: libs) {
+			yield "-l"+l;
+		}
+	}
+}
+
 function compile_userland_app(name,proj) {
 	local objects = proj.objects;
 	// Userland application
@@ -707,9 +758,12 @@ function compile_userland_app(name,proj) {
 	local no = proj.options.get("no",[]);
 	local linker = proj.options.get("compiler","c");
 	if ("libc" !in no) {
-		libs.remove("_start");
 		libs.remove("c");
-		libs.append("_start","c");
+		if ("_start" !in no) {
+			libs.remove("_start");
+			libs.append("_start");
+		}
+		libs.append("c");
 	}
 	if ("libgcc" !in no) {
 		libs.remove("gcc");
@@ -740,11 +794,11 @@ do_compile_userland:
 		(for (local l: libpaths) "-L"+l)...,
 		proj.options.get("linker_flags",[])...,
 		objects...,
-		(for (local l: libs) "-l"+l)...,
+		get_proj_libs(libpaths,libs,proj.options.get("pe",false))...,
 		// "-llibc",
 		// "-lgcc",
 		// "-lfdlibm",
-		]);
+	]);
 	_force_changed_files.append(output);
 	print "Re-linking:",repr output;
 	local t = run_compiler_process(p);
@@ -761,13 +815,14 @@ function compile_static_library(name,proj) {
 		objects,fast_getmtime(output))) return false;
 	local p = process(executables["ar"],[
 		"rcs",output,objects...,
-		]);
+	]);
 	_force_changed_files.append(output);
 	print "Re-linking:",repr output;
 	changed_libs.append(name);
 	run_compiler_process(p);
 	return true;
 }
+
 function compile_shared_library(name,proj) {
 	local objects = proj.objects;
 	// Userland application
@@ -808,8 +863,8 @@ do_compile_sharedlib:
 		"-nostdlib","-shared","-o",output,
 		proj.options.get("linker_flags",[])...,
 		objects...,
-		(for (local l: libs) "-l"+l)...,
-		]);
+		get_proj_libs(libpaths,libs,proj.options.get("pe",false))...,
+	]);
 	_force_changed_files.append(output);
 	print "Re-linking:",repr output;
 	// Not needed for shared libraries
