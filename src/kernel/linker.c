@@ -295,32 +295,30 @@ ksecdata_translate_rw(struct ksecdata *__restrict self,
 size_t
 ksecdata_getmem(struct ksecdata const *__restrict self, ksymaddr_t addr,
                 void *__restrict buf, size_t bufsize) {
- void const *shptr; size_t result = 0,maxbytes,copysize;
+ void const *shptr; size_t maxbytes,copysize;
  kassertobj(self);
  while ((shptr = ksecdata_translate_ro(self,addr,&maxbytes)) != NULL) {
   copysize = min(maxbytes,bufsize);
   memcpy(buf,shptr,copysize);
-  result             += copysize;
-  if (copysize == bufsize) break;
   bufsize            -= copysize;
+  if (copysize == bufsize) break;
   *(uintptr_t *)&buf += copysize;
  }
- return result;
+ return bufsize;
 }
 size_t
 ksecdata_setmem(struct ksecdata *__restrict self, ksymaddr_t addr,
                 void const *__restrict buf, size_t bufsize) {
- void *shptr; size_t result = 0,maxbytes,copysize;
+ void *shptr; size_t maxbytes,copysize;
  kassertobj(self);
  while ((shptr = ksecdata_translate_rw(self,addr,&maxbytes)) != NULL) {
   copysize = min(maxbytes,bufsize);
   memcpy(shptr,buf,copysize);
-  result             += copysize;
-  if (copysize == bufsize) break;
   bufsize            -= copysize;
+  if (copysize == bufsize) break;
   *(uintptr_t *)&buf += copysize;
  }
- return result;
+ return bufsize;
 }
 
 ksymaddr_t
@@ -349,21 +347,58 @@ kshlib_symaddr2fileaddr(struct kshlib const *__restrict self,
 }
 
 
-void kreloc_quit(struct kreloc *__restrict self) {
+
+//////////////////////////////////////////////////////////////////////////
+// === kreloc ===
+__crit void kreloc_quit(struct kreloc *__restrict self) {
  struct krelocvec *iter,*end;
- ksymlist_quit(&self->r_syms);
+ KTASK_CRIT_MARK
+ kassertobj(self);
+ ksymlist_quit(&self->r_elf_syms);
  end = (iter = self->r_vecv)+self->r_vecc;
  for (; iter != end; ++iter) free(iter->rv_data);
  free(self->r_vecv);
 }
+__crit struct krelocvec *
+kreloc_alloc(struct kreloc *__restrict self) {
+ struct krelocvec *newvec;
+ KTASK_CRIT_MARK
+ kassertobj(self);
+ assert((self->r_vecc == 0) == (self->r_vecv == NULL));
+ newvec = (struct krelocvec *)realloc(self->r_vecv,(self->r_vecc+1)*
+                                      sizeof(struct krelocvec));
+ if __likely(newvec) {
+  self->r_vecv = newvec;
+  newvec += self->r_vecc++;
+ }
+ return newvec;
+}
 
 
 
-void kshliblist_quit(struct kshliblist *__restrict self) {
+
+//////////////////////////////////////////////////////////////////////////
+// === kshliblist ===
+__crit void kshliblist_quit(struct kshliblist *__restrict self) {
  struct kshlib **iter,**end;
+ KTASK_CRIT_MARK
  end = (iter = self->sl_libv)+self->sl_libc;
  for (; iter != end; ++iter) kshlib_decref(*iter);
  free(self->sl_libv);
+}
+__crit kerrno_t
+kshliblist_append_inherited(struct kshliblist *__restrict self,
+                            __ref struct kshlib *__restrict lib) {
+ struct kshlib **newvec;
+ KTASK_CRIT_MARK
+ kassertobj(self);
+ kassert_kshlib(lib);
+ newvec = (struct kshlib **)realloc(self->sl_libv,(self->sl_libc+1)*
+                                    sizeof(struct kshlib *));
+ if __unlikely(!newvec) return KE_NOMEM;
+ self->sl_libv = newvec;
+ newvec[self->sl_libc++] = lib; /* Inherit reference. */
+ return KE_OK;
 }
 
 
@@ -436,7 +471,7 @@ struct kshlib __kshlib_kernel = {
  /* sh_reloc                         */{
  /* sh_reloc.r_vecc                  */0,
  /* sh_reloc.r_vecv                  */NULL,
- /* sh_reloc.r_syms                  */KSYMLIST_INIT},
+ /* sh_reloc.r_elf_syms              */KSYMLIST_INIT},
  /* sh_callbacks                     */{
  /* sh_callbacks.slc_start           */(ksymaddr_t)(uintptr_t)&_start,
  /* sh_callbacks.slc_preinit_array_v */KSYM_INVALID,

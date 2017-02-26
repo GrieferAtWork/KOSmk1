@@ -27,16 +27,33 @@
 #include <kos/compiler.h>
 #include <kos/errno.h>
 #include <kos/types.h>
+#include <kos/kernel/linker.h>
 #include <windows/pe.h>
 
 __DECL_BEGIN
+
+//////////////////////////////////////////////////////////////////////////
+// Parse a ZERO-terminated array of functions imported from
+// 'import_lib', starting at the given symbol address 'first_thunk'.
+// NOTE: 'rt_thunks' should point to the symbol address of the runtime address table.
+extern __crit __wunused kerrno_t
+kshlib_pe32_parsethunks(struct kshlib *__restrict self,
+                        ksymaddr_t first_thunk, ksymaddr_t rt_thunks,
+                        struct kfile *__restrict pe_file, __uintptr_t image_base,
+                        struct kshlib *__restrict import_lib);
+
+extern __crit __wunused kerrno_t
+kshlib_pe32_parseimports(struct kshlib *__restrict self,
+                         IMAGE_IMPORT_DESCRIPTOR const *__restrict descrv,
+                         __size_t descrc, struct kfile *__restrict pe_file,
+                         __uintptr_t image_base);
 
 
 //////////////////////////////////////////////////////////////////////////
 // Load shared library data from a given file.
 extern __crit __wunused __nonnull((1,2,4)) kerrno_t
 ksecdata_pe32_init(struct ksecdata *__restrict self,
-                   Pe32_SectionHeader const *__restrict headerv,
+                   IMAGE_SECTION_HEADER const *__restrict headerv,
                    __size_t headerc, struct kfile *__restrict pe_file,
                    __uintptr_t image_base);
 

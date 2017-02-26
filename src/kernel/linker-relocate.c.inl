@@ -68,7 +68,7 @@ __new_dlsym(struct kproc *__restrict proc,
  struct ksymbol const *symbol; struct kshlib *lib = start_module->pm_lib;
  if (start_module != exclude_module && 
     (symbol = ksymtable_lookupname_h(&lib->sh_publicsym,name,name_size,name_hash)) != NULL &&
-      symbol->s_shndx != SHN_UNDEF) goto found_symbol;
+     symbol->s_shndx != SHN_UNDEF) goto found_symbol;
  end = (iter = start_module->pm_depids)+start_module->pm_lib->sh_deps.sl_libc;
  for (; iter != end; ++iter) {
   assert(*iter < proc->p_modules.pms_moda);
@@ -77,7 +77,7 @@ __new_dlsym(struct kproc *__restrict proc,
   if (result != NULL) return result;
  }
  if ((symbol = ksymtable_lookupname_h(&lib->sh_weaksym,name,name_size,name_hash)) != NULL &&
-     symbol->s_shndx != SHN_UNDEF) goto found_symbol;
+      symbol->s_shndx != SHN_UNDEF) goto found_symbol;
  return NULL;
 found_symbol:
  return (__user void *)((uintptr_t)start_module->pm_base+symbol->s_addr);
@@ -213,6 +213,62 @@ rel_next:;
  }
 }
 
+
+
+__local void
+kreloc_pe_import_exec(struct krelocvec const *__restrict self,
+                      struct kshm *__restrict memspace,
+                      struct kproc *__restrict proc,
+                      struct kprocmodule *__restrict reloc_module,
+                      struct kprocmodule *__restrict start_module) {
+#define relv  self->rv_pe.rpi_symv
+ struct ksymbol **iter,**end,*sym;
+ struct kprocmodule *hint_module,*module_end;
+ uintptr_t new_address,base; ksymaddr_t thunk_iter;
+ base = (uintptr_t)reloc_module->pm_base;
+ end = (iter = relv)+self->rv_relc;
+ if (self->rv_pe.rpi_hint) {
+  /* Try to locate the loaded instance of the hinted module. */
+  module_end = (hint_module = proc->p_modules.pms_modv)+proc->p_modules.pms_moda;
+  for (;; ++hint_module) {
+   if (hint_module == module_end) { hint_module = NULL; break; }
+   if (hint_module->pm_lib == self->rv_pe.rpi_hint) break;
+  }
+ } else {
+  hint_module = NULL;
+ }
+ thunk_iter = self->rv_pe.rpi_thunk;
+ for (; iter != end; ++iter) {
+  sym = *iter;
+  kassertobj(sym);
+  LOG(KLOG_TRACE,"[PE][CMD %Iu] Importing symbol %s\n",
+      iter-relv,sym->s_name);
+  /* Prefer loading the symbol from the hinted module.
+   * NOTE: I am fully aware that we're already breaking windows rules
+   *       by not only scanning the hinted module, but also all of its
+   *       dependencies. - But the important part is that the hinted
+   *       module is scanned first, as is required by PE, and if you
+   *       look further down below, you'll see that we're even performing
+   *       regular ELF-style dependency scanning as well! */
+  new_address = __likely(hint_module)
+   ? (uintptr_t)__dlsym(proc,hint_module,sym->s_name,sym->s_nmsz,sym->s_hash,reloc_module) 
+   : 0;
+  /* If we didn't already find the symbol, do a regular ELF-style symbol scan. */
+  if __unlikely(!new_address) {
+   new_address = (uintptr_t)__dlsym(proc,start_module,sym->s_name,
+                                    sym->s_nmsz,sym->s_hash,reloc_module);
+  }
+  if (!new_address) {
+   LOG(KLOG_ERROR,"[PE][CMD %Iu] Failed to find symbol: %s\n",
+       iter-relv,sym->s_name);
+  }
+  /* Store the address we've just figured out in the thunk. */
+  SETMEM(ADDR(thunk_iter),&new_address,sizeof(new_address));
+  thunk_iter += sizeof(uintptr_t);
+ }
+#undef relv
+}
+
 __local void
 krelocvec_exec(struct krelocvec *__restrict self,
                struct ksymlist *__restrict symbols,
@@ -227,6 +283,9 @@ krelocvec_exec(struct krelocvec *__restrict self,
    break;
   case KRELOCVEC_TYPE_ELF32_RELA:
    LOG(KLOG_ERROR,"ELF-32 Rela-relocations not implemented\n");
+   break;
+  case KRELOCVEC_TYPE_PE_IMPORT:
+   kreloc_pe_import_exec(self,memspace,proc,reloc_module,start_module);
    break;
   default: __builtin_unreachable(); break;
  }
@@ -243,7 +302,7 @@ void kreloc_exec(struct kreloc *__restrict self,
  end = (iter = self->r_vecv)+self->r_vecc;
  for (; iter != end; ++iter) {
   LOG(KLOG_TRACE,"Relocating... (%Iu commands)\n",iter->rv_relc);
-  krelocvec_exec(iter,&self->r_syms,memspace,proc,reloc_module,start_module);
+  krelocvec_exec(iter,&self->r_elf_syms,memspace,proc,reloc_module,start_module);
  }
 }
 

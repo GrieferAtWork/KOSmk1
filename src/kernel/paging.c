@@ -282,7 +282,6 @@ kpagedir_findfreerange(struct kpagedir const *self, size_t pages,
  kassertobj(self);
  assertf(isaligned((uintptr_t)hint,PAGEALIGN),"Address not aligned: %p",hint);
  iter = (uintptr_t)hint;
- if __unlikely(!iter) iter = PAGESIZE;
  do {
   attr = kpagedir_rangeattr(self,(void *)iter,pages);
   if (KPAGEDIR_RANGEATTR_EMPTY(attr)) {
@@ -293,22 +292,22 @@ kpagedir_findfreerange(struct kpagedir const *self, size_t pages,
   } else {
    iter += PAGESIZE;
   }
- } while (iter > (uintptr_t)hint);
- assert(!iter);
- if __unlikely(!hint) return NULL;
- iter = PAGESIZE;
- do {
-  attr = kpagedir_rangeattr(self,(void *)iter,pages);
-  if (KPAGEDIR_RANGEATTR_EMPTY(attr)) {
-   // Found a free area
-   return (__virtualaddr void *)iter;
-  } else if (KPAGEDIR_RANGEATTR_ALL(attr)) {
-   iter += pages*PAGESIZE; // Skip this entry area
-  } else {
-   iter += PAGESIZE;
-  }
- } while (iter < (uintptr_t)hint);
- return NULL;
+ } while (iter+pages*PAGESIZE > (uintptr_t)hint);
+ if __likely((uintptr_t)hint != 0) {
+  iter = 0;
+  do {
+   attr = kpagedir_rangeattr(self,(void *)iter,pages);
+   if (KPAGEDIR_RANGEATTR_EMPTY(attr)) {
+    // Found a free area
+    return (__virtualaddr void *)iter;
+   } else if (KPAGEDIR_RANGEATTR_ALL(attr)) {
+    iter += pages*PAGESIZE; // Skip this entry area
+   } else {
+    iter += PAGESIZE;
+   }
+  } while (iter+pages*PAGESIZE < (uintptr_t)hint);
+ }
+ return KPAGEDIR_FINDFREERANGE_ERR;
 }
 
 extern __virtualaddr void *
@@ -319,7 +318,7 @@ kpagedir_mapanyex(struct kpagedir *self, __physicaladdr void const *phys,
  assertf(isaligned((uintptr_t)phys,PAGEALIGN),"Address not aligned: %p",phys);
  assertf(isaligned((uintptr_t)hint,PAGEALIGN),"Address not aligned: %p",hint);
  result = kpagedir_findfreerange(self,pages,hint);
- if __unlikely(!result) return NULL;
+ if __unlikely(result == KPAGEDIR_FINDFREERANGE_ERR) return NULL;
  assertf(kpagedir_isunmapped(self,result,pages),"WTF?!");
  if __unlikely(KE_ISERR(kpagedir_remap(self,phys,result,pages,flags))) return NULL;
  return result;

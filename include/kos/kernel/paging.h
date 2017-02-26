@@ -123,11 +123,12 @@ kpagedir_setflags(struct kpagedir *self, __virtualaddr void const *virt,
 //////////////////////////////////////////////////////////////////////////
 // Find an unmapped range bit enough to map at least 'pages' pages.
 // NOTE: Will never map the NULL page
-// @return: * :   The virtual address the given physical range was mapped to.
-// @return: NULL: Failed to find an unused are big enough to map the given range.
+// @return: * :                         The virtual address the given physical range was mapped to.
+// @return: KPAGEDIR_FINDFREERANGE_ERR: Failed to find an unused are big enough to map the given range.
 extern __nonnull((1)) __virtualaddr void *
 kpagedir_findfreerange(struct kpagedir const *self, __size_t pages,
                        __virtualaddr void const *hint);
+#define KPAGEDIR_FINDFREERANGE_ERR ((void *)(__uintptr_t)-1)
 
 //////////////////////////////////////////////////////////////////////////
 // Map the given physical address range to the first available free virtual range

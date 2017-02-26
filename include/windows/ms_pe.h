@@ -138,6 +138,23 @@ typedef struct __packed _IMAGE_OPTIONAL_HEADER64 {
     IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
 } IMAGE_OPTIONAL_HEADER64,*PIMAGE_OPTIONAL_HEADER64;
 
+/* Special directory entires. */
+#define IMAGE_DIRECTORY_ENTRY_EXPORT 0
+#define IMAGE_DIRECTORY_ENTRY_IMPORT 1
+#define IMAGE_DIRECTORY_ENTRY_RESOURCE 2
+#define IMAGE_DIRECTORY_ENTRY_EXCEPTION 3
+#define IMAGE_DIRECTORY_ENTRY_SECURITY 4
+#define IMAGE_DIRECTORY_ENTRY_BASERELOC 5
+#define IMAGE_DIRECTORY_ENTRY_DEBUG 6
+#define IMAGE_DIRECTORY_ENTRY_ARCHITECTURE 7
+#define IMAGE_DIRECTORY_ENTRY_GLOBALPTR 8
+#define IMAGE_DIRECTORY_ENTRY_TLS 9
+#define IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG 10
+#define IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT 11
+#define IMAGE_DIRECTORY_ENTRY_IAT 12
+#define IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT 13
+#define IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR 14
+
 typedef struct __packed _IMAGE_NT_HEADERS64 {
     DWORD                   Signature;
     IMAGE_FILE_HEADER       FileHeader;
@@ -212,10 +229,63 @@ typedef struct _IMAGE_SECTION_HEADER {
 
 #define IMAGE_SCN_SCALE_INDEX 0x00000001
 
+/* IMAGE_DIRECTORY_ENTRY_EXPORT */
+typedef struct _IMAGE_EXPORT_DIRECTORY {
+    DWORD Characteristics;
+    DWORD TimeDateStamp;
+    WORD  MajorVersion;
+    WORD  MinorVersion;
+    DWORD Name;
+    DWORD Base;
+    DWORD NumberOfFunctions;
+    DWORD NumberOfNames;
+    DWORD AddressOfFunctions;
+    DWORD AddressOfNames;
+    DWORD AddressOfNameOrdinals;
+} IMAGE_EXPORT_DIRECTORY,*PIMAGE_EXPORT_DIRECTORY;
 
+/* IMAGE_DIRECTORY_ENTRY_IMPORT */
+typedef struct _IMAGE_IMPORT_DESCRIPTOR {
+    union {
+        DWORD Characteristics;
+        DWORD OriginalFirstThunk;
+    };
+    DWORD TimeDateStamp;
+    DWORD ForwarderChain;
+    DWORD Name;
+    DWORD FirstThunk;
+} IMAGE_IMPORT_DESCRIPTOR;
+typedef IMAGE_IMPORT_DESCRIPTOR UNALIGNED *PIMAGE_IMPORT_DESCRIPTOR;
 
-__NOCLAIM_END
+__COMPILER_PACK_PUSH(8)
+typedef struct _IMAGE_THUNK_DATA64 {
+    union {
+        ULONGLONG ForwarderString;
+        ULONGLONG Function;
+        ULONGLONG Ordinal;
+        ULONGLONG AddressOfData;
+    };
+} IMAGE_THUNK_DATA64, *PIMAGE_THUNK_DATA64;
+
 __COMPILER_PACK_POP
+
+typedef struct _IMAGE_THUNK_DATA32 {
+    union {
+        DWORD ForwarderString;
+        DWORD Function;
+        DWORD Ordinal;
+        DWORD AddressOfData;
+    };
+} IMAGE_THUNK_DATA32, *PIMAGE_THUNK_DATA32;
+
+typedef struct _IMAGE_IMPORT_BY_NAME {
+    WORD Hint;
+    BYTE Name[1];
+} IMAGE_IMPORT_BY_NAME,*PIMAGE_IMPORT_BY_NAME;
+
+
+__COMPILER_PACK_POP
+__NOCLAIM_END
 
 __DECL_END
 

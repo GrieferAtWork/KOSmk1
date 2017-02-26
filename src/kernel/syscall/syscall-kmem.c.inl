@@ -74,7 +74,7 @@ SYSCALL(sys_kmem_map) {
  if (!(flags&MAP_FIXED)) {
   /* For non-fixed mappings, find a suitable free range. */
   hint = kpagedir_findfreerange(kproc_getpagedir(procself),pages,hint);
-  if __unlikely(!hint) goto err_unlock;
+  if __unlikely(hint == KPAGEDIR_FINDFREERANGE_ERR) goto err_unlock;
  }
  region = kshmregion_newram(pages,prot);
  if __unlikely(!region) goto err_unlock;
@@ -134,7 +134,7 @@ SYSCALL(sys_kmem_mapdev) {
  if (!(flags&MAP_FIXED)) {
   /* For non-fixed mappings, find a suitable free range. */
   hint = kpagedir_findfreerange(kproc_getpagedir(procself),pages,hint);
-  if __unlikely(!hint) { error = KE_NOSPC; goto end_unlock; }
+  if __unlikely(hint == KPAGEDIR_FINDFREERANGE_ERR) { error = KE_NOSPC; goto end_unlock; }
  }
  result = (void *)((uintptr_t)hint+alignment_offset);
  if __unlikely(kshm_copytouser(kproc_getshm(procself),

@@ -29,6 +29,12 @@
 
 __DECL_BEGIN
 
+#ifdef _MSC_VER
+#define UNALIGNED __unaligned
+#else
+#define UNALIGNED /* nothing */
+#endif
+
 /* NOTE: Always use fixed-length integral types to keep this consistent.
  *    >> Even if it says 'LONG', doesn't mean it'll equal sizeof(long)!
  */

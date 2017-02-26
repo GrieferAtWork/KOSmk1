@@ -399,7 +399,12 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #endif
 
 /* Marks a region of code containing only, or partially code
- * neither written, nor claimed by my (GrieferAtWork). */
+ * neither written, nor claimed by my (GrieferAtWork).
+ * NOTE: These should be read as recursive, with every region
+ *       started with '__NOCLAIM_BEGIN(*)' ending at the associated
+ *       '__NOCLAIM_END', where everything '__NOCLAIM_BEGIN' has
+ *       exactly one, nearest (afterwards) '__NOCLAIM_END' associated
+ *       with it. Note that every '__NOCLAIM_END' can only be used once. */
 #define __NOCLAIM_BEGIN(who)
 #define __NOCLAIM_END
 

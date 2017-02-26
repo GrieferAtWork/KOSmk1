@@ -142,6 +142,7 @@ __crit __user void *
 kproc_find_base_for_module(struct kproc *__restrict self,
                            struct kshlib *__restrict module) {
  uintptr_t addr_lo,addr_hi;
+ __user void *hint,*result;
  KTASK_CRIT_MARK
  addr_lo = module->sh_data.ed_begin;
  addr_hi = module->sh_data.ed_end;
@@ -152,9 +153,21 @@ kproc_find_base_for_module(struct kproc *__restrict self,
  // L: lib
  // A: application
  if (addr_hi <= addr_lo) return (void *)(uintptr_t)-1;
- return kpagedir_findfreerange(kproc_getpagedir(self),
-                               ceildiv(addr_hi-addr_lo,PAGESIZE),
-                               KPAGEDIR_MAPANY_HINT_LIBS);
+ if (module->sh_flags&KSHLIB_FLAG_PREFER_FIXED) {
+  /* Prefer loading the module to its lowest-address,
+   * thus potentially speeding up relocations later on.
+   * >> This is used for Windows PE binaries. */
+  hint = (__user void *)align(addr_lo,PAGEALIGN);
+ } else {
+  hint = KPAGEDIR_MAPANY_HINT_LIBS;
+ }
+ result = kpagedir_findfreerange(kproc_getpagedir(self),
+                                 ceildiv(addr_hi-addr_lo,PAGESIZE),hint);
+ if (result == KPAGEDIR_FINDFREERANGE_ERR) return (void *)(uintptr_t)-1;
+ /* Re-align the result free range to fix the module's symbolic start address. */
+ if ((uintptr_t)result < addr_lo) return (void *)(uintptr_t)-1;
+ *(uintptr_t *)&result -= addr_lo;
+ return result;
 }
 
 __crit kerrno_t
@@ -208,11 +221,11 @@ kproc_insmod_single_unlocked(struct kproc *__restrict self,
      !module->sh_data.ed_secc) modtab->pm_base = NULL;
  else {
   modtab->pm_base = kproc_find_base_for_module(self,module);
-  if (!modtab->pm_base) { error = KE_NOSPC; goto err_module; }
-  if (modtab->pm_base == (void *)(uintptr_t)-1) modtab->pm_base = NULL;
+  if (modtab->pm_base == (void *)(uintptr_t)-1) { error = KE_NOSPC; goto err_module; }
  }
+ assert(modtab->pm_lib == module);
  k_syslogf_prefixfile(KLOG_TRACE,module->sh_file,"Loading module in process (pid = %I32d) to %.8p\n",
-                  self->p_pid,modtab->pm_base);
+                      self->p_pid,modtab->pm_base);
  error = kproc_loadmodsections(self,module,modtab->pm_base);
  if __unlikely(KE_ISERR(error)) goto err_module;
  assertf(modtab->pm_loadc != 0,"Invalid module load counter");
@@ -221,6 +234,7 @@ err_module:
  kshlib_decref(module);
 err_modtab:
  modtab->pm_lib = NULL;
+ assert(KE_ISERR(error));
  // TODO: Free unused memory from 'self->p_modules.pms_modv'
  return error;
 }
@@ -301,7 +315,7 @@ kproc_insmod_unlocked_impl(struct kproc *__restrict self,
  assert(depids_iter == depids+module->sh_deps.sl_libc);
  error = kproc_insmod_single_unlocked(self,module,module_id,depids);
  if __unlikely(error != KE_OK) free(depids);
- return KE_OK;
+ return error;
 err_iter:
  while (depids_iter-- != depids) {
   kproc_delmod_unlocked(self,*depids_iter);
@@ -316,6 +330,8 @@ static void kproc_modrelocate(struct kproc *self, kmodid_t modid, kmodid_t start
  assert(start_modid < self->p_modules.pms_moda);
  assert(modid < self->p_modules.pms_moda);
  module = &self->p_modules.pms_modv[modid];
+ assert(module);
+ assert(module->pm_lib);
  kassert_kprocmodule(module);
  kassert_kshlib(module->pm_lib);
  // Recursively relocate all dependencies (do this first!)
@@ -324,8 +340,8 @@ static void kproc_modrelocate(struct kproc *self, kmodid_t modid, kmodid_t start
  if (!(module->pm_flags&KPROCMODULE_FLAG_RELOC)) {
   // Relocate the module (Make sure every module is only relocated _ONCE_)
   kreloc_exec(&module->pm_lib->sh_reloc,
-              kproc_getshm(self),self,module,
-              &self->p_modules.pms_modv[start_modid]);
+             kproc_getshm(self),self,module,
+             &self->p_modules.pms_modv[start_modid]);
   // Must set the reloc flag _AFTER_ we did it, as otherwise
   // the module might try to load its own non-relocated symbols...
   module->pm_flags |= KPROCMODULE_FLAG_RELOC;
@@ -504,7 +520,7 @@ kproc_dlsymex_unlocked(struct kproc *__restrict self,
  module = &self->p_modules.pms_modv[module_id];
  if __unlikely((lib = module->pm_lib) == NULL) return NULL;
  if ((symbol = ksymtable_lookupname_h(&lib->sh_publicsym,name,name_size,name_hash)) != NULL &&
-     symbol->s_shndx != 0) goto found_symbol;
+     symbol->s_shndx != SHN_UNDEF) goto found_symbol;
  end = (iter = module->pm_depids)+lib->sh_deps.sl_libc;
  for (; iter != end; ++iter) {
   result = kproc_dlsymex_unlocked(self,*iter,name,
@@ -512,7 +528,7 @@ kproc_dlsymex_unlocked(struct kproc *__restrict self,
   if (result != NULL) return result;
  }
  if ((symbol = ksymtable_lookupname_h(&lib->sh_weaksym,name,name_size,name_hash)) != NULL &&
-     symbol->s_shndx != 0) goto found_symbol;
+     symbol->s_shndx != SHN_UNDEF) goto found_symbol;
  return NULL;
 found_symbol:
 #if 0

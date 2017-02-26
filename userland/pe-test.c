@@ -24,15 +24,25 @@
 #define __PE_TEST_C__ 1
 
 #include <stddef.h>
+#include <malloc.h>
+#include <string.h>
+#include <stdio.h>
 #include <kos/task.h>
 #include <kos/syslog.h>
 
+extern void __libc_init(void);
 
 void _start(void) {
  int i;
  for (i = 0; i < 20; ++i) {
   k_syslog(KLOG_INFO,"System log entry from PE file!\n",(size_t)-1);
  }
+ __libc_init();
+ char *s = strdup("calling a function from a .so library!");
+ printf("This is an .exe file %s\n",s);
+ free(s);
+
+
 
  kproc_exit(0);
  /* We should never get here! */

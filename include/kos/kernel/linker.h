@@ -38,6 +38,7 @@
 __DECL_BEGIN
 
 struct kfile;
+struct kshlib;
 
 #define KOBJECT_MAGIC_SYMTABLE   0x5F47AB7E /*< SYMTABLE. */
 #define KOBJECT_MAGIC_SHLIB      0x5471B    /*< SHLIB. */
@@ -72,7 +73,9 @@ struct ksymbol {
  ksymaddr_t      s_addr;     /*< Address associated with this symbol. */
  __size_t        s_size;     /*< Size of this symbol (Or ZERO(0) if not known). */
  ksymhash_t      s_hash;     /*< Unmodulated hash of this symbol. */
- __size_t        s_shndx;    /*< Section index of this symbol (== Elf32_Sym::st_shndx). */
+ __size_t        s_shndx;    /*< Section index of this symbol (== Elf32_Sym::st_shndx).
+                                 NOTE: In PE-mode, this field is set to 'SHN_UNDEF' for imported symbols, and
+                                       some other value for those either exported, or simply not imported. */
  __size_t        s_nmsz;     /*< Length of this symbol's name. */
  char            s_name[1];  /*< [s_nmsz] Name of the symbol (inlined to improve speed). */
  //char          s_zero;     /*< Ensure zero-termination of 's_name'. */
@@ -184,22 +187,30 @@ ksymtable_insert_inherited(struct ksymtable *__restrict self,
 
 //////////////////////////////////////////////////////////////////////////
 // Shared library relocations
+struct kreloc_peimport {
+ /* PE-style import table relocation. */
+ struct ksymbol **rpi_symv;  /*< [1..1][0..:rv_relc][owned] Vector of symbols affected (Same order as that in 'rpi_thunk') */
+ struct kshlib   *rpi_hint;  /*< [0..1] Hint pointer describing the first library to scan for imports. */
+ ksymaddr_t       rpi_thunk; /*< Symbol address of 'FirstThunk' (Array of pointers to imported functions). */
+};
+
 struct krelocvec {
 #define KRELOCVEC_TYPE_ELF32_REL  0
 #define KRELOCVEC_TYPE_ELF32_RELA 1
-#define KRELOCVEC_TYPE_ELF32_PLT  2
+#define KRELOCVEC_TYPE_PE_IMPORT  2
  __u32        rv_type; /*< Type of relocation vector (one of 'KRELOCVEC_TYPE_*') */
  __size_t     rv_relc; /*< Amount of relocation entries. */
  union{
   void       *rv_data; /*< [0..rv_relc*sizeof(?)][owned] Vector of relocation commands. */
   Elf32_Rel  *rv_elf32_relv;  /*< [0..rv_relc] ELF-32 relocations. */
   Elf32_Rela *rv_elf32_relav; /*< [0..rv_relc] ELF-32 relocations (w/ addend). */
+  struct kreloc_peimport rv_pe; /*< PE import relocations. */
  };
 };
 struct kreloc {
- __size_t          r_vecc; /*< Amount of relocation vectors. */
- struct krelocvec *r_vecv; /*< [0..r_vecc][owned] Vector of known relocations. */
- struct ksymlist   r_syms; /*< Vector of dynamic symbols. */
+ __size_t          r_vecc;     /*< Amount of relocation vectors. */
+ struct krelocvec *r_vecv;     /*< [0..r_vecc][owned] Vector of known relocations. */
+ struct ksymlist   r_elf_syms; /*< Vector of dynamic symbols (Used by ELF). */
 };
 #ifdef __INTELLISENSE__
 extern __nonnull((1)) void kreloc_init(struct kreloc *__restrict self);
@@ -207,7 +218,15 @@ extern __nonnull((1)) void kreloc_init(struct kreloc *__restrict self);
 #define kreloc_init(self) \
  memset(self,0,sizeof(struct kreloc))
 #endif
-extern __nonnull((1)) void kreloc_quit(struct kreloc *__restrict self);
+extern __crit __nonnull((1)) void kreloc_quit(struct kreloc *__restrict self);
+
+//////////////////////////////////////////////////////////////////////////
+// Allocate and return a new entry within the relocation vector.
+// @return: * :   A pointer to an uninitialized relocation entry, to-be filled by the caller.
+// @return: NULL: Not enough memory.
+extern __crit __wunused __malloccall __nonnull((1))
+struct krelocvec *kreloc_alloc(struct kreloc *__restrict self);
+
 
 struct kshm;
 struct kproc;
@@ -267,7 +286,8 @@ ksecdata_translate_rw(struct ksecdata *__restrict self,
 
 //////////////////////////////////////////////////////////////////////////
 // Reads/Writes up to 'bufsize' bytes from/to 'addr' into/from 'buf'
-// @return: * : Amount of actually read/written bytes.
+// @return: 0 : Successfully transferred all bytes.
+// @return: * : Amount of bytes not transferred.
 extern __wunused __nonnull((1,3)) __size_t
 ksecdata_getmem(struct ksecdata const *__restrict self, ksymaddr_t addr,
                 void *__restrict buf, __size_t bufsize);
@@ -301,7 +321,15 @@ extern __nonnull((1)) void kshliblist_init(struct kshliblist *__restrict self);
 #define kshliblist_init(self) \
  memset(self,0,sizeof(struct kshliblist))
 #endif
-extern __nonnull((1)) void kshliblist_quit(struct kshliblist *__restrict self);
+extern __crit __nonnull((1)) void kshliblist_quit(struct kshliblist *__restrict self);
+
+//////////////////////////////////////////////////////////////////////////
+// Append a given library to this list.
+// @return: KE_OK:    Successfully inherited a reference and appended the given lib.
+// @return: KE_NOMEM: Not enough available memory (No reference is inherited)
+extern __crit __nonnull((1,2)) kerrno_t
+kshliblist_append_inherited(struct kshliblist *__restrict self,
+                            __ref struct kshlib *__restrict lib);
 
 
 struct kshlib {
@@ -312,9 +340,10 @@ struct kshlib {
  KOBJECT_HEAD
  __atomic __u32          sh_refcnt;    /*< Reference counter. */
  __ref struct kfile     *sh_file;      /*< [1..1] Open file to this shared library (Used to retrieve library name/path). */
-#define KSHLIB_FLAG_NONE   0x00000000
-#define KSHLIB_FLAG_FIXED  0x00000001   /*< The shared library must be loaded at a fixed address (base = NULL). */
-#define KSHLIB_FLAG_LOADED 0x00000002   /*< Set when the library is fully loaded (used to detect cyclic dependencies). */
+#define KSHLIB_FLAG_NONE         0x00000000
+#define KSHLIB_FLAG_FIXED        0x00000001 /*< The shared library must be loaded at a fixed address (base = NULL). */
+#define KSHLIB_FLAG_PREFER_FIXED 0x00000002 /*< The shared library prefers being loaded to a fixed address (base = NULL), but is capable of being relocated elsewhere. */
+#define KSHLIB_FLAG_LOADED       0x00000004 /*< Set when the library is fully loaded (used to detect cyclic dependencies). */
  __u32                   sh_flags;      /*< Shared library flags. */
  __size_t                sh_cidx;       /*< [lock(kslcache_lock)] Cache index (set to (size_t)-1 when not cached). */
  struct ksymtable        sh_publicsym;  /*< Hash-table of public symbols (exported by this shared library). */

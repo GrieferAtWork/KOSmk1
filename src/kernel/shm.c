@@ -2091,7 +2091,7 @@ kshm_mapautomatic(struct kshm *__restrict self,
  kassert_kshmregion(region);
  if __unlikely((*user_address = kpagedir_findfreerange(
                 self->s_pd,region->sre_chunk.sc_pages,hint
-               )) == NULL) return KE_NOSPC;
+               )) == KPAGEDIR_FINDFREERANGE_ERR) return KE_NOSPC;
  error = kshm_mapregion_inherited(self,*user_address,region,
                                   in_region_page_start,
                                   in_region_page_count);
