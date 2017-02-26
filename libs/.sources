@@ -40,12 +40,20 @@
 
 # Statically linked against any ring-3 application
 # >> This library implements the '_start' function that eventually calls main()
-[project = lib:static:_start] { ./_start/start.c; }
-[pe][project = lib:static:_pe_start][name = _start] { ./_start/start.c; }
+# NOTE: This library must be compiled twice as it is always linked
+#       statically, meaning that ELF and PE both need their own versions.
+    [project = lib:static:_elf_start][name = _start] { ./_start/start.c; }
+[pe][project = lib:static:_pe_start] [name = _start] { ./_start/start.c; }
+
 
 # Various shared libraries
-[project = lib:shared:fdlibm]  [diskfile = /usr/lib/libfdlibm.so] [define(lint = 1)] \
-[flags(-Wno-parentheses,-Wno-unused-but-set-variable,-Wno-misleading-indentation,-Wno-unknown-pragmas)] { ./libfdlibm/*.c; }
+[project = lib:shared:fdlibm]\
+[diskfile = /usr/lib/libfdlibm.so]\
+[flags(-Wno-parentheses\
+       ,-Wno-unused-but-set-variable\
+       ,-Wno-misleading-indentation\
+       ,-Wno-unknown-pragmas)\
+][define(lint = 1)] { ./libfdlibm/*.c; }
 [project = lib:shared:pthread] [diskfile = /usr/lib/libpthread.so] { ./libpthread/*.c; }
 [project = lib:shared:dl]      [diskfile = /usr/lib/libdl.so] { ./libdl/*.c; }
 [project = lib:shared:rline]   [diskfile = /usr/lib/librline.so] { ./librline/*.c; }

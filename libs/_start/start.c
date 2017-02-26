@@ -56,7 +56,7 @@ void _start(void) {
  __libc_get_argv(&av);
 
  /* Execute the hosted C-main() function, and exit. */
- exit(main(av.argc,av.argv,environ));
+ exit(main((int)av.argc,av.argv,environ));
 
  /* We should never get here! */
  __builtin_unreachable();

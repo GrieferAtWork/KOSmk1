@@ -423,6 +423,8 @@ kshlib_pe32_new(struct kshlib **__restrict result,
 #undef HAS_OPTION
  lib->sh_flags |= KSHLIB_FLAG_LOADED;
  *result = lib;
+ kshlibrecent_add(lib);
+
  return error;
 err_secheaders: free(section_headers);
  if (0) {err_data: ksecdata_quit(&lib->sh_data); }
