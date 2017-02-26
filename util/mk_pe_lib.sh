@@ -33,7 +33,7 @@ do_file() {
 	libfile="$shpath/$shname.lib"
 	echo "Generating .def file $deffile for $shfile..."
 	echo "EXPORTS" > "$deffile"
-	"$APP_NM" -g "$shfile" | grep ' T ' | sed 's/.* T //' >> "$deffile"
+	"$APP_NM" -g "$shfile" | sed 's/.* . //' >> "$deffile"
 	echo "Generating .lib file $libfile for $shfile..."
 	"$APP_DLLTOOL" --def "$deffile" --dllname "$shfullname" --output-lib "$libfile"
 }

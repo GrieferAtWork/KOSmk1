@@ -59,6 +59,7 @@ local addr2line_exe = "bin/kos_kernel.bin";
 local kernel_args = [];
 local rebuild_on_dot_sources_changed = false;
 //local addr2line_exe = "bin/userland/ls";
+local const default_mode = "i386-elf";
 
 // Amount of parallel instance of gcc
 // >> Drastically reduces compilation time
@@ -85,7 +86,7 @@ local executables = dict {
 	"addr2line"    : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-addr2line"),
 	"asm-pe"       : "i686-pc-cygwin-gcc.exe",
 	"c-pe"         : "i686-pc-cygwin-gcc.exe",
-	"ar-pe"        : "i686-pc-cygwin-ar.exe",
+	"ar-pe"        : "i686-pc-cygwin-gcc-ar.exe",
 	"ld-pe"        : "i686-pc-cygwin-ld.exe",
 	"cxx-pe"       : "i686-pc-cygwin-g++.exe",
 	"addr2line-pe" : "i686-pc-cygwin-addr2line.exe",
@@ -419,8 +420,9 @@ function parse_single_source(path,attrib,filename,fp_last_changed) {
 	}
 
 	filename = fs::path::rel(fs::path::abs(filename,path)).replace("\\","/");
+	local buildpath = "build/"+attrib.get("mode",default_mode)+"/";
 	local raw_build_file = fs::path::rel(fs::path::join(
-		"build",project,fs::path::file(
+		buildpath,project,fs::path::file(
 		filename.replace("/","_")))).replace("\\","/");
 	raw_build_file = raw_build_file.replace(":","/").replace("//","/");
 	raw_build_file += "_"+fs::path::ext(filename)[1:];
@@ -488,33 +490,40 @@ function parse_wmatch_source(path,attrib,filename,fp_last_changed) {
 	}
 }
 
+#define is_pe_mode(x)                 ("pe" in (x))
+#define get_static_lib_name(lib,mode) ((mode)+"-"+(lib)+".a")
+
 function parse_attrib_marker(attrib,marker) {
 	local pe_linker_flags = ["-Wl,-e__start"];
 	switch (marker) {
 		case "elf":
+		case "i386-elf":
 			/* Set attributes to compile under ELF mode */
 			local defs = attrib.setdefault("define",dict {});
 			defs["__ELF__"] = "1";
 			defs.pop("__SYMBOL_NEED_UNDERSCORE",none);
 			defs.pop("__USER_LABEL_PREFIX__",none);
 			defs.pop("__PE__",none);
-			attrib["pe"]       = false;
-			attrib["compiler"] = "c";
-			attrib["linker"]   = "ld";
+			attrib.pop("mode");
+			attrib.pop("ar");
+			attrib.pop("compiler");
+			attrib.pop("linker");
 			local linker_flags = attrib.setdefault("linker_flags",[]);
 			for (local x: pe_linker_flags) linker_flags.remove(x);
 			return true;
 			
 		case "pe":
+		case "i386-pe":
 			/* Set attributes to compile under PE mode */
 			local defs = attrib.setdefault("define",dict {});
 			defs["__PE__"]                   = "1";
 			defs["__SYMBOL_NEED_UNDERSCORE"] = "1";
 			defs["__USER_LABEL_PREFIX__"]    = "_";
 			defs.pop("__ELF__",none);
-			attrib["pe"]       = true;
+			attrib["mode"]     = "i386-pe";
 			attrib["compiler"] = "c-pe";
 			attrib["linker"]   = "ld-pe";
+			attrib["ar"]       = "ar-pe";
 			local linker_flags = attrib.setdefault("linker_flags",[]);
 			for (local x: pe_linker_flags) {
 				if (x !in linker_flags)
@@ -737,26 +746,36 @@ function create_libfile(libpaths,lib) {
 	return "-l"+lib;
 }
 
-function get_proj_libs(libpaths,libs,pe_mode) {
-	if (pe_mode) {
-		/* Must locate the correct .so file & create missing .lib files. */
-		for (local l: libs) {
-			yield create_libfile(libpaths,l);
+function get_proj_libs(libpaths,libs,mode) {
+	for (local l: libs) {
+		/* Scan for static libraries. */
+		local static_name = get_static_lib_name(l,mode);
+		for (local p: libpaths) {
+			local absfile = fs::path::join(p,static_name);
+			if (fs::isfile(absfile)) {
+				yield absfile;
+				goto next;
+			}
 		}
-	} else {
-		for (local l: libs) {
+		if (is_pe_mode(mode)) {
+			/* Must locate the correct .so file & create missing .lib files. */
+			yield create_libfile(libpaths,l);
+		} else {
 			yield "-l"+l;
 		}
+next:;
 	}
 }
 
 function compile_userland_app(name,proj) {
 	local objects = proj.objects;
 	// Userland application
-	local output = "bin/userland/"+name;
+	local options = proj.options;
+	local mode = options.get("mode",default_mode);
+	local output = "bin/userland/"+options.get("name",name);
 	local libs = proj.libs;
-	local no = proj.options.get("no",[]);
-	local linker = proj.options.get("compiler","c");
+	local no = options.get("no",[]);
+	local linker = options.get("compiler","c");
 	if ("libc" !in no) {
 		libs.remove("c");
 		if ("_start" !in no) {
@@ -792,9 +811,9 @@ do_compile_userland:
 		"-o",output,(optimize ? ["-O2"] : [])...,
 		"-nostdlib",
 		(for (local l: libpaths) "-L"+l)...,
-		proj.options.get("linker_flags",[])...,
+		options.get("linker_flags",[])...,
 		objects...,
-		get_proj_libs(libpaths,libs,proj.options.get("pe",false))...,
+		get_proj_libs(libpaths,libs,mode)...,
 		// "-llibc",
 		// "-lgcc",
 		// "-lfdlibm",
@@ -810,15 +829,19 @@ do_compile_userland:
 
 function compile_static_library(name,proj) {
 	local objects = proj.objects;
-	local output = "bin/libs/lib"+name+".a";
+	local options = proj.options;
+	local used_name = options.get("name",name);
+	local output = "bin/libs/"+get_static_lib_name(
+		used_name,options.get("mode",default_mode));
 	if (fs::exists(output) && !any_file_newer_than(
 		objects,fast_getmtime(output))) return false;
-	local p = process(executables["ar"],[
+	local p = process(executables[options.get("ar","ar")],[
+		options.get("ar_flags",[])...,
 		"rcs",output,objects...,
 	]);
 	_force_changed_files.append(output);
 	print "Re-linking:",repr output;
-	changed_libs.append(name);
+	changed_libs.append(used_name);
 	run_compiler_process(p);
 	return true;
 }
@@ -826,10 +849,12 @@ function compile_static_library(name,proj) {
 function compile_shared_library(name,proj) {
 	local objects = proj.objects;
 	// Userland application
-	local output = "bin/libs/lib"+name+".so";
+	local options = proj.options;
+	local mode = options.get("mode",default_mode);
+	local output = "bin/libs/lib"+options.get("name",name)+".so";
 	local libs = proj.libs;
-	local no = proj.options.get("no",[]);
-	local linker = proj.options.get("linker","ld");
+	local no = options.get("no",[]);
+	local linker = options.get("linker","ld");
 	if ("libc" !in no) {
 		libs.remove("c");
 		if (name != "c") libs.append("c");
@@ -861,9 +886,8 @@ do_compile_sharedlib:
 		(for (local l: libpaths) "-L"+l)...,
 		//"-static-libgcc",(optimize ? ["-O2"] : [])...,
 		"-nostdlib","-shared","-o",output,
-		proj.options.get("linker_flags",[])...,
-		objects...,
-		get_proj_libs(libpaths,libs,proj.options.get("pe",false))...,
+		options.get("linker_flags",[])...,objects...,
+		get_proj_libs(libpaths,libs,mode)...,
 	]);
 	_force_changed_files.append(output);
 	print "Re-linking:",repr output;
@@ -915,7 +939,7 @@ do_compile_kernel:
 				(for (local l: libpaths) "-L"+l)...,
 				proj.options.get("flags",[])...,
 				objects...,
-				(for (local l: libs) "-l"+l)...,
+				get_proj_libs(libpaths,libs,default_mode)...,
 			]);
 			_force_changed_files.append(output);
 			print "Re-linking:",repr output;

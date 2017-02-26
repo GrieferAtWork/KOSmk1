@@ -42,6 +42,10 @@ extern void __libc_init(void);
 extern void __libc_get_argv(struct args *a);
 
 
+#ifdef __PE__
+void __main(void) {}
+#endif
+
 void _start(void) {
  struct args av;
 

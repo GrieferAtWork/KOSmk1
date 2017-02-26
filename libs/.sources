@@ -41,6 +41,7 @@
 # Statically linked against any ring-3 application
 # >> This library implements the '_start' function that eventually calls main()
 [project = lib:static:_start] { ./_start/start.c; }
+[pe][project = lib:static:_pe_start][name = _start] { ./_start/start.c; }
 
 # Various shared libraries
 [project = lib:shared:fdlibm]  [diskfile = /usr/lib/libfdlibm.so] [define(lint = 1)] \
