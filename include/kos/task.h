@@ -617,7 +617,13 @@ __local _syscall3(kerrno_t,ktask_fexec,int,fd,
 #endif
 
 #define KTASK_EXEC_FLAG_NONE       0x00000000
-#define KTASK_EXEC_FLAG_SEARCHPATH 0x00000001 /*< Search $PATH for the given executable (Ignored in fexec). */
+/* Search $PATH for the given executable (Ignored in fexec). */
+#define KTASK_EXEC_FLAG_SEARCHPATH 0x00000001
+/* Use ':' or ';'-separated list $PATHEXT or ".exe" to search for the
+ * executable again if it hasn't been found carrying the specified name.
+ * WARNING: Ignored when the given path is absolute, or
+ *          'KTASK_EXEC_FLAG_SEARCHPATH' isn't set as well. */
+#define KTASK_EXEC_FLAG_RESOLVEEXT 0x00000002
 
 #ifndef __ASSEMBLY__
 struct kexecargs {

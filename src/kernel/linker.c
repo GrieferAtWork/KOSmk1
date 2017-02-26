@@ -39,6 +39,10 @@
 
 __DECL_BEGIN
 
+static char const default_libsearch_paths[] = "/lib:/usr/lib";
+static char const default_pathext[]         = ".exe";
+
+
 ksymhash_t
 ksymhash_of(char const *__restrict text,
             size_t size) {
@@ -717,7 +721,6 @@ again_lookup:
 __crit kerrno_t
 kshlib_openlib(char const *__restrict name, __size_t namemax,
                __ref struct kshlib **__restrict result) {
- static char const default_libsearch_paths[] = "/lib:/usr/lib";
  kerrno_t error; struct kfspathenv env;
  env.env_root = NULL;
  if __likely(KE_ISOK(error = kfspathenv_inituser(&env))) {
@@ -772,20 +775,61 @@ kshlib_openlib(char const *__restrict name, __size_t namemax,
 
 __crit kerrno_t
 kshlib_openexe(char const *__restrict name, __size_t namemax,
-               __ref struct kshlib **__restrict result,
-               int allow_path_search) {
+               __ref struct kshlib **__restrict result, __u32 flags) {
  kerrno_t error; struct kfspathenv env;
+ char *env_path,*env_pathext;
+ size_t env_path_size,env_pathext_size;
  if __unlikely(KE_ISERR(error = kfspathenv_inituser(&env))) return error;
- if (!allow_path_search || (namemax && KFS_ISSEP(name[0]))) {
+ if (!(flags&KTASK_EXEC_FLAG_SEARCHPATH) || (namemax && KFS_ISSEP(name[0]))) {
   /* Absolute executable path (open directly in respect to chroot-prisons). */
   error = kshlib_openfileenv(&env,name,namemax,result,1);
  } else {
-  char *envval; size_t env_size;
   /* Check for process-local environment variable 'PATH'. */
-  error = copyenvstring("PATH",&envval,&env_size);
+  error = copyenvstring("PATH",&env_path,&env_path_size);
   if __unlikely(KE_ISERR(error)) goto end_err;
-  error = kshlib_opensearch(&env,name,namemax,envval,env_size,result,1);
-  free(envval);
+  error = kshlib_opensearch(&env,name,namemax,env_path,env_path_size,result,1);
+  if __unlikely(KE_ISERR(error)) {
+   if (flags&KTASK_EXEC_FLAG_RESOLVEEXT) {
+    char *partstart; size_t partsize;
+    /* Re-scan by appending all parts of "$PATHEXT". */
+    error = copyenvstring("PATHEXT",&env_pathext,&env_pathext_size);
+    if __unlikely(KE_ISERR(error)) {
+     if __unlikely(error != KE_NOENT) goto end_envpath;
+     /* Default to using the hard-coded list of extensions. */
+     env_pathext      = (char *)default_pathext;
+     env_pathext_size = __compiler_STRINGSIZE(default_pathext);
+    }
+    namemax   = strnlen(name,namemax);
+    partstart = env_pathext;
+    while (env_pathext_size) {
+     char *part_end = strnpbrk(partstart,env_pathext_size,":;",2);
+     partsize = part_end ? part_end-partstart : env_pathext_size;
+     assert(partsize <= env_pathext_size);
+     if (partsize) {
+      char *newname; size_t newnamesize;
+      newnamesize = namemax+partsize;
+      /* Concat the extension with the given path. */
+      newname = (char *)malloc((newnamesize+1)*sizeof(char));
+      if __unlikely(newname) { error = KE_NOMEM; goto end_envpathext; }
+      memcpy(newname,name,namemax*sizeof(char));
+      memcpy(newname+namemax,partstart,partsize*sizeof(char));
+      newname[newnamesize] = '\0';
+      /* Perform another scan, this time for the new name. */
+      error = kshlib_opensearch(&env,newname,newnamesize,env_path,env_path_size,result,1);
+      free(newname);
+      if __likely(KE_ISOK(error)) break;
+     }
+     ++partsize;
+     partstart        += partsize;
+     env_pathext_size -= partsize;
+     assert(partstart == part_end+1);
+    }
+end_envpathext:
+    if (env_pathext != (char *)default_pathext) free(env_pathext);
+   }
+  }
+end_envpath:
+  free(env_path);
  }
 end_err:
  kfspathenv_quituser(&env);

@@ -445,12 +445,14 @@ extern __crit __wunused __nonnull((1,3)) kerrno_t
 kshlib_openlib(char const *__restrict name, __size_t namemax,
                __ref struct kshlib **__restrict result);
 
-/* Open a user-level executable as searched for by exec().
- * Looks at the $PATH environment variable of the calling process,
- * but also accepts absolute paths. */
+//////////////////////////////////////////////////////////////////////////
+// Open a user-level executable as searched for by exec().
+// Looks at the $PATH environment variable of the calling process,
+// but also accepts absolute paths.
+// @param: flags: A set of 'KTASK_EXEC_FLAG_*'
 extern __crit __wunused __nonnull((1,3)) kerrno_t
 kshlib_openexe(char const *__restrict name, __size_t namemax,
-               __ref struct kshlib **__restrict result, int allow_path_search);
+               __ref struct kshlib **__restrict result, __u32 flags);
 
 
 extern __crit __wunused __nonnull((1,2,4,6)) kerrno_t

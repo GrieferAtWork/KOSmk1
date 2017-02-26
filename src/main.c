@@ -60,7 +60,7 @@ void run_init(void) {
  process = kproc_newroot();
  assert(process);
  asserte(KE_ISOK(kproc_locks(process,KPROC_LOCK_SHM|KPROC_LOCK_MODS)));
- error = kshlib_openexe(path,(size_t)-1,&lib,1);
+ error = kshlib_openexe(path,(size_t)-1,&lib,KTASK_EXEC_FLAG_NONE);
  assertf(KE_ISOK(error),"%d",error);
  error = kproc_insmod_unlocked(process,lib,&modid);
  assertf(KE_ISOK(error),"%d",error);
