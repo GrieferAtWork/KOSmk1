@@ -31,6 +31,7 @@
 #include <stdint.h>
 #include <kos/kernel/procmodules.h>
 #include <kos/kernel/proc.h>
+#include <windows/pe.h>
 
 __DECL_BEGIN
 
@@ -140,13 +141,13 @@ kreloc_elf32_rel_exec(Elf32_Rel const *relv, size_t relc,
   }
   sym = symbols->sl_symv[symbol];
   kassertobjnull(sym);
+#define PGETMEM(dst,addr,size) \
+ if (!kshm_copyfromuser(memspace,dst,addr,size));else\
+     LOG(KLOG_ERROR,"[CMD %Iu] failed: memcpy(k:%p,u:%p,%Iu)\n",\
+         iter-relv,dst,addr,size)
 #define GETMEM(T,addr) \
  __xblock({ T __inst; \
-            if (kshm_copyfromuser(memspace,&__inst,addr,sizeof(T))) {\
-             LOG(KLOG_ERROR,"[CMD %Iu] failed: memcpy(k:%p,u:%p,%Iu)\n",\
-                 iter-relv,&__inst,addr,sizeof(T));\
-             __inst = 0;\
-            }\
+            PGETMEM(&__inst,addr,sizeof(__inst)),__inst = 0;\
             __xreturn __inst;\
  })
 #define SETMEM(dst,src,s) \
@@ -270,6 +271,71 @@ kreloc_pe_import_exec(struct krelocvec const *__restrict self,
 }
 
 __local void
+kreloc_pe32_reloc_exec(struct krelocvec const *__restrict self,
+                       struct kshm *__restrict memspace,
+                       struct kproc *__restrict proc,
+                       struct kprocmodule *__restrict reloc_module,
+                       struct kprocmodule *__restrict start_module) {
+#define relv  self->rv_pe32_reloc.rpr_offv
+ __u16 *iter,*end,mode,offset,temp16;
+ __u32 temp32,base,delta; __u64 temp64; __user void *absaddr;
+ /* NOTE: Since we always added module_base to everything,
+  *       we have essentially aligned everything to NULL.
+  *       With that in mind, a shift to any address other
+  *       than NULL implies that address as delta. */
+ delta = reloc_module->pm_base32/*-0*/;
+ if __unlikely(!delta) return; /* No relocation required. */
+ end = (iter = self->rv_pe32_reloc.rpr_offv)+self->rv_relc;
+ /* New base address of this relocation 'block'.
+  * >> This is the module base address plus the relocation base. */
+ base = reloc_module->pm_base32+self->rv_pe32_reloc.rpr_base;
+ for (; iter != end; ++iter) {
+  mode = *iter;
+  /* Offset within the block. */
+  offset = mode & 0xfff;
+  mode >>= 12;
+  /* NOTE: This relocation interpreter is based on stuff found here:
+   * https://katjahahn.github.io/PortEx/javadocs/com/github/katjahahn/parser/sections/reloc/RelocType.html
+   * https://opensource.apple.com/source/emacs/emacs-56/emacs/nt/preprep.c.auto.html
+   */
+  absaddr = (__user void *)(base+offset);
+  switch (mode) {
+   case IMAGE_REL_BASED_ABSOLUTE:
+    /* 'The base relocation is skipped' */
+    break;
+
+   case IMAGE_REL_BASED_HIGHLOW:
+   case IMAGE_REL_BASED_HIGHADJ:
+    temp32  = GETMEM(__u32,absaddr);
+    temp32 += delta;
+    SETMEM(absaddr,&temp32,sizeof(__u32));
+    break;
+
+   case IMAGE_REL_BASED_LOW:
+   case IMAGE_REL_BASED_HIGH:
+    temp16  = GETMEM(__u16,absaddr);
+    temp16 += (__u16)((mode == IMAGE_REL_BASED_LOW) ? (delta & 0xffff) : ((delta & 0xffff0000) >> 16));
+    SETMEM(absaddr,&temp16,sizeof(__u16));
+    break;
+
+   case IMAGE_REL_BASED_DIR64:
+    temp64  = GETMEM(__u64,absaddr);
+    temp64 += delta;
+    SETMEM(absaddr,&temp64,sizeof(__u64));
+    break;
+
+   case IMAGE_REL_BASED_SECTION: /* TODO */
+   case IMAGE_REL_BASED_REL32: /* TODO */
+   default:
+    LOG(KLOG_ERROR,"[PE][CMD %Iu] Unsupported relocation command %I16u\n",
+        iter-relv,mode);
+    break;
+  }
+ }
+#undef relv
+}
+
+__local void
 krelocvec_exec(struct krelocvec *__restrict self,
                struct ksymlist *__restrict symbols,
                struct kshm *__restrict memspace,
@@ -286,6 +352,9 @@ krelocvec_exec(struct krelocvec *__restrict self,
    break;
   case KRELOCVEC_TYPE_PE_IMPORT:
    kreloc_pe_import_exec(self,memspace,proc,reloc_module,start_module);
+   break;
+  case KRELOCVEC_TYPE_PE32_RELOC:
+   kreloc_pe32_reloc_exec(self,memspace,proc,reloc_module,start_module);
    break;
   default: __builtin_unreachable(); break;
  }

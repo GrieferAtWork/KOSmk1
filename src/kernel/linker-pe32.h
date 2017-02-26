@@ -53,11 +53,19 @@ kshlib_pe32_parseexports(struct kshlib *__restrict self,
                          __size_t max_descrc, struct kfile *__restrict pe_file,
                          __uintptr_t image_base);
 
+extern __crit __wunused kerrno_t
+ksecdata_pe32_parsereloc(struct ksecdata *__restrict self,
+                         struct kreloc *__restrict reloc,
+                         IMAGE_DATA_DIRECTORY const *dir,
+                         struct kfile *__restrict pe_file,
+                         __uintptr_t image_base);
+
 
 //////////////////////////////////////////////////////////////////////////
 // Load shared library data from a given file.
-extern __crit __wunused __nonnull((1,2,4)) kerrno_t
+extern __crit __wunused __nonnull((1,2,3,5)) kerrno_t
 ksecdata_pe32_init(struct ksecdata *__restrict self,
+                   struct kreloc *__restrict reloc,
                    IMAGE_SECTION_HEADER const *__restrict headerv,
                    __size_t headerc, struct kfile *__restrict pe_file,
                    __uintptr_t image_base);

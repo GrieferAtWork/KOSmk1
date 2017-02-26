@@ -14,6 +14,7 @@
 [project = userland:snake]        [diskfile = /bin/snake]        { ./snake.c; }
 [pe] {
 	[project = userland:pe-test] [diskfile = /bin/pe-test] { ./pe-test.c; }
+	[project = lib:shared:pe-lib][diskfile = /usr/lib/pe-lib.dll][libs(_start)] { ./pe-test.c; }
 }
 
 

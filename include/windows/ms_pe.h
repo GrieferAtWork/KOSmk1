@@ -316,6 +316,24 @@ typedef struct _IMAGE_IMPORT_BY_NAME {
     BYTE Name[1];
 } IMAGE_IMPORT_BY_NAME,*PIMAGE_IMPORT_BY_NAME;
 
+typedef struct _IMAGE_BASE_RELOCATION {
+    DWORD   VirtualAddress;
+    DWORD   SizeOfBlock;
+  //WORD    TypeOffset[1];
+} IMAGE_BASE_RELOCATION, *PIMAGE_BASE_RELOCATION;
+
+#define IMAGE_REL_BASED_ABSOLUTE         0
+#define IMAGE_REL_BASED_HIGH             1
+#define IMAGE_REL_BASED_LOW              2
+#define IMAGE_REL_BASED_HIGHLOW          3
+#define IMAGE_REL_BASED_HIGHADJ          4
+#define IMAGE_REL_BASED_MIPS_JMPADDR     5
+#define IMAGE_REL_BASED_SECTION          6
+#define IMAGE_REL_BASED_REL32            7
+#define IMAGE_REL_BASED_MIPS_JMPADDR16   9
+#define IMAGE_REL_BASED_IA64_IMM64       9
+#define IMAGE_REL_BASED_DIR64            10
+
 
 __COMPILER_PACK_POP
 __NOCLAIM_END

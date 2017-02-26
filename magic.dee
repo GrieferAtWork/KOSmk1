@@ -94,7 +94,7 @@ local executables = dict {
 	"i686-pe-asm"        : EXE("i686-pc-cygwin-gcc"),
 	"i686-pe-c"          : EXE("i686-pc-cygwin-gcc"),
 	"i686-pe-ar"         : EXE("i686-pc-cygwin-gcc-ar"),
-	"i686-pe-ld"         : EXE("i686-pc-cygwin-ld"),
+	"i686-pe-ld"         : EXE("i686-pc-cygwin-gcc"),
 	"i686-pe-cxx"        : EXE("i686-pc-cygwin-g++"),
 	"i686-pe-addr2line"  : EXE("i686-pc-cygwin-addr2line"),
 #ifdef __WINDOWS__
@@ -591,7 +591,13 @@ function parse_data_block(path,attrib,text,fp_last_changed) {
 			text = text[attrib_end+1:].strip();
 		}
 		if (text.startswith("{")) {
-			local block_end = text.rindex("}");
+			local block_end = 1,recursion = 1;
+			for (; block_end < #text; ++block_end) {
+				if (text[block_end] == "{") ++recursion;
+				else if (text[block_end] == "}") {
+					if (!--recursion) break;
+				}
+			}
 			yield parse_data_block(path,used_attrib,text[1:block_end].strip(),fp_last_changed)...;
 			text = text[block_end+1:].strip();
 		} else {
@@ -869,7 +875,9 @@ function compile_shared_library(name,proj) {
 	// Userland application
 	local options = proj.options;
 	local mode = options.get("mode",default_mode);
-	local output = "bin/libs/lib"+options.get("name",name)+".so";
+	local output = "bin/libs/lib"+
+		options.get("name",name)+
+		fs::path::ext(options.get("diskfile",".so"));
 	local libs = proj.libs;
 	local no = options.get("no",[]);
 	local linker = options.get("linker",default_ld);

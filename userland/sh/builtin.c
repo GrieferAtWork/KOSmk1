@@ -136,14 +136,16 @@ int builtin_exit(int argc, char *argv[]) {
 
 int builtin_color(int argc, char *argv[]) {
 #if 1
- mod_t m = mod_open("/bin/pe-test");
+ mod_t md;
+ //md = mod_open("/bin/pe-test");
+ md = mod_open("/usr/lib/pe-lib.dll");
  void (*callback)(void);
- if (m == MOD_ERR) perror("mod_open");
+ if (md == MOD_ERR) perror("mod_open");
  else {
-  *(void **)&callback = mod_sym(m,"exported_function");
+  *(void **)&callback = mod_sym(md,"exported_function");
   if (!callback) perror("mod_sym");
   else (*callback)();
-  mod_close(m);
+  mod_close(md);
  }
 #else
  dprintf(STDOUT_FILENO,

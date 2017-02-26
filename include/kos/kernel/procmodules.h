@@ -52,7 +52,10 @@ struct kprocmodule {
 #define KPROCMODULE_FLAG_RELOC 0x00000001 /*< [set_once] Module was relocated. */
  __u32                      pm_flags;   /*< Module flags. */
  __ref struct kshlib       *pm_lib;     /*< [0..1] Shared library associated with this module (NULL for unloaded modules). */
+union{
  __pagealigned __user void *pm_base;    /*< The base address at which this module is mapped. */
+ __pagealigned __user __u32 pm_base32;  /*< The base address (32-bit mode only). */
+};
  kmodid_t                  *pm_depids;  /*< [0..pm_lib->sh_deps.sl_libc][owned] Vector of module ids for dependencies. */
 };
 

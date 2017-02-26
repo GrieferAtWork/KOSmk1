@@ -225,7 +225,8 @@ kshlib_pe32_parseexports(struct kshlib *__restrict self,
  kassertmem(descrv,max_descrc*sizeof(IMAGE_IMPORT_DESCRIPTOR));
  end = (iter = descrv)+max_descrc;
  do {
-  num_exports = min(iter->NumberOfFunctions,iter->NumberOfNames);
+  num_exports = min(iter->NumberOfFunctions,
+                    iter->NumberOfNames);
   if (num_exports) {
    funp_iter = image_base+iter->AddressOfFunctions;
    namp_iter = image_base+iter->AddressOfNames;
@@ -258,6 +259,7 @@ kshlib_pe32_parseexports(struct kshlib *__restrict self,
 
 __crit kerrno_t
 ksecdata_pe32_init(struct ksecdata *__restrict self,
+                   struct kreloc *__restrict reloc,
                    IMAGE_SECTION_HEADER const *__restrict headerv,
                    size_t headerc, struct kfile *__restrict pe_file,
                    uintptr_t image_base) {
@@ -277,15 +279,20 @@ ksecdata_pe32_init(struct ksecdata *__restrict self,
  iter = self->ed_secv;
  head_end = (head_iter = headerv)+headerc;
  for (; head_iter != head_end; ++head_iter) {
-  if (head_iter->Misc.VirtualSize) {
+  if (head_iter->Misc.VirtualSize &&
+    !(head_iter->Characteristics&(IMAGE_SCN_LNK_INFO|IMAGE_SCN_LNK_REMOVE))) {
    assert(iter != self->ed_secv+self->ed_secc);
    pages = ceildiv(head_iter->Misc.VirtualSize,PAGESIZE);
    flags = KSHMREGION_FLAG_NONE;
 #define CHARACTERISTIC(f) ((head_iter->Characteristics&(f))==(f))
    if (CHARACTERISTIC(IMAGE_SCN_MEM_SHARED))  flags |= KSHMREGION_FLAG_SHARED;
-   if (CHARACTERISTIC(IMAGE_SCN_MEM_EXECUTE)) flags |= KSHMREGION_FLAG_EXEC;
-   if (CHARACTERISTIC(IMAGE_SCN_MEM_READ))    flags |= KSHMREGION_FLAG_READ;
    if (CHARACTERISTIC(IMAGE_SCN_MEM_WRITE))   flags |= KSHMREGION_FLAG_WRITE;
+   if (head_iter->Characteristics&
+      (IMAGE_SCN_MEM_READ|IMAGE_SCN_CNT_INITIALIZED_DATA)
+       ) flags |= KSHMREGION_FLAG_READ;
+   if (head_iter->Characteristics&
+      (IMAGE_SCN_MEM_EXECUTE|IMAGE_SCN_CNT_CODE)
+       ) flags |= KSHMREGION_FLAG_EXEC;
 #undef CHARACTERISTIC
    /* Allocate a region big enough to support this section. */
    region = kshmregion_newram(pages,flags);
@@ -313,9 +320,19 @@ ksecdata_pe32_init(struct ksecdata *__restrict self,
                        ,(kshmregion_getflags(region)&KSHMREGION_FLAG_READ) ? 'R' : '-'
                        ,(kshmregion_getflags(region)&KSHMREGION_FLAG_WRITE) ? 'W' : '-'
                        ,(kshmregion_getflags(region)&KSHMREGION_FLAG_EXEC) ? 'X' : '-');
+#if 0
+   if (head_iter->PointerToRelocations &&
+       head_iter->NumberOfRelocations) {
+    /* Relocations. */
+    error = ksecdata_pe32_parsereloc(self,reloc,
+                                     head_iter->Characteristics,
+                                     head_iter->PointerToRelocations,
+                                     head_iter->NumberOfRelocations,0,
+                                     pe_file,image_base);
+    if __unlikely(KE_ISERR(error)) goto err_region;
+   }
+#endif
    ++iter;
-   /* TODO: Relocations. */
-   // head_iter->PointerToRelocations;
   }
  }
  assert(iter == self->ed_secv+self->ed_secc);
@@ -329,6 +346,52 @@ err_iter:
  }
  free(self->ed_secv);
  return error;
+}
+
+__crit __wunused kerrno_t
+ksecdata_pe32_parsereloc(struct ksecdata *__restrict self,
+                         struct kreloc *__restrict reloc,
+                         IMAGE_DATA_DIRECTORY const *dir,
+                         struct kfile *__restrict pe_file,
+                         __uintptr_t image_base) {
+ IMAGE_BASE_RELOCATION rel;
+ ksymaddr_t block_iter = image_base+(ksymaddr_t)dir->VirtualAddress;
+ ksymaddr_t block_end = block_iter+dir->Size;
+ while (block_iter != block_end) {
+  assert(block_iter <= block_end);
+  if __unlikely(ksecdata_getmem(self,block_iter,&rel,sizeof(rel))) break;
+  if ((block_iter += sizeof(rel)) >= block_end) break;
+  if (rel.SizeOfBlock > sizeof(rel)) {
+   /* Extract the relocation vector. */
+   struct krelocvec *relocation_entry;
+   size_t real_block_size,block_size; __u16 *block,*newblock;
+   real_block_size = block_size = min(block_end-block_iter,rel.SizeOfBlock-sizeof(rel));
+   assert(block_size);
+   block = (__u16 *)malloc(block_size);
+   if __unlikely(!block) return KE_NOMEM;
+   real_block_size -= ksecdata_getmem(self,block_iter,block,block_size);
+   real_block_size &= ~((size_t)(sizeof(__u16)-1)); /*< Align the block size to 2-byte. */
+   assert(real_block_size <= block_size);
+   if __unlikely(real_block_size != block_size) {
+    if (!real_block_size) { free(block); continue; }
+    newblock = (__u16 *)realloc(block,real_block_size);
+    if __likely(newblock) block = newblock;
+   }
+   /* We've extracted the block. - Now to install it as a relocation. */
+   relocation_entry = kreloc_alloc(reloc);
+   if __unlikely(!relocation_entry) { free(block); return KE_NOMEM; }
+   relocation_entry->rv_type                = KRELOCVEC_TYPE_PE32_RELOC;
+   relocation_entry->rv_relc                = real_block_size/sizeof(__u16);
+   relocation_entry->rv_pe32_reloc.rpr_offv = block; /* Inherit vector. */
+   relocation_entry->rv_pe32_reloc.rpr_base = image_base+(ksymaddr_t)rel.VirtualAddress;
+   k_syslogf_prefixfile(KLOG_DEBUG,pe_file,"Parsed relocations: %Iu offset of %p\n",
+                        relocation_entry->rv_relc,
+                        relocation_entry->rv_pe32_reloc.rpr_base);
+   /* Continue on with the next block. */
+   block_iter += block_size;
+  }
+ }
+ return KE_OK;
 }
 
 
@@ -427,11 +490,19 @@ kshlib_pe32_new(struct kshlib **__restrict result,
                                file_header.FileHeader.NumberOfSections*
                                sizeof(IMAGE_SECTION_HEADER));
  if __unlikely(KE_ISERR(error)) goto err_secheaders;
- error = ksecdata_pe32_init(&lib->sh_data,section_headers,
+ error = ksecdata_pe32_init(&lib->sh_data,&lib->sh_reloc,section_headers,
                             file_header.FileHeader.NumberOfSections,
                             pe_file,image_base);
  free(section_headers); /* Set to NULL to trick cleanup code. */
  if __unlikely(KE_ISERR(error)) goto err_reloc;
+
+ if (HAS_DATADIR(IMAGE_DIRECTORY_ENTRY_BASERELOC)) {
+  /* Parse more relocations... */
+  error = ksecdata_pe32_parsereloc(&lib->sh_data,&lib->sh_reloc,
+                                   &DATADIR(IMAGE_DIRECTORY_ENTRY_BASERELOC),
+                                   pe_file,image_base);
+  if __unlikely(KE_ISERR(error)) goto err_reloc;
+ }
 
  /* Parse Imports. */
  if (HAS_DATADIR(IMAGE_DIRECTORY_ENTRY_IMPORT)) {

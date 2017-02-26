@@ -193,11 +193,17 @@ struct kreloc_peimport {
  struct kshlib   *rpi_hint;  /*< [0..1] Hint pointer describing the first library to scan for imports. */
  ksymaddr_t       rpi_thunk; /*< Symbol address of 'FirstThunk' (Array of pointers to imported functions). */
 };
+struct kreloc_pereloc32 {
+ __u16           *rpr_offv;  /*< [0..:rv_relc][owned] Vector of symbol type & offset (this is IMAGE_BASE_RELOCATION::TypeOffset) */
+ ksymaddr_t       rpr_base;  /*< Section base (Added to offsets to find ksymaddr_t for '__u32 *' to which a delta is added) */
+};
+
 
 struct krelocvec {
 #define KRELOCVEC_TYPE_ELF32_REL  0
 #define KRELOCVEC_TYPE_ELF32_RELA 1
 #define KRELOCVEC_TYPE_PE_IMPORT  2
+#define KRELOCVEC_TYPE_PE32_RELOC 3
  __u32        rv_type; /*< Type of relocation vector (one of 'KRELOCVEC_TYPE_*') */
  __size_t     rv_relc; /*< Amount of relocation entries. */
  union{
@@ -205,6 +211,7 @@ struct krelocvec {
   Elf32_Rel  *rv_elf32_relv;  /*< [0..rv_relc] ELF-32 relocations. */
   Elf32_Rela *rv_elf32_relav; /*< [0..rv_relc] ELF-32 relocations (w/ addend). */
   struct kreloc_peimport rv_pe; /*< PE import relocations. */
+  struct kreloc_pereloc32 rv_pe32_reloc; /*< 32-bit PE relocations. */
  };
 };
 struct kreloc {
