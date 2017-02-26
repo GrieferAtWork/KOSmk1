@@ -19,16 +19,16 @@
 
 # Nano
 #[project = userland:nano][diskfile = /bin/nano][libs(curses)] \
-#[flags(-include strings.h)]\
-#[define(\
-#   HAVE_VSNPRINTF = 1\
-#  ,HAVE_LIMITS_H = 1\
-#  ,HAVE_STDARG_H = 1\
-#  ,HAVE_ISBLANK = 1\
-#  ,HAVE_STRCASECMP = 1\
-#  ,HAVE_STRNCASECMP = 1\
-#  ,HAVE_STRCASESTR = 1\
-#  ,NANO_TINY = 1\
-#  ,RETSIGTYPE = int\
-#  ,DISABLE_COLOR = 1\
-#)] { ./nano/*.c; }
+[flags(-include strings.h)]\
+[define(\
+   HAVE_VSNPRINTF = 1\
+  ,HAVE_LIMITS_H = 1\
+  ,HAVE_STDARG_H = 1\
+  ,HAVE_ISBLANK = 1\
+  ,HAVE_STRCASECMP = 1\
+  ,HAVE_STRNCASECMP = 1\
+  ,HAVE_STRCASESTR = 1\
+  ,NANO_TINY = 1\
+  ,RETSIGTYPE = int\
+  ,DISABLE_COLOR = 1\
+)] { ./nano/*.c; }

@@ -30,6 +30,11 @@
 #include <kos/task.h>
 #include <kos/syslog.h>
 
+__public void exported_function(void) {
+ printf("very secret callback...\n");
+}
+
+
 int main(int argc, char *argv[]) {
  int i;
  for (i = 0; i < 20; ++i) {

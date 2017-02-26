@@ -41,7 +41,6 @@
 #include <thread>
 
 local arch = "i386";
-local arch_toolchain = "i686";
 local verbose = 0;
 local force = false;
 local force_disk = false;
@@ -59,13 +58,11 @@ local addr2line_exe = "bin/kos_kernel.bin";
 local kernel_args = [];
 local rebuild_on_dot_sources_changed = false;
 //local addr2line_exe = "bin/userland/ls";
-local const default_mode = "i386-elf";
 
 // Amount of parallel instance of gcc
 // >> Drastically reduces compilation time
 local max_compilers_processes = 8;
 
-// Paths
 #ifdef __WINDOWS__
 #define EXE(x) x ".exe"
 #else
@@ -77,30 +74,36 @@ local max_compilers_processes = 8;
 //local old_path = fs::getenv("PATH");
 fs::setenv("PATH",fs::getenv("PATH")+";D:\\cygwin32\\bin");
 
+
+local const default_mode      = "i386-elf";
+local const default_c         = "i686-elf-c";
+local const default_ar        = "i686-elf-ar";
+local const default_ld        = "i686-elf-ld";
+local const default_asm       = "i686-elf-asm";
+local const default_addr2line = "i686-elf-addr2line";
+
+#define is_asm_compiler(x) ((x).endswith("asm"))
+// Paths to used executables
 local executables = dict {
-	"asm"          : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc"),
-	"c"            : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-gcc"),
-	"ar"           : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ar"),
-	"ld"           : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-ld"),
-	"cxx"          : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-g++"),
-	"addr2line"    : EXE("binutils/build-binutils-"+arch_toolchain+"-elf/bin/"+arch_toolchain+"-elf-addr2line"),
-	"asm-pe"       : "i686-pc-cygwin-gcc.exe",
-	"c-pe"         : "i686-pc-cygwin-gcc.exe",
-	"ar-pe"        : "i686-pc-cygwin-gcc-ar.exe",
-	"ld-pe"        : "i686-pc-cygwin-ld.exe",
-	"cxx-pe"       : "i686-pc-cygwin-g++.exe",
-	"addr2line-pe" : "i686-pc-cygwin-addr2line.exe",
-	"dlltool"      : "D:\\cygwin32\\bin\\dlltool.exe",
+	"i686-elf-asm"       : EXE("binutils/build-binutils-i686-elf/bin/i686-elf-gcc"),
+	"i686-elf-c"         : EXE("binutils/build-binutils-i686-elf/bin/i686-elf-gcc"),
+	"i686-elf-ar"        : EXE("binutils/build-binutils-i686-elf/bin/i686-elf-ar"),
+	"i686-elf-ld"        : EXE("binutils/build-binutils-i686-elf/bin/i686-elf-ld"),
+	"i686-elf-cxx"       : EXE("binutils/build-binutils-i686-elf/bin/i686-elf-g++"),
+	"i686-elf-addr2line" : EXE("binutils/build-binutils-i686-elf/bin/i686-elf-addr2line"),
+	"i686-pe-asm"        : EXE("i686-pc-cygwin-gcc"),
+	"i686-pe-c"          : EXE("i686-pc-cygwin-gcc"),
+	"i686-pe-ar"         : EXE("i686-pc-cygwin-gcc-ar"),
+	"i686-pe-ld"         : EXE("i686-pc-cygwin-ld"),
+	"i686-pe-cxx"        : EXE("i686-pc-cygwin-g++"),
+	"i686-pe-addr2line"  : EXE("i686-pc-cygwin-addr2line"),
 #ifdef __WINDOWS__
-	"mkisofs"      : "binutils/build-mkisofs-md5-2.01/mkisofs.exe",
-	"qemu"         : "D:\\qemu\\qemu-system-i386.exe",
+	"mkisofs"            : "binutils/build-mkisofs-md5-2.01/mkisofs.exe",
+	"qemu-system-i386"   : "D:\\qemu\\qemu-system-i386.exe",
 #else
-	"mkisofs"      : "mkisofs",
-	"qemu"         : "qemu-system-i386",
+	"mkisofs"            : "mkisofs",
 #endif
 };
-
-fs::chdir(fs::path::head(__FILE__));
 
 local default_sources_files = list {
 	"src/.sources",
@@ -112,6 +115,7 @@ local sources_files = default_sources_files;
 local default_attrib = dict {
 	.define = {
 		"__"+arch+"__"      : "1",
+		/* Emulate some tpp-style extensions. */
 		"__DATE_DAY__"      : str __DATE_DAY__,
 		"__DATE_WDAY__"     : str __DATE_WDAY__,
 		"__DATE_YDAY__"     : str __DATE_YDAY__,
@@ -122,7 +126,7 @@ local default_attrib = dict {
 		"__TIME_SEC__"      : str __TIME_SEC__,
 		"_FILE_OFFSET_BITS" : "64",
 	},
-	.libs = list {},
+	//.libs = list {},
 	.flags = list {
 		// "-std=gnu99",
 		"-ffreestanding",
@@ -137,7 +141,56 @@ local default_attrib = dict {
 	},
 };
 
-//executables["c"] = executables["cxx"];
+#define is_pe_mode(x)                 ("pe" in (x))
+#define get_static_lib_name(lib,mode) ((mode)+"-"+(lib)+".a")
+
+function parse_attrib_marker(attrib,marker) {
+	local pe_linker_flags = ["-Wl,-e__start"];
+	switch (marker) {
+		case "elf":
+			marker = "i386-elf";
+		case "i386-elf":
+		case "i686-elf":
+			/* Set attributes to compile under ELF mode */
+			local defs = attrib.setdefault("define",dict {});
+			defs["__ELF__"] = "1";
+			defs.pop("__SYMBOL_NEED_UNDERSCORE",none);
+			defs.pop("__USER_LABEL_PREFIX__",none);
+			defs.pop("__PE__",none);
+			attrib["mode"] = marker;
+			attrib.pop("ar");
+			attrib.pop("compiler");
+			attrib.pop("linker");
+			local linker_flags = attrib.setdefault("linker_flags",[]);
+			for (local x: pe_linker_flags) linker_flags.remove(x);
+			return true;
+			
+		case "pe":
+			marker = "i386-pe";
+		case "i386-pe":
+		case "i686-pe":
+			/* Set attributes to compile under PE mode */
+			local defs = attrib.setdefault("define",dict {});
+			defs["__PE__"]                   = "1";
+			defs["__SYMBOL_NEED_UNDERSCORE"] = "1";
+			defs["__USER_LABEL_PREFIX__"]    = "_";
+			defs.pop("__ELF__",none);
+			attrib["mode"]     = marker;
+			attrib["compiler"] = "i686-pe-c";
+			attrib["linker"]   = "i686-pe-ld";
+			attrib["ar"]       = "i686-pe-ar";
+			local linker_flags = attrib.setdefault("linker_flags",[]);
+			for (local x: pe_linker_flags) {
+				if (x !in linker_flags)
+					linker_flags.append(x);
+			}
+			return true;
+		default:
+			break;
+	}
+	return false;
+}
+
 
 function help() {
 	print "Usage: deemon magic.dee [ARGS...] [DOT-SOURCES...] [:KERNEL-ARGS...]";
@@ -235,11 +288,18 @@ if (args) {
 			break;
 		}
 	}
+	/* Turn dot-source files into absolute paths, so we can chdir into the root folder. */
 	if (args) {
-		sources_files = args;
+		local cwd = fs::getcwd();
+		sources_files = [];
+		sources_files.reserve(#args);
+		for (local a: args) {
+			sources_files.append(fs::path::abs(a,cwd));
+		}
 	}
 }
 
+fs::chdir(fs::path::head(__FILE__));
 
 
 local _force_changed_files = list {};
@@ -396,7 +456,7 @@ class Project {
 local projects = dict {};
 function parse_single_source(path,attrib,filename,fp_last_changed) {
 	local target_arch   = attrib.get("arch","*");
-	local compiler      = attrib.get("compiler","c");
+	local compiler      = attrib.get("compiler",default_c);
 	local libpaths      = attrib.get("libpaths",[]);
 	local libraries     = attrib.get("libs",[]);
 	local more_flags    = attrib.get("flags",[]);
@@ -464,7 +524,7 @@ function parse_single_source(path,attrib,filename,fp_last_changed) {
 	yield pack(project,filename,object_file,executables[compiler],[
 		(for (local x: libpaths) "-L"+x)...,
 		(for (local name,value: defines) "-D"+name+"="+(value ?: "1"))...,
-		((compiler == "asm" || filename.endswith(".S")) ? ["-D__ASSEMBLY__"] : [])...,
+		((is_asm_compiler(compiler) || filename.endswith(".S")) ? ["-D__ASSEMBLY__"] : [])...,
 		(for (local x: include_paths) "-I"+x)...,
 		(optimize ? ["-O3"] : [])...,
 		(ndebug ? ["-DNDEBUG"] : ["-fstack-protector-strong","-g"])...,
@@ -489,53 +549,6 @@ function parse_wmatch_source(path,attrib,filename,fp_last_changed) {
 		yield parse_single_source(path,attrib,filename,fp_last_changed)...;
 	}
 }
-
-#define is_pe_mode(x)                 ("pe" in (x))
-#define get_static_lib_name(lib,mode) ((mode)+"-"+(lib)+".a")
-
-function parse_attrib_marker(attrib,marker) {
-	local pe_linker_flags = ["-Wl,-e__start"];
-	switch (marker) {
-		case "elf":
-		case "i386-elf":
-			/* Set attributes to compile under ELF mode */
-			local defs = attrib.setdefault("define",dict {});
-			defs["__ELF__"] = "1";
-			defs.pop("__SYMBOL_NEED_UNDERSCORE",none);
-			defs.pop("__USER_LABEL_PREFIX__",none);
-			defs.pop("__PE__",none);
-			attrib.pop("mode");
-			attrib.pop("ar");
-			attrib.pop("compiler");
-			attrib.pop("linker");
-			local linker_flags = attrib.setdefault("linker_flags",[]);
-			for (local x: pe_linker_flags) linker_flags.remove(x);
-			return true;
-			
-		case "pe":
-		case "i386-pe":
-			/* Set attributes to compile under PE mode */
-			local defs = attrib.setdefault("define",dict {});
-			defs["__PE__"]                   = "1";
-			defs["__SYMBOL_NEED_UNDERSCORE"] = "1";
-			defs["__USER_LABEL_PREFIX__"]    = "_";
-			defs.pop("__ELF__",none);
-			attrib["mode"]     = "i386-pe";
-			attrib["compiler"] = "c-pe";
-			attrib["linker"]   = "ld-pe";
-			attrib["ar"]       = "ar-pe";
-			local linker_flags = attrib.setdefault("linker_flags",[]);
-			for (local x: pe_linker_flags) {
-				if (x !in linker_flags)
-					linker_flags.append(x);
-			}
-			return true;
-		default:
-			break;
-	}
-	return false;
-}
-
 
 function parse_data_block(path,attrib,text,fp_last_changed) {
 	while (text) {
@@ -696,7 +709,12 @@ function creatediskpath(path) {
 function updatediskfile(path,diskpath) {
 	print "Updating disk:",repr path,"-->",repr diskpath;
 	local p = process("bash",["disk/putfile.sh",path,diskpath]);
-	p.stdout = p.stderr = file.open("NUL");
+	p.stdout = p.stderr = 
+#ifdef __WINDOWS__
+		file.open("NUL");
+#else
+		file.open("/dev/null");
+#endif
 	p.start();
 	local error = p.join();
 	if (error != 0) {
@@ -775,7 +793,7 @@ function compile_userland_app(name,proj) {
 	local output = "bin/userland/"+options.get("name",name);
 	local libs = proj.libs;
 	local no = options.get("no",[]);
-	local linker = options.get("compiler","c");
+	local linker = options.get("compiler",default_c);
 	if ("libc" !in no) {
 		libs.remove("c");
 		if ("_start" !in no) {
@@ -835,7 +853,7 @@ function compile_static_library(name,proj) {
 		used_name,options.get("mode",default_mode));
 	if (fs::exists(output) && !any_file_newer_than(
 		objects,fast_getmtime(output))) return false;
-	local p = process(executables[options.get("ar","ar")],[
+	local p = process(executables[options.get("ar",default_ar)],[
 		options.get("ar_flags",[])...,
 		"rcs",output,objects...,
 	]);
@@ -854,7 +872,7 @@ function compile_shared_library(name,proj) {
 	local output = "bin/libs/lib"+options.get("name",name)+".so";
 	local libs = proj.libs;
 	local no = options.get("no",[]);
-	local linker = options.get("linker","ld");
+	local linker = options.get("linker",default_ld);
 	if ("libc" !in no) {
 		libs.remove("c");
 		if (name != "c") libs.append("c");
@@ -930,7 +948,7 @@ function compile_project(name,proj) {
 do_compile_kernel:
 			local libpaths = proj.libpaths;
 			if ("bin/libs" !in libpaths) libpaths.append("bin/libs");
-			local p = process(executables["c"],[
+			local p = process(executables[default_c],[
 				"-static-libgcc",
 				"-T","src/kernel/arch/x86/linker.ld",
 				"-o",output,"-ffreestanding",
@@ -1032,7 +1050,7 @@ local addr2line_outr = <>;
 
 function start_addr2line() {
 	if (!addr2line_proc) {
-		addr2line_proc.set(process(executables["addr2line"],[
+		addr2line_proc.set(process(executables[default_addr2line],[
 			"-e",addr2line_exe,"-i","-f"
 		]));
 		local inr,inw = pipe.new()...;
@@ -1072,7 +1090,9 @@ function run_addr2line(addr) {
 
 
 function run_qemu(kernel_binary) {
-	local qemu = process(executables["qemu"],[
+	local qemu_exe = "qemu-system-"+arch;
+	try qemu_exe = executables[qemu_exe]; catch (...);
+	local qemu = process(qemu_exe,[
 		(hosted ? ["-no-reboot","-no-shutdown"] : [])...,
 		"-serial","stdio",
 		(remote ? ["-s","-S"] : [])...,
@@ -1087,12 +1107,16 @@ function run_qemu(kernel_binary) {
 		
 	]);
 	local r,w = pipe.new()...;
-	// Redirect stdout to format special serial output (tracebacks...)
+	/* Redirect stdout to format special serial output (tracebacks...) */
 	qemu.stdout = w;
 	qemu.start();
 	w.close();
-	// Also redirect to stddbg (OutputDebugString, so stuff shows up in the Vistual Studio log)
+#ifdef __WINDOWS__
+	/* Also redirect to stddbg (OutputDebugString), so stuff shows up in the Vistual Studio log. */
 	local outfile = file.io.stddbg|file.io.stderr;
+#else
+	local outfile = file.io.stderr;
+#endif
 	while (local c = r.readall(1)) {
 		if (c == '#') {
 			c = r.readall(1);

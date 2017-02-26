@@ -221,6 +221,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "lib", "lib", "{79BE4F16-35E
 	ProjectSection(SolutionItems) = preProject
 		..\include\lib\cmd.h = ..\include\lib\cmd.h
 		..\include\lib\disasm.h = ..\include\lib\disasm.h
+		..\include\lib\libc.h = ..\include\lib\libc.h
 		..\include\lib\rline.h = ..\include\lib\rline.h
 		..\include\lib\term.h = ..\include\lib\term.h
 	EndProjectSection

@@ -10,11 +10,14 @@
 	./libc/*.S;
 	./libc/sys/*.c;
 }
+
 [project = lib:static:kfdlibm] \
 [define(__KERNEL__ = 1)] \
-[flags(-Wno-parentheses,-Wno-unused-but-set-variable,-Wno-misleading-indentation,-Wno-unknown-pragmas)] {
-	[define(lint = 1)] ./libfdlibm/*.c;
-}
+[flags(-Wno-parentheses\
+       ,-Wno-unused-but-set-variable\
+       ,-Wno-misleading-indentation\
+       ,-Wno-unknown-pragmas)]\
+[define(lint = 1)] { ./libfdlibm/*.c; }
 
 #### Lib-C ####
 [project = lib:shared:c] \
@@ -52,8 +55,8 @@
 [flags(-Wno-parentheses\
        ,-Wno-unused-but-set-variable\
        ,-Wno-misleading-indentation\
-       ,-Wno-unknown-pragmas)\
-][define(lint = 1)] { ./libfdlibm/*.c; }
+       ,-Wno-unknown-pragmas)]\
+[define(lint = 1)] { ./libfdlibm/*.c; }
 [project = lib:shared:pthread] [diskfile = /usr/lib/libpthread.so] { ./libpthread/*.c; }
 [project = lib:shared:dl]      [diskfile = /usr/lib/libdl.so] { ./libdl/*.c; }
 [project = lib:shared:rline]   [diskfile = /usr/lib/librline.so] { ./librline/*.c; }

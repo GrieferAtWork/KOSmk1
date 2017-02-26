@@ -22,32 +22,27 @@
  */
 
 #include <kos/compiler.h>
+#include <lib/libc.h>
 #include <stdlib.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <malloc.h>
-#include <assert.h>
 
 __DECL_BEGIN
 
 extern int main(int argc, char *argv[], char *envp[]);
 
-struct args {
- size_t argc;
- char **argv;
-};
-
 extern char **environ;
-extern void __libc_init(void);
-extern void __libc_get_argv(struct args *a);
-
 
 #ifdef __PE__
+/* Windows strangeness causes main() to emit a call to a function named '__main()'.
+ * While I'm not sure _why_ someone chose to do this at some point, we still have
+ * to supply the linker with ~something~ to call...
+ * NOTE: I am aware that it's to do with initialization, but
+ *       why do it this way? - And even worse: hard-code it?
+ * Reference: http://wiki.osdev.org/User:Combuster/Alloca */
 void __main(void) {}
 #endif
 
 void _start(void) {
- struct args av;
+ struct __libc_args av;
 
  /* Initialize lib-c. */
  __libc_init();
@@ -56,7 +51,9 @@ void _start(void) {
  __libc_get_argv(&av);
 
  /* Execute the hosted C-main() function, and exit. */
- exit(main((int)av.argc,av.argv,environ));
+ exit(main((int)av.__c_argc,
+                av.__c_argv,
+           environ));
 
  /* We should never get here! */
  __builtin_unreachable();

@@ -161,18 +161,23 @@ err:     free(symv);
 __crit kerrno_t
 kshlib_pe32_parseimports(struct kshlib *__restrict self,
                          IMAGE_IMPORT_DESCRIPTOR const *__restrict descrv,
-                         size_t descrc, struct kfile *__restrict pe_file,
+                         size_t max_descrc, struct kfile *__restrict pe_file,
                          uintptr_t image_base) {
  IMAGE_IMPORT_DESCRIPTOR const *iter,*end;
  kerrno_t error; char *name; void *zero_buffer;
  __ref struct kshlib *dep;
  KTASK_CRIT_MARK
  kassert_kshlib(self);
- assert(descrc);
- kassertmem(descrv,descrc*sizeof(IMAGE_IMPORT_DESCRIPTOR));
- k_syslogf_prefixfile(KLOG_DEBUG,pe_file,"Parse %Iu import descriptors...\n",descrc);
- end = (iter = descrv)+descrc;
+ assert(max_descrc);
+ kassertmem(descrv,max_descrc*sizeof(IMAGE_IMPORT_DESCRIPTOR));
+ k_syslogf_prefixfile(KLOG_TRACE,pe_file,"Parse up to %Iu import descriptors...\n",max_descrc);
+ end = (iter = descrv)+max_descrc;
  do {
+  /* The import is terminated by a ZERO-entry.
+   * https://msdn.microsoft.com/en-us/library/ms809762.aspx */
+  if (!iter->Characteristics && !iter->TimeDateStamp &&
+      !iter->ForwarderChain && !iter->Name &&
+      !iter->FirstThunk) break;
   name = ksecdata_getzerostring(&self->sh_data,iter->Name+image_base,&zero_buffer);
   if __likely(name) {
    k_syslogf_prefixfile(KLOG_INFO,pe_file,"[PE] Searching for dependency: %q\n",name);
@@ -204,6 +209,51 @@ after_thunks:
  } while (++iter != end);
  return KE_OK;
 }
+
+__crit __wunused kerrno_t
+kshlib_pe32_parseexports(struct kshlib *__restrict self,
+                         IMAGE_EXPORT_DIRECTORY const *__restrict descrv,
+                         size_t max_descrc, struct kfile *__restrict pe_file,
+                         uintptr_t image_base) {
+ IMAGE_EXPORT_DIRECTORY const *iter,*end; kerrno_t error;
+ DWORD num_exports; char *name; void *zero_buffer;
+ ksymaddr_t funp_iter,namp_iter; struct ksymbol *sym;
+ ksymaddr_t addr,nameaddr;
+ KTASK_CRIT_MARK
+ kassert_kshlib(self);
+ assert(max_descrc);
+ kassertmem(descrv,max_descrc*sizeof(IMAGE_IMPORT_DESCRIPTOR));
+ end = (iter = descrv)+max_descrc;
+ do {
+  num_exports = min(iter->NumberOfFunctions,iter->NumberOfNames);
+  if (num_exports) {
+   funp_iter = image_base+iter->AddressOfFunctions;
+   namp_iter = image_base+iter->AddressOfNames;
+   while (num_exports--) {
+    /* Read array fields and dereference the name address (OMG! So much indirection :( ). */
+    if (ksecdata_getmem(&self->sh_data,funp_iter,&addr,sizeof(addr)) ||
+        ksecdata_getmem(&self->sh_data,namp_iter,&nameaddr,sizeof(nameaddr)) ||
+       (name = ksecdata_getzerostring(&self->sh_data,image_base+nameaddr,&zero_buffer)) == NULL) break;
+    addr += image_base;
+    k_syslogf_prefixfile(KLOG_DEBUG,pe_file,"Exporting symbol %q at %p...\n",name,addr);
+    sym = ksymbol_new(name);
+    free(zero_buffer);
+    if __unlikely(!sym) return KE_NOMEM;
+    sym->s_size  = 0;
+    sym->s_addr  = (ksymaddr_t)addr;
+    sym->s_shndx = SHN_UNDEF+1; /* Something different than 'SHN_UNDEF'... */
+    /* Declare exported symbols public, as well. */
+    error = ksymtable_insert_inherited(&self->sh_publicsym,sym);
+    if __unlikely(KE_ISERR(error)) { ksymbol_delete(sym); return error; }
+    /* Advance to the next symbol. */
+    funp_iter += sizeof(ksymaddr_t);
+    namp_iter += sizeof(ksymaddr_t);
+   }
+  }
+ } while (++iter != end);
+ return KE_OK;
+}
+
 
 
 __crit kerrno_t
@@ -318,6 +368,12 @@ kshlib_pe32_new(struct kshlib **__restrict result,
  if __unlikely(KE_ISERR(error)) goto err_cache;
  error = kfile_kernel_readall(pe_file,&file_header,offsetof(IMAGE_NT_HEADERS32,OptionalHeader));
  if __unlikely(KE_ISERR(error)) goto err_cache;
+ if (file_header.Signature != PE_FILE_SIGNATURE
+#ifdef __i386__
+  || file_header.FileHeader.Machine != IMAGE_FILE_MACHINE_I386
+#endif
+     ) { error = KE_NOEXEC; goto err_cache; }
+
 #define HAS_OPTION(x) \
  (file_header.FileHeader.SizeOfOptionalHeader >= offsetafter(IMAGE_OPTIONAL_HEADER32,x))
 #define HAS_DATADIR(i) HAS_OPTION(DataDirectory[i])
@@ -379,14 +435,14 @@ kshlib_pe32_new(struct kshlib **__restrict result,
 
  /* Parse Imports. */
  if (HAS_DATADIR(IMAGE_DIRECTORY_ENTRY_IMPORT)) {
-  IMAGE_IMPORT_DESCRIPTOR *import_descrv;
+  PIMAGE_IMPORT_DESCRIPTOR import_descrv;
   PIMAGE_DATA_DIRECTORY dir = &DATADIR(IMAGE_DIRECTORY_ENTRY_IMPORT);
   size_t good_data,import_descrc = dir->Size/sizeof(IMAGE_IMPORT_DESCRIPTOR);
   ksymaddr_t dir_address;
   if (import_descrc) {
    dir->Size = good_data = import_descrc*sizeof(IMAGE_IMPORT_DESCRIPTOR);
    dir_address   = dir->VirtualAddress+image_base;
-   import_descrv = (IMAGE_IMPORT_DESCRIPTOR *)ksecdata_translate_ro(&lib->sh_data,dir_address,&good_data);
+   import_descrv = (PIMAGE_IMPORT_DESCRIPTOR)ksecdata_translate_ro(&lib->sh_data,dir_address,&good_data);
    if __likely(import_descrv && good_data == dir->Size) {
     /* No need to allocate a temporary buffer (Data wasn't partitioned). */
     error = kshlib_pe32_parseimports(lib,import_descrv,good_data/
@@ -394,13 +450,13 @@ kshlib_pe32_new(struct kshlib **__restrict result,
                                      pe_file,image_base);
    } else {
     good_data = dir->Size;
-    import_descrv = (IMAGE_IMPORT_DESCRIPTOR *)malloc(good_data);
+    import_descrv = (PIMAGE_IMPORT_DESCRIPTOR)malloc(good_data);
     if __unlikely(!import_descrv) { error = KE_NOMEM; goto err_data; }
     /* Handle invalid pointers by clamping their address range.
      * >> What we're doing here is just the perfect example of
      *    what I always call "weak undefined behavior":
      *    It'll continue running stable, but it's
-     *    probably not gon'na work correctly. */
+     *    probably not gonna work correctly. */
     good_data -= ksecdata_getmem(&lib->sh_data,dir_address,
                                  import_descrv,good_data);
     if __likely(good_data) {
@@ -416,7 +472,39 @@ kshlib_pe32_new(struct kshlib **__restrict result,
   }
  }
 
- /* TODO: Exports. */
+ /* Parse Exports. */
+ if (HAS_DATADIR(IMAGE_DIRECTORY_ENTRY_EXPORT)) {
+  PIMAGE_EXPORT_DIRECTORY export_descrv;
+  PIMAGE_DATA_DIRECTORY dir = &DATADIR(IMAGE_DIRECTORY_ENTRY_EXPORT);
+  size_t good_data,export_descrc = dir->Size/sizeof(IMAGE_EXPORT_DIRECTORY);
+  ksymaddr_t dir_address;
+  if (export_descrc) {
+   dir->Size = good_data = export_descrc*sizeof(IMAGE_EXPORT_DIRECTORY);
+   dir_address   = dir->VirtualAddress+image_base;
+   export_descrv = (PIMAGE_EXPORT_DIRECTORY)ksecdata_translate_ro(&lib->sh_data,dir_address,&good_data);
+   if __likely(export_descrv && good_data == dir->Size) {
+    /* No need to allocate a temporary buffer (Data wasn't partitioned). */
+    error = kshlib_pe32_parseexports(lib,export_descrv,good_data/
+                                     sizeof(IMAGE_EXPORT_DIRECTORY),
+                                     pe_file,image_base);
+   } else {
+    good_data = dir->Size;
+    export_descrv = (PIMAGE_EXPORT_DIRECTORY)malloc(good_data);
+    if __unlikely(!export_descrv) { error = KE_NOMEM; goto err_data; }
+    good_data -= ksecdata_getmem(&lib->sh_data,dir_address,
+                                 export_descrv,good_data);
+    if __likely(good_data) {
+     error = kshlib_pe32_parseexports(lib,export_descrv,good_data/
+                                      sizeof(IMAGE_EXPORT_DIRECTORY),
+                                      pe_file,image_base);
+    } else {
+     error = KE_OK;
+    }
+    free(export_descrv);
+   }
+   if __unlikely(KE_ISERR(error)) goto err_data;
+  }
+ }
 
 #undef DATADIR
 #undef HAS_DATADIR

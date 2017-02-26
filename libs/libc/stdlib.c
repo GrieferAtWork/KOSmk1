@@ -25,6 +25,7 @@
 
 #include <kos/compiler.h>
 #include <kos/config.h>
+#include <lib/libc.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -302,21 +303,16 @@ err_r: free(result);
  return NULL;
 }
 
-struct args {
- size_t argc;
- char **argv;
-};
-
 static char *cmd_default[] = {NULL};
 
-__public void __libc_get_argv(struct args *a) {
+__public void __libc_get_argv(struct __libc_args *a) {
  char *text,*iter,**argv,**dest; size_t argc;
  assert(a);
  if __unlikely((text = kos_alloccmdtext()) == NULL) goto use_empty;
  argc = 0,iter = text;
  for (; *iter; iter = strend(iter)+1) ++argc;
  if (!argc) goto use_empty;
- // Make space for one padding NULL entry
+ /* Make space for one padding NULL entry (for convenience). */
  argv = (char **)(malloc)((argc+1)*sizeof(char *));
  if __unlikely(!argv) goto use_empty;
  iter = text,dest = argv;
@@ -324,12 +320,12 @@ __public void __libc_get_argv(struct args *a) {
  assert(dest == argv+argc);
  *dest = NULL;
 
- a->argc = argc;
- a->argv = argv;
+ a->__c_argc = argc;
+ a->__c_argv = argv;
  return;
 use_empty:
- a->argc = __compiler_ARRAYSIZE(cmd_default);
- a->argv = cmd_default;
+ a->__c_argc = __compiler_ARRAYSIZE(cmd_default);
+ a->__c_argv = cmd_default;
 }
 
 

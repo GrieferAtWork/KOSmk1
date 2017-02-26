@@ -132,10 +132,24 @@ int builtin_exit(int argc, char *argv[]) {
 }
 
 
+#include <mod.h>
+
 int builtin_color(int argc, char *argv[]) {
+#if 1
+ mod_t m = mod_open("/bin/pe-test");
+ void (*callback)(void);
+ if (m == MOD_ERR) perror("mod_open");
+ else {
+  *(void **)&callback = mod_sym(m,"exported_function");
+  if (!callback) perror("mod_sym");
+  else (*callback)();
+  mod_close(m);
+ }
+#else
  dprintf(STDOUT_FILENO,
          "\033[48;5;0;37m00\033[48;5;1;30m01\033[48;5;2;30m02\033[48;5;3;30m03\033[48;5;4;37m04\033[48;5;5;30m05\033[48;5;6;30m06\033[48;5;7;30m07\n"
          "\033[48;5;8;30m08\033[48;5;9;30m09\033[48;5;10;30m0a\033[48;5;11;30m0b\033[48;5;12;30m0c\033[48;5;13;30m0d\033[48;5;14;30m0e\033[48;5;15;30m0f\033[0m\n");
+#endif
  return EXIT_SUCCESS;
 }
 

@@ -45,7 +45,12 @@ kshlib_pe32_parsethunks(struct kshlib *__restrict self,
 extern __crit __wunused kerrno_t
 kshlib_pe32_parseimports(struct kshlib *__restrict self,
                          IMAGE_IMPORT_DESCRIPTOR const *__restrict descrv,
-                         __size_t descrc, struct kfile *__restrict pe_file,
+                         __size_t max_descrc, struct kfile *__restrict pe_file,
+                         __uintptr_t image_base);
+extern __crit __wunused kerrno_t
+kshlib_pe32_parseexports(struct kshlib *__restrict self,
+                         IMAGE_EXPORT_DIRECTORY const *__restrict descrv,
+                         __size_t max_descrc, struct kfile *__restrict pe_file,
                          __uintptr_t image_base);
 
 

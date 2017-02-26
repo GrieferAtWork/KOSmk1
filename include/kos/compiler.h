@@ -289,10 +289,9 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #endif
 #endif /* __public */
 #else /* !__PE__ */
-#ifndef __public
 /* Assuming usage in source files. */
+#   undef __public
 #   define __public  __export
-#endif
 #ifndef __private
 #   define __private /* nothing */
 #endif

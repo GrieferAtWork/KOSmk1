@@ -8,10 +8,8 @@
 [libs(kdisasm)] \
 {
 	[arch = i386] {
-		[compiler = asm] {
-			kernel/arch/x86/boot.S;
-			kernel/arch/x86/realmode.S;
-		}
+		kernel/arch/x86/boot.S;
+		kernel/arch/x86/realmode.S;
 	}
 	main.c;
 	kernel/*.c;
