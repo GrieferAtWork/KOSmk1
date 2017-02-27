@@ -75,7 +75,7 @@ kvinodepid_new_inherited(struct kvprocdirent const *__restrict decl,
 
 /* Generic operators for "/proc/[PID]" INodes. */
 extern void kvinodepid_generic_quit(struct kinode *__restrict self);
-extern kerrno_t kvinodepid_generic_getattr(struct kinode const *__restrict self, __size_t ac, union kinodeattr *av);
+extern kerrno_t kvinodepid_generic_getattr(struct kinode const *__restrict self, __size_t ac, union kinodeattr av[]);
 extern kerrno_t kvinodepiddir_generic_walk(struct kinode *__restrict self, struct kdirentname const *__restrict name, __ref struct kinode **resnode);
 extern kerrno_t kvinodepiddir_generic_enumdir(struct kinode *__restrict self, pkenumdir callback, void *closure);
 #ifdef __INTELLISENSE__

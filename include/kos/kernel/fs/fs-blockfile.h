@@ -49,16 +49,16 @@ struct kfilechunk {
 
 struct kblockfiletype {
  struct kfiletype bft_file; /*< Underlying, regular filetype. */
- kerrno_t (*bft_loadchunk)(struct kblockfile const *self, struct kfilechunk const *chunk, void *__restrict buf);
- kerrno_t (*bft_savechunk)(struct kblockfile *self, struct kfilechunk const *chunk, void const *__restrict buf);
- kerrno_t (*bft_nextchunk)(struct kblockfile *self, struct kfilechunk *chunk);
- kerrno_t (*bft_findchunk)(struct kblockfile *self, struct kfilechunk *chunk);
+ kerrno_t (*bft_loadchunk)(struct kblockfile const *__restrict self, struct kfilechunk const *__restrict chunk, void *__restrict buf);
+ kerrno_t (*bft_savechunk)(struct kblockfile *__restrict self, struct kfilechunk const *__restrict chunk, void const *__restrict buf);
+ kerrno_t (*bft_nextchunk)(struct kblockfile *__restrict self, struct kfilechunk *__restrict chunk);
+ kerrno_t (*bft_findchunk)(struct kblockfile *__restrict self, struct kfilechunk *__restrict chunk);
  // Release all chunks following the one at index 'count', including 'count' itself
- kerrno_t (*bft_releasechunks)(struct kblockfile *self, __fsblkcnt_t count);
+ kerrno_t (*bft_releasechunks)(struct kblockfile *__restrict self, __fsblkcnt_t count);
  // Get/Set the actual file size
- kerrno_t (*bft_getsize)(struct kblockfile const *self, __pos_t *fsize);
- kerrno_t (*bft_setsize)(struct kblockfile *self, __pos_t fsize);
- kerrno_t (*bft_getchunksize)(struct kblockfile const *self, __size_t *chsize);
+ kerrno_t (*bft_getsize)(struct kblockfile const *__restrict self, __pos_t *fsize);
+ kerrno_t (*bft_setsize)(struct kblockfile *__restrict self, __pos_t fsize);
+ kerrno_t (*bft_getchunksize)(struct kblockfile const *__restrict self, __size_t *chsize);
 };
 struct kblockfile {
  struct kfile      bf_file;       /*< Underlying, regular file. */
@@ -135,19 +135,19 @@ struct kblockfile {
 #define kblockfile_inode    (*(__ref struct kinode *(*)(struct kfile *))&_kblockfile_inode)
 #define kblockfile_dirent   (*(__ref struct kdirent *(*)(struct kfile *))&_kblockfile_dirent)
 
-extern void     _kblockfile_quit(struct kblockfile *self);
-extern kerrno_t _kblockfile_open(struct kblockfile *self, struct kdirent *__restrict dirent, struct kinode *__restrict inode, __openmode_t mode);
+extern void     _kblockfile_quit(struct kblockfile *__restrict self);
+extern kerrno_t _kblockfile_open(struct kblockfile *__restrict self, struct kdirent *__restrict dirent, struct kinode *__restrict inode, __openmode_t mode);
 #define _kblockfile_close  _kblockfile_flush
-extern kerrno_t _kblockfile_read(struct kblockfile *self, void *__restrict buf, __size_t c, __size_t *rc);
-extern kerrno_t _kblockfile_write(struct kblockfile *self, void const *__restrict buf, __size_t c, __size_t *wc);
-extern kerrno_t _kblockfile_seek(struct kblockfile *self, __off_t off, int whence, __pos_t *newpos);
-extern kerrno_t _kblockfile_trunc(struct kblockfile *self, __pos_t size);
-extern kerrno_t _kblockfile_ioctl(struct kblockfile *self, kattr_t cmd, __user void *arg);
-extern kerrno_t _kblockfile_flush(struct kblockfile *self);
-extern kerrno_t _kblockfile_getattr(struct kblockfile const *self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern kerrno_t _kblockfile_setattr(struct kblockfile *self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
-extern __ref struct kinode  *_kblockfile_inode(struct kblockfile *self);
-extern __ref struct kdirent *_kblockfile_dirent(struct kblockfile *self);
+extern kerrno_t _kblockfile_read(struct kblockfile *__restrict self, void *__restrict buf, __size_t c, __size_t *rc);
+extern kerrno_t _kblockfile_write(struct kblockfile *__restrict self, void const *__restrict buf, __size_t c, __size_t *wc);
+extern kerrno_t _kblockfile_seek(struct kblockfile *__restrict self, __off_t off, int whence, __pos_t *newpos);
+extern kerrno_t _kblockfile_trunc(struct kblockfile *__restrict self, __pos_t size);
+extern kerrno_t _kblockfile_ioctl(struct kblockfile *__restrict self, kattr_t cmd, __user void *arg);
+extern kerrno_t _kblockfile_flush(struct kblockfile *__restrict self);
+extern kerrno_t _kblockfile_getattr(struct kblockfile const *__restrict self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
+extern kerrno_t _kblockfile_setattr(struct kblockfile *__restrict self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
+extern __ref struct kinode  *_kblockfile_inode(struct kblockfile *__restrict self);
+extern __ref struct kdirent *_kblockfile_dirent(struct kblockfile *__restrict self);
 
 __DECL_END
 #endif /* __KERNEL__ */

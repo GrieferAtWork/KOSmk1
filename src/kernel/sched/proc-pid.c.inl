@@ -163,8 +163,8 @@ __crit __ref struct kproc *kproclist_getproc_k(__u32 pid) {
  return result;
 }
 
-kerrno_t kproclist_enumpid(pid_t *__restrict pidv,
-                           size_t pidc, size_t *__restrict reqpidc) {
+kerrno_t kproclist_enumpid(pid_t pidv[], size_t pidc,
+                           size_t *__restrict reqpidc) {
  __pid_t *iter,*end; kerrno_t error;
  struct kproc **piter,**pend,*proc;
  kassertmem(pidv,pidc*sizeof(pid_t));
@@ -187,7 +187,7 @@ kerrno_t kproclist_enumpid(pid_t *__restrict pidv,
 }
 
 __crit size_t
-kproclist_enumproc(__ref struct kproc **__restrict procv, size_t procc) {
+kproclist_enumproc(__ref struct kproc *procv[], size_t procc) {
  KTASK_CRIT_MARK
  __ref struct kproc **iter,**end;
  struct kproc **piter,**pend,*proc;

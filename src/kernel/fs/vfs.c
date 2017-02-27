@@ -28,6 +28,7 @@
 #include <kos/kernel/fs/vfs-dev.h>
 #include <kos/kernel/fs/vfs-proc.h>
 #include <kos/kernel/fs/fs-dirfile.h>
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <kos/kernel/tty.h>
 #include <kos/syslog.h>
@@ -154,70 +155,88 @@ struct kinodetype kvlinknode_type = {
 
 //////////////////////////////////////////////////////////////////////////
 // === Virtual Proxy File ===
+#define SELF  ((struct kvproxyfile *)self)
 void kvproxyfile_quit(struct kfile *__restrict self) {
- kfile_decref(((struct kvproxyfile *)self)->pf_used);
+ kfile_decref(SELF->pf_used);
 }
-kerrno_t kvproxyfile_read(struct kfile *__restrict self,
-                          void *__restrict buf, size_t bufsize,
-                          size_t *__restrict rsize) {
- return kfile_kernel_read(((struct kvproxyfile *)self)->pf_used,buf,bufsize,rsize);
+kerrno_t
+kvproxyfile_read(struct kfile *__restrict self,
+                 __user void *__restrict buf, size_t bufsize,
+                 __kernel size_t *__restrict rsize) {
+ return kfile_user_read(SELF->pf_used,buf,bufsize,rsize);
 }
-kerrno_t kvproxyfile_write(struct kfile *__restrict self,
-                           void const *__restrict buf, size_t bufsize,
-                           size_t *__restrict wsize) {
- return kfile_kernel_write(((struct kvproxyfile *)self)->pf_used,buf,bufsize,wsize);
+kerrno_t
+kvproxyfile_write(struct kfile *__restrict self,
+                  __user void const *__restrict buf, size_t bufsize,
+                  __kernel size_t *__restrict wsize) {
+ return kfile_user_write(SELF->pf_used,buf,bufsize,wsize);
 }
-kerrno_t kvproxyfile_ioctl(struct kfile *__restrict self,
-                           kattr_t cmd, __user void *arg) {
- return kfile_kernel_ioctl(((struct kvproxyfile *)self)->pf_used,cmd,arg);
+kerrno_t
+kvproxyfile_ioctl(struct kfile *__restrict self,
+                  kattr_t cmd, __user void *arg) {
+ return kfile_user_ioctl(SELF->pf_used,cmd,arg);
 }
-kerrno_t kvproxyfile_getattr(struct kfile const *__restrict self,
-                             kattr_t attr, void *__restrict buf,
-                             size_t bufsize, size_t *__restrict reqsize) {
- return kfile_kernel_getattr(((struct kvproxyfile *)self)->pf_used,attr,buf,bufsize,reqsize);
+kerrno_t
+kvproxyfile_getattr(struct kfile const *__restrict self, kattr_t attr,
+                    __user void *__restrict buf, size_t bufsize,
+                    __kernel size_t *__restrict reqsize) {
+ return kfile_user_getattr(SELF->pf_used,attr,buf,bufsize,reqsize);
 }
-kerrno_t kvproxyfile_setattr(struct kfile *__restrict self, kattr_t attr,
-                             void const *__restrict buf, size_t bufsize) {
- return kfile_kernel_setattr(((struct kvproxyfile *)self)->pf_used,attr,buf,bufsize);
+kerrno_t
+kvproxyfile_setattr(struct kfile *__restrict self, kattr_t attr,
+                    __user void const *__restrict buf, size_t bufsize) {
+ return kfile_user_setattr(SELF->pf_used,attr,buf,bufsize);
 }
-kerrno_t kvproxyfile_pread(struct kfile *__restrict self, __pos_t pos,
-                           void *__restrict buf, size_t bufsize,
-                           size_t *__restrict rsize) {
- return kfile_kernel_pread(((struct kvproxyfile *)self)->pf_used,pos,buf,bufsize,rsize);
+kerrno_t
+kvproxyfile_pread(struct kfile *__restrict self, pos_t pos,
+                  __user void *__restrict buf, size_t bufsize,
+                  __kernel size_t *__restrict rsize) {
+ return kfile_user_pread(SELF->pf_used,pos,buf,bufsize,rsize);
 }
-kerrno_t kvproxyfile_pwrite(struct kfile *__restrict self, __pos_t pos,
-                            void const *__restrict buf, size_t bufsize,
-                            size_t *__restrict wsize) {
- return kfile_kernel_pwrite(((struct kvproxyfile *)self)->pf_used,pos,buf,bufsize,wsize);
+kerrno_t
+kvproxyfile_pwrite(struct kfile *__restrict self, pos_t pos,
+                   __user void const *__restrict buf, size_t bufsize,
+                   __kernel size_t *__restrict wsize) {
+ return kfile_user_pwrite(SELF->pf_used,pos,buf,bufsize,wsize);
 }
-kerrno_t kvproxyfile_seek(struct kfile *__restrict self, __off_t off,
-                          int whence, __pos_t *__restrict newpos) {
- return kfile_seek(((struct kvproxyfile *)self)->pf_used,off,whence,newpos);
+kerrno_t
+kvproxyfile_seek(struct kfile *__restrict self, off_t off,
+                 int whence, __kernel pos_t *__restrict newpos) {
+ return kfile_seek(SELF->pf_used,off,whence,newpos);
 }
-kerrno_t kvproxyfile_trunc(struct kfile *__restrict self, __pos_t size) {
- return kfile_trunc(((struct kvproxyfile *)self)->pf_used,size);
+kerrno_t
+kvproxyfile_trunc(struct kfile *__restrict self,
+                  pos_t size) {
+ return kfile_trunc(SELF->pf_used,size);
 }
-kerrno_t kvproxyfile_flush(struct kfile *__restrict self) {
- return kfile_flush(((struct kvproxyfile *)self)->pf_used);
+kerrno_t
+kvproxyfile_flush(struct kfile *__restrict self) {
+ return kfile_flush(SELF->pf_used);
 }
-kerrno_t kvproxyfile_readdir(struct kfile *__restrict self,
-                             __ref struct kinode **__restrict inode,
-                             struct kdirentname **__restrict name,
-                             __u32 flags) {
- return kfile_readdir(((struct kvproxyfile *)self)->pf_used,inode,name,flags);
+kerrno_t
+kvproxyfile_readdir(struct kfile *__restrict self,
+                    __ref struct kinode **__restrict inode,
+                    struct kdirentname **__restrict name,
+                    __u32 flags) {
+ return kfile_readdir(SELF->pf_used,inode,name,flags);
 }
-__ref struct kinode *kvproxyfile_getinode(struct kfile *__restrict self) {
- return kfile_getinode(((struct kvproxyfile *)self)->pf_used);
+__crit __ref struct kinode *
+kvproxyfile_getinode(struct kfile *__restrict self) {
+ return kfile_getinode(SELF->pf_used);
 }
-__ref struct kdirent *kvproxyfile_getdirent(struct kfile *__restrict self) {
- return kfile_getdirent(((struct kvproxyfile *)self)->pf_used);
+__crit __ref struct kdirent *
+kvproxyfile_getdirent(struct kfile *__restrict self) {
+ return kfile_getdirent(SELF->pf_used);
 }
+#undef SELF
 
 
 
 //////////////////////////////////////////////////////////////////////////
 // Virtual File system Initialization
-static void vfs_mount(char const *path, struct ksuperblock *block) {
+static void
+vfs_mount(char const *__restrict path,
+          struct ksuperblock *__restrict block) {
  kerrno_t error;
  error = krootfs_mount(path,(size_t)-1,block,NULL);
  if __unlikely(KE_ISERR(error)) {

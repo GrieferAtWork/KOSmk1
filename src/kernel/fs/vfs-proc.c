@@ -106,7 +106,7 @@ kvinodepid_new_inherited(struct kvprocdirent const *__restrict decl,
 void kvinodepid_generic_quit(struct kinode *__restrict self) { kproc_decref(PROC); }
 kerrno_t
 kvinodepid_generic_getattr(struct kinode const *__restrict self,
-                           size_t ac, __user union kinodeattr *av) {
+                           size_t ac, __user union kinodeattr av[]) {
  union kinodeattr attr;
  kerrno_t error;
  for (; ac; ++av,--ac) {
@@ -399,7 +399,7 @@ struct kfiletype kvfiletype_proc_kcore = {
 };
 static kerrno_t
 vfsnode_proc_kcore_getattr(struct kinode const *__restrict self,
-                           size_t ac, __user union kinodeattr *av) {
+                           size_t ac, __user union kinodeattr av[]) {
  kerrno_t error;
  union kinodeattr attr;
  for (; ac; ++av,--ac) {

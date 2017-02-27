@@ -47,7 +47,7 @@ __DECL_BEGIN
 static void pipe_quit(struct kinode *__restrict self) { kiobuf_quit(&SELF->p_iobuf); }
 static kerrno_t
 pipe_getattr(struct kinode const *__restrict self,
-             size_t ac, __user union kinodeattr *av) {
+             size_t ac, __user union kinodeattr av[]) {
  kerrno_t error;
  union kinodeattr attr;
  for (; ac; --ac,++av) {
@@ -74,7 +74,7 @@ next_attr:;
 }
 static kerrno_t
 pipe_setattr(struct kinode *__restrict self, size_t ac,
-             union kinodeattr const *av) {
+             union kinodeattr const av[]) {
  kerrno_t error;
  size_t new_max_size;
  union kinodeattr attr;

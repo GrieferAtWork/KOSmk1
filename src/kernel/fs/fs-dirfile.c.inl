@@ -57,9 +57,11 @@ struct kdirfilelist {
  size_t                ent_a;
  struct kdirfileentry *ent_v;
 };
-__local kerrno_t kdirfilelist_append(struct kdirfilelist *self,
-                                     __ref struct kinode *__restrict inode,
-                                     struct kdirentname const *__restrict name) {
+
+__local kerrno_t
+kdirfilelist_append(struct kdirfilelist *__restrict self,
+                    __ref struct kinode *__restrict inode,
+                    struct kdirentname const *__restrict name) {
  kerrno_t error;
  struct kdirfileentry *entry;
  kassert_kinode(inode);
@@ -82,9 +84,10 @@ __local kerrno_t kdirfilelist_append(struct kdirfilelist *self,
  if __unlikely(KE_ISERR(error)) --self->ent_c;
  return error;
 }
-__local kerrno_t kdirfilelist_insertnew(struct kdirfilelist *self,
-                                        __ref struct kinode *__restrict inode,
-                                        struct kdirentname const *__restrict name) {
+__local kerrno_t
+kdirfilelist_insertnew(struct kdirfilelist *__restrict self,
+                       __ref struct kinode *__restrict inode,
+                       struct kdirentname const *__restrict name) {
  struct kdirfileentry *iter,*end;
  kassertobj(self);
  kassertobj(name);
@@ -101,9 +104,10 @@ __local kerrno_t kdirfilelist_insertnew(struct kdirfilelist *self,
 
 
 
-static kerrno_t kdirfile_enum(struct kinode *__restrict inode,
-                              struct kdirentname const *__restrict name,
-                              struct kdirfilelist *buf) {
+static kerrno_t
+kdirfile_enum(struct kinode *__restrict inode,
+              struct kdirentname const *__restrict name,
+              struct kdirfilelist *__restrict buf) {
  kerrno_t error;
  if __unlikely(KE_ISERR(error = kinode_incref(inode))) return error;
  error = kdirfilelist_insertnew(buf,inode,name);
@@ -114,8 +118,9 @@ static kerrno_t kdirfile_enum(struct kinode *__restrict inode,
  return error;
 }
 
-__local kerrno_t kdirfile_fillcache(struct kdirfilelist *self,
-                                    struct kdirentcache *cache) {
+__local kerrno_t
+kdirfile_fillcache(struct kdirfilelist *__restrict self,
+                   struct kdirentcache *__restrict cache) {
  // Search the dirent's child cache for virtual files
  // NOTE: For this, we must be careful not to re-use 
  struct kdirent **iter,**end; size_t totalsize;
@@ -169,7 +174,8 @@ nextentry:
  return KE_OK;
 }
 
-static kerrno_t kdirfile_fill(struct kdirfile *self) {
+static kerrno_t
+kdirfile_fill(struct kdirfile *__restrict self) {
  kerrno_t error; struct kinode *inode; struct kdirent *mydirent;
  struct kdirfilelist data; size_t oldseek;
  kerrno_t(*callback)(struct kinode *,pkenumdir,void *);
@@ -218,7 +224,8 @@ err_data:
  return error;
 }
 
-__local void kdirfile_freeentries(struct kdirfile *self) {
+__local void
+kdirfile_freeentries(struct kdirfile *__restrict self) {
  struct kdirfileentry *iter,*end;
  if (self->df_entv != KDIRFILE_ENTV_EMPTY) {
   iter = self->df_entv,end = self->df_endv;
@@ -227,13 +234,17 @@ __local void kdirfile_freeentries(struct kdirfile *self) {
  }
 }
 
-static void kdirfile_quit(struct kdirfile *self) {
+static void
+kdirfile_quit(struct kdirfile *__restrict self) {
  kdirfile_freeentries(self);
  kdirent_decref(self->df_dirent);
  kinode_decref(self->df_inode);
 }
-static kerrno_t kdirfile_open(struct kdirfile *self, struct kdirent *__restrict dirent,
-                              struct kinode *__restrict inode, openmode_t mode) {
+
+static kerrno_t
+kdirfile_open(struct kdirfile *__restrict self,
+              struct kdirent *__restrict dirent,
+              struct kinode *__restrict inode, openmode_t mode) {
  kerrno_t error;
  // Directories must be opened read-only
  if (mode&(O_WRONLY|O_RDWR)) return KE_ISDIR;
@@ -245,8 +256,10 @@ static kerrno_t kdirfile_open(struct kdirfile *self, struct kdirent *__restrict 
  if __unlikely(KE_ISERR(error = kinode_incref(self->df_inode = inode))) { kdirent_decref(dirent); return error; }
  return KE_OK;
 }
-static kerrno_t kdirfile_seek(struct kdirfile *self, off_t off,
-                              int whence, pos_t *__restrict newpos) {
+
+static kerrno_t
+kdirfile_seek(struct kdirfile *__restrict self, off_t off,
+              int whence, pos_t *__restrict newpos) {
  kerrno_t error;
  if __unlikely(KE_ISERR(error = kmutex_lock(&self->df_lock))) return error;
  switch (whence) {
@@ -262,8 +275,12 @@ end:
  kmutex_unlock(&self->df_lock);
  return error;
 }
-static kerrno_t kdirfile_readdir(struct kdirfile *self, __ref struct kinode **__restrict inode,
-                                 struct kdirentname **__restrict name, __u32 flags) {
+
+static kerrno_t
+kdirfile_readdir(struct kdirfile *__restrict self,
+                 __ref struct kinode **__restrict inode,
+                 struct kdirentname **__restrict name,
+                 __u32 flags) {
  kerrno_t error;
  kassertobj(inode);
  kassertobj(name);
@@ -285,24 +302,31 @@ end:
  return error;
 }
 
-static kerrno_t kdirfile_ioctl(struct kdirfile *self,
-                               kattr_t cmd, __user void *arg) {
+static kerrno_t
+kdirfile_ioctl(struct kdirfile *__restrict self,
+               kattr_t cmd, __user void *arg) {
  return kfile_generic_ioctl(&self->df_file,cmd,arg);
 }
-static kerrno_t kdirfile_getattr(struct kdirfile const *self, kattr_t attr,
-                                 __user void *__restrict buf, size_t bufsize,
-                                 __kernel size_t *__restrict reqsize) {
+
+static kerrno_t
+kdirfile_getattr(struct kdirfile const *self, kattr_t attr,
+                 __user void *__restrict buf, size_t bufsize,
+                 __kernel size_t *__restrict reqsize) {
  return kfile_generic_getattr(&self->df_file,attr,buf,bufsize,reqsize);
 }
-static kerrno_t kdirfile_setattr(struct kdirfile *self, kattr_t attr,
-                                 __user void const *__restrict buf, size_t bufsize) {
+static kerrno_t
+kdirfile_setattr(struct kdirfile *__restrict self, kattr_t attr,
+                 __user void const *__restrict buf, size_t bufsize) {
  return kfile_generic_setattr(&self->df_file,attr,buf,bufsize);
 }
 
-static struct kinode *kdirfile_getinode(struct kdirfile *self) {
+static __ref struct kinode *
+kdirfile_getinode(struct kdirfile *__restrict self) {
  return __likely(KE_ISOK(kinode_incref(self->df_inode))) ? self->df_inode : NULL;
 }
-static struct kdirent *kdirfile_getdirent(struct kdirfile *self) {
+
+static __ref struct kdirent *
+kdirfile_getdirent(struct kdirfile *__restrict self) {
  return __likely(KE_ISOK(kdirent_incref(self->df_dirent))) ? self->df_dirent : NULL;
 }
 

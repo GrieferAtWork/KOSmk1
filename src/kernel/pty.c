@@ -564,7 +564,7 @@ kerrno_t kpty_user_swrite(struct kpty *__restrict self,
 
 kerrno_t
 kfspty_mgetattr(struct kfspty const *self,
-                size_t ac, __user union kinodeattr *av) {
+                size_t ac, __user union kinodeattr av[]) {
  kerrno_t error;
  union kinodeattr attr;
  for (; ac; --ac,++av) {
@@ -592,7 +592,7 @@ next_attr:;
 }
 kerrno_t
 kfspty_sgetattr(struct kfspty const *self, size_t ac,
-                __user union kinodeattr *av) {
+                __user union kinodeattr av[]) {
  kerrno_t error;
  union kinodeattr attr;
  for (; ac; --ac,++av) {

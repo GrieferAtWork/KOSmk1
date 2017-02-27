@@ -104,8 +104,15 @@ __public int dladdr(void *addr, Dl_info *info) {
                          NULL,0,KMOD_SYMINFO_FLAG_WANTNAME|
                          KMOD_SYMINFO_FLAG_LOOKUPADDR);
  if __unlikely(!syminfo) return -1;
+ /* Looking at some example I found here http://www.clifford.at/cfun/elfstuff/
+  * it look as though dladdr returns the full library path in dli_fname... */
+#if 1
+ modinfo = __mod_info(syminfo->si_modid,NULL,0,
+                      MOD_INFO_PATH|MOD_INFO_INFO);
+#else
  modinfo = __mod_info(syminfo->si_modid,NULL,0,
                       MOD_INFO_NAME|MOD_INFO_INFO);
+#endif
  if __unlikely(!modinfo) { free(syminfo); return -1; }
  /* Exchange the latest symbol information, freeing the old stuff.
   * NOTE: We untrack the new information because it might not get freed... */
@@ -114,8 +121,8 @@ __public int dladdr(void *addr, Dl_info *info) {
 
  info->dli_fname = modinfo->mi_name;
  info->dli_fbase = modinfo->mi_base;
- info->dli_saddr = syminfo->si_base;
  info->dli_sname = syminfo->si_name;
+ info->dli_saddr = syminfo->si_base;
  return 0;
 }
 

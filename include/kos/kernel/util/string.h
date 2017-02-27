@@ -81,8 +81,8 @@ extern __crit __wunused __ssize_t __user_vsnprintf_c(__user char *buf, __size_t 
 #define __user_vsnprintf(buf,bufsize,reqsize,fmt,args) KTASK_CRIT(__user_vsnprintf_c(buf,bufsize,reqsize,fmt,args))
 #define user_memset(p,byte,bytes)                    (KTASK_ISKEPD_P ? (memset(p,byte,bytes),0) : __user_memset(p,byte,bytes))
 #define user_strncpy(p,s,maxchars)                   (KTASK_ISKEPD_P ? (strncpy(p,s,maxchars),0) : __user_strncpy(p,s,maxchars))
-#define user_snprintf(buf,bufsize,reqsize,...)       (KTASK_ISKEPD_P ? __xblock({ __ssize_t __temp = (__ssize_t)snprintf(buf,bufsize,__VA_ARGS__); if (reqsize) *(reqsize) = __temp; __xreturn 0; }) : __user_snprintf(buf,bufsize,reqsize,__VA_ARGS__))
-#define user_vsnprintf(buf,bufsize,reqsize,fmt,args) (KTASK_ISKEPD_P ? __xblock({ __ssize_t __temp = (__ssize_t)vsnprintf(buf,bufsize,fmt,args);   if (reqsize) *(reqsize) = __temp; __xreturn 0; }) : __user_vsnprintf(buf,bufsize,reqsize,fmt,args))
+#define user_snprintf(buf,bufsize,reqsize,...)       (KTASK_ISKEPD_P ? __xblock({ __ssize_t __temp = (__ssize_t)snprintf(buf,bufsize,__VA_ARGS__); __size_t *const __reqsize = (reqsize); if (__reqsize) *__reqsize = __temp; __xreturn 0; }) : __user_snprintf(buf,bufsize,reqsize,__VA_ARGS__))
+#define user_vsnprintf(buf,bufsize,reqsize,fmt,args) (KTASK_ISKEPD_P ? __xblock({ __ssize_t __temp = (__ssize_t)vsnprintf(buf,bufsize,fmt,args);   __size_t *const __reqsize = (reqsize); if (__reqsize) *__reqsize = __temp; __xreturn 0; }) : __user_vsnprintf(buf,bufsize,reqsize,fmt,args))
 #endif
 
 

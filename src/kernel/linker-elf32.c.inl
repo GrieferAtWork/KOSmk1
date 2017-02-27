@@ -35,6 +35,12 @@
 #include <assert.h>
 #include <string.h>
 
+#if 0
+/* DWARF: DWARF2_Internal_LineInfo */
+#include "../../binutils/binutils-2.27/binutils/dwarf.h"
+#include "../../binutils/binutils-2.27/binutils/dwarf.c"
+#endif
+
 __DECL_BEGIN
 
 __crit kerrno_t

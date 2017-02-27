@@ -822,8 +822,8 @@ extern __crit __wunused __ref struct kproc *kproclist_getproc_k(__u32 pid);
 //////////////////////////////////////////////////////////////////////////
 // Enumerate all process ids visible to the caller.
 // @return: KE_DESTROYED: The process list was destroyed (No new processes may be spawed).
-extern __crit kerrno_t kproclist_enumpid(__pid_t *__restrict pidv,
-                                         __size_t pidc, __size_t *__restrict reqpidc);
+extern __crit kerrno_t kproclist_enumpid(__pid_t pidv[], __size_t pidc,
+                                         __size_t *__restrict reqpidc);
 
 //////////////////////////////////////////////////////////////////////////
 // Enumerate all processes, storing a reference to each in the provided buffer.
@@ -831,7 +831,7 @@ extern __crit kerrno_t kproclist_enumpid(__pid_t *__restrict pidv,
 // @return: *: The required amount of buffer entries.
 //             Unless this value is <= 'procc', 'procv' does not contain references.
 extern __crit __size_t
-kproclist_enumproc(__ref struct kproc **__restrict procv, __size_t procc);
+kproclist_enumproc(__ref struct kproc *procv[], __size_t procc);
 
 
 

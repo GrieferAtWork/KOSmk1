@@ -161,7 +161,8 @@ static __crit struct ksymbol const *
 proc_find_symbol_by_addr(struct kproc *self,
                          void const *sym_address,
                          struct kprocmodule **module,
-                         struct kprocmodule *exclude_module) {
+                         struct kprocmodule *exclude_module,
+                         __u32 *flags) {
  struct kprocmodule *iter,*end; ksymaddr_t reladdr;
  struct ksymbol const *result; struct kshlib *lib;
  KTASK_CRIT_MARK
@@ -172,7 +173,7 @@ proc_find_symbol_by_addr(struct kproc *self,
   reladdr = (ksymaddr_t)sym_address-(ksymaddr_t)iter->pm_base;
   if (reladdr >= lib->sh_data.ed_begin &&
       reladdr <  lib->sh_data.ed_end) {
-   result = kshlib_get_closest_symbol(lib,reladdr);
+   result = kshlib_get_closest_symbol(lib,reladdr,flags);
    if (result) { *module = iter; return result; }
   }
  }
@@ -183,14 +184,15 @@ static __crit struct ksymbol const *
 proc_find_symbol_by_name(struct kproc *self, char const *name,
                          size_t name_size, size_t name_hash,
                          struct kprocmodule **module,
-                         struct kprocmodule *exclude_module) {
+                         struct kprocmodule *exclude_module,
+                         __u32 *flags) {
  struct kprocmodule *iter,*end;
  struct ksymbol const *result;
  KTASK_CRIT_MARK
  assert(kproc_islocked(self,KPROC_LOCK_MODS));
  end = (iter = self->p_modules.pms_modv)+self->p_modules.pms_moda;
  for (; iter != end; ++iter) if (iter->pm_lib && iter != exclude_module) {
-  result = kshlib_get_any_symbol(iter->pm_lib,name,name_size,name_hash);
+  result = kshlib_get_any_symbol(iter->pm_lib,name,name_size,name_hash,flags);
   if (result) { *module = iter; return result; }
  }
  return NULL;
@@ -212,10 +214,11 @@ static __crit kerrno_t
 ksymbol_fillinfo(struct kproc *__restrict proc,
                  struct kprocmodule *__restrict module,
                  struct ksymbol const *__restrict symbol,
+                 ksymaddr_t effective_addr,
                  __user struct ksyminfo *buf,
                  size_t bufsize, size_t *__restrict reqsize,
-                 __u32 flags) {
- struct ksyminfo info; byte_t *buf_end;
+                 __u32 flags, __u32 symbol_flags) {
+ struct ksyminfo info; byte_t *buf_end; kerrno_t error;
  size_t copy_size,bufavail,bufreq,info_size;
  KTASK_CRIT_MARK
       if (flags&KMOD_SYMINFO_FLAG_WANTFILE) copy_size = offsetafter(struct ksyminfo,si_flsz);
@@ -224,7 +227,7 @@ ksymbol_fillinfo(struct kproc *__restrict proc,
  if __unlikely(copy_from_user(&info,buf,copy_size)) return KE_FAULT;
 dont_copy_input:
  /* Fill in generic information, such as base and size. */
- info.si_flags = KSYMINFO_FLAG_NONE;
+ info.si_flags = symbol_flags;
  info.si_modid = (kmodid_t)(module-proc->p_modules.pms_modv);
  info.si_base  = (void *)((uintptr_t)module->pm_base+symbol->s_addr);
  if ((info.si_size = symbol->s_size) != 0) info.si_flags |= KSYMINFO_FLAG_SIZE;
@@ -253,7 +256,7 @@ dont_copy_input:
    }
    bufreq = (symbol->s_nmsz+1)*sizeof(char);
    copy_size = min(info.si_nmsz,bufreq);
-   copy_to_user(info.si_name,symbol->s_name,copy_size);
+   if __unlikely(copy_to_user(info.si_name,symbol->s_name,copy_size)) return KE_FAULT;
    if (info.si_name == (char *)buf_end) {
     if (!info.si_nmsz) info.si_name = NULL;
     *reqsize += bufreq;
@@ -266,11 +269,39 @@ dont_copy_input:
   }
  }
 
- if (flags&KMOD_SYMINFO_FLAG_WANTFILE) {
-  info.si_flsz = 0; /* TODO. */
- }
- if (flags&KMOD_SYMINFO_FLAG_WANTLINE) {
-  info.si_line = 0; /* TODO. */
+ if (flags&(KMOD_SYMINFO_FLAG_WANTFILE|KMOD_SYMINFO_FLAG_WANTLINE)) {
+  if (symbol->s_a2l) {
+   struct kfileandline fal; ssize_t print_error;
+   error = kaddr2line_exec(symbol->s_a2l,module->pm_lib,effective_addr,&fal);
+   if __unlikely(KE_ISERR(error)) goto no_fal;
+   if (flags&KMOD_SYMINFO_FLAG_WANTFILE) {
+    info.si_flsz |= KSYMINFO_FLAG_FILE;
+    if (!info.si_file || !info.si_flsz) {
+     info.si_file = (char *)buf_end;
+     info.si_flsz = (__size_t)bufavail;
+    }
+    print_error = user_snprintf(info.si_file,info.si_flsz,&bufreq,"%s/%s",
+                                fal.fal_path ? fal.fal_path : "",
+                                fal.fal_file ? fal.fal_file : "");
+    if (print_error < 0) { kfileandline_quit(&fal); return KE_FAULT; }
+    copy_size = bufreq-(size_t)print_error;
+    if (info.si_file == (char *)buf_end) {
+     if (!info.si_flsz) info.si_file = NULL;
+     *reqsize += bufreq;
+     buf_end  += copy_size;
+     bufavail -= copy_size;
+    }
+    info.si_flsz = bufreq;
+   } else {
+    info.si_flsz = 0;
+   }
+   if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info.si_line = fal.fal_line;
+   kfileandline_quit(&fal);
+  } else {
+no_fal:
+   if (flags&KMOD_SYMINFO_FLAG_WANTFILE) info.si_flsz = 0;
+   if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info.si_line = 0;
+  }
  }
 
  /* Copy the info data block to user-space. */
@@ -292,7 +323,7 @@ SYSCALL(sys_kmod_syminfo) {
  kerrno_t error; size_t reqsize;
  struct kproc *proc,*caller = kproc_self();
  struct kprocmodule *module; size_t sym_name_hash;
- struct ksymname sym_name;
+ struct ksymname sym_name; __u32 symbol_flags;
  struct kfdentry fd; struct ksymbol const *symbol;
  if (!buf) bufsize = 0;
  KTASK_CRIT_BEGIN_FIRST
@@ -322,10 +353,10 @@ search_all_modules:
    /* Search all modules for a viable symbol. */
    if (flags&KMOD_SYMINFO_FLAG_LOOKUPADDR) {
     symbol = proc_find_symbol_by_addr(proc,(__user void const *)addr_or_name,
-                                      &module,module);
+                                      &module,module,&symbol_flags);
    } else {
     symbol = proc_find_symbol_by_name(proc,sym_name.sn_name,sym_name.sn_size,
-                                      sym_name_hash,&module,module);
+                                      sym_name_hash,&module,module,&symbol_flags);
    }
    goto found_symbol;
   }
@@ -346,18 +377,22 @@ parse_module:
    } else {
     symbol = kshlib_get_closest_symbol(module->pm_lib,
                                       (uintptr_t)addr_or_name-
-                                      (uintptr_t)module->pm_base);
+                                      (uintptr_t)module->pm_base,
+                                       &symbol_flags);
    }
   } else {
    symbol = kshlib_get_any_symbol(module->pm_lib,sym_name.sn_name,
-                                  sym_name.sn_size,sym_name_hash);
+                                  sym_name.sn_size,sym_name_hash,
+                                  &symbol_flags);
   }
 found_symbol:
   if __unlikely(!symbol) { error = KE_NOENT; goto end_freename; }
   assert(module);
   assert(symbol);
-  error = ksymbol_fillinfo(proc,module,symbol,buf,bufsize,
-                           preqsize ? &reqsize : NULL,flags);
+  error = ksymbol_fillinfo(proc,module,symbol,(flags&KMOD_SYMINFO_FLAG_LOOKUPADDR)
+                           ? ((uintptr_t)addr_or_name-(uintptr_t)module->pm_base)
+                           : symbol->s_addr,buf,bufsize,preqsize
+                           ? &reqsize : NULL,flags,symbol_flags);
  }
 end_freename:
  if (!(flags&KMOD_SYMINFO_FLAG_LOOKUPADDR)) {

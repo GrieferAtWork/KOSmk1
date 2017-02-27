@@ -100,8 +100,8 @@ struct kfspty {
  struct kpty   fp_pty;  /*< Associated PTY. */
 };
 
-extern kerrno_t kfspty_mgetattr(struct kfspty const *__restrict self, __size_t ac, __user union kinodeattr *av);
-extern kerrno_t kfspty_sgetattr(struct kfspty const *__restrict self, __size_t ac, __user union kinodeattr *av);
+extern kerrno_t kfspty_mgetattr(struct kfspty const *__restrict self, __size_t ac, __user union kinodeattr av[]);
+extern kerrno_t kfspty_sgetattr(struct kfspty const *__restrict self, __size_t ac, __user union kinodeattr av[]);
 
 
 //////////////////////////////////////////////////////////////////////////

@@ -173,7 +173,7 @@ typedef __u32 ksymflag_t;
 #define KSYMINFO_FLAG_SIZE    0x00000800 /*< The symbol has a known size. */
 #define KSYMINFO_FLAG_PUBLIC  0x00010000 /*< The symbol is exported as public. */
 #define KSYMINFO_FLAG_PRIVATE 0x00020000 /*< The symbol is exported as private. */
-#define KSYMINFO_FLAG_WEAK    0x00040000 /*< The symbol is exported as weak. */
+#define KSYMINFO_FLAG_WEAK    0x00030000 /*< The symbol is exported as weak. */
 
 #define KSYMINFO_TYPE_NONE    0x00000000
 #define KSYMINFO_TYPE_FUNC    0x00000001 /*< Function symbol. */

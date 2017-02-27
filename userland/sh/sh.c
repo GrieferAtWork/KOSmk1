@@ -235,7 +235,7 @@ void addrinfo(void *addr) {
 
 int main(int argc, char *argv[]) {
  int error; struct rline *r; int optc;
- addrinfo(&addrinfo);
+ addrinfo(&main);
  // movl	%gs:0, %eax
  // movl	foo@ntpoff(%eax), %eax
  //int x = foo;

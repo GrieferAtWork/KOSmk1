@@ -54,49 +54,49 @@
 //#define __LIBC_HAVE_SBRK_THREADSAFE /*< Make brk/sbrk be thread-safe (Not required by posix, or dlmalloc). */
 #endif
 
-#ifdef __DEBUG__
 #define __LIBC_HAVE_DEBUG_PARAMS  3
-#define __LIBC_DEBUG_PARAMS       char const *__file, int __line, char const *__func
-#define __LIBC_DEBUG_PARAMS_      char const *__file, int __line, char const *__func,
-#define __LIBC_DEBUG__PARAMS     ,char const *__file, int __line, char const *__func
 #define __LIBC_DEBUG_UPARAMS      char const *__unused(__file), int __unused(__line), char const *__unused(__func)
 #define __LIBC_DEBUG_UPARAMS_     char const *__unused(__file), int __unused(__line), char const *__unused(__func),
 #define __LIBC_DEBUG__UPARAMS    ,char const *__unused(__file), int __unused(__line), char const *__unused(__func)
+#define __LIBC_DEBUG_NULL         NULL,-1,NULL
+#define __LIBC_DEBUG_NULL_        NULL,-1,NULL,
+#define __LIBC_DEBUG__NULL       ,NULL,-1,NULL
+#ifdef __DEBUG__
+#define __LIBC_DEBUG_PARAMS       char const *__file, int __line, char const *__func
+#define __LIBC_DEBUG_PARAMS_      char const *__file, int __line, char const *__func,
+#define __LIBC_DEBUG__PARAMS     ,char const *__file, int __line, char const *__func
 #define __LIBC_DEBUG_ARGS         __FILE__,__LINE__,__compiler_FUNCTION()
 #define __LIBC_DEBUG_ARGS_        __FILE__,__LINE__,__compiler_FUNCTION(),
 #define __LIBC_DEBUG__ARGS       ,__FILE__,__LINE__,__compiler_FUNCTION()
 #define __LIBC_DEBUG_FWD          __file,__line,__func
 #define __LIBC_DEBUG_FWD_         __file,__line,__func,
 #define __LIBC_DEBUG__FWD        ,__file,__line,__func
-#define __LIBC_DEBUG_NULL         NULL,-1,NULL
-#define __LIBC_DEBUG_NULL_        NULL,-1,NULL,
-#define __LIBC_DEBUG__NULL       ,NULL,-1,NULL
 #define __LIBC_DEBUG_FILE         __file
 #define __LIBC_DEBUG_LINE         __line
 #define __LIBC_DEBUG_FUNC         __func
+#else
+#define __LIBC_DEBUG_PARAMS       __LIBC_DEBUG_UPARAMS
+#define __LIBC_DEBUG_PARAMS_      __LIBC_DEBUG_UPARAMS_
+#define __LIBC_DEBUG__PARAMS      __LIBC_DEBUG__UPARAMS
+#define __LIBC_DEBUG_ARGS         __LIBC_DEBUG_NULL
+#define __LIBC_DEBUG_ARGS_        __LIBC_DEBUG_NULL_
+#define __LIBC_DEBUG__ARGS        __LIBC_DEBUG__NULL
+#define __LIBC_DEBUG_FWD          __LIBC_DEBUG_NULL
+#define __LIBC_DEBUG_FWD_         __LIBC_DEBUG_NULL_
+#define __LIBC_DEBUG__FWD         __LIBC_DEBUG__NULL
+#define __LIBC_DEBUG_FILE         (char const *)0
+#define __LIBC_DEBUG_LINE         (int)-1
+#define __LIBC_DEBUG_FUNC         (char const *)0
+#endif
+
+#ifdef __DEBUG__
 #define __LIBC_HAVE_DEBUG_MALLOC  /* malloc(), calloc(), realloc(), free(), strdup() */
 #define __LIBC_HAVE_DEBUG_MEMCHECKS
 #ifdef __KERNEL__
 #define __KERNEL_HAVE_DEBUG_STACKCHECKS
 #endif
-#else
-#define __LIBC_HAVE_DEBUG_PARAMS  0
-#define __LIBC_DEBUG_PARAMS       void
-#define __LIBC_DEBUG_PARAMS_      /* nothing */
-#define __LIBC_DEBUG__PARAMS      /* nothing */
-#define __LIBC_DEBUG_ARGS         /* nothing */
-#define __LIBC_DEBUG_ARGS_        /* nothing */
-#define __LIBC_DEBUG__ARGS        /* nothing */
-#define __LIBC_DEBUG_FWD          /* nothing */
-#define __LIBC_DEBUG_FWD_         /* nothing */
-#define __LIBC_DEBUG__FWD         /* nothing */
-#define __LIBC_DEBUG_NULL         /* nothing */
-#define __LIBC_DEBUG_NULL_        /* nothing */
-#define __LIBC_DEBUG__NULL        /* nothing */
-#define __LIBC_DEBUG_FILE         (char const *)0
-#define __LIBC_DEBUG_LINE         (int)-1
-#define __LIBC_DEBUG_FUNC         (char const *)0
 #endif
+
 
 #ifndef __LIBC_HAVE_DEBUG_MEMCHECKS
 #ifdef __OPTIMIZE__

@@ -378,7 +378,7 @@ __public pid_t proc_getpid(proc_t proc) {
  __set_errno(-result);
  return -1;
 }
-__public ssize_t proc_enumpid(pid_t *__restrict pidv, size_t pidc) {
+__public ssize_t proc_enumpid(pid_t pidv[], size_t pidc) {
  size_t reqsize; kerrno_t error;
  error = kproc_enumpid(pidv,pidc,&reqsize);
  if __unlikely(KE_ISERR(error)) { __set_errno(-error); return -1; }

@@ -65,10 +65,31 @@ ksymbol_new(char const *__restrict name) {
  if __likely(result) {
   result->s_hash = ksymhash_of(name,name_size);
   result->s_nmsz = name_size;
+  result->s_a2l  = NULL;
   memcpy(result->s_name,name,name_size*sizeof(char));
   result->s_name[name_size] = '\0';
  }
  return result;
+}
+
+
+__crit kerrno_t
+kaddr2line_exec(struct kaddr2line const *__restrict self,
+                struct kshlib *__restrict lib,
+                ksymaddr_t addr, struct kfileandline *__restrict result) {
+ KTASK_CRIT_MARK
+ kassertobj(self);
+ kassertobj(result);
+ kassert_kshlib(lib);
+
+ result->fal_path  = NULL;
+ result->fal_file  = NULL;
+ result->fal_line  = 42;
+ result->fal_flags = KFILEANDLINE_FLAG_NONE;
+
+ /* TODO */
+
+ return KE_OK;
 }
 
 
@@ -923,7 +944,7 @@ ksymtable_lookupaddr_size(struct ksymtable const *self,
 
 struct ksymbol const *
 kshlib_get_closest_symbol(struct kshlib *__restrict self,
-                          ksymaddr_t sym_address) {
+                          ksymaddr_t sym_address, __u32 *flags) {
  struct ksymbol const *symbols[3],*result;
  size_t diff,newdiff;
  kassert_kshlib(self);
@@ -942,18 +963,23 @@ kshlib_get_closest_symbol(struct kshlib *__restrict self,
   BETTER(symbols[2]);
 #undef BETTER
  }
+ if (result) {
+       if (result == symbols[0]) *flags = KSYMINFO_FLAG_PRIVATE;
+  else if (result == symbols[1]) *flags = KSYMINFO_FLAG_PUBLIC;
+  else                           *flags = KSYMINFO_FLAG_WEAK;
+ }
  return result;
 }
 
 struct ksymbol const *
 kshlib_get_any_symbol(struct kshlib *__restrict self,
                       char const *name, __size_t name_size,
-                      __size_t name_hash) {
+                      __size_t name_hash, __u32 *flags) {
  struct ksymbol const *result;
  kassert_kshlib(self);
-              result = ksymtable_lookupname_h(&self->sh_publicsym,name,name_size,name_hash);
- if (!result) result = ksymtable_lookupname_h(&self->sh_privatesym,name,name_size,name_hash);
- if (!result) result = ksymtable_lookupname_h(&self->sh_weaksym,name,name_size,name_hash);
+      if ((result = ksymtable_lookupname_h(&self->sh_privatesym,name,name_size,name_hash)) != NULL) *flags = KSYMINFO_FLAG_PRIVATE;
+ else if ((result = ksymtable_lookupname_h(&self->sh_publicsym,name,name_size,name_hash)) != NULL) *flags = KSYMINFO_FLAG_PUBLIC;
+ else if ((result = ksymtable_lookupname_h(&self->sh_weaksym,name,name_size,name_hash)) != NULL) *flags = KSYMINFO_FLAG_WEAK;
  return result;
 }
 

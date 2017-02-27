@@ -37,6 +37,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <kos/syslog.h>
+#include <kos/kernel/util/string.h>
 
 __DECL_BEGIN
 
@@ -112,7 +113,7 @@ kfatinode_dir_walk_finalize(struct ksuperblock *__restrict sblock,
  }
  return KE_OK;
 }
-static kerrno_t kfatinode_dir_walk(struct kfatinode *self,
+static kerrno_t kfatinode_dir_walk(struct kfatinode *__restrict self,
                                    struct kdirentname const *__restrict name,
                                    __ref struct kinode **resnod) {
  struct kfat_walkdata data; kerrno_t error;
@@ -137,7 +138,7 @@ err_freenode:
  *resnod = (struct kinode *)data.resnode; // Inherit reference
  return KE_OK;
 }
-__local kerrno_t kfatinode_root_walk(struct kfatinode *self,
+__local kerrno_t kfatinode_root_walk(struct kfatinode *__restrict self,
                                      struct kdirentname const *__restrict name,
                                      __ref struct kinode **resnod) {
  struct kfat_walkdata data; kerrno_t error;
@@ -194,14 +195,14 @@ static kerrno_t kfat_enumdir(struct kfatfs *__restrict fs, struct kfatfilepos co
 }
 
 static kerrno_t kfatinode_dir_enumdir(
- struct kfatinode *self, pkenumdir callback, void *closure) {
+ struct kfatinode *__restrict self, pkenumdir callback, void *closure) {
  struct kfat_enumdirdata data = {callback,closure};
  return kfatfs_enumdir(&((struct kfatsuperblock *)self->fi_inode.i_sblock)->f_fs,
                        kfatfileheader_getcluster(&self->fi_file),
                        (pkfatfs_enumdir_callback)&kfat_enumdir,&data);
 }
 static kerrno_t kfatinode_root_enumdir(
- struct kfatinode *self, pkenumdir callback, void *closure) {
+ struct kfatinode *__restrict self, pkenumdir callback, void *closure) {
  struct kfat_enumdirdata data = {callback,closure};
  struct kfatsuperblock *sblock = (struct kfatsuperblock *)__kinode_superblock(self);
  if (sblock->f_fs.f_type == KFSTYPE_FAT32) {
@@ -213,43 +214,50 @@ static kerrno_t kfatinode_root_enumdir(
  }
 }
 
-static kerrno_t kfatinode_getattr(struct kfatinode const *self, size_t ac, union kinodeattr *av) {
- union kinodeattr *iter,*end;
+static kerrno_t
+kfatinode_getattr(struct kfatinode const *__restrict self,
+                  size_t ac, __user union kinodeattr av[]) {
+ union kinodeattr *iter,*end,attr;
  end = (iter = av)+ac;
- while (iter != end) {
-  switch (iter->ia_common.a_id) {
-   case KATTR_FS_ATIME: kfatfileheader_getatime(&self->fi_file,&iter->ia_time.tm_time); break;
-   case KATTR_FS_CTIME: kfatfileheader_getctime(&self->fi_file,&iter->ia_time.tm_time); break;
-   case KATTR_FS_MTIME: kfatfileheader_getmtime(&self->fi_file,&iter->ia_time.tm_time); break;
-   case KATTR_FS_PERM:  iter->ia_perm.p_perm = self->fi_file.f_attr&KFATFILE_ATTR_READONLY ? 0555 : 0777; break;
-   case KATTR_FS_OWNER: iter->ia_owner.o_owner = 0; break;
-   case KATTR_FS_GROUP: iter->ia_group.g_group = 0; break;
+ for (; iter != end; ++iter) {
+  if __unlikely(copy_from_user(&attr,iter,sizeof(attr))) return KE_FAULT;
+  switch (attr.ia_common.a_id) {
+   case KATTR_FS_ATIME: kfatfileheader_getatime(&self->fi_file,&attr.ia_time.tm_time); break;
+   case KATTR_FS_CTIME: kfatfileheader_getctime(&self->fi_file,&attr.ia_time.tm_time); break;
+   case KATTR_FS_MTIME: kfatfileheader_getmtime(&self->fi_file,&attr.ia_time.tm_time); break;
+   case KATTR_FS_PERM:  attr.ia_perm.p_perm = self->fi_file.f_attr&KFATFILE_ATTR_READONLY ? 0555 : 0777; break;
+   case KATTR_FS_OWNER: attr.ia_owner.o_owner = 0; break;
+   case KATTR_FS_GROUP: attr.ia_group.g_group = 0; break;
    case KATTR_FS_SIZE:
-    iter->ia_size.sz_size = (pos_t)kfatfileheader_getsize(&self->fi_file);
-    if (!iter->ia_size.sz_size && S_ISDIR(self->fi_inode.i_kind))
-     iter->ia_size.sz_size = 4096;
+    attr.ia_size.sz_size = (pos_t)kfatfileheader_getsize(&self->fi_file);
+    if (!attr.ia_size.sz_size && S_ISDIR(self->fi_inode.i_kind))
+     attr.ia_size.sz_size = 4096;
     break;
-   case KATTR_FS_INO:   iter->ia_ino.i_ino = (ino_t)kfatfileheader_getcluster(&self->fi_file); break;
-   case KATTR_FS_NLINK: iter->ia_nlink.n_lnk = 1; break;
-   case KATTR_FS_KIND:  iter->ia_kind.k_kind = self->fi_inode.i_kind; break;
+   case KATTR_FS_INO:   attr.ia_ino.i_ino = (ino_t)kfatfileheader_getcluster(&self->fi_file); break;
+   case KATTR_FS_NLINK: attr.ia_nlink.n_lnk = 1; break;
+   case KATTR_FS_KIND:  attr.ia_kind.k_kind = self->fi_inode.i_kind; break;
    default: return KE_NOSYS;
   }
-  ++iter;
+  if __unlikely(copy_to_user(iter,&attr,sizeof(attr))) return KE_FAULT;
  }
  return KE_OK;
 }
-static kerrno_t kfatinode_setattr(struct kfatinode *self, size_t ac, union kinodeattr const *av) {
- union kinodeattr const *iter,*end; int changed = 0;
+static kerrno_t
+kfatinode_setattr(struct kfatinode *__restrict self,
+                  size_t ac, __user union kinodeattr const av[]) {
+ __user union kinodeattr const *iter,*end;
+ int changed = 0; union kinodeattr attr;
  struct kfatfs *__restrict fs = &((struct kfatsuperblock *)kinode_superblock(&self->fi_inode))->f_fs;
  if __unlikely(!ac) return KE_OK;
  end = (iter = av)+ac;
- while (iter != end) {
-  switch (iter->ia_common.a_id) {
-   case KATTR_FS_ATIME: if (kfatfileheader_setatime(&self->fi_file,&iter->ia_time.tm_time)) changed = 1; break;
-   case KATTR_FS_CTIME: if (kfatfileheader_setctime(&self->fi_file,&iter->ia_time.tm_time)) changed = 1; break;
-   case KATTR_FS_MTIME: if (kfatfileheader_setmtime(&self->fi_file,&iter->ia_time.tm_time)) changed = 1; break;
+ for (; iter != end; ++iter) {
+  if __unlikely(copy_from_user(&attr,iter,sizeof(attr))) return KE_FAULT;
+  switch (attr.ia_common.a_id) {
+   case KATTR_FS_ATIME: if (kfatfileheader_setatime(&self->fi_file,&attr.ia_time.tm_time)) changed = 1; break;
+   case KATTR_FS_CTIME: if (kfatfileheader_setctime(&self->fi_file,&attr.ia_time.tm_time)) changed = 1; break;
+   case KATTR_FS_MTIME: if (kfatfileheader_setmtime(&self->fi_file,&attr.ia_time.tm_time)) changed = 1; break;
    case KATTR_FS_PERM:
-    if (iter->ia_perm.p_perm&0222) {
+    if (attr.ia_perm.p_perm&0222) {
      if (self->fi_file.f_attr&KFATFILE_ATTR_READONLY) {
       changed = 1;
       self->fi_file.f_attr &= ~(KFATFILE_ATTR_READONLY);
@@ -261,16 +269,16 @@ static kerrno_t kfatinode_setattr(struct kfatinode *self, size_t ac, union kinod
     break;
    default: return KE_NOSYS;
   }
-  ++iter;
  }
  // If nothing changed, skip saving the header
  if __unlikely(!changed) return KE_OK;
  return kfatfs_savefileheader(fs,self->fi_pos.fm_headpos,&self->fi_file);
 }
 
-static kerrno_t kfatinode_unlink(struct kfatinode *self,
-                                 struct kdirentname const *__restrict name,
-                                 struct kfatinode *inode) {
+static kerrno_t
+kfatinode_unlink(struct kfatinode *__restrict self,
+                 struct kdirentname const *__restrict name,
+                 struct kfatinode *__restrict inode) {
  struct kfatfs *fatfs; kerrno_t error;
  assert(self->fi_inode.i_type == &kfatinode_dir_type ||
         self->fi_inode.i_type == &kfatsuperblock_type.st_node);
@@ -285,9 +293,10 @@ static kerrno_t kfatinode_unlink(struct kfatinode *self,
  }
  return error;
 }
-static kerrno_t kfatinode_rmdir(struct kfatinode *self,
-                                struct kdirentname const *__restrict name,
-                                struct kfatinode *inode) {
+static kerrno_t
+kfatinode_rmdir(struct kfatinode *__restrict self,
+                struct kdirentname const *__restrict name,
+                struct kfatinode *__restrict inode) {
  struct kfatfs *fatfs; kerrno_t error;
  assert(self->fi_inode.i_type == &kfatinode_dir_type);
  assert(inode->fi_inode.i_type == &kfatinode_dir_type);
@@ -300,10 +309,10 @@ static kerrno_t kfatinode_rmdir(struct kfatinode *self,
  return error;
 }
 static kerrno_t
-kfatinode_mkdat(struct kfatinode *self,
+kfatinode_mkdat(struct kfatinode *__restrict self,
                 struct kdirentname const *__restrict name,
-                size_t ac, union kinodeattr const *av, 
-                __ref struct kfatinode **resnode,
+                size_t ac, union kinodeattr const av[], 
+                __ref struct kfatinode **__restrict resnode,
                 __u8 fat_file_attributes) {
  kerrno_t error; int need_long_header;
  kfatcls_t dir; int dir_is_sector;
@@ -342,30 +351,33 @@ err_newnode:
  __kinode_free((struct kinode *)newnode);
  return error;
 }
-static kerrno_t kfatinode_mkdir(struct kfatinode *self,
-                                struct kdirentname const *__restrict name,
-                                size_t ac, union kinodeattr const *av, 
-                                __ref struct kfatinode **resnode) {
+
+static kerrno_t
+kfatinode_mkdir(struct kfatinode *__restrict self,
+                struct kdirentname const *__restrict name,
+                size_t ac, union kinodeattr const av[], 
+                __ref struct kfatinode **__restrict resnode) {
  return kfatinode_mkdat(self,name,ac,av,resnode,KFATFILE_ATTR_DIRECTORY);
 }
-static kerrno_t kfatinode_mkreg(struct kfatinode *self,
-                                struct kdirentname const *__restrict name,
-                                size_t ac, union kinodeattr const *av, 
-                                __ref struct kfatinode **resnode) {
+static kerrno_t
+kfatinode_mkreg(struct kfatinode *__restrict self,
+                struct kdirentname const *__restrict name,
+                size_t ac, union kinodeattr const av[], 
+                __ref struct kfatinode **__restrict resnode) {
  return kfatinode_mkdat(self,name,ac,av,resnode,KFATFILE_ATTR_DIRECTORY);
 }
 
 struct kinodetype kfatinode_file_type = {
  .it_size    = sizeof(struct kfatinode),
- .it_getattr = (kerrno_t(*)(struct kinode const *,size_t ac, union kinodeattr *av))&kfatinode_getattr,
- .it_setattr = (kerrno_t(*)(struct kinode *,size_t ac, union kinodeattr const *av))&kfatinode_setattr,
+ .it_getattr = (kerrno_t(*)(struct kinode const *,size_t ac, union kinodeattr av[]))&kfatinode_getattr,
+ .it_setattr = (kerrno_t(*)(struct kinode *,size_t ac, union kinodeattr const av[]))&kfatinode_setattr,
 };
 struct kinodetype kfatinode_dir_type = {
  .it_size    = sizeof(struct kfatinode),
  .it_walk    = (kerrno_t(*)(struct kinode *,struct kdirentname const *,__ref struct kinode **))&kfatinode_dir_walk,
  .it_enumdir = (kerrno_t(*)(struct kinode *,pkenumdir,void *))&kfatinode_dir_enumdir,
- .it_getattr = (kerrno_t(*)(struct kinode const *,size_t ac, union kinodeattr *av))&kfatinode_getattr,
- .it_setattr = (kerrno_t(*)(struct kinode *,size_t ac, union kinodeattr const *av))&kfatinode_setattr,
+ .it_getattr = (kerrno_t(*)(struct kinode const *,size_t ac, union kinodeattr av[]))&kfatinode_getattr,
+ .it_setattr = (kerrno_t(*)(struct kinode *,size_t ac, union kinodeattr const av[]))&kfatinode_setattr,
  .it_unlink  = (kerrno_t(*)(struct kinode *,struct kdirentname const *,struct kinode *))&kfatinode_unlink,
  .it_rmdir   = (kerrno_t(*)(struct kinode *,struct kdirentname const *,struct kinode *))&kfatinode_rmdir,
  .it_mkdir   = (kerrno_t(*)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,__ref struct kinode **))&kfatinode_mkdir,
@@ -377,19 +389,25 @@ struct kinodetype kfatinode_dir_type = {
 #define FATNODE   ((struct kfatinode *)FILE->bf_inode)
 #define FATSUPER  ((struct kfatsuperblock *)FILE->bf_inode->i_sblock)
 #define FATFS     (&FATSUPER->f_fs)
-static kerrno_t kfatfile_loadchunk(struct kblockfile const *self,
-                                   struct kfilechunk const *chunk, void *__restrict buf) {
+static kerrno_t
+kfatfile_loadchunk(struct kblockfile const *__restrict self,
+                   struct kfilechunk const *__restrict chunk,
+                   __kernel void *__restrict buf) {
  struct kfatfs const *fs = FATFS;
  return kfatfs_loadsectors(fs,kfatfs_clusterstart(fs,(kfatcls_t)chunk->fc_data),
                            fs->f_sec4clus,buf);
 }
-static kerrno_t kfatfile_savechunk(struct kblockfile *self,
-                                   struct kfilechunk const *chunk, void const *__restrict buf) {
+static kerrno_t
+kfatfile_savechunk(struct kblockfile *__restrict self,
+                   struct kfilechunk const *__restrict chunk,
+                   __kernel void const *__restrict buf) {
  struct kfatfs *__restrict fs = FATFS;
  return kfatfs_savesectors(fs,kfatfs_clusterstart(fs,(kfatcls_t)chunk->fc_data),
                            fs->f_sec4clus,buf);
 }
-static kerrno_t kfatfile_nextchunk(struct kblockfile *self, struct kfilechunk *chunk) {
+static kerrno_t
+kfatfile_nextchunk(struct kblockfile *__restrict self,
+                   struct kfilechunk *__restrict chunk) {
  kerrno_t error; kfatcls_t target;
  struct kfatfs *__restrict fs = FATFS;
  assertf(chunk->fc_data < fs->f_clseof,"The given chunk contains invalid data");
@@ -397,7 +415,9 @@ static kerrno_t kfatfile_nextchunk(struct kblockfile *self, struct kfilechunk *c
  if __likely(KE_ISOK(error)) chunk->fc_data = (__u64)target;
  return error;
 }
-static kerrno_t kfatfile_findchunk(struct kblockfile *self, struct kfilechunk *chunk) {
+static kerrno_t
+kfatfile_findchunk(struct kblockfile *__restrict self,
+                   struct kfilechunk *__restrict chunk) {
  kfatcls_t rescls,newcls; kerrno_t error; __u64 count;
  struct kfatinode *fatnode = FATNODE;
  struct kfatfs *__restrict fs = &((struct kfatsuperblock *)fatnode->fi_inode.i_sblock)->f_fs;
@@ -422,7 +442,9 @@ static kerrno_t kfatfile_findchunk(struct kblockfile *self, struct kfilechunk *c
  chunk->fc_data = rescls;
  return KE_OK;
 }
-static kerrno_t kfatfile_releasechunks(struct kblockfile *self, __u64 cindex) {
+static kerrno_t
+kfatfile_releasechunks(struct kblockfile *__restrict self,
+                       __u64 cindex) {
  kfatcls_t rescls,newcls; kerrno_t error;
  struct kfatinode *fatnode = FATNODE;
  struct kfatfs *__restrict fs = &((struct kfatsuperblock *)fatnode->fi_inode.i_sblock)->f_fs;
@@ -436,11 +458,15 @@ static kerrno_t kfatfile_releasechunks(struct kblockfile *self, __u64 cindex) {
  }
  return kfatfs_fat_freeall(fs,rescls);
 }
-static kerrno_t kfatfile_getsize(struct kblockfile const *self, __pos_t *fsize) {
+static kerrno_t
+kfatfile_getsize(struct kblockfile const *__restrict self,
+                 __pos_t *fsize) {
  *fsize = (__pos_t)kfatfileheader_getsize(&(FATNODE)->fi_file);
  return KE_OK;
 }
-static kerrno_t kfatfile_setsize(struct kblockfile *self, __pos_t fsize) {
+static kerrno_t
+kfatfile_setsize(struct kblockfile *__restrict self,
+                 __pos_t fsize) {
  struct kfatinode *fatinode = FATNODE;
  struct kfatfs *__restrict fs = FATFS;
 #ifdef __USE_FILE_OFFSET64
@@ -449,7 +475,9 @@ static kerrno_t kfatfile_setsize(struct kblockfile *self, __pos_t fsize) {
  fatinode->fi_file.f_size = leswap_32((__u32)fsize);
  return kfatfs_savefileheader(fs,fatinode->fi_pos.fm_headpos,&fatinode->fi_file);
 }
-static kerrno_t kfatfile_getchunksize(struct kblockfile const *self, size_t *chsize) {
+static kerrno_t
+kfatfile_getchunksize(struct kblockfile const *__restrict self,
+                      size_t *__restrict chsize) {
  struct kfatfs const *fatfs;
  fatfs = FATFS;
  *chsize = fatfs->f_secsize*fatfs->f_sec4clus;
@@ -513,8 +541,8 @@ struct ksuperblocktype kfatsuperblock_type = {
   .it_quit    = (void(*)(struct kinode *))&kfatsuperinode_quit,
   .it_walk    = (kerrno_t(*)(struct kinode *,struct kdirentname const *,__ref struct kinode **))&kfatinode_root_walk,
   .it_enumdir = (kerrno_t(*)(struct kinode *,pkenumdir,void *))&kfatinode_root_enumdir,
-  .it_getattr = (kerrno_t(*)(struct kinode const *,size_t ac, union kinodeattr *av))&kfatinode_getattr,
-  .it_setattr = (kerrno_t(*)(struct kinode *,size_t ac, union kinodeattr const *av))&kfatinode_setattr,
+  .it_getattr = (kerrno_t(*)(struct kinode const *,size_t ac, union kinodeattr av[]))&kfatinode_getattr,
+  .it_setattr = (kerrno_t(*)(struct kinode *,size_t ac, union kinodeattr const av[]))&kfatinode_setattr,
   .it_unlink  = (kerrno_t(*)(struct kinode *,struct kdirentname const *,struct kinode *))&kfatinode_unlink,
   .it_rmdir   = (kerrno_t(*)(struct kinode *,struct kdirentname const *,struct kinode *))&kfatinode_rmdir,
   .it_mkdir   = (kerrno_t(*)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,__ref struct kinode **))&kfatinode_mkdir,

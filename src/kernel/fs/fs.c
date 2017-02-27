@@ -148,7 +148,7 @@ void kinode_destroy(struct kinode *__restrict self) {
 
 kerrno_t
 kinode_user_getattr(struct kinode const *__restrict self, size_t ac,
-                    __user union kinodeattr *av) {
+                    __user union kinodeattr av[]) {
  kerrno_t error; kassert_kinode(self);
  error = kcloselock_beginop((struct kcloselock *)&self->i_closelock);
  if __unlikely(KE_ISERR(error)) return error;
@@ -160,7 +160,7 @@ kinode_user_getattr(struct kinode const *__restrict self, size_t ac,
 }
 kerrno_t
 kinode_user_setattr(struct kinode *__restrict self, size_t ac,
-                    __user union kinodeattr const *av) {
+                    __user union kinodeattr const av[]) {
  kerrno_t error; kassert_kinode(self);
  error = kcloselock_beginop((struct kcloselock *)&self->i_closelock);
  if __unlikely(KE_ISERR(error)) return error;
@@ -349,7 +349,7 @@ kinode_remove(struct kinode *__restrict self,
 kerrno_t
 kinode_mkdir(struct kinode *__restrict self,
              struct kdirentname const *__restrict name,
-             size_t ac, __user union kinodeattr const *av,
+             size_t ac, __user union kinodeattr const av[],
              __ref struct kinode **resnode) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,struct kinode **);
  kerrno_t error;
@@ -367,7 +367,7 @@ kinode_mkdir(struct kinode *__restrict self,
 kerrno_t
 kinode_mkreg(struct kinode *__restrict self,
              struct kdirentname const *__restrict name,
-             size_t ac, __user union kinodeattr const *av,
+             size_t ac, __user union kinodeattr const av[],
              __ref struct kinode **resnode) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,size_t,union kinodeattr const *,struct kinode **);
  kerrno_t error;
@@ -385,7 +385,7 @@ kinode_mkreg(struct kinode *__restrict self,
 kerrno_t
 kinode_mklnk(struct kinode *__restrict self,
              struct kdirentname const *__restrict name,
-             size_t ac, __user union kinodeattr const *av, 
+             size_t ac, __user union kinodeattr const av[], 
              struct kdirentname const *__restrict target,
              __ref struct kinode **resnode) {
  kerrno_t(*callback)(struct kinode *,struct kdirentname const *,size_t,
@@ -1008,7 +1008,7 @@ kdirent_walkall(struct kfspathenv const *__restrict env,
 
 __crit kerrno_t
 kdirent_mkdirat(struct kfspathenv const *__restrict env, char const *path,
-                size_t pathmax, size_t ac, union kinodeattr const *av,
+                size_t pathmax, size_t ac, union kinodeattr const av[],
                 __ref /*opt*/struct kdirent **resent,
                 __ref /*opt*/struct kinode **resnode) {
  struct kdirentname last; kerrno_t error;
@@ -1029,7 +1029,7 @@ kdirent_mkdirat(struct kfspathenv const *__restrict env, char const *path,
 __crit kerrno_t
 kdirent_mkregat(struct kfspathenv const *__restrict env,
                 char const *__restrict path, size_t pathmax,
-                size_t ac, union kinodeattr const *av,
+                size_t ac, union kinodeattr const av[],
                 __ref /*opt*/struct kdirent **resent,
                 __ref /*opt*/struct kinode **resnode) {
  struct kdirentname last; kerrno_t error;
@@ -1050,7 +1050,7 @@ kdirent_mkregat(struct kfspathenv const *__restrict env,
 __crit kerrno_t
 kdirent_mklnkat(struct kfspathenv const *__restrict env,
                 char const *__restrict path, size_t pathmax,
-                size_t ac, union kinodeattr const *av,
+                size_t ac, union kinodeattr const av[],
                 struct kdirentname const *__restrict target,
                 __ref /*opt*/struct kdirent **resent,
                 __ref /*opt*/struct kinode **resnode) {

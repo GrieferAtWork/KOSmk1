@@ -68,18 +68,49 @@ extern __wunused __nonnull((1)) ksymhash_t
 ksymhash_of(char const *__restrict text, __size_t size);
 #endif
 
+struct kfileandline {
+ char const  *fal_path;  /*< [0..1] Path name. */
+ char const  *fal_file;  /*< [0..1] File name. */
+ unsigned int fal_line;  /*< Line number. */
+ __u32        fal_flags; /*< flags (Set of 'KFILEANDLINE_FLAG_*'). */
+#define KFILEANDLINE_FLAG_NONE     0x00000000
+#define KFILEANDLINE_FLAG_FREEPATH 0x00000001 /*< Caller must free() 'fal_path'. */
+#define KFILEANDLINE_FLAG_FREEFILE 0x00000002 /*< Caller must free() 'fal_file'. */
+};
+#define kfileandline_quit(self) \
+ (((self)->fal_flags&KFILEANDLINE_FLAG_FREEPATH) ? free((char *)(self)->fal_path) : (void)0,\
+  ((self)->fal_flags&KFILEANDLINE_FLAG_FREEFILE) ? free((char *)(self)->fal_file) : (void)0)
+
+
+struct kaddr2line {
+ __u32 a2l_kind; /*< The kind of addr2line technology used. */
+};
+
+//////////////////////////////////////////////////////////////////////////
+// Invoke an addr2line technology, as described by 'lib'.
+// Upon success, '*result' is filled with a
+// valid instance of an'kfileandline' structure.
+extern __crit __wunused __nonnull((1,2,4)) kerrno_t
+kaddr2line_exec(struct kaddr2line const *__restrict self,
+                struct kshlib *__restrict lib,
+                ksymaddr_t addr, struct kfileandline *__restrict result);
+
+
+
+
 struct ksymbol {
- struct ksymbol *s_nextname; /*< [0..1][owned] Next symbol who's name has the same hash. */
- struct ksymbol *s_nextaddr; /*< [0..1][owned] Next symbol who's address has the same hash. */
- ksymaddr_t      s_addr;     /*< Address associated with this symbol. */
- __size_t        s_size;     /*< Size of this symbol (Or ZERO(0) if not known). */
- ksymhash_t      s_hash;     /*< Unmodulated hash of this symbol. */
- __size_t        s_shndx;    /*< Section index of this symbol (== Elf32_Sym::st_shndx).
-                                 NOTE: In PE-mode, this field is set to 'SHN_UNDEF' for imported symbols, and
-                                       some other value for those either exported, or simply not imported. */
- __size_t        s_nmsz;     /*< Length of this symbol's name. */
- char            s_name[1];  /*< [s_nmsz] Name of the symbol (inlined to improve speed). */
- //char          s_zero;     /*< Ensure zero-termination of 's_name'. */
+ struct ksymbol    *s_nextname; /*< [0..1][owned] Next symbol who's name has the same hash. */
+ struct ksymbol    *s_nextaddr; /*< [0..1][owned] Next symbol who's address has the same hash. */
+ ksymaddr_t         s_addr;     /*< Address associated with this symbol. */
+ __size_t           s_size;     /*< Size of this symbol (Or ZERO(0) if not known). */
+ ksymhash_t         s_hash;     /*< Unmodulated hash of this symbol. */
+ struct kaddr2line *s_a2l;      /*< [0..1] The addr2line engine used for unwinding, or NULL if not available. */
+ __size_t           s_shndx;    /*< Section index of this symbol (== Elf32_Sym::st_shndx).
+                                    NOTE: In PE-mode, this field is set to 'SHN_UNDEF' for imported symbols, and
+                                          some other value for those either exported, or simply not imported. */
+ __size_t           s_nmsz;     /*< Length of this symbol's name. */
+ char               s_name[1];  /*< [s_nmsz] Name of the symbol (inlined to improve speed). */
+ //char             s_zero;     /*< Ensure zero-termination of 's_name'. */
 };
 
 extern __crit __wunused __malloccall __nonnull((1))
@@ -536,12 +567,12 @@ kshlib_user_getinfo(struct kshlib *__restrict self,
 // or NULL if not symbol is located at that address.
 extern __wunused __nonnull((1)) struct ksymbol const *
 kshlib_get_closest_symbol(struct kshlib *__restrict self,
-                          ksymaddr_t sym_address);
+                          ksymaddr_t sym_address, __u32 *flags);
 
 extern __wunused __nonnull((1,2)) struct ksymbol const *
 kshlib_get_any_symbol(struct kshlib *__restrict self,
                       char const *name, __size_t name_size,
-                      __size_t name_hash);
+                      __size_t name_hash, __u32 *flags);
 
 
 #if KCONFIG_SHLIB_RECENT_CACHE_SIZE
