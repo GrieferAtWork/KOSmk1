@@ -153,7 +153,7 @@ kproc_find_base_for_module(struct kproc *__restrict self,
  // L: lib
  // A: application
  if (addr_hi <= addr_lo) return (void *)(uintptr_t)-1;
- if (module->sh_flags&KSHLIB_FLAG_PREFER_FIXED) {
+ if (module->sh_flags&KMODFLAG_PREFFIXED) {
   /* Prefer loading the module to its lowest-address,
    * thus potentially speeding up relocations later on.
    * >> This is used for Windows PE binaries. */
@@ -217,7 +217,7 @@ kproc_insmod_single_unlocked(struct kproc *__restrict self,
  *module_id = (kmodid_t)(modtab-self->p_modules.pms_modv);
  if __unlikely(KE_ISERR(error = kshlib_incref(module))) goto err_modtab;
  // Use a fixed base of NULL for fixed-address modules (such as executables)
- if ((module->sh_flags&KSHLIB_FLAG_FIXED) ||
+ if ((module->sh_flags&KMODFLAG_FIXED) ||
      !module->sh_data.ed_secc) modtab->pm_base = NULL;
  else {
   modtab->pm_base = kproc_find_base_for_module(self,module);
@@ -251,9 +251,9 @@ kproc_delmod_single_unlocked(struct kproc *__restrict self, kmodid_t module_id,
  kassertobj(dep_idc);
  assert(kproc_islocked(self,KPROC_LOCK_SHM));
  assert(kproc_islocked(self,KPROC_LOCK_MODS));
- if __unlikely(module_id >= self->p_modules.pms_moda) return KE_NOENT;
+ if __unlikely(module_id >= self->p_modules.pms_moda) return KE_INVAL;
  module = self->p_modules.pms_modv+module_id;
- if __unlikely(!module->pm_lib) return KE_NOENT;
+ if __unlikely(!module->pm_lib) return KE_INVAL;
  kassert_kshlib(module->pm_lib);
  assertf(module->pm_loadc != 0,"Invalid module load counter");
  if (--module->pm_loadc != 0) return KS_UNCHANGED; // Module must still remain loaded
@@ -466,7 +466,7 @@ kproc_delmod_all(struct kproc *__restrict self) {
   if (!self->p_modules.pms_moda) break;
   for (i = self->p_modules.pms_moda; i; ++i) {
    error = kproc_delmod_unlocked(self,i);
-   if (KE_ISERR(error) && error != KE_NOENT) error_occurred = 1;
+   if (KE_ISERR(error) && error != KE_INVAL) error_occurred = 1;
   }
   if (error_occurred) break;
  }

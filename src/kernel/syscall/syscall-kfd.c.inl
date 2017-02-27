@@ -150,28 +150,39 @@ SYSCALL(sys_kfd_closeall) {
 /*< _syscall{4|5}(kerrno_t,kfd_seek,int,fd,{__s64,off|__s32,offhi,__s32,offlo},int,whence,__u64 *,newpos); */
 SYSCALL(sys_kfd_seek) {
 #ifdef KFD_HAVE_BIARG_POSITIONS
- LOAD5(int    ,K (fd),
-       __s64  ,D (off),void,N,
-       int    ,K (whence),
-       __u64 *,U0(newpos));
+ LOAD5(int    ,K(fd),
+       __s64  ,D(off),void,N,
+       int    ,K(whence),
+       __u64 *,K(pnewpos));
 #else
- LOAD4(int    ,K (fd),
-       __s64  ,K (off),
-       int    ,K (whence),
-       __u64 *,U0(newpos));
+ LOAD4(int    ,K(fd),
+       __s64  ,K(off),
+       int    ,K(whence),
+       __u64 *,K(pnewpos));
 #endif
- RETURN(KTASK_CRIT(kproc_seekfd(kproc_self(),fd,off,whence,newpos)));
+ __u64 newpos; kerrno_t error;
+ KTASK_CRIT_BEGIN_FIRST
+ error = kproc_seekfd(kproc_self(),fd,off,whence,
+                      pnewpos ? &newpos : NULL);
+ if (__likely(KE_ISOK(error)) && pnewpos &&
+     __unlikely(copy_to_user(pnewpos,&newpos,sizeof(newpos)))
+     ) error = KE_FAULT;
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /*< _syscall4(kerrno_t,kfd_read,int,fd,void *,buf,size_t,bufsize,size_t *,rsize); */
 SYSCALL(sys_kfd_read) {
  LOAD4(int     ,K(fd),
-       void   *,U(buf),
+       void   *,K(buf),
        size_t  ,K(bufsize),
-       size_t *,U(rsize));
- kerrno_t error;
+       size_t *,K(prsize));
+ kerrno_t error; size_t rsize;
  KTASK_CRIT_BEGIN_FIRST
- error = kproc_kernel_readfd(kproc_self(),fd,buf,bufsize,rsize);
+ error = kproc_user_readfd(kproc_self(),fd,buf,bufsize,&rsize);
+ if (__likely(KE_ISOK(error)) &&
+     __unlikely(copy_to_user(prsize,&rsize,sizeof(rsize)))
+     ) error = KE_FAULT;
  KTASK_CRIT_END
  RETURN(error);
 }
@@ -179,10 +190,17 @@ SYSCALL(sys_kfd_read) {
 /*< _syscall4(kerrno_t,kfd_write,int,fd,void const *,buf,size_t,bufsize,size_t *,wsize); */
 SYSCALL(sys_kfd_write) {
  LOAD4(int         ,K(fd),
-       void const *,U(buf),
+       void const *,K(buf),
        size_t      ,K(bufsize),
-       size_t     *,U(wsize));
- RETURN(KTASK_CRIT(kproc_kernel_writefd(kproc_self(),fd,buf,bufsize,wsize)));
+       size_t     *,K(pwsize));
+ kerrno_t error; size_t wsize;
+ KTASK_CRIT_BEGIN_FIRST
+ error = kproc_user_writefd(kproc_self(),fd,buf,bufsize,&wsize);
+ if (__likely(KE_ISOK(error)) &&
+     __unlikely(copy_to_user(pwsize,&wsize,sizeof(wsize)))
+     ) error = KE_FAULT;
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /*< _syscall{5|6}(kerrno_t,kfd_pread,int,fd,{__u64,pos|__u32,poshi,__u32,poslo},void *,buf,size_t,bufsize,size_t *,rsize); */
@@ -190,17 +208,24 @@ SYSCALL(sys_kfd_pread) {
 #ifdef KFD_HAVE_BIARG_POSITIONS
  LOAD6(int     ,K(fd),
        __u64   ,D(pos),void,N,
-       void   *,U(buf),
+       void   *,K(buf),
        size_t  ,K(bufsize),
-       size_t *,U(rsize));
+       size_t *,K(prsize));
 #else
  LOAD5(int     ,K(fd),
        __u64   ,K(pos),
-       void   *,U(buf),
+       void   *,K(buf),
        size_t  ,K(bufsize),
-       size_t *,U(rsize));
+       size_t *,K(prsize));
 #endif
- RETURN(KTASK_CRIT(kproc_kernel_preadfd(kproc_self(),fd,pos,buf,bufsize,rsize)));
+ kerrno_t error; size_t rsize;
+ KTASK_CRIT_BEGIN_FIRST
+ error = kproc_user_preadfd(kproc_self(),fd,pos,buf,bufsize,&rsize);
+ if (__likely(KE_ISOK(error)) &&
+     __unlikely(copy_to_user(prsize,&rsize,sizeof(rsize)))
+     ) error = KE_FAULT;
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /*< _syscall{5|6}(kerrno_t,kfd_pwrite,int,fd,{__u64,pos|__u32,poshi,__u32,poslo},void const *,buf,size_t,bufsize,size_t *,wsize); */
@@ -208,23 +233,34 @@ SYSCALL(sys_kfd_pwrite) {
 #ifdef KFD_HAVE_BIARG_POSITIONS
  LOAD6(int         ,K(fd),
        __u64       ,D(pos),void,N,
-       void const *,U(buf),
+       void const *,K(buf),
        size_t      ,K(bufsize),
-       size_t     *,U(wsize));
+       size_t     *,K(pwsize));
 #else
  LOAD5(int         ,K(fd),
        __u64       ,K(pos),
-       void const *,U(buf),
+       void const *,K(buf),
        size_t      ,K(bufsize),
-       size_t     *,U(wsize));
+       size_t     *,K(pwsize));
 #endif
- RETURN(KTASK_CRIT(kproc_kernel_pwritefd(kproc_self(),fd,pos,buf,bufsize,wsize)));
+ kerrno_t error; size_t wsize;
+ KTASK_CRIT_BEGIN_FIRST
+ error = kproc_user_pwritefd(kproc_self(),fd,pos,buf,bufsize,&wsize);
+ if (__likely(KE_ISOK(error)) &&
+     __unlikely(copy_to_user(pwsize,&wsize,sizeof(wsize)))
+     ) error = KE_FAULT;
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /*< _syscall1(kerrno_t,kfd_flush,int,fd); */
 SYSCALL(sys_kfd_flush) {
  LOAD1(int,K(fd));
- RETURN(KTASK_CRIT(kproc_flushfd(kproc_self(),fd)));
+ kerrno_t error;
+ KTASK_CRIT_BEGIN_FIRST
+ error = kproc_flushfd(kproc_self(),fd);
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /*< _syscall{2|3}(kerrno_t,kfd_trunc,int,fd,{__u64,size|__u32,sizehi,__u32,sizelo}); */
@@ -236,7 +272,11 @@ SYSCALL(sys_kfd_trunc) {
  LOAD2(int     ,K(fd),
        __u64   ,K(size));
 #endif
- RETURN(KTASK_CRIT(kproc_truncfd(kproc_self(),fd,size)));
+ kerrno_t error;
+ KTASK_CRIT_BEGIN_FIRST
+ error = kproc_truncfd(kproc_self(),fd,size);
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /*< _syscall3(kerrno_t,kfd_fcntl,int,fd,int,cmd,void *,arg); */
@@ -244,7 +284,11 @@ SYSCALL(sys_kfd_fcntl) {
  LOAD3(int   ,K(fd),
        int   ,K(cmd),
        void *,K(arg));
- RETURN(KTASK_CRIT(kproc_user_fcntlfd(kproc_self(),fd,cmd,arg)));
+ kerrno_t error;
+ KTASK_CRIT_BEGIN_FIRST
+ error = kproc_user_fcntlfd(kproc_self(),fd,cmd,arg);
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /*< _syscall3(kerrno_t,kfd_ioctl,int,fd,kattr_t,attr,void *,cmd); */
@@ -252,26 +296,42 @@ SYSCALL(sys_kfd_ioctl) {
  LOAD3(int    ,K(fd),
        kattr_t,K(cmd),
        void  *,K(arg));
- RETURN(KTASK_CRIT(kproc_user_ioctlfd(kproc_self(),fd,cmd,arg)));
+ kerrno_t error;
+ KTASK_CRIT_BEGIN_FIRST
+ error = kproc_user_ioctlfd(kproc_self(),fd,cmd,arg);
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /*< _syscall5(kerrno_t,kfd_getattr,int,fd,kattr_t,attr,void *,buf,size_t,bufsize,size_t *,reqsize); */
 SYSCALL(sys_kfd_getattr) {
- LOAD5(int     ,K (fd),
-       kattr_t ,K (attr),
-       void   *,U (buf),
-       size_t  ,K (bufsize),
-       size_t *,U0(reqsize));
- RETURN(KTASK_CRIT(kproc_kernel_getattrfd(kproc_self(),fd,attr,buf,bufsize,reqsize)));
+ LOAD5(int     ,K(fd),
+       kattr_t ,K(attr),
+       void   *,K(buf),
+       size_t  ,K(bufsize),
+       size_t *,K(preqsize));
+ kerrno_t error; size_t reqsize;
+ KTASK_CRIT_BEGIN_FIRST
+ error = kproc_user_getattrfd(kproc_self(),fd,attr,buf,bufsize,
+                              preqsize ? &reqsize : NULL);
+ if (__likely(KE_ISOK(error)) && preqsize &&
+     __unlikely(copy_to_user(preqsize,&reqsize,sizeof(reqsize)))
+     ) error = KE_FAULT;
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /*< _syscall4(kerrno_t,kfd_setattr,int,fd,kattr_t,attr,void const *,buf,size_t,bufsize); */
 SYSCALL(sys_kfd_setattr) {
  LOAD4(int     ,K(fd),
        kattr_t ,K(attr),
-       void   *,U(buf),
+       void   *,K(buf),
        size_t  ,K(bufsize));
- RETURN(KTASK_CRIT(kproc_kernel_setattrfd(kproc_self(),fd,attr,buf,bufsize)));
+ kerrno_t error;
+ KTASK_CRIT_BEGIN_FIRST
+ error = kproc_user_setattrfd(kproc_self(),fd,attr,buf,bufsize);
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /*< _syscall3(kerrno_t,kfd_readdir,int,fd,struct kfddirent *,dent,__u32,flags); */
@@ -370,8 +430,10 @@ SYSCALL(sys_kfd_dup) {
  LOAD2(int,K(fd),
        int,K(flags));
  kerrno_t error; int result;
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_dupfd(kproc_self(),fd,&result,(kfdflag_t)flags);
  if __likely(KE_ISOK(error)) error = result;
+ KTASK_CRIT_END
  RETURN(error);
 }
 
@@ -381,8 +443,10 @@ SYSCALL(sys_kfd_dup2) {
        int,K(resfd),
        int,K(flags));
  kerrno_t error;
+ KTASK_CRIT_BEGIN_FIRST
  error = kproc_dupfd2(kproc_self(),fd,resfd,(kfdflag_t)flags);
  if __likely(KE_ISOK(error)) error = resfd;
+ KTASK_CRIT_END
  RETURN(error);
 }
 

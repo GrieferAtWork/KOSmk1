@@ -82,10 +82,10 @@ __local kerrno_t longnamebuffer_insertfile(struct longnamebuffer *self, struct k
 
 
 #ifdef DIRISSEC
-kerrno_t kfatfs_enumdirsec(struct kfatfs *self, kfatsec_t dirsec, __u32 maxsize,
+kerrno_t kfatfs_enumdirsec(struct kfatfs *__restrict self, kfatsec_t dirsec, __u32 maxsize,
                            pkfatfs_enumdir_callback callback, void *closure)
 #else
-kerrno_t kfatfs_enumdir(struct kfatfs *self, kfatcls_t dir,
+kerrno_t kfatfs_enumdir(struct kfatfs *__restrict self, kfatcls_t dir,
                         pkfatfs_enumdir_callback callback, void *closure)
 #endif
 {

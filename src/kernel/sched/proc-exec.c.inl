@@ -123,7 +123,7 @@ kproc_exec(struct kshlib *__restrict exec_main,
          "exec() can't handle KE_INTR-style interrupts.\n"
          "Call this function from within a ktask_crit_begin_nointr()-block.");
  assertf(self != kproc_kernel(),"Can't exec in kernel process.");
- if __unlikely(exec_main->sh_callbacks.slc_start == KSYM_INVALID)
+ if __unlikely(!(exec_main->sh_flags&KMODFLAG_CANEXEC))
   return KE_NOEXEC; // No entry point found
  // Create an environment, based on what is described by the given arguments.
  error = kprocenv_init_from_execargs(&newenv,self->p_environ.pe_memmax,

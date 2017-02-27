@@ -95,6 +95,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kos", "kos", "{0BC61691-24B
 	ProjectSection(SolutionItems) = preProject
 		..\include\kos\__alloca.h = ..\include\kos\__alloca.h
 		..\include\kos\__byteswap.h = ..\include\kos\__byteswap.h
+		..\include\kos\addrtree.h = ..\include\kos\addrtree.h
 		..\include\kos\aligned_storage.h = ..\include\kos\aligned_storage.h
 		..\include\kos\arch.h = ..\include\kos\arch.h
 		..\include\kos\asm.h = ..\include\kos\asm.h

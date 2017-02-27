@@ -264,7 +264,7 @@ err_depiter:
      } else {
       --self->sh_deps.sl_libc;
      }
-    } else if (!(dep->sh_flags&KSHLIB_FLAG_LOADED)) {
+    } else if (!(dep->sh_flags&KMODFLAG_LOADED)) {
      k_syslogf_prefixfile(KLOG_ERROR,elf_file,"[ELF] Dependency loop: %q\n",name);
      // Dependency loop
      error = KE_LOOP;
@@ -617,14 +617,16 @@ __crit kerrno_t kshlib_elf32_new(__ref struct kshlib **result, struct kfile *__r
  if __unlikely((lib = omalloc(struct kshlib)) == NULL) return KE_NOMEM;
  kobject_init(lib,KOBJECT_MAGIC_SHLIB);
  lib->sh_refcnt = 1;
- lib->sh_flags = KSHLIB_FLAG_NONE;
+ lib->sh_flags = KMODFLAG_NONE|KMODKIND_ELF32;
  error = kfile_kernel_readall(elf_file,&ehdr,sizeof(ehdr));
  if __unlikely(KE_ISERR(error)) goto err_lib;
  if __unlikely(ehdr.ehrd_magic[0] != ELFMAG0 || ehdr.ehrd_magic[1] != ELFMAG1
             || ehdr.ehrd_magic[2] != ELFMAG2 || ehdr.ehrd_magic[3] != ELFMAG3
             ) { error = KE_NOEXEC; goto err_lib; }
- // TODO: Is there some other (better conforming) way of detecting fixed-address images?
- if (ehdr.e_type == ET_EXEC) lib->sh_flags |= KSHLIB_FLAG_FIXED;
+ /* TODO: Is there some other (better conforming) way of detecting fixed-address images? */
+ if (ehdr.e_type == ET_EXEC) {
+  lib->sh_flags |= KMODFLAG_FIXED|KMODFLAG_BINARY|KMODFLAG_CANEXEC;
+ }
  error = kfile_incref(lib->sh_file = elf_file);
  if __unlikely(KE_ISERR(error)) goto err_lib;
  error = kshlibcache_addlib(lib);
@@ -642,21 +644,17 @@ __crit kerrno_t kshlib_elf32_new(__ref struct kshlib **result, struct kfile *__r
  dyninfo.dyn_symtable_header.sh_offset  = 0;
  dyninfo.dyn_symtable_header.sh_size    = (Elf32_Word)-1;
  dyninfo.dyn_symtable_header.sh_entsize = (Elf32_Word)-1;
- if (ehdr.e_type == ET_EXEC) {
-  lib->sh_callbacks.slc_start = (ksymaddr_t)ehdr.e_entry;
- } else {
-  lib->sh_callbacks.slc_start = KSYM_INVALID;
- }
- lib->sh_callbacks.slc_init            = KSYM_INVALID;
- lib->sh_callbacks.slc_fini            = KSYM_INVALID;
- lib->sh_callbacks.slc_preinit_array_v = KSYM_INVALID;
- lib->sh_callbacks.slc_preinit_array_c = 0;
- lib->sh_callbacks.slc_init            = KSYM_INVALID;
- lib->sh_callbacks.slc_init_array_v    = KSYM_INVALID;
- lib->sh_callbacks.slc_init_array_c    = 0;
- lib->sh_callbacks.slc_fini            = KSYM_INVALID;
- lib->sh_callbacks.slc_fini_array_v    = KSYM_INVALID;
- lib->sh_callbacks.slc_fini_array_c    = 0;
+ lib->sh_callbacks.slc_start            = (ksymaddr_t)ehdr.e_entry;
+ lib->sh_callbacks.slc_init             = KSYM_INVALID;
+ lib->sh_callbacks.slc_fini             = KSYM_INVALID;
+ lib->sh_callbacks.slc_preinit_array_v  = KSYM_INVALID;
+ lib->sh_callbacks.slc_preinit_array_c  = 0;
+ lib->sh_callbacks.slc_init             = KSYM_INVALID;
+ lib->sh_callbacks.slc_init_array_v     = KSYM_INVALID;
+ lib->sh_callbacks.slc_init_array_c     = 0;
+ lib->sh_callbacks.slc_fini             = KSYM_INVALID;
+ lib->sh_callbacks.slc_fini_array_v     = KSYM_INVALID;
+ lib->sh_callbacks.slc_fini_array_c     = 0;
  // Load program headers and collect dynamic information
  error = kshlib_elf32_load_pheaders(lib,&dyninfo,elf_file,&ehdr);
  if __unlikely(KE_ISERR(error)) goto err_cache;
@@ -667,8 +665,12 @@ __crit kerrno_t kshlib_elf32_new(__ref struct kshlib **result, struct kfile *__r
  kreloc_init(&lib->sh_reloc);
  error = kshlib_elf32_load_sheaders(lib,&dyninfo,elf_file,&ehdr);
  if __unlikely(KE_ISERR(error)) goto err_post_pheaders;
- else kshlibrecent_add(lib);
- lib->sh_flags |= KSHLIB_FLAG_LOADED;
+ else {
+  /* Without any relocations, the module must be loaded as fixed. */
+  //if (!lib->sh_reloc.r_vecc) lib->sh_flags |= KMODFLAG_FIXED;
+  kshlibrecent_add(lib);
+ }
+ lib->sh_flags |= KMODFLAG_LOADED;
  *result = lib;
  return error;
 err_post_pheaders:

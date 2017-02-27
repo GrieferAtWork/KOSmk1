@@ -27,7 +27,9 @@
 #ifdef __KERNEL__
 #include <kos/compiler.h>
 #include <kos/types.h>
+#include <stdarg.h>
 #ifndef __INTELLISENSE__
+#include <stdio.h>
 #include <kos/errno.h>
 #include <kos/kernel/task.h>
 #include <kos/kernel/proc.h>
@@ -47,22 +49,43 @@ extern __nonnull((2)) __wunused __size_t copy_in_user(__user void *dst, __user v
 extern __crit __nonnull((2)) __wunused __size_t __copy_from_user_c(__kernel void *dst, __user void const *src, __size_t bytes);
 extern __crit __nonnull((2)) __wunused __size_t __copy_to_user_c(__user void *dst, __kernel void const *__restrict src, __size_t bytes);
 extern __crit __nonnull((2)) __wunused __size_t __copy_in_user_c(__user void *dst, __user void const *src, __size_t bytes);
-#define __copy_from_user(dst,src,bytes) KTASK_CRIT(__copy_from_user_c(dst,src,bytes))
-#define __copy_to_user(dst,src,bytes)   KTASK_CRIT(__copy_to_user_c(dst,src,bytes))
-#define __copy_in_user(dst,src,bytes)   KTASK_CRIT(__copy_in_user_c(dst,src,bytes))
-#define copy_from_user(dst,src,bytes)  (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : __copy_from_user(dst,src,bytes))
-#define copy_to_user(dst,src,bytes)    (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : __copy_to_user(dst,src,bytes))
-#define copy_in_user(dst,src,bytes)    (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : __copy_in_user(dst,src,bytes))
+#define __do_copy_from_user(dst,src,bytes) KTASK_CRIT(__copy_from_user_c(dst,src,bytes))
+#define __do_copy_to_user(dst,src,bytes)   KTASK_CRIT(__copy_to_user_c(dst,src,bytes))
+#define __do_copy_in_user(dst,src,bytes)   KTASK_CRIT(__copy_in_user_c(dst,src,bytes))
+#define __copy_from_user(dst,src,bytes)  (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : __do_copy_from_user(dst,src,bytes))
+#define __copy_to_user(dst,src,bytes)    (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : __do_copy_to_user(dst,src,bytes))
+#define __copy_in_user(dst,src,bytes)    (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : __do_copy_in_user(dst,src,bytes))
+#define copy_from_user(dst,src,bytes)    ((__builtin_constant_p(bytes) && !(bytes)) ? 0 : __copy_from_user(dst,src,bytes))
+#define copy_to_user(dst,src,bytes)      ((__builtin_constant_p(bytes) && !(bytes)) ? 0 : __copy_to_user(dst,src,bytes))
+#define copy_in_user(dst,src,bytes)      ((__builtin_constant_p(bytes) && !(bytes)) ? 0 : __copy_in_user(dst,src,bytes))
 #endif
 
 #ifdef __INTELLISENSE__
-// Returns the amount of bytes not set
-extern __wunused __size_t user_memset(__user void const *p, int byte, __size_t bytes);
+// Returns the amount of bytes not written
+extern __wunused __size_t user_memset(__user void *p, int byte, __size_t bytes);
+extern __wunused __size_t user_strncpy(__user char *p, __kernel char const *s, __size_t maxchars);
+// Returns the amount of characters not written if the buffer was too
+// small, or the negative amount not written if the buffer was faulty.
+// >> if (user_snprintf(...) < 0) return KE_FAULT;
+// NOTE: '*reqsize' is filled with the required size including the terminating \0-character.
+extern __wunused __ssize_t user_snprintf(__user char *buf, __size_t bufsize, /*opt*/__kernel __size_t *reqsize, __kernel char const *fmt, ...);
+extern __wunused __ssize_t user_vsnprintf(__user char *buf, __size_t bufsize, /*opt*/__kernel __size_t *reqsize, __kernel char const *fmt, va_list args);
 #else
-extern __wunused __size_t __user_memset_c(__user void const *p, int byte, __size_t bytes);
-#define __user_memset(p,byte,bytes) KTASK_CRIT(__user_memset_c(p,byte,bytes))
-#define user_memset(p,byte,bytes)  (KTASK_ISKEPD_P ? (memset(p,byte,bytes),0) : __user_memset(p,byte,bytes))
+extern __crit __wunused __size_t __user_memset_c(__user void *p, int byte, __size_t bytes);
+extern __crit __wunused __size_t __user_strncpy_c(__user char *p, __kernel char const *s, __size_t maxchars);
+extern __crit __wunused __ssize_t __user_snprintf_c(__user char *buf, __size_t bufsize, /*opt*/__kernel __size_t *reqsize, __kernel char const *fmt, ...);
+extern __crit __wunused __ssize_t __user_vsnprintf_c(__user char *buf, __size_t bufsize, /*opt*/__kernel __size_t *reqsize, __kernel char const *fmt, va_list args);
+#define __user_memset(p,byte,bytes)                    KTASK_CRIT(__user_memset_c(p,byte,bytes))
+#define __user_strncpy(p,s,maxchars)                   KTASK_CRIT(__user_strncpy_c(p,s,maxchars))
+#define __user_snprintf(buf,bufsize,reqsize,...)       KTASK_CRIT(__user_snprintf_c(buf,bufsize,reqsize,__VA_ARGS__))
+#define __user_vsnprintf(buf,bufsize,reqsize,fmt,args) KTASK_CRIT(__user_vsnprintf_c(buf,bufsize,reqsize,fmt,args))
+#define user_memset(p,byte,bytes)                    (KTASK_ISKEPD_P ? (memset(p,byte,bytes),0) : __user_memset(p,byte,bytes))
+#define user_strncpy(p,s,maxchars)                   (KTASK_ISKEPD_P ? (strncpy(p,s,maxchars),0) : __user_strncpy(p,s,maxchars))
+#define user_snprintf(buf,bufsize,reqsize,...)       (KTASK_ISKEPD_P ? __xblock({ __ssize_t __temp = (__ssize_t)snprintf(buf,bufsize,__VA_ARGS__); if (reqsize) *(reqsize) = __temp; __xreturn 0; }) : __user_snprintf(buf,bufsize,reqsize,__VA_ARGS__))
+#define user_vsnprintf(buf,bufsize,reqsize,fmt,args) (KTASK_ISKEPD_P ? __xblock({ __ssize_t __temp = (__ssize_t)vsnprintf(buf,bufsize,fmt,args);   if (reqsize) *(reqsize) = __temp; __xreturn 0; }) : __user_vsnprintf(buf,bufsize,reqsize,fmt,args))
 #endif
+
+
 
 #ifdef __INTELLISENSE__
 //////////////////////////////////////////////////////////////////////////
@@ -146,6 +169,8 @@ do{ struct ktask *const __uf_caller = ktask_self();\
     KTASK_CRIT_END\
     if (__uf_s) {__VA_ARGS__;}\
 }while(0)
+
+#define USER_FOREACH_BREAK  do{__uf_s=0;break;}while(0)
 
 
 __DECL_END

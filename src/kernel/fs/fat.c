@@ -43,7 +43,7 @@ __DECL_BEGIN
 
 __ref struct kfatinode *
 kfatinode_new(struct kfatsuperblock *superblock,
-              struct kfatfilepos const *fpos,
+              struct kfatfilepos const *__restrict fpos,
               struct kfatfileheader const *fheader) {
  struct kfatinode *result;
  kassert_ksuperblock((struct ksuperblock *)superblock);
@@ -72,8 +72,8 @@ struct kfat_walkdata {
  struct kfatinode *resnode;
 };
 
-static kerrno_t kfat_walkcallback(struct kfatfs *fs, struct kfatfilepos const *fpos,
-                                  struct kfatfileheader const *file,
+static kerrno_t kfat_walkcallback(struct kfatfs *__restrict fs, struct kfatfilepos const *__restrict fpos,
+                                  struct kfatfileheader const *__restrict file,
                                   char const *filename, size_t filename_size,
                                   struct kfat_walkdata *data) {
 #if 0
@@ -176,8 +176,8 @@ struct kfat_enumdirdata {
  void     *closure;
 };
 
-static kerrno_t kfat_enumdir(struct kfatfs *fs, struct kfatfilepos const *fpos,
-                             struct kfatfileheader const *file,
+static kerrno_t kfat_enumdir(struct kfatfs *__restrict fs, struct kfatfilepos const *__restrict fpos,
+                             struct kfatfileheader const *__restrict file,
                              char const *filename, size_t filename_size,
                              struct kfat_enumdirdata *data) {
  struct kfatinode *fatinode; kerrno_t error;
@@ -240,7 +240,7 @@ static kerrno_t kfatinode_getattr(struct kfatinode const *self, size_t ac, union
 }
 static kerrno_t kfatinode_setattr(struct kfatinode *self, size_t ac, union kinodeattr const *av) {
  union kinodeattr const *iter,*end; int changed = 0;
- struct kfatfs *fs = &((struct kfatsuperblock *)kinode_superblock(&self->fi_inode))->f_fs;
+ struct kfatfs *__restrict fs = &((struct kfatsuperblock *)kinode_superblock(&self->fi_inode))->f_fs;
  if __unlikely(!ac) return KE_OK;
  end = (iter = av)+ac;
  while (iter != end) {
@@ -308,7 +308,7 @@ kfatinode_mkdat(struct kfatinode *self,
  kerrno_t error; int need_long_header;
  kfatcls_t dir; int dir_is_sector;
  struct kfatsuperblock *sb = (struct kfatsuperblock *)kinode_superblock((struct kinode *)self);
- struct kfatfs *fs = &sb->f_fs;
+ struct kfatfs *__restrict fs = &sb->f_fs;
  __ref struct kfatinode *newnode;
  newnode = (__ref struct kfatinode *)__kinode_alloc((struct ksuperblock *)sb,
                                                     &kfatinode_dir_type,
@@ -385,13 +385,13 @@ static kerrno_t kfatfile_loadchunk(struct kblockfile const *self,
 }
 static kerrno_t kfatfile_savechunk(struct kblockfile *self,
                                    struct kfilechunk const *chunk, void const *__restrict buf) {
- struct kfatfs *fs = FATFS;
+ struct kfatfs *__restrict fs = FATFS;
  return kfatfs_savesectors(fs,kfatfs_clusterstart(fs,(kfatcls_t)chunk->fc_data),
                            fs->f_sec4clus,buf);
 }
 static kerrno_t kfatfile_nextchunk(struct kblockfile *self, struct kfilechunk *chunk) {
  kerrno_t error; kfatcls_t target;
- struct kfatfs *fs = FATFS;
+ struct kfatfs *__restrict fs = FATFS;
  assertf(chunk->fc_data < fs->f_clseof,"The given chunk contains invalid data");
  error = kfatfs_fat_readandalloc(fs,(kfatcls_t)chunk->fc_data,&target);
  if __likely(KE_ISOK(error)) chunk->fc_data = (__u64)target;
@@ -400,7 +400,7 @@ static kerrno_t kfatfile_nextchunk(struct kblockfile *self, struct kfilechunk *c
 static kerrno_t kfatfile_findchunk(struct kblockfile *self, struct kfilechunk *chunk) {
  kfatcls_t rescls,newcls; kerrno_t error; __u64 count;
  struct kfatinode *fatnode = FATNODE;
- struct kfatfs *fs = &((struct kfatsuperblock *)fatnode->fi_inode.i_sblock)->f_fs;
+ struct kfatfs *__restrict fs = &((struct kfatsuperblock *)fatnode->fi_inode.i_sblock)->f_fs;
  rescls = kfatfileheader_getcluster(&fatnode->fi_file);
  if __unlikely(kfatfs_iseofcluster(fs,rescls)) {
   // Allocate the initial chunk
@@ -425,7 +425,7 @@ static kerrno_t kfatfile_findchunk(struct kblockfile *self, struct kfilechunk *c
 static kerrno_t kfatfile_releasechunks(struct kblockfile *self, __u64 cindex) {
  kfatcls_t rescls,newcls; kerrno_t error;
  struct kfatinode *fatnode = FATNODE;
- struct kfatfs *fs = &((struct kfatsuperblock *)fatnode->fi_inode.i_sblock)->f_fs;
+ struct kfatfs *__restrict fs = &((struct kfatsuperblock *)fatnode->fi_inode.i_sblock)->f_fs;
  rescls = kfatfileheader_getcluster(&fatnode->fi_file);
  /* The following shouldn't happen, but left be careful. */
  if __unlikely(kfatfs_iseofcluster(fs,rescls)) return KE_OK;
@@ -442,7 +442,7 @@ static kerrno_t kfatfile_getsize(struct kblockfile const *self, __pos_t *fsize) 
 }
 static kerrno_t kfatfile_setsize(struct kblockfile *self, __pos_t fsize) {
  struct kfatinode *fatinode = FATNODE;
- struct kfatfs *fs = FATFS;
+ struct kfatfs *__restrict fs = FATFS;
 #ifdef __USE_FILE_OFFSET64
  if __unlikely(fsize > (__pos_t)(__u32)-1) return KE_NOSPC;
 #endif
@@ -475,7 +475,7 @@ struct kblockfiletype kfatfile_file_type = {
 
 
 
-kerrno_t kfatsuperblock_init(struct kfatsuperblock *self, struct ksdev *dev) {
+kerrno_t kfatsuperblock_init(struct kfatsuperblock *self, struct ksdev *__restrict dev) {
  kerrno_t error;
  if __unlikely(KE_ISERR(error = kfatfs_init(&self->f_fs,dev))) return error;
  // todo: Special node type for root directory
@@ -493,7 +493,7 @@ static kerrno_t kfatsuperblock_flush(struct ksuperblock *self) {
  return kfatfs_fat_flush(&((struct kfatsuperblock *)self)->f_fs);
 }
 static void kfatsuperinode_quit(struct kinode *__restrict self) {
- struct kfatfs *fs = &((struct kfatsuperblock *)__kinode_superblock(self))->f_fs;
+ struct kfatfs *__restrict fs = &((struct kfatsuperblock *)__kinode_superblock(self))->f_fs;
  kerrno_t error = kfatfs_fat_close(fs);
  if (KE_ISERR(error) && error != KE_DESTROYED) {
   k_syslogf(KLOG_ERROR,"Failed to properly close FAT filesystem: %d\n",error);

@@ -101,8 +101,8 @@ kerrno_t kfdentry_user_getattr(struct kfdentry *__restrict self, kattr_t attr,
                                __kernel size_t *__restrict reqsize) {
  switch (self->fd_type) {
   case KFDTYPE_FILE:  return kfile_user_getattr(self->fd_file,attr,buf,bufsize,reqsize);
-  case KFDTYPE_TASK:  return ktask_getattr(self->fd_task,attr,buf,bufsize,reqsize); /* TODO: 'ktask_user_getattr' */
-  case KFDTYPE_PROC:  return kproc_getattr(self->fd_proc,attr,buf,bufsize,reqsize); /* TODO: 'kproc_user_getattr' */
+  case KFDTYPE_TASK:  return ktask_user_getattr(self->fd_task,attr,buf,bufsize,reqsize);
+  case KFDTYPE_PROC:  return kproc_user_getattr(self->fd_proc,attr,buf,bufsize,reqsize);
   case KFDTYPE_INODE: return kinode_user_getattr_legacy(self->fd_inode,attr,buf,bufsize,reqsize);
   {
    struct kinode *dirnode; kerrno_t error;
@@ -125,8 +125,8 @@ kerrno_t kfdentry_user_setattr(struct kfdentry *__restrict self, kattr_t attr,
                                __user void const *__restrict buf, size_t bufsize) {
  switch (self->fd_type) {
   case KFDTYPE_FILE:  return kfile_user_setattr(self->fd_file,attr,buf,bufsize);
-  case KFDTYPE_TASK:  return ktask_setattr(self->fd_task,attr,buf,bufsize); /* TODO: 'ktask_user_setattr' */
-  case KFDTYPE_PROC:  return kproc_setattr(self->fd_proc,attr,buf,bufsize); /* TODO: 'kproc_user_setattr' */
+  case KFDTYPE_TASK:  return ktask_user_setattr(self->fd_task,attr,buf,bufsize);
+  case KFDTYPE_PROC:  return kproc_user_setattr(self->fd_proc,attr,buf,bufsize);
   case KFDTYPE_INODE: return kinode_user_setattr_legacy(self->fd_inode,attr,buf,bufsize);
   {
    struct kinode *dirnode; kerrno_t error;

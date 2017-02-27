@@ -25,18 +25,18 @@
 
 #include <ctype.h>
 #include <itos.h>
+#include <kos/fd.h>
 #include <kos/kernel/fs/fs-dirfile.h>
 #include <kos/kernel/fs/vfs-proc.h>
 #include <kos/kernel/fs/vfs.h>
+#include <kos/kernel/linker.h>
 #include <kos/kernel/proc.h>
 #include <kos/kernel/task.h>
+#include <kos/kernel/util/string.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <kos/fd.h>
-#include <kos/kernel/linker.h>
-#include <kos/kernel/util/string.h>
 
 __DECL_BEGIN
 
@@ -315,8 +315,13 @@ static kerrno_t
 vfsfile_proc_kcore_read(struct kfile *__restrict self,
                         void *__restrict buf, size_t bufsize,
                         size_t *__restrict rsize) {
- size_t copysize = min(bufsize,MAXRW);
- if __unlikely(copy_to_user(buf,SELF->c_pos,copysize)) return KE_FAULT;
+ int save; size_t copysize,copyfail;
+ copysize = min(bufsize,MAXRW);
+ /* Disable paging to get access to unmapped memory. */
+ if __likely((save = kpaging_enabled())) kpaging_disable();
+ copyfail = copy_to_user(buf,SELF->c_pos,copysize);
+ if __likely(save) kpaging_enable();
+ if __unlikely(copyfail) return KE_FAULT;
  *rsize = copysize;
  SELF->c_pos += copysize;
  return KE_OK;
@@ -325,9 +330,14 @@ static kerrno_t
 vfsfile_proc_kcore_write(struct kfile *__restrict self,
                          __user void const *buf, size_t bufsize,
                          __kernel size_t *__restrict wsize) {
- size_t copysize = min(bufsize,MAXRW);
+ int save; size_t copyfail,copysize;
+ copysize = min(bufsize,MAXRW);
+ /* Disable paging to get access to unmapped memory. */
+ if __likely((save = kpaging_enabled())) kpaging_disable();
  /* We literally might not see the end of this... */
- if __unlikely(copy_from_user(SELF->c_pos,buf,copysize)) return KE_FAULT;
+ copyfail = copy_from_user(SELF->c_pos,buf,copysize);
+ if __likely(save) kpaging_enable();
+ if __unlikely(copyfail) return KE_FAULT;
  *wsize = copysize;
  SELF->c_pos += copysize;
  return KE_OK;
@@ -336,9 +346,12 @@ static kerrno_t
 vfsfile_proc_kcore_pread(struct kfile *__restrict self, pos_t pos,
                          void *__restrict buf, size_t bufsize,
                          size_t *__restrict rsize) {
- size_t copysize = (pos >= (pos_t)(uintptr_t)-1)
-  ? 0 : min(bufsize,((uintptr_t)-1)-(uintptr_t)pos);
- if __unlikely(copy_to_user(buf,(void *)(uintptr_t)pos,copysize)) return KE_FAULT;
+ int save; size_t copyfail,copysize;
+ copysize = (pos >= (pos_t)(uintptr_t)-1) ? 0 : min(bufsize,((uintptr_t)-1)-(uintptr_t)pos);
+ if __likely((save = kpaging_enabled())) kpaging_disable();
+ copyfail = copy_to_user(buf,(void *)(uintptr_t)pos,copysize);
+ if __likely(save) kpaging_enable();
+ if __unlikely(copyfail) return KE_FAULT;
  *rsize = copysize;
  return KE_OK;
 }
@@ -346,10 +359,13 @@ static kerrno_t
 vfsfile_proc_kcore_pwrite(struct kfile *__restrict self, pos_t pos,
                           void const *__restrict buf, size_t bufsize,
                           size_t *__restrict wsize) {
- size_t copysize = (pos >= (pos_t)(uintptr_t)-1)
-  ? 0 : min(bufsize,((uintptr_t)-1)-(uintptr_t)pos);
+ int save; size_t copyfail,copysize;
+ copysize = (pos >= (pos_t)(uintptr_t)-1) ? 0 : min(bufsize,((uintptr_t)-1)-(uintptr_t)pos);
+ if __likely((save = kpaging_enabled())) kpaging_disable();
  /* We literally might not see the end of this... */
- if __unlikely(copy_from_user((void *)(uintptr_t)pos,buf,copysize)) return KE_FAULT;
+ copyfail = copy_from_user((void *)(uintptr_t)pos,buf,copysize);
+ if __likely(save) kpaging_enable();
+ if __unlikely(copyfail) return KE_FAULT;
  *wsize = copysize;
  return KE_OK;
 }

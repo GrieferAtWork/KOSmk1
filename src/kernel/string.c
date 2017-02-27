@@ -27,7 +27,10 @@
 #include <kos/kernel/proc.h>
 #include <kos/kernel/paging.h>
 #include <kos/kernel/util/string.h>
+#include <sys/types.h>
 #include <string.h>
+#include <stdio.h>
+#include <format-printer.h>
 
 __DECL_BEGIN
 
@@ -81,8 +84,8 @@ __copy_in_user_c(__user void *dst,
 }
 
 
-__wunused size_t
-__user_memset_c(__user void const *p, int byte, size_t bytes) {
+__crit size_t
+__user_memset_c(__user void *p, int byte, size_t bytes) {
  size_t maxbytes; __kernel void *kptr;
  KTASK_CRIT_MARK
  USER_FOREACH_BEGIN(p,bytes,kptr,maxbytes,1) {
@@ -92,6 +95,136 @@ __user_memset_c(__user void const *p, int byte, size_t bytes) {
  });
  return 0;
 }
+
+__crit size_t
+__user_strncpy_c(__user char *p, __kernel char const *s, size_t maxchars) {
+ size_t maxbytes; __kernel void *kptr;
+ KTASK_CRIT_MARK
+ maxchars = strnlen(s,maxchars)*sizeof(char);
+ USER_FOREACH_BEGIN(p,maxchars+1,kptr,maxbytes,1) {
+  if (maxbytes > maxchars) {
+   memcpy(kptr,s,maxchars);
+   memset((char *)kptr+maxchars/sizeof(char),0,
+          maxbytes-maxchars);
+   maxchars = 0;
+  } else {
+   memcpy(kptr,s,maxbytes);
+   s        += maxbytes;
+   maxchars -= maxbytes;
+  }
+ } USER_FOREACH_END({
+  return USER_FOREACH_PENDING;
+ });
+ return 0;
+}
+
+__crit ssize_t
+__user_snprintf_c(__user char *buf, size_t bufsize,
+                  /*opt*/__kernel size_t *reqsize,
+                  __kernel char const *fmt, ...) {
+ va_list args;
+ ssize_t result;
+ va_start(args,fmt);
+ result = __user_vsnprintf_c(buf,bufsize,reqsize,fmt,args);
+ va_end(args);
+ return result;
+}
+
+struct user_vsnprintf_data {
+ struct kshm           *shm;      /*< [1..1] SHM address translator. */
+ struct kpagedir const *epd;      /*< [1..1] Effective page directory. */
+ __user   char         *u_bufpos; /*< [?..1] Start of the next user-buffer part. */
+ __user   char         *u_bufend; /*< [?..1] End of the user-buffer. */
+ __kernel char         *k_bufpos; /*< [?..1] Start of the current kernel-buffer part. */
+ size_t                 k_bufsiz; /*< Amount of available bytes starting at 'k_bufpos'. */
+};
+static int
+user_vsnprintf_callback(__kernel char const *s, size_t maxlen,
+                        struct user_vsnprintf_data *data) {
+ size_t copysize;
+ maxlen = strnlen(s,maxlen)*sizeof(char);
+ for (;;) {
+  copysize = min(maxlen,data->k_bufsiz);
+  memcpy(data->k_bufpos,s,copysize);
+  data->k_bufpos += copysize;
+  data->k_bufsiz -= copysize;
+  maxlen         -= copysize;
+  if (!maxlen) break;
+  assert(!data->k_bufsiz);
+  /* Check for out-of-bounds / faulty pointer. */
+  if (data->u_bufend <= data->k_bufpos) {
+   data->k_bufpos += maxlen;
+   return 0;
+  }
+  /* Must translate another part. */
+  data->k_bufpos = (__kernel char *)kshm_translateuser(data->shm,data->epd,data->u_bufpos,
+                                                      (size_t)(data->u_bufend-data->u_bufpos),
+                                                       &data->k_bufsiz,1);
+  if (!data->k_bufpos) {
+   /* Faulty pointer (mark as out-of-bounds for now). */
+   data->u_bufend = data->k_bufpos;
+   assert(!data->k_bufsiz);
+  } else {
+   /* Advance the user-pointer to point into the next part. */
+   data->u_bufpos += data->k_bufsiz;
+   assert(data->u_bufpos <= data->u_bufend);
+  }
+ }
+ return 0;
+}
+
+
+__crit ssize_t
+__user_vsnprintf_c(__user char *buf, size_t bufsize,
+                   /*opt*/__kernel size_t *reqsize,
+                   __kernel char const *fmt, va_list args) {
+ struct user_vsnprintf_data data;
+ ssize_t result; __user char *real_bufend;
+ struct ktask *caller = ktask_self();
+ struct kproc *proc = ktask_getproc(caller);
+ KTASK_CRIT_MARK
+ data.shm = kproc_getshm(proc);
+ data.epd = caller->t_epd;
+ data.u_bufend = real_bufend = (data.u_bufpos = buf)+bufsize;
+ data.k_bufpos = NULL,data.k_bufsiz = 0;
+ if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) {
+  /* Still need to evaluate the format string. */
+  result = (ssize_t)vsnprintf(NULL,0,fmt,args);
+  if (reqsize) *reqsize = result;
+  return -result;
+ }
+ format_vprintf((pformatprinter)&user_vsnprintf_callback,
+                &data,fmt,args);
+ /* Append a terminating \0-character. */
+ if (data.k_bufsiz) {
+  *data.k_bufpos = '\0';
+  --data.k_bufsiz;
+ } else if (data.u_bufpos < data.u_bufend) {
+  size_t avail_bytes;
+  data.k_bufpos = (__kernel char *)kshm_translateuser(data.shm,data.epd,data.u_bufpos,
+                                                      sizeof(char),&avail_bytes,1);
+  if (data.k_bufpos) *data.k_bufpos = '\0';
+  else data.u_bufend = data.u_bufpos;
+  ++data.u_bufpos;
+ }
+ kproc_unlock(proc,KPROC_LOCK_SHM);
+ /* Subtract memory not used by the translated kernel buffer. */
+ data.u_bufpos -= data.k_bufsiz;
+ /* When requested to, store the required size. */
+ if (reqsize) *reqsize = (size_t)(data.u_bufpos-buf);
+ /* If the user-buffer pointer is out-of-bounds, it
+  * was either of insufficient size, or faulty.
+  * If not, everything worked. */
+ if (data.u_bufpos <= data.u_bufend) return 0;
+ result = (ssize_t)(data.u_bufpos-data.u_bufend);
+ /* The buffer was faulty if the end-pointer was moved. */
+ assert(data.u_bufend <= real_bufend);
+ if (data.u_bufend != real_bufend) result = -result;
+ return result;
+}
+
+
+
 
 /* TODO: Everything in this file should use 'USER_FOREACH'! */
 

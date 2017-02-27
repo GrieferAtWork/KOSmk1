@@ -35,6 +35,7 @@
 #include <assert.h>
 #include <kos/kernel/debug.h>
 #include <kos/kernel/interrupts.h>
+#include <kos/kernel/util/string.h>
 #include <malloc.h>
 #include <math.h>
 #endif
@@ -155,16 +156,20 @@ extern kerrno_t krawbuf_reset(struct krawbuf *__restrict self);
 // @return: KE_NOMEM:     Not enough memory was available to reallocate the buffer ('*wsize' is set to '0').
 // @return: KE_PERM:      The buffer is full and not allowed to grow anymore.
 // @return: KE_DESTROYED: The buffer was destroyed (closed).
+// @return: KE_FAULT:     [krawbuf_user_write] A faulty pointer was given.
 __local __wunused __nonnull((1)) kerrno_t
-krawbuf_write(struct krawbuf *__restrict self, void const *buf,
-              __size_t bufsize, __size_t *wsize);
+krawbuf_write(struct krawbuf *__restrict self, __kernel void const *buf,
+              __size_t bufsize, __kernel __size_t *wsize);
+__local __wunused __nonnull((1)) kerrno_t
+krawbuf_user_write(struct krawbuf *__restrict self, __user void const *buf,
+                   __size_t bufsize, __kernel __size_t *wsize);
 
 
 //////////////////////////////////////////////////////////////////////////
 // Capture raw buffer data:
 // >> krawbuf_capture_begin(buf);
 // >> error = flush_data(krawbuf_capture_data(buf),
-//                       krawbuf_capture_size(buf));
+// >>                    krawbuf_capture_size(buf));
 // >> krawbuf_capture_end(buf);
 // >> handle_error(error);
 extern __crit void krawbuf_capture_begin(struct krawbuf *self);
@@ -204,16 +209,40 @@ extern __crit void krawbuf_capture_end_inherit(struct krawbuf *self);
 
 #ifndef __INTELLISENSE__
 #define krawbuf_write(self,buf,bufsize,wsize) \
- __xblock({ struct krawbuf *const __rbwself = (self); kerrno_t __rbwerror;\
-            NOIRQ_BEGINLOCK(krawbuf_trylock(__rbwself,KRAWBUF_LOCK_DATA));\
-            __rbwerror = __krawbuf_write_unlocked(__rbwself,buf,bufsize,wsize);\
-            NOIRQ_ENDUNLOCK(krawbuf_unlock(__rbwself,KRAWBUF_LOCK_DATA));\
-            __xreturn __rbwerror;\
- })
+ (KTASK_ISCRIT_P \
+  ? __xblock({ struct krawbuf *const __rbwself = (self); kerrno_t __rbwerror;\
+               krawbuf_lock(__rbwself,KRAWBUF_LOCK_DATA);\
+               __rbwerror = __krawbuf_write_unlocked(__rbwself,buf,bufsize,wsize);\
+               krawbuf_unlock(__rbwself,KRAWBUF_LOCK_DATA);\
+               __xreturn __rbwerror;\
+    })\
+  : __xblock({ struct krawbuf *const __rbwself = (self); kerrno_t __rbwerror;\
+               NOIRQ_BEGINLOCK(krawbuf_trylock(__rbwself,KRAWBUF_LOCK_DATA));\
+               __rbwerror = __krawbuf_write_unlocked(__rbwself,buf,bufsize,wsize);\
+               NOIRQ_ENDUNLOCK(krawbuf_unlock(__rbwself,KRAWBUF_LOCK_DATA));\
+               __xreturn __rbwerror;\
+    })\
+ )
+#define krawbuf_user_write(self,buf,bufsize,wsize) \
+ (KTASK_ISCRIT_P \
+  ? __xblock({ struct krawbuf *const __rbwself = (self); kerrno_t __rbwerror;\
+               krawbuf_lock(__rbwself,KRAWBUF_LOCK_DATA);\
+               __rbwerror = __krawbuf_user_write_unlocked(__rbwself,buf,bufsize,wsize);\
+               krawbuf_unlock(__rbwself,KRAWBUF_LOCK_DATA);\
+               __xreturn __rbwerror;\
+    })\
+  : __xblock({ struct krawbuf *const __rbwself = (self); kerrno_t __rbwerror;\
+               NOIRQ_BEGINLOCK(krawbuf_trylock(__rbwself,KRAWBUF_LOCK_DATA));\
+               __rbwerror = __krawbuf_user_write_unlocked(__rbwself,buf,bufsize,wsize);\
+               NOIRQ_ENDUNLOCK(krawbuf_unlock(__rbwself,KRAWBUF_LOCK_DATA));\
+               __xreturn __rbwerror;\
+    })\
+ )
 
 __local kerrno_t
-__krawbuf_write_unlocked(struct krawbuf *__restrict self, void const *buf,
-                         __size_t bufsize, __size_t *wsize) {
+__krawbuf_write_unlocked(struct krawbuf *__restrict self,
+                         __kernel void const *buf, __size_t bufsize,
+                         __kernel __size_t *wsize) {
  __size_t newsize,bufavail,copysize = 0;
  __byte_t *newbuf; kerrno_t error = KE_OK;
  kassert_krawbuf(self); kassertobj(wsize);
@@ -242,6 +271,44 @@ __krawbuf_write_unlocked(struct krawbuf *__restrict self, void const *buf,
  copysize = min(bufavail,bufsize);
  assert(!(self->rb_flags&KRAWBUF_FLAG_DEAD));
  memcpy(self->rb_bufpos,buf,copysize);
+ self->rb_bufpos += copysize;
+end:
+ *wsize = copysize;
+ return error;
+}
+__local kerrno_t
+__krawbuf_user_write_unlocked(struct krawbuf *__restrict self,
+                              __user void const *buf, __size_t bufsize,
+                              __kernel __size_t *wsize) {
+ __size_t newsize,bufavail,copyfail,copysize = 0;
+ __byte_t *newbuf; kerrno_t error = KE_OK;
+ kassert_krawbuf(self); kassertobj(wsize);
+ assert((self->rb_bufend != NULL) == (self->rb_buffer != NULL));
+ assert((self->rb_bufpos != NULL) == (self->rb_buffer != NULL));
+ bufavail = (__size_t)(self->rb_bufend-self->rb_bufpos);
+ if (bufsize > bufavail) {
+  __size_t bufpos;
+  if __unlikely(self->rb_flags&KRAWBUF_FLAG_DEAD) { error = KE_DESTROYED; goto end; }
+  newsize = (__size_t)(self->rb_bufpos-self->rb_buffer)+bufsize;
+  newsize = align(newsize,64);
+  assert(newsize != (__size_t)(self->rb_bufend-self->rb_buffer));
+  if (newsize > self->rb_maxsize) {
+   newsize = self->rb_maxsize;
+   if (newsize == (__size_t)(self->rb_bufend-self->rb_buffer)) { error = KE_PERM; goto end; }
+  }
+  newbuf = (__byte_t *)realloc(self->rb_buffer,newsize);
+  if __unlikely(!newbuf) { error = KE_NOMEM; goto end; }
+  bufpos = (__size_t)(self->rb_bufpos-self->rb_buffer);
+  assert(newsize > bufpos);
+  self->rb_buffer = newbuf;
+  self->rb_bufend = newbuf+newsize;
+  self->rb_bufpos = newbuf+bufpos;
+  bufavail = (__size_t)(newsize-bufpos);
+ }
+ copysize = min(bufavail,bufsize);
+ assert(!(self->rb_flags&KRAWBUF_FLAG_DEAD));
+ copyfail = copy_from_user(self->rb_bufpos,buf,copysize);
+ if __unlikely(copyfail) { error = KE_FAULT; copysize -= copyfail; }
  self->rb_bufpos += copysize;
 end:
  *wsize = copysize;

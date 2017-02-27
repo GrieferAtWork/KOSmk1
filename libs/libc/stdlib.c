@@ -156,7 +156,7 @@ __public int system(char const *command) {
  if ((cmd_system = katomic_load(stored_cmd_system)) == NULL) {
   mod_t module2,module = katomic_load(stored_module);
   if (module == MOD_ALL) {
-   module = mod_open("libcmd.so");
+   module = mod_open("libcmd.so",MOD_OPEN_NONE);
    module2 = katomic_cmpxch_val(stored_module,MOD_ALL,module);
    if (module2 != MOD_ALL) { mod_close(module); module = module2; }
   }

@@ -138,7 +138,7 @@ int builtin_color(int argc, char *argv[]) {
 #if 1
  mod_t md;
  //md = mod_open("/bin/pe-test");
- md = mod_open("/usr/lib/pe-lib.dll");
+ md = mod_open("/usr/lib/pe-lib.dll",MOD_OPEN_NONE);
  void (*callback)(void);
  if (md == MOD_ERR) perror("mod_open");
  else {

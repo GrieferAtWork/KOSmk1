@@ -37,7 +37,8 @@
 
 __DECL_BEGIN
 
-__local time_t kfatfile_date_totimet(struct kfatfile_date const *self) {
+__local time_t
+kfatfile_date_totimet(struct kfatfile_date const *__restrict self) {
  time_t result; unsigned int year;
  year = self->fd_year+1980;
  result = __time_years2days(year-__LINUX_TIME_START_YEAR);
@@ -45,7 +46,8 @@ __local time_t kfatfile_date_totimet(struct kfatfile_date const *self) {
  result += (self->fd_day-1);
  return result*__SECS_PER_DAY;
 }
-__local int kfatfile_date_fromtimet(struct kfatfile_date *self, time_t tmt) {
+__local int
+kfatfile_date_fromtimet(struct kfatfile_date *__restrict self, time_t tmt) {
  struct kfatfile_date newdate;
  __u8 i; time_t const *monthvec; unsigned int year;
  tmt /= __SECS_PER_DAY;
@@ -62,12 +64,14 @@ __local int kfatfile_date_fromtimet(struct kfatfile_date *self, time_t tmt) {
  *self = newdate;
  return 1;
 }
-__local time_t kfatfile_time_totimet(struct kfatfile_time const *self) {
+__local time_t
+kfatfile_time_totimet(struct kfatfile_time const *__restrict self) {
  return ((time_t)self->ft_hour*60*60)+
         ((time_t)self->ft_min*60)+
         ((time_t)self->ft_sec*2);
 }
-__local int kfatfile_time_fromtimet(struct kfatfile_time *self, time_t tmt) {
+__local int
+kfatfile_time_fromtimet(struct kfatfile_time *__restrict self, time_t tmt) {
  struct kfatfile_time newtime;
  newtime.ft_sec  = (tmt % 60)/2;
  newtime.ft_min  = ((tmt/60) % 60);
@@ -77,28 +81,38 @@ __local int kfatfile_time_fromtimet(struct kfatfile_time *self, time_t tmt) {
  return 1;
 }
 
-void kfatfileheader_getatime(struct kfatfileheader const *self, struct timespec *result) {
+void
+kfatfileheader_getatime(struct kfatfileheader const *__restrict self,
+                        struct timespec *__restrict result) {
  kassertobj(self); kassertobj(result);
  result->tv_sec = kfatfile_date_totimet(&self->f_atime);
  result->tv_nsec = 0;
 }
-void kfatfileheader_getctime(struct kfatfileheader const *self, struct timespec *result) {
+void
+kfatfileheader_getctime(struct kfatfileheader const *__restrict self,
+                        struct timespec *__restrict result) {
  kassertobj(self); kassertobj(result);
  result->tv_sec  = kfatfile_date_totimet(&self->f_ctime.fc_date);
  result->tv_sec += kfatfile_time_totimet(&self->f_ctime.fc_time);
  result->tv_nsec = (long)self->f_ctime.fc_sectenth*(1000000000l/200l);
 }
-void kfatfileheader_getmtime(struct kfatfileheader const *self, struct timespec *result) {
+void
+kfatfileheader_getmtime(struct kfatfileheader const *__restrict self,
+                        struct timespec *__restrict result) {
  kassertobj(self); kassertobj(result);
  result->tv_sec  = kfatfile_date_totimet(&self->f_mtime.fc_date);
  result->tv_sec += kfatfile_time_totimet(&self->f_mtime.fc_time);
  result->tv_nsec = 0;
 }
-int kfatfileheader_setatime(struct kfatfileheader *self, struct timespec const *value) {
+int
+kfatfileheader_setatime(struct kfatfileheader *__restrict self,
+                        struct timespec const *__restrict value) {
  kassertobj(self); kassertobj(value);
  return kfatfile_date_fromtimet(&self->f_atime,value->tv_sec);
 }
-int kfatfileheader_setctime(struct kfatfileheader *self, struct timespec const *value) {
+int
+kfatfileheader_setctime(struct kfatfileheader *__restrict self,
+                        struct timespec const *__restrict value) {
  int changed; __u8 newnth;
  kassertobj(self); kassertobj(value);
  changed = kfatfile_date_fromtimet(&self->f_ctime.fc_date,value->tv_sec)
@@ -110,15 +124,18 @@ int kfatfileheader_setctime(struct kfatfileheader *self, struct timespec const *
  }
  return changed;
 }
-int kfatfileheader_setmtime(struct kfatfileheader *self, struct timespec const *value) {
+int
+kfatfileheader_setmtime(struct kfatfileheader *__restrict self,
+                        struct timespec const *__restrict value) {
  kassertobj(self); kassertobj(value);
  return kfatfile_date_fromtimet(&self->f_mtime.fc_date,value->tv_sec)
      || kfatfile_time_fromtimet(&self->f_mtime.fc_time,value->tv_sec);
 }
 
 
-kerrno_t kfatfs_savefileheader(struct kfatfs *self, __u64 headpos,
-                               struct kfatfileheader const *header) {
+kerrno_t
+kfatfs_savefileheader(struct kfatfs *__restrict self, __u64 headpos,
+                      struct kfatfileheader const *__restrict header) {
  kfatsec_t headsec; void *secbuf; kerrno_t error;
  struct kfatfileheader *headbuf;
  kassertobj(self); kassertobj(header);
@@ -137,7 +154,9 @@ kerrno_t kfatfs_savefileheader(struct kfatfs *self, __u64 headpos,
  return kfatfs_savesectors(self,headsec,1,secbuf);
 }
 
-kerrno_t kfatfs_rmheaders(struct kfatfs *self, __u64 headpos, unsigned int count) {
+kerrno_t
+kfatfs_rmheaders(struct kfatfs *__restrict self,
+                 __u64 headpos, unsigned int count) {
  kfatsec_t headsec; void *secbuf; kerrno_t error;
  struct kfatfileheader *headbuf;
  kassertobj(self);
@@ -164,9 +183,9 @@ kerrno_t kfatfs_rmheaders(struct kfatfs *self, __u64 headpos, unsigned int count
 }
 
 kerrno_t
-kfatfs_allocheaders(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
-                    struct kfatfileheader const *first_header,
-                    size_t header_count, struct kfatfilepos *filepos) {
+kfatfs_allocheaders(struct kfatfs *__restrict self, kfatcls_t dir, int dir_is_sector,
+                    struct kfatfileheader const *__restrict first_header,
+                    size_t header_count, struct kfatfilepos *__restrict filepos) {
 
  /* TODO. */
  debug_hexdump(first_header,header_count*sizeof(struct kfatfileheader));
@@ -184,8 +203,9 @@ __u8 kfat_genlfnchecksum(char const short_name[KFATFILE_NAMEMAX+KFATFILE_EXTMAX]
  return result;
 }
 
-__local void fill_lfn_entry(struct kfatfileheader *header,
-                            char const text[KFAT_LFN_NAME]) {
+__local void
+fill_lfn_entry(struct kfatfileheader *__restrict header,
+               char const text[KFAT_LFN_NAME]) {
  int i;
 #define COPYPART(field,start,n) \
  { for (i = 0; i < (n); ++i) field[i] = (kfat_usc2char)text[(start)+i]; }
@@ -199,10 +219,10 @@ __local void fill_lfn_entry(struct kfatfileheader *header,
 }
 
 kerrno_t
-kfatfs_mklongheader(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
-                    struct kfatfileheader const *header,
-                    char const *long_name, size_t long_name_size,
-                    struct kfatfilepos *filepos) {
+kfatfs_mklongheader(struct kfatfs *__restrict self, kfatcls_t dir, int dir_is_sector,
+                    struct kfatfileheader const *__restrict header,
+                    char const *__restrict long_name, size_t long_name_size,
+                    struct kfatfilepos *__restrict filepos) {
  /* Long filename entries. */
  struct kfatfileheader *all_headers,*header_iter;
  size_t req_headers; __u8 checksum;
@@ -241,9 +261,9 @@ kfatfs_mklongheader(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
 
 
 kerrno_t
-kfatfs_mkshortname(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
-                   struct kfatfileheader *header, char const *long_name,
-                   size_t long_name_size, int *need_long_header) {
+kfatfs_mkshortname(struct kfatfs *__restrict self, kfatcls_t dir, int dir_is_sector,
+                   struct kfatfileheader *__restrict header, char const *__restrict long_name,
+                   size_t long_name_size, int *__restrict need_long_header) {
  int name_error,retry = 0;
  kerrno_t error;
 again:

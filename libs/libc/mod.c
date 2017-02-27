@@ -27,37 +27,123 @@
 #ifndef __KERNEL__
 #include <mod.h>
 #include <kos/mod.h>
+#include <kos/task.h>
+#include <malloc.h>
 #include <errno.h>
 #include <stddef.h>
+#include <limits.h>
 
 __DECL_BEGIN
 
-__public mod_t mod_open(char const *name) {
+__public mod_t mod_open(char const *name, __u32 flags) {
  mod_t result; kerrno_t error;
- error = kmod_open(name,(size_t)-1,&result,KMOD_OPEN_FLAG_NONE);
+ error = kmod_open(name,(size_t)-1,&result,flags);
  if __likely(KE_ISOK(error)) return result;
  __set_errno(-error);
  return MOD_ERR;
 }
-__public mod_t mod_fopen(int fd) {
+__public mod_t mod_fopen(int fd, __u32 flags) {
  mod_t result; kerrno_t error;
- error = kmod_fopen(fd,&result,KMOD_OPEN_FLAG_NONE);
+ error = kmod_fopen(fd,&result,flags);
  if __likely(KE_ISOK(error)) return result;
  __set_errno(-error);
  return MOD_ERR;
 }
-__public int mod_close(mod_t mod) {
+__public int mod_close __D1(mod_t,mod) {
  kerrno_t error;
- error = kmod_close(mod);
+ /* NOTE: Don't allow mod_close(MOD_SELF), because
+  *       the function would affect libc instead of
+  *       what the caller probably meant as a joke... */
+ if __unlikely(mod == MOD_SELF) error = KE_INVAL;
+ else error = kmod_close(mod);
  if __likely(KE_ISOK(error)) return 0;
  __set_errno(-error);
  return -1;
 }
-__public void *mod_sym(mod_t mod, char const *symname) {
- void *result = kmod_sym(mod,symname,(size_t)-1);
- if __unlikely(!result) __set_errno(ENOENT);
- return result;
+
+
+__public modinfo_t *
+__mod_info(mod_t mod, modinfo_t *buf,
+           size_t bufsize, __u32 flags) {
+ kerrno_t error; size_t reqsize;
+ if (!bufsize) {
+  modinfo_t *result,*newresult;
+  size_t sizehint;
+       if (flags&MOD_INFO_NAME) sizehint = sizeof(modinfo_t)+(PATH_MAX+1)*sizeof(char);
+  else if ((flags&MOD_INFO_INFO) == MOD_INFO_INFO) sizehint = offsetof(modinfo_t,mi_name);
+  else if ((flags&MOD_INFO_ID) == MOD_INFO_ID)     sizehint = offsetafter(modinfo_t,mi_id);
+  else sizehint = 64;
+  result = (modinfo_t *)malloc(sizehint);
+  if __unlikely(!result) return NULL;
+  for (;;) {
+   error = kmod_info(kproc_self(),mod,result,sizehint,&reqsize,flags);
+   if __unlikely(KE_ISERR(error)) { free(result); goto err; }
+   if __likely(reqsize <= sizehint) break;
+   /* Must allocate more memory. */
+   newresult = (modinfo_t *)realloc(result,reqsize);
+   if __unlikely(!newresult) { free(result); return NULL; }
+   /* Try again with a larger buffer. */
+   result   = newresult;
+   sizehint = reqsize;
+  }
+  if (reqsize != sizehint) {
+   newresult = (modinfo_t *)realloc(result,reqsize);
+   if (newresult) result = newresult;
+  }
+  return result;
+ }
+ error = kmod_info(kproc_self(),mod,buf,bufsize,&reqsize,flags);
+ if __likely(KE_ISOK(error)) {
+  if (reqsize > bufsize) { __set_errno(EBUFSIZ); return NULL; }
+  return buf;
+ }
+err:
+ __set_errno(-error);
+ return NULL;
 }
+
+__public char *
+__mod_name(mod_t mod, char *buf,
+           size_t bufsize, __u32 flags) {
+ modinfo_t info;
+ kerrno_t error;
+ if (!bufsize) {
+  char *newbuf;
+  /* Use a dynamic buffer. */
+  bufsize = (PATH_MAX+1)*sizeof(char);
+  buf = (char *)malloc(bufsize);
+  if __unlikely(!buf) return NULL;
+  for (;;) {
+   info.mi_name = buf;
+   info.mi_nmsz = bufsize;
+   error = kmod_info(kproc_self(),mod,&info,sizeof(info),NULL,flags);
+   if __unlikely(KE_ISERR(error)) {err_buf: free(buf); goto err; }
+   if __unlikely(info.mi_name != buf) { error = KE_INVAL; goto err_buf; }
+   if __likely(info.mi_nmsz <= bufsize) break;
+   /* Must allocate more memory. */
+   newbuf = (char *)realloc(buf,info.mi_nmsz);
+   if __unlikely(!newbuf) { free(buf); return NULL; }
+   /* Try again with a larger buffer. */
+   buf     = newbuf;
+   bufsize = info.mi_nmsz;
+  }
+  if (info.mi_nmsz != bufsize) {
+   newbuf = (char *)realloc(buf,info.mi_nmsz);
+   if (newbuf) buf = newbuf;
+  }
+  return buf;
+ }
+ info.mi_name = buf;
+ info.mi_nmsz = bufsize;
+ error = kmod_info(kproc_self(),mod,&info,sizeof(info),NULL,flags);
+ if __unlikely(KE_ISERR(error)) goto err;
+ if __unlikely(info.mi_name != buf) { __set_errno(EINVAL); return NULL; }
+ if __unlikely(info.mi_nmsz > bufsize) { __set_errno(EBUFSIZ); return NULL; }
+ return buf;
+err: __set_errno(-error);
+ return NULL;
+}
+
 
 
 __DECL_END

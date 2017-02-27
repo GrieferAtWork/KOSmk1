@@ -185,7 +185,7 @@ kshlib_pe32_parseimports(struct kshlib *__restrict self,
    if __unlikely(KE_ISERR(error = kshlib_openlib(name,(size_t)-1,&dep))) {
     k_syslogf_prefixfile(KLOG_ERROR,pe_file,"[PE] Missing dependency: %q\n",name);
     if (KSHLIB_IGNORE_MISSING_DEPENDENCIES) { error = KE_OK; goto after_thunks; }
-   } else if (!(dep->sh_flags&KSHLIB_FLAG_LOADED)) {
+   } else if (!(dep->sh_flags&KMODFLAG_LOADED)) {
     k_syslogf_prefixfile(KLOG_ERROR,pe_file,"[PE] Dependency loop: %q\n",name);
     /* Dependency loop */
     kshlib_decref(dep);
@@ -412,7 +412,7 @@ kshlib_pe32_new(struct kshlib **__restrict result,
  if __unlikely((lib = omalloc(struct kshlib)) == NULL) return KE_NOMEM;
  kobject_init(lib,KOBJECT_MAGIC_SHLIB);
  lib->sh_refcnt = 1;
- lib->sh_flags = KSHLIB_FLAG_PREFER_FIXED;
+ lib->sh_flags = KMODKIND_PE32;
  error = kfile_kernel_readall(pe_file,&dos_header,sizeof(dos_header));
  if __unlikely(KE_ISERR(error)) goto err_lib;
  /* Validate that this is really a PE executable. */
@@ -449,14 +449,14 @@ kshlib_pe32_new(struct kshlib **__restrict result,
                                file_header.FileHeader.SizeOfOptionalHeader);
   if __unlikely(KE_ISERR(error)) goto err_cache;
  }
+ if (!(file_header.FileHeader.Characteristics&IMAGE_FILE_DLL)
+     ) lib->sh_flags |= KMODFLAG_BINARY; /* Not a dll? - Then you're a binary! */
 
  image_base = HAS_OPTION(ImageBase) ? file_header.OptionalHeader.ImageBase : 0;
  if (HAS_OPTION(AddressOfEntryPoint)) {
   lib->sh_callbacks.slc_start = (ksymaddr_t)file_header.OptionalHeader.AddressOfEntryPoint;
  } else {
-  k_syslogf_prefixfile(KLOG_WARN,pe_file,"[PE] Binary file has no entry point (Optional header size: %Ix)\n",
-                      (size_t)file_header.FileHeader.SizeOfOptionalHeader);
-  lib->sh_callbacks.slc_start = (ksymaddr_t)0; /* ??? */
+  lib->sh_callbacks.slc_start = (ksymaddr_t)-1; /* ??? */
  }
  lib->sh_callbacks.slc_start += image_base;
  k_syslogf_prefixfile(KLOG_DEBUG,pe_file,"[PE] Determined entry pointer %p (base %p)\n",
@@ -496,13 +496,34 @@ kshlib_pe32_new(struct kshlib **__restrict result,
  free(section_headers); /* Set to NULL to trick cleanup code. */
  if __unlikely(KE_ISERR(error)) goto err_reloc;
 
+ /* Set the canexec-flag if a mapped entry point was given. */
+ if (HAS_OPTION(AddressOfEntryPoint) &&
+     ksecdata_ismapped(&lib->sh_data,lib->sh_callbacks.slc_start)
+     ) lib->sh_flags |= KMODFLAG_CANEXEC;
+
+#if 0 /*< Screw that flag. - I'd rather figure it out myself. */
+ if (file_header.FileHeader.Characteristics&IMAGE_FILE_RELOCS_STRIPPED) {
+  /* The header says that relocations were stripped...
+   * >> so even if there are some, we ignore them. */
+  lib->sh_flags |= KMODFLAG_FIXED;
+ } else
+#endif
  if (HAS_DATADIR(IMAGE_DIRECTORY_ENTRY_BASERELOC)) {
   /* Parse more relocations... */
   error = ksecdata_pe32_parsereloc(&lib->sh_data,&lib->sh_reloc,
                                    &DATADIR(IMAGE_DIRECTORY_ENTRY_BASERELOC),
                                    pe_file,image_base);
   if __unlikely(KE_ISERR(error)) goto err_reloc;
+  if (!lib->sh_reloc.r_vecc && lib->sh_data.ed_secc) {
+   /* If there are no relocations, but there are sections,
+    * we know that this module must be loaded to a fixed address. */
+   lib->sh_flags |= KMODFLAG_FIXED;
+  } else {
+   lib->sh_flags |= KMODFLAG_PREFFIXED;
+  }
  }
+
+
 
  /* Parse Imports. */
  if (HAS_DATADIR(IMAGE_DIRECTORY_ENTRY_IMPORT)) {
@@ -580,7 +601,7 @@ kshlib_pe32_new(struct kshlib **__restrict result,
 #undef DATADIR
 #undef HAS_DATADIR
 #undef HAS_OPTION
- lib->sh_flags |= KSHLIB_FLAG_LOADED;
+ lib->sh_flags |= KMODFLAG_LOADED;
  *result = lib;
  kshlibrecent_add(lib);
 

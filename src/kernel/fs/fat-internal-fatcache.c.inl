@@ -84,7 +84,7 @@ typedef kfatsec_t kfatoff_t;
 #define LOCK_DOWNGRADE()     krwlock_downgrade(&SELF->f_fatlock)
 
 
-kerrno_t _kfatfs_fat_freeall_unlocked(struct kfatfs *self, kfatcls_t first) {
+kerrno_t _kfatfs_fat_freeall_unlocked(struct kfatfs *__restrict self, kfatcls_t first) {
  kerrno_t error; kfatcls_t next;
  error = _kfatfs_fat_read_unlocked(self,first,&next);
  if __unlikely(KE_ISERR(error)) return error;
@@ -97,7 +97,7 @@ kerrno_t _kfatfs_fat_freeall_unlocked(struct kfatfs *self, kfatcls_t first) {
  return KE_OK;
 }
 
-kerrno_t kfatfs_fat_freeall(struct kfatfs *self, kfatcls_t first) {
+kerrno_t kfatfs_fat_freeall(struct kfatfs *__restrict self, kfatcls_t first) {
  kerrno_t error;
  if __unlikely(KE_ISERR(error = LOCK_WRITE_BEGIN())) return error;
  error = _kfatfs_fat_freeall_unlocked(self,first);
@@ -105,7 +105,7 @@ kerrno_t kfatfs_fat_freeall(struct kfatfs *self, kfatcls_t first) {
  return error;
 }
 
-kerrno_t kfatfs_fat_allocfirst(struct kfatfs *self, kfatcls_t *target) {
+kerrno_t kfatfs_fat_allocfirst(struct kfatfs *__restrict self, kfatcls_t *__restrict target) {
  kerrno_t error;
  if __unlikely(KE_ISERR(error = LOCK_WRITE_BEGIN())) return error;
  error = _kfatfs_fat_getfreecluster_unlocked(self,target,0);
@@ -117,7 +117,7 @@ kerrno_t kfatfs_fat_allocfirst(struct kfatfs *self, kfatcls_t *target) {
  LOCK_WRITE_END();
  return error;
 }
-kerrno_t kfatfs_fat_readandalloc(struct kfatfs *self, kfatcls_t index, kfatcls_t *target) {
+kerrno_t kfatfs_fat_readandalloc(struct kfatfs *__restrict self, kfatcls_t index, kfatcls_t *__restrict target) {
  kerrno_t error; size_t meta_addr;
  byte_t meta_mask,meta_val; kfatoff_t fat_index;
  kassertobj(self);
@@ -185,7 +185,7 @@ end:
  return error;
 }
 
-kerrno_t _kfatfs_fat_read_unlocked(struct kfatfs *self, kfatcls_t index, kfatcls_t *target) {
+kerrno_t _kfatfs_fat_read_unlocked(struct kfatfs *__restrict self, kfatcls_t index, kfatcls_t *__restrict target) {
  kerrno_t error; size_t meta_addr;
  byte_t meta_mask,meta_val; kfatoff_t fat_index;
  kassertobj(self);
@@ -223,7 +223,7 @@ kerrno_t _kfatfs_fat_read_unlocked(struct kfatfs *self, kfatcls_t index, kfatcls
  }
  return error;
 }
-kerrno_t kfatfs_fat_read(struct kfatfs *self, kfatcls_t index, kfatcls_t *target) {
+kerrno_t kfatfs_fat_read(struct kfatfs *__restrict self, kfatcls_t index, kfatcls_t *__restrict target) {
  kerrno_t error; size_t meta_addr;
  byte_t meta_mask,meta_val; kfatoff_t fat_index;
  kassertobj(self);
@@ -265,7 +265,7 @@ kerrno_t kfatfs_fat_read(struct kfatfs *self, kfatcls_t index, kfatcls_t *target
  LOCK_WRITE_END();
  return error;
 }
-kerrno_t kfatfs_fat_write(struct kfatfs *self, kfatcls_t index, kfatcls_t target) {
+kerrno_t kfatfs_fat_write(struct kfatfs *__restrict self, kfatcls_t index, kfatcls_t target) {
  kerrno_t error; size_t meta_addr; byte_t meta_mask,meta_val;
  kfatoff_t fat_index;
  kassertobj(self);
@@ -303,7 +303,7 @@ kerrno_t kfatfs_fat_write(struct kfatfs *self, kfatcls_t index, kfatcls_t target
  return KE_OK;
 }
 
-kerrno_t kfatfs_fat_flush(struct kfatfs *self) {
+kerrno_t kfatfs_fat_flush(struct kfatfs *__restrict self) {
  kerrno_t error;
  kassertobj(self);
  kassertbyte(self->f_readfat);
@@ -318,7 +318,7 @@ kerrno_t kfatfs_fat_flush(struct kfatfs *self) {
  LOCK_WRITE_END();
  return error;
 }
-kerrno_t _kfatfs_fat_doflush_unlocked(struct kfatfs *self) {
+kerrno_t _kfatfs_fat_doflush_unlocked(struct kfatfs *__restrict self) {
  kerrno_t error; byte_t *fat_data,*meta_data,metamask;
  kfatsec_t i; size_t j;
  kassertobj(self);
@@ -346,8 +346,8 @@ kerrno_t _kfatfs_fat_doflush_unlocked(struct kfatfs *self) {
 }
 
 kerrno_t
-_kfatfs_fat_getfreecluster_unlocked(struct kfatfs *self,
-                                    kfatcls_t *result,
+_kfatfs_fat_getfreecluster_unlocked(struct kfatfs *__restrict self,
+                                    kfatcls_t *__restrict result,
                                     kfatcls_t hint) {
  kerrno_t error; kfatcls_t cls; size_t meta_addr;
  byte_t meta_mask,meta_val; kfatoff_t fat_index;

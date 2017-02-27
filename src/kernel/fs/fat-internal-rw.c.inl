@@ -26,8 +26,8 @@
 #include <alloca.h>
 #include <assert.h>
 #include <kos/compiler.h>
-#include <kos/kernel/debug.h>
 #include <kos/errno.h>
+#include <kos/kernel/debug.h>
 #include <kos/kernel/fs/fat-internal.h>
 #include <kos/kernel/types.h>
 #include <math.h>
@@ -35,7 +35,7 @@
 
 __DECL_BEGIN
 
-kerrno_t kfatfs_loadsectors(struct kfatfs const *self, kfatsec_t sec, size_t c, void *__restrict buf) {
+kerrno_t kfatfs_loadsectors(struct kfatfs const *__restrict self, kfatsec_t sec, size_t c, void *__restrict buf) {
  struct ksdev *sdev; kassertobj(self);
  kassertmem(buf,self->f_secsize);
  sdev = self->f_dev;
@@ -66,7 +66,7 @@ kerrno_t kfatfs_loadsectors(struct kfatfs const *self, kfatsec_t sec, size_t c, 
   return error;
  }
 }
-kerrno_t kfatfs_savesectors(struct kfatfs *self, kfatsec_t sec, size_t c, void const *__restrict buf) {
+kerrno_t kfatfs_savesectors(struct kfatfs *__restrict self, kfatsec_t sec, size_t c, void const *__restrict buf) {
  struct ksdev *sdev; kassertobj(self);
  kassertmem(buf,self->f_secsize);
  sdev = self->f_dev;

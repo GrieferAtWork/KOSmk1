@@ -43,7 +43,7 @@ __local char tohex(int x) {
 
 
 int kdos83_makeshort(char const *__restrict name, size_t namesize,
-                     int retry, __u8 *ntflags, char result[11]) {
+                     int retry, __u8 *__restrict ntflags, char result[11]) {
  char const *extstart,*iter,*end; char *dst,ch;
  size_t basesize,extsize,matchsize;
  int retry_hex,retry_dig,has_mixed_case = 0;

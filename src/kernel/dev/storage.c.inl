@@ -184,7 +184,7 @@ kerrno_t ksdev_new_findfirstata(struct ksdev **result) {
  *result = (struct ksdev *)resdisk;
  return error;
 }
-kerrno_t ksdev_new_part(struct ksdev **result, struct ksdev *dev,
+kerrno_t ksdev_new_part(struct ksdev **result, struct ksdev *__restrict dev,
                         kslba_t start, kslba_t size) {
  kpartdev_t *resdisk;
  kassertobj(result); kassertobj(dev);

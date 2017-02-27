@@ -214,7 +214,7 @@ void ksyscall_trace(struct kirq_registers const *regs) {
   CASE4(kmod_open,         ARGS4(X("name","%p"),X("namemax","%Iu"),X("modid","%p"),X("flags","I32u")),_p,_I,_p,_I32);
   CASE1(kmod_close,        ARGS1(X("modid","%Iu")),_I);
   CASE3(kmod_sym,          ARGS3(X("modid","%Iu"),X("name","%p"),X("namemax","%Iu")),_I,_I,_p);
-  CASE5(kmod_info,         ARGS5(X("modid","%Iu"),X("buf","%p"),X("bufsize","%Iu"),X("reqsize","%p"),X("flags","%I32u")),_I32,_p,_I,_p,_I32);
+  CASE6(kmod_info,         ARGS6(X("procfd","%d"),X("modid","%Iu"),X("buf","%p"),X("bufsize","%Iu"),X("reqsize","%p"),X("flags","%I32u")),_I32,_p,_I,_p,_I32);
 #undef ARGS7
 #undef ARGS6
 #undef ARGS5

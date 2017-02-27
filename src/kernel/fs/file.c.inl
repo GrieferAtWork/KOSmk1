@@ -24,13 +24,13 @@
 #define __KOS_KERNEL_FS_FILE_C_INL__ 1
 
 #include <fcntl.h>
-#include <kos/compiler.h>
 #include <kos/attr.h>
+#include <kos/compiler.h>
+#include <kos/errno.h>
+#include <kos/kernel/closelock.h>
 #include <kos/kernel/fs/file.h>
 #include <kos/kernel/fs/fs.h>
-#include <kos/kernel/closelock.h>
 #include <kos/kernel/object.h>
-#include <kos/errno.h>
 #include <malloc.h>
 #include <sys/stat.h>
 #include <sys/types.h>

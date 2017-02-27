@@ -217,17 +217,13 @@ end:
 err_fault: error = KE_FAULT; goto end;
 }
 
+
 __local kerrno_t
-kpty_s2m_write_unlocked(struct kpty *__restrict self,
-                        void const *buf, size_t bufsize, size_t *wsize) {
+kpty_s2m_write_crlf_unlocked(struct kpty *__restrict self,
+                             __kernel void const *buf, size_t bufsize,
+                             __kernel size_t *wsize) {
  char const *iter,*end,*flush_start;
  kerrno_t error; size_t partsize,didpartsize;
- kassert_kpty(self);
- assert(krwlock_isreadlocked(&self->ty_lock));
- if (!(self->ty_ios.c_oflag&ONLCR)) {
-  return kiobuf_write(&self->ty_s2m,buf,bufsize,
-                      wsize,PTY_WRITE_BLOCKING_MODE);
- }
  *wsize = 0;
  // Must convert '\n' to '\r\n'
  end = (flush_start = iter = (char const *)buf)+(bufsize/sizeof(char));
@@ -248,6 +244,40 @@ kpty_s2m_write_unlocked(struct kpty *__restrict self,
   }
   ++iter;
  }
+ return error;
+}
+__local kerrno_t
+kpty_s2m_write_unlocked(struct kpty *__restrict self,
+                        __kernel void const *buf, size_t bufsize,
+                        __kernel size_t *wsize) {
+ kassert_kpty(self);
+ assert(krwlock_isreadlocked(&self->ty_lock));
+ if (!(self->ty_ios.c_oflag&ONLCR)) {
+  return kiobuf_write(&self->ty_s2m,buf,bufsize,
+                      wsize,PTY_WRITE_BLOCKING_MODE);
+ }
+ return kpty_s2m_write_crlf_unlocked(self,buf,bufsize,wsize);
+}
+__local kerrno_t
+kpty_s2m_user_write_unlocked(struct kpty *__restrict self,
+                             __user void const *buf, size_t bufsize,
+                             __kernel size_t *wsize) {
+ __kernel void *part_p;
+ size_t part_s,temp; kerrno_t error = KE_OK;
+ kassert_kpty(self);
+ assert(krwlock_isreadlocked(&self->ty_lock));
+ if (!(self->ty_ios.c_oflag&ONLCR)) {
+  return kiobuf_user_write(&self->ty_s2m,buf,bufsize,
+                           wsize,PTY_WRITE_BLOCKING_MODE);
+ }
+ *wsize = 0;
+ USER_FOREACH_BEGIN(buf,bufsize,part_p,part_s,0) {
+  error = kpty_s2m_write_crlf_unlocked(self,part_p,part_s,&temp);
+  if __unlikely(KE_ISERR(error)) USER_FOREACH_BREAK;
+  *wsize += temp;
+ } USER_FOREACH_END({
+  return KE_FAULT;
+ });
  return error;
 }
 
@@ -339,20 +369,12 @@ ret_error_nosignal:
 
 
 kerrno_t
-kpty_mwrite_unlocked(struct kpty *__restrict self, void const *buf,
-                     size_t bufsize, size_t *__restrict wsize) {
+kpty_mwrite_canon_unlocked(struct kpty *__restrict self, __kernel void const *buf,
+                           size_t bufsize, __kernel size_t *__restrict wsize) {
  kerrno_t error; size_t temp;
  cc_t const *iter,*end,*canon_start,*new_canon_start;
  kassert_kpty(self);
  assert(krwlock_isreadlocked(&self->ty_lock));
- if (!(self->ty_ios.c_lflag&ICANON)) {
-  if (self->ty_ios.c_lflag&ECHO) {
-   error = kpty_s2m_write_unlocked(self,buf,bufsize,&temp);
-   if __unlikely(KE_ISERR(error)) return error;
-  }
-  return kiobuf_write(&self->ty_m2s,buf,bufsize,
-                      wsize,PTY_WRITE_BLOCKING_MODE);
- }
  // Must use the line buffer, as well as check for control characters
  end = (canon_start = iter = (cc_t const *)buf)+bufsize;
 again:
@@ -373,7 +395,7 @@ flush_canon:
    if (new_canon_start == iter) {
     size_t canbufsize; void *canbuf;
     assert(iter != (cc_t const *)buf);
-    assertf(iter[-1] == '\n',"'%c' %I8x",iter[-1],iter[-1]);
+    //assertf(iter[-1] == '\n',"'%c' %I8x",iter[-1],iter[-1]);
     // Write the canon to the slave
     KTASK_CRIT_BEGIN
     krawbuf_capture_begin(&self->ty_canon);
@@ -416,12 +438,66 @@ flush_canon:
 }
 
 kerrno_t
-kpty_mwrite(struct kpty *__restrict self, void const *buf,
-            size_t bufsize, size_t *__restrict wsize) {
+kpty_mwrite_unlocked(struct kpty *__restrict self, __kernel void const *buf,
+                     size_t bufsize, __kernel size_t *__restrict wsize) {
+ kerrno_t error; size_t temp;
+ kassert_kpty(self);
+ assert(krwlock_isreadlocked(&self->ty_lock));
+ if (!(self->ty_ios.c_lflag&ICANON)) {
+  if (self->ty_ios.c_lflag&ECHO) {
+   error = kpty_s2m_write_unlocked(self,buf,bufsize,&temp);
+   if __unlikely(KE_ISERR(error)) return error;
+  }
+  return kiobuf_write(&self->ty_m2s,buf,bufsize,
+                      wsize,PTY_WRITE_BLOCKING_MODE);
+ }
+ return kpty_mwrite_canon_unlocked(self,buf,bufsize,wsize);
+}
+
+kerrno_t
+kpty_user_mwrite_unlocked(struct kpty *__restrict self, __user void const *buf,
+                          size_t bufsize, __kernel size_t *__restrict wsize) {
+ kerrno_t error; size_t temp;
+ __kernel void *part_p; size_t part_s;
+ kassert_kpty(self);
+ assert(krwlock_isreadlocked(&self->ty_lock));
+ if (!(self->ty_ios.c_lflag&ICANON)) {
+  if (self->ty_ios.c_lflag&ECHO) {
+   error = kpty_s2m_user_write_unlocked(self,buf,bufsize,&temp);
+   if __unlikely(KE_ISERR(error)) return error;
+  }
+  return kiobuf_user_write(&self->ty_m2s,buf,bufsize,
+                           wsize,PTY_WRITE_BLOCKING_MODE);
+ }
+ *wsize = 0;
+ USER_FOREACH_BEGIN(buf,bufsize,part_p,part_s,0) {
+  error = kpty_mwrite_canon_unlocked(self,part_p,part_s,&temp);
+  if __unlikely(KE_ISERR(error)) USER_FOREACH_BREAK;
+  *wsize += temp;
+ } USER_FOREACH_END({
+  return KE_FAULT;
+ });
+ return error;
+}
+
+kerrno_t
+kpty_mwrite(struct kpty *__restrict self, __kernel void const *buf,
+            size_t bufsize, __kernel size_t *__restrict wsize) {
  kerrno_t error;
  kassert_kpty(self);
  if __likely(KE_ISOK(error = krwlock_beginread(&self->ty_lock))) {
   error = kpty_mwrite_unlocked(self,buf,bufsize,wsize);
+  krwlock_endread(&self->ty_lock);
+ }
+ return error;
+}
+kerrno_t
+kpty_user_mwrite(struct kpty *__restrict self, __user void const *buf,
+                 size_t bufsize, __kernel size_t *__restrict wsize) {
+ kerrno_t error;
+ kassert_kpty(self);
+ if __likely(KE_ISOK(error = krwlock_beginread(&self->ty_lock))) {
+  error = kpty_user_mwrite_unlocked(self,buf,bufsize,wsize);
   krwlock_endread(&self->ty_lock);
  }
  return error;
@@ -459,12 +535,26 @@ end:
  return error;
 }
 
-kerrno_t kpty_swrite(struct kpty *__restrict self, void const *buf,
-                     size_t bufsize, size_t *__restrict wsize) {
+kerrno_t kpty_swrite(struct kpty *__restrict self,
+                     __kernel void const *buf, size_t bufsize,
+                     __kernel size_t *__restrict wsize) {
  kerrno_t error;
  KTASK_CRIT_BEGIN
  if __likely(KE_ISOK(error = krwlock_beginread(&self->ty_lock))) {
   error = kpty_s2m_write_unlocked(self,buf,bufsize,wsize);
+  krwlock_endread(&self->ty_lock);
+ }
+ KTASK_CRIT_END
+ return error;
+}
+
+kerrno_t kpty_user_swrite(struct kpty *__restrict self,
+                          __user void const *buf, size_t bufsize,
+                          __kernel size_t *__restrict wsize) {
+ kerrno_t error;
+ KTASK_CRIT_BEGIN
+ if __likely(KE_ISOK(error = krwlock_beginread(&self->ty_lock))) {
+  error = kpty_s2m_user_write_unlocked(self,buf,bufsize,wsize);
   krwlock_endread(&self->ty_lock);
  }
  KTASK_CRIT_END
@@ -733,8 +823,7 @@ static kerrno_t
 kptyfile_master_write(struct kfile *__restrict self,
                       __user void const *__restrict buf, size_t bufsize,
                       __kernel size_t *__restrict wsize) {
- /* TODO: 'kpty_user_mwrite'. */
- return kpty_mwrite(&SELF->pf_pty->fp_pty,buf,bufsize,wsize);
+ return kpty_user_mwrite(&SELF->pf_pty->fp_pty,buf,bufsize,wsize);
 }
 static kerrno_t
 kptyfile_slave_read(struct kfile *__restrict self,
@@ -746,8 +835,7 @@ static kerrno_t
 kptyfile_slave_write(struct kfile *__restrict self,
                      __user void const *__restrict buf, size_t bufsize,
                      __kernel size_t *__restrict wsize) {
- /* TODO: 'kpty_user_swrite'. */
- return kpty_swrite(&SELF->pf_pty->fp_pty,buf,bufsize,wsize);
+ return kpty_user_swrite(&SELF->pf_pty->fp_pty,buf,bufsize,wsize);
 }
 static kerrno_t
 kptyfile_ioctl(struct kfile *__restrict self,

@@ -36,6 +36,8 @@
 #include <math.h>
 #include <strings.h>
 
+// TODO: Make SHM branches use 
+
 // Shared memory layout
 __DECL_BEGIN
 
@@ -539,8 +541,7 @@ kshmbranch_locate(struct kshmbranch *__restrict root,
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the old '*proot' and replaces it with either its min, or max branch.
-// Special handling is performed to determine the perfect match when
-// '*proot' has both a min and a max branch.
+// The min/max branches of *proot will be reinserted.
 extern __crit __nomp __wunused __retnonnull __nonnull((1)) struct kshmbranch *
 kshmbranch_popone(struct kshmbranch **__restrict proot,
                   __uintptr_t addr_semi, unsigned int addr_level);

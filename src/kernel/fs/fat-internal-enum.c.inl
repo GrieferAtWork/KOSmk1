@@ -37,13 +37,13 @@ __DECL_BEGIN
 
 struct check_short_data {
  char const *short_name;
- char const *long_name;
+ char const *__restrict long_name;
  size_t long_name_size;
 };
 
 static kerrno_t
-check_short_callback(struct kfatfs *fs, struct kfatfilepos const *fpos,
-                     struct kfatfileheader const *file,
+check_short_callback(struct kfatfs *__restrict fs, struct kfatfilepos const *__restrict fpos,
+                     struct kfatfileheader const *__restrict file,
                      char const *filename, size_t filename_size,
                      struct check_short_data *data) {
  if (!memcmp(data->short_name,file->f_nameext,KFATFILE_NAMEMAX+KFATFILE_EXTMAX))
@@ -56,8 +56,8 @@ check_short_callback(struct kfatfs *fs, struct kfatfilepos const *fpos,
 
 
 kerrno_t
-kfatfs_checkshort(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
-                  char const *long_name, size_t long_name_size,
+kfatfs_checkshort(struct kfatfs *__restrict self, kfatcls_t dir, int dir_is_sector,
+                  char const *__restrict long_name, size_t long_name_size,
                   char const name[KFATFILE_NAMEMAX+KFATFILE_EXTMAX]) {
  struct check_short_data data;
  data.long_name = long_name;

@@ -167,16 +167,22 @@ typedef __u32 kmodkind_t;
 #endif
 
 /* Module kind flags & utilities. */
-#define KMODKIND_BINARY     0x10000000 /*< FLAG: Module is a binary. */
-#define KMODKIND_FMASK      0xffffff00 /*< Mask for flags. */
-#define KMODKIND_KMASK      0x000000ff /*< Mask for kind. */
+#define KMODFLAG_NONE       0x00000000
+#define KMODFLAG_BINARY     0x00000100 /*< FLAG: Module is a binary. */
+#define KMODFLAG_FIXED      0x00000200 /*< FLAG: The module has no relocation information and must be loaded to a fixed address. */
+#define KMODFLAG_PREFFIXED  0x00000400 /*< FLAG: The module prefers being loaded to a fixed address (base = NULL), but is capable of being relocated elsewhere. */
+#define KMODFLAG_CANEXEC    0x00000800 /*< FLAG: The module can be executed (NOTE: ). */
+#define KMODFLAG_LOADED     0x80000000 /*< FLAG: Always set; Used internally to prevent dependecy loops (the library and all dependencies were loaded successfully). */
+#define KMODKIND_FMASK      0xffffff00 /*< Mask for flags (KMODFLAG_*). */
+#define KMODKIND_KMASK      0x000000ff /*< Mask for kind (KMODKIND_*). */
 #define KMODKIND_KIND(x)  ((x)&KMODKIND_KMASK)
 #define KMODKIND_FLAGS(x) ((x)&KMODKIND_FMASK)
 
 /* Module technologies. */
 #define KMODKIND_UNKNOWN    0 /*< Unknown binary type (May safely be used for error-cases). */
-#define KMODKIND_ELF        1 /*< ELF shared library. */
-
+#define KMODKIND_ELF32      1 /*< ELF-32 (.../.so) binary/shared library. */
+#define KMODKIND_PE32       2 /*< PE-32 (.exe/.dll) binary/shared library. */
+#define KMODKIND_KERNEL  0xff /*< Exclusively used by the kernel itself. */
 
 #ifndef __kmodinfo_defined
 #define __kmodinfo_defined 1
@@ -187,6 +193,7 @@ struct kmodinfo {
      * - Use 'KMODKIND_KIND' to extract the raw switch-capable kind.
      * - Use 'KMODKIND_FLAGS' to extract flags.
      */
+    kmodid_t   mi_id;         /*< The real module id. */
     kmodkind_t mi_kind;       /*< The kind of module/binary. */
     void      *mi_base;       /*< Base address to which the given module was loaded. */
     /* == Section-based address range ==
@@ -205,7 +212,9 @@ struct kmodinfo {
      */
     void      *mi_begin;      /*< Begin of section-based memory. */
     void      *mi_end;        /*< End of section-based memory. */
-    char      *mi_name;       /*< [?..1] ZERO-terminated module file/path name. */
+    void      *mi_start;      /*< Module entry point (undefined/technology-specific when 'KMODFLAG_CANEXEC' isn't set). */
+    char      *mi_name;       /*< [0..1] ZERO-terminated module file/path name. */
+    __size_t   mi_nmsz;       /*< Size of 'mi_name' (WARNING: is bytes & including the terminating \0-character) */
     /* Future members & dynamic buffer space are located here. */
 };
 #endif
@@ -213,22 +222,42 @@ struct kmodinfo {
 #ifndef __NO_PROTOTYPES
 //////////////////////////////////////////////////////////////////////////
 // Query information on a loaded module, given its id.
+// @param: procfd:  A process/task descriptor for the process
+// @param: modid:   A module id to query information for, or 'KMODID_SELF'
+//                  for the calling module, 'KMODID_NEXT' for the next module after self,
+//                  or 'KMODID_ALL' for the root executable, as also listed in k_syslog.
+// @param: bufsize: The supplied buffer size.
+// @param: reqsize: When non-NULL, store the required buffer size.
 // @return: KE_OK:    The given buffer was filled with information.
 //                    NOTE: Depending on the value of '*reqsize',
 //                          not all information may have been loaded.
+// @return: KE_BADF:  The given descriptor for 'procfd' is invalid, or not a task/process.
 // @return: KE_INVAL: Invalid/already closed module id.
 // @return: KE_NOSYS: An unsupported bit was set in 'flags'.
 // @return: KE_FAULT: A faulty pointer was given.
-__local _syscall5(kerrno_t,kmod_info,kmodid_t,modid,struct kmodinfo *,buf,
-                  __size_t,bufsize,__size_t *,reqsize,__u32,flags);
+__local _syscall6(kerrno_t,kmod_info,int,procfd,kmodid_t,modid,
+                  struct kmodinfo *,buf,__size_t,bufsize,
+                  __size_t *,reqsize,__u32,flags);
 #endif /* !__NO_PROTOTYPES */
 
 #define KMOD_INFO_FLAG_NONE 0x0000
-#define KMOD_INFO_FLAG_KIND 0x0001 /*< Fill 'mi_base', 'mi_begin' and 'mi_end'. */
-#define KMOD_INFO_FLAG_ADDR 0x0002 /*< Fill 'mi_base', 'mi_begin' and 'mi_end'. */
-#define KMOD_INFO_FLAG_NAME 0x0004 /*< Fill 'mi_name' with the module's name (filename w/o path). */
-#define KMOD_INFO_FLAG_PATH 0x000C /*< Fill 'mi_name' with the module's path (filename w/ path) (Implies 'KMOD_INFO_FLAG_NAME'). */
-#define KMOD_INFO_FLAG_ALL  0x000F /*< Fill in all information. */
+
+/* Fill in 'mi_id' */
+#define KMOD_INFO_FLAG_ID   0x0001
+
+/* Fill Generic module information.
+ * NOTE: Implies 'KMOD_INFO_FLAG_ID'. */
+#define KMOD_INFO_FLAG_INFO 0x0003
+
+/* Fill 'mi_name' with the module's name (filename w/o path)
+ * NOTE: On input, use 'mi_nmsz' as bufsize; On output, store reqsize in 'mi_nmsz'.
+ * NOTE: If 'mi_nmsz' is ZERO(0) or 'mi_name' is NULL, try to use memory provided
+ *       by 'buf', including the size required for the name in '*reqsize'. */
+#define KMOD_INFO_FLAG_NAME 0x0004
+
+/* Fill 'mi_name' with the module's path (filename w/ path)
+ * NOTE: Implies 'KMOD_INFO_FLAG_NAME'. */
+#define KMOD_INFO_FLAG_PATH 0x000C
 
 __DECL_END
 

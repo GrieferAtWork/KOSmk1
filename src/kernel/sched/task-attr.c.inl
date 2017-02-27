@@ -26,11 +26,15 @@
 #include <kos/compiler.h>
 #include <kos/kernel/task.h>
 #include <kos/kernel/proc.h>
+#include <kos/kernel/util/string.h>
+#include <sys/types.h>
 
 __DECL_BEGIN
 
-kerrno_t ktask_getattr_k(struct ktask *__restrict self, kattr_t attr,
-                         void *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
+kerrno_t
+ktask_user_getattr_k(struct ktask *__restrict self, kattr_t attr,
+                     __user void *__restrict buf, size_t bufsize,
+                     __kernel size_t *__restrict reqsize) {
  switch (attr) {
   {
    char const *name;
@@ -38,34 +42,38 @@ kerrno_t ktask_getattr_k(struct ktask *__restrict self, kattr_t attr,
    name = ktask_getname(self);
    if __likely(name) {
     if (reqsize) *reqsize = (strlen(name)+1)*sizeof(char);
-    strncpy((char *)buf,name,bufsize);
+    if __unlikely(user_strncpy((char *)buf,name,bufsize)) return KE_FAULT;
    } else {
-    size_t usedsize;
-    // TODO: filename of executable?
-    usedsize = snprintf((char *)buf,bufsize,
-                        "thread[%Iu|%Iu]",
-                        ktask_getparid(self),
-                        ktask_gettid(self));
-    if (reqsize) *reqsize = (usedsize+1);
+    ssize_t error;
+    /* TODO: filename of executable? */
+    error = user_snprintf((char *)buf,bufsize,reqsize,
+                          "thread[%Iu|%Iu]",
+                          ktask_getparid(self),
+                          ktask_gettid(self));
+    if (error < 0) return KE_FAULT;
    }
    return KE_OK;
   }
  }
  return KE_NOSYS; // TODO
 }
-kerrno_t ktask_setattr_k(struct ktask *__restrict self, kattr_t attr,
-                         void const *__restrict buf, size_t bufsize) {
+kerrno_t
+ktask_user_setattr_k(struct ktask *__restrict self, kattr_t attr,
+                     __user void const *__restrict buf, size_t bufsize) {
  return KE_NOSYS; // TODO
 }
-kerrno_t ktask_getattr(struct ktask *__restrict self, kattr_t attr,
-                       void *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
+kerrno_t
+ktask_user_getattr(struct ktask *__restrict self, kattr_t attr,
+                   __user void *__restrict buf, size_t bufsize,
+                   __kernel size_t *__restrict reqsize) {
  if __unlikely(!ktask_accessgp(self)) return KE_ACCES;
- return ktask_getattr_k(self,attr,buf,bufsize,reqsize);
+ return ktask_user_getattr_k(self,attr,buf,bufsize,reqsize);
 }
-kerrno_t ktask_setattr(struct ktask *__restrict self, kattr_t attr,
-                       void const *__restrict buf, size_t bufsize) {
+kerrno_t
+ktask_user_setattr(struct ktask *__restrict self, kattr_t attr,
+                   __user void const *__restrict buf, size_t bufsize) {
  if __unlikely(!ktask_accesssp(self)) return KE_ACCES;
- return ktask_setattr_k(self,attr,buf,bufsize);
+ return ktask_user_setattr_k(self,attr,buf,bufsize);
 }
 
 __DECL_END

@@ -27,15 +27,15 @@
 #include <byteswap.h>
 #include <ctype.h>
 #include <kos/compiler.h>
+#include <kos/errno.h>
 #include <kos/kernel/debug.h>
 #include <kos/kernel/dev/storage.h>
-#include <kos/errno.h>
 #include <kos/kernel/fs/fat-internal.h>
+#include <kos/kernel/rwlock.h>
 #include <malloc.h>
 #include <math.h>
 #include <string.h>
 #include <sys/types.h>
-#include <kos/kernel/rwlock.h>
 
 __DECL_BEGIN
 
@@ -44,7 +44,9 @@ static void trimspecstring(char *__restrict buf, size_t size) {
  while (size && isspace(buf[size-1])) buf[--size] = '\0';
 }
 
-kerrno_t kfatfs_init(struct kfatfs *self, struct ksdev *dev) {
+kerrno_t
+kfatfs_init(struct kfatfs *__restrict self,
+            struct ksdev *__restrict dev) {
  union kfat_header *header; kerrno_t error;
  byte_t *boot_signature; kassertobj(self); kassertobj(dev);
  if __unlikely(dev->sd_blocksize < (sizeof(union kfat_header)+2)) return KE_RANGE;
@@ -172,7 +174,7 @@ nomem_dev:
  return KE_OK;
 }
 
-void kfatfs_quit(struct kfatfs *self) {
+void kfatfs_quit(struct kfatfs *__restrict self) {
  kassertobj(self);
  free(self->f_fatmeta);
  free(self->f_fatv);

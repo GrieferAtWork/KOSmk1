@@ -26,27 +26,28 @@
 #include <kos/kernel/proc.h>
 #include <kos/kernel/task.h>
 #include <kos/errno.h>
+#include <stddef.h>
 
 __DECL_BEGIN
 
 __crit kerrno_t
-kproc_getattr_c(struct kproc *__restrict self, kattr_t attr,
-                void *__restrict buf, __size_t bufsize,
-                __size_t *__restrict reqsize) {
+kproc_user_getattr_c(struct kproc *__restrict self, kattr_t attr,
+                     __user void *__restrict buf, size_t bufsize,
+                     __kernel size_t *__restrict reqsize) {
  struct ktask *root_task; kerrno_t error;
  KTASK_CRIT_MARK
  if __unlikely((root_task = kproc_getroottask(self)) == NULL) return KE_DESTROYED;
- error = ktask_getattr(root_task,attr,buf,bufsize,reqsize);
+ error = ktask_user_getattr(root_task,attr,buf,bufsize,reqsize);
  ktask_decref(root_task);
  return error;
 }
 __crit kerrno_t
-kproc_setattr_c(struct kproc *__restrict self, kattr_t attr,
-                void const *__restrict buf, __size_t bufsize) {
+kproc_user_setattr_c(struct kproc *__restrict self, kattr_t attr,
+                     __user void const *__restrict buf, size_t bufsize) {
  struct ktask *root_task; kerrno_t error;
  KTASK_CRIT_MARK
  if __unlikely((root_task = kproc_getroottask(self)) == NULL) return KE_DESTROYED;
- error = ktask_setattr(root_task,attr,buf,bufsize);
+ error = ktask_user_setattr(root_task,attr,buf,bufsize);
  ktask_decref(root_task);
  return error;
 }

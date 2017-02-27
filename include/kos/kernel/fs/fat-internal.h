@@ -203,13 +203,14 @@ union __packed {struct __packed {union __packed {
  kfat_usc2char         lfn_name_3[KFAT_LFN_NAME3];
 };};};
 struct timespec;
+
 // NOTE: The setters return non-zero if the given header was modified
-extern void kfatfileheader_getatime(struct kfatfileheader const *self, struct timespec *result);
-extern void kfatfileheader_getctime(struct kfatfileheader const *self, struct timespec *result);
-extern void kfatfileheader_getmtime(struct kfatfileheader const *self, struct timespec *result);
-extern int kfatfileheader_setatime(struct kfatfileheader *self, struct timespec const *value);
-extern int kfatfileheader_setctime(struct kfatfileheader *self, struct timespec const *value);
-extern int kfatfileheader_setmtime(struct kfatfileheader *self, struct timespec const *value);
+extern __nonnull((1,2)) void kfatfileheader_getatime(struct kfatfileheader const *__restrict self, struct timespec *__restrict result);
+extern __nonnull((1,2)) void kfatfileheader_getctime(struct kfatfileheader const *__restrict self, struct timespec *__restrict result);
+extern __nonnull((1,2)) void kfatfileheader_getmtime(struct kfatfileheader const *__restrict self, struct timespec *__restrict result);
+extern __nonnull((1,2)) int kfatfileheader_setatime(struct kfatfileheader *__restrict self, struct timespec const *__restrict value);
+extern __nonnull((1,2)) int kfatfileheader_setctime(struct kfatfileheader *__restrict self, struct timespec const *__restrict value);
+extern __nonnull((1,2)) int kfatfileheader_setmtime(struct kfatfileheader *__restrict self, struct timespec const *__restrict value);
 
 //////////////////////////////////////////////////////////////////////////
 // Generate a checksum for a given short filename, for use in long filename entries.
@@ -237,9 +238,9 @@ typedef kfatsec_t kfatdir_t;
 struct kfatfs;
 
 #define KFATFS_CUSTER_UNUSED 0 /*< Cluster number found in the FAT, marking an unused cluster. */
-typedef kfatoff_t (*pkfatfs_getfatsector)(struct kfatfs *self, kfatcls_t index);
-typedef kfatcls_t (*pkfatfs_readfat)(struct kfatfs *self, kfatcls_t cluster);
-typedef void (*pkfatfs_writefat)(struct kfatfs *self, kfatcls_t cluster, kfatcls_t value);
+typedef kfatoff_t (*pkfatfs_getfatsector)(struct kfatfs *__restrict self, kfatcls_t index);
+typedef kfatcls_t (*pkfatfs_readfat)(struct kfatfs *__restrict self, kfatcls_t cluster);
+typedef void (*pkfatfs_writefat)(struct kfatfs *__restrict self, kfatcls_t cluster, kfatcls_t value);
 
 #define kfatfs_iseofcluster(self,cls) \
  ((cls) >= (self)->f_clseof/* || (cls) < 2*/)
@@ -281,33 +282,27 @@ union{
 //////////////////////////////////////////////////////////////////////////
 // Perform operations on the fat's FAT cache
 // @return: KE_DESTROYED: The FAT was already destroyed.
-extern kerrno_t kfatfs_fat_close(struct kfatfs *self);
-extern kerrno_t kfatfs_fat_read(struct kfatfs *self, kfatcls_t index, kfatcls_t *target);
-extern kerrno_t kfatfs_fat_write(struct kfatfs *self, kfatcls_t index, kfatcls_t target);
-extern kerrno_t kfatfs_fat_flush(struct kfatfs *self);
-extern kerrno_t kfatfs_fat_readandalloc(struct kfatfs *self, kfatcls_t index, kfatcls_t *target);
-extern kerrno_t kfatfs_fat_allocfirst(struct kfatfs *self, kfatcls_t *target);
-extern kerrno_t kfatfs_fat_freeall(struct kfatfs *self, kfatcls_t first); /*< Free all clusters in a chain starting at 'first'. */
-extern kerrno_t _kfatfs_fat_doflush_unlocked(struct kfatfs *self);
-extern kerrno_t _kfatfs_fat_read_unlocked(struct kfatfs *self, kfatcls_t index, kfatcls_t *target);
-extern kerrno_t _kfatfs_fat_load_unlocked(struct kfatfs *self, kfatcls_t index);
-extern kerrno_t _kfatfs_fat_getfreecluster_unlocked(struct kfatfs *self, kfatcls_t *result, kfatcls_t hint);
-extern kerrno_t _kfatfs_fat_freeall_unlocked(struct kfatfs *self, kfatcls_t first);
+extern kerrno_t kfatfs_fat_close(struct kfatfs *__restrict self);
+extern kerrno_t kfatfs_fat_read(struct kfatfs *__restrict self, kfatcls_t index, kfatcls_t *__restrict target);
+extern kerrno_t kfatfs_fat_write(struct kfatfs *__restrict self, kfatcls_t index, kfatcls_t target);
+extern kerrno_t kfatfs_fat_flush(struct kfatfs *__restrict self);
+extern kerrno_t kfatfs_fat_readandalloc(struct kfatfs *__restrict self, kfatcls_t index, kfatcls_t *__restrict target);
+extern kerrno_t kfatfs_fat_allocfirst(struct kfatfs *__restrict self, kfatcls_t *__restrict target);
+extern kerrno_t kfatfs_fat_freeall(struct kfatfs *__restrict self, kfatcls_t first); /*< Free all clusters in a chain starting at 'first'. */
+extern kerrno_t _kfatfs_fat_doflush_unlocked(struct kfatfs *__restrict self);
+extern kerrno_t _kfatfs_fat_read_unlocked(struct kfatfs *__restrict self, kfatcls_t index, kfatcls_t *__restrict target);
+extern kerrno_t _kfatfs_fat_load_unlocked(struct kfatfs *__restrict self, kfatcls_t index);
+extern kerrno_t _kfatfs_fat_getfreecluster_unlocked(struct kfatfs *__restrict self, kfatcls_t *__restrict result, kfatcls_t hint);
+extern kerrno_t _kfatfs_fat_freeall_unlocked(struct kfatfs *__restrict self, kfatcls_t first);
 
 
 __local __wunused __nonnull((1)) kfatsec_t
-kfatfs_clusterstart(struct kfatfs const *self, kfatcls_t cluster) {
+kfatfs_clusterstart(struct kfatfs const *__restrict self, kfatcls_t cluster) {
  return ((cluster-2)*self->f_sec4clus)+self->f_firstdatasec;
 }
-/*
-__local __wunused __nonnull((1)) kfatcls_t
-kfatfs_sec2clus(struct kfatfs const *self, kfatsec_t sector) {
- return ((sector-self->f_firstdatasec)/self->f_sec4clus)+2;
-}
-*/
 
-extern kerrno_t kfatfs_savefileheader(struct kfatfs *self, __u64 headpos,
-                                      struct kfatfileheader const *header);
+extern kerrno_t kfatfs_savefileheader(struct kfatfs *__restrict self, __u64 headpos,
+                                      struct kfatfileheader const *__restrict header);
 
 //////////////////////////////////////////////////////////////////////////
 // Initialize a fat filesystem by loading it from a given storage device.
@@ -316,12 +311,12 @@ extern kerrno_t kfatfs_savefileheader(struct kfatfs *self, __u64 headpos,
 // @return: KE_DEVICE: The storage device encountered an error.
 // @return: KE_RANGE:  Blocks of the device are too small for a FAT filesystem.
 // @return: KE_INVAL:  The partition record is broken
-extern __wunused __nonnull((1,2)) kerrno_t kfatfs_init(struct kfatfs *self, struct ksdev *dev);
-extern __wunused __nonnull((1,2)) kerrno_t kfatfs_create(struct kfatfs *self, struct ksdev *dev);
-extern           __nonnull((1)) void kfatfs_quit(struct kfatfs *self);
+extern __wunused __nonnull((1,2)) kerrno_t kfatfs_init(struct kfatfs *__restrict self, struct ksdev *__restrict dev);
+extern __wunused __nonnull((1,2)) kerrno_t kfatfs_create(struct kfatfs *__restrict self, struct ksdev *__restrict dev);
+extern           __nonnull((1)) void kfatfs_quit(struct kfatfs *__restrict self);
 
-extern __wunused __nonnull((1,4)) kerrno_t kfatfs_loadsectors(struct kfatfs const *self, kfatsec_t sec, __size_t c, void *__restrict buf);
-extern __wunused __nonnull((1,4)) kerrno_t kfatfs_savesectors(struct kfatfs *self, kfatsec_t sec, __size_t c, void const *__restrict buf);
+extern __wunused __nonnull((1,4)) kerrno_t kfatfs_loadsectors(struct kfatfs const *__restrict self, kfatsec_t sec, __size_t c, void *__restrict buf);
+extern __wunused __nonnull((1,4)) kerrno_t kfatfs_savesectors(struct kfatfs *__restrict self, kfatsec_t sec, __size_t c, void const *__restrict buf);
 
 #define kfatfs_getrootdir(self) ((self)->f_rootdir)
 
@@ -330,9 +325,10 @@ struct kfatfilepos {
  __u64 fm_headpos; /*< On-disk, sector-based location (in bytes) of the file's header. */
 };
 
-typedef kerrno_t (*__wunused __nonnull((1,2,3)) pkfatfs_enumdir_callback)(
- struct kfatfs *fs, struct kfatfilepos const *fpos, struct kfatfileheader const *file,
- char const *filename, __size_t filename_size, void *closure);
+typedef kerrno_t (*__wunused __nonnull((1,2,3)) pkfatfs_enumdir_callback)
+       (struct kfatfs *__restrict fs, struct kfatfilepos const *__restrict fpos,
+        struct kfatfileheader const *__restrict file, char const *filename,
+        __size_t filename_size, void *closure);
 
 //////////////////////////////////////////////////////////////////////////
 // Enumerate all files withing a given directory
@@ -341,10 +337,10 @@ typedef kerrno_t (*__wunused __nonnull((1,2,3)) pkfatfs_enumdir_callback)(
 // @return: * : Any value other than KE_OK, returned by 'callback'
 // @return: KE_NOMEM: Not enough available memory
 extern __wunused __nonnull((1,3)) kerrno_t
-kfatfs_enumdir(struct kfatfs *self, kfatcls_t dir,
+kfatfs_enumdir(struct kfatfs *__restrict self, kfatcls_t dir,
                pkfatfs_enumdir_callback callback, void *closure);
 extern __wunused __nonnull((1,4)) kerrno_t
-kfatfs_enumdirsec(struct kfatfs *self, kfatsec_t dir, __u32 maxsize,
+kfatfs_enumdirsec(struct kfatfs *__restrict self, kfatsec_t dir, __u32 maxsize,
                   pkfatfs_enumdir_callback callback, void *closure);
 
 //////////////////////////////////////////////////////////////////////////
@@ -354,14 +350,14 @@ kfatfs_enumdirsec(struct kfatfs *self, kfatsec_t dir, __u32 maxsize,
 // @return: KE_NOENT:  The given long name already exists (file already exists!).
 // @return: *: Some device-specific error occurred.
 extern __wunused __nonnull((1,4,6)) kerrno_t
-kfatfs_checkshort(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
-                  char const *long_name, size_t long_name_size,
+kfatfs_checkshort(struct kfatfs *__restrict self, kfatcls_t dir, int dir_is_sector,
+                  char const *__restrict long_name, __size_t long_name_size,
                   char const name[KFATFILE_NAMEMAX+KFATFILE_EXTMAX]);
 
 //////////////////////////////////////////////////////////////////////////
 // Mark a file header at a given location as deleted (aka. unused)
 extern __wunused __nonnull((1)) kerrno_t
-kfatfs_rmheaders(struct kfatfs *self, __u64 headpos, unsigned int count);
+kfatfs_rmheaders(struct kfatfs *__restrict self, __u64 headpos, unsigned int count);
 
 //////////////////////////////////////////////////////////////////////////
 // Allocate and save a set of consecutive headers.
@@ -369,9 +365,9 @@ kfatfs_rmheaders(struct kfatfs *self, __u64 headpos, unsigned int count);
 // @param: filepos->fm_headpos: Address of the last header upon success.
 // @return: KE_OK: Successfully allocated space for the new headers.
 extern __wunused __nonnull((1,4,6)) kerrno_t
-kfatfs_allocheaders(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
-                    struct kfatfileheader const *first_header,
-                    __size_t header_count, struct kfatfilepos *filepos);
+kfatfs_allocheaders(struct kfatfs *__restrict self, kfatcls_t dir, int dir_is_sector,
+                    struct kfatfileheader const *__restrict first_header,
+                    __size_t header_count, struct kfatfilepos *__restrict filepos);
 
 #define kfatfs_mkheader(self,dir,dir_is_sector,header,filepos) \
  kfatfs_allocheaders(self,dir,dir_is_sector,header,1,filepos)
@@ -380,19 +376,19 @@ kfatfs_allocheaders(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
 // Generates a long filename entry.
 // @return: KE_NAMETOOLONG: The given long_name is too long, even for a long-filename-entry.
 extern __wunused __nonnull((1,4,5,7)) kerrno_t
-kfatfs_mklongheader(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
-                    struct kfatfileheader const *header,
-                    char const *long_name, __size_t long_name_size,
-                    struct kfatfilepos *filepos);
+kfatfs_mklongheader(struct kfatfs *__restrict self, kfatcls_t dir, int dir_is_sector,
+                    struct kfatfileheader const *__restrict header,
+                    char const *__restrict long_name, __size_t long_name_size,
+                    struct kfatfilepos *__restrict filepos);
 
 //////////////////////////////////////////////////////////////////////////
 // Generate a short filename for storage within the given directory.
 // @return: KE_OVERFLOW: Too many variations of the same DOS 8.3 filename already exist.
 // @return: *: Some other, device-specific error occurred.
 extern __wunused __nonnull((1,4,5,7)) kerrno_t
-kfatfs_mkshortname(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
-                   struct kfatfileheader *header, char const *long_name,
-                   __size_t long_name_size, int *need_long_header);
+kfatfs_mkshortname(struct kfatfs *__restrict self, kfatcls_t dir, int dir_is_sector,
+                   struct kfatfileheader *__restrict header, char const *__restrict long_name,
+                   __size_t long_name_size, int *__restrict need_long_header);
 
 //////////////////////////////////////////////////////////////////////////
 // Create a Dos 8.3 short filename.
@@ -414,7 +410,7 @@ kfatfs_mkshortname(struct kfatfs *self, kfatcls_t dir, int dir_is_sector,
 //                             requires the use of a long filename entry.
 //                             Note through, that 'retry' cannot be used to generate more names.
 extern int kdos83_makeshort(char const *__restrict name, __size_t namesize,
-                            int retry, __u8 *ntflags, char result[11]);
+                            int retry, __u8 *__restrict ntflags, char result[11]);
 #define KDOS83_KIND_SHORT   0
 #define KDOS83_KIND_LONG    1
 #define KDOS83_KIND_CASE    2
@@ -424,15 +420,15 @@ extern int kdos83_makeshort(char const *__restrict name, __size_t namesize,
 
 
 
-extern kfatoff_t kfatfs_getfatsec_12(struct kfatfs *self, kfatcls_t index);
-extern kfatoff_t kfatfs_getfatsec_16(struct kfatfs *self, kfatcls_t index);
-extern kfatoff_t kfatfs_getfatsec_32(struct kfatfs *self, kfatcls_t index);
-extern kfatcls_t kfatfs_readfat_12(struct kfatfs *self, kfatcls_t cluster);
-extern kfatcls_t kfatfs_readfat_16(struct kfatfs *self, kfatcls_t cluster);
-extern kfatcls_t kfatfs_readfat_32(struct kfatfs *self, kfatcls_t cluster);
-extern void kfatfs_writefat_12(struct kfatfs *self, kfatcls_t cluster, kfatcls_t value);
-extern void kfatfs_writefat_16(struct kfatfs *self, kfatcls_t cluster, kfatcls_t value);
-extern void kfatfs_writefat_32(struct kfatfs *self, kfatcls_t cluster, kfatcls_t value);
+extern kfatoff_t kfatfs_getfatsec_12(struct kfatfs *__restrict self, kfatcls_t index);
+extern kfatoff_t kfatfs_getfatsec_16(struct kfatfs *__restrict self, kfatcls_t index);
+extern kfatoff_t kfatfs_getfatsec_32(struct kfatfs *__restrict self, kfatcls_t index);
+extern kfatcls_t kfatfs_readfat_12(struct kfatfs *__restrict self, kfatcls_t cluster);
+extern kfatcls_t kfatfs_readfat_16(struct kfatfs *__restrict self, kfatcls_t cluster);
+extern kfatcls_t kfatfs_readfat_32(struct kfatfs *__restrict self, kfatcls_t cluster);
+extern void kfatfs_writefat_12(struct kfatfs *__restrict self, kfatcls_t cluster, kfatcls_t value);
+extern void kfatfs_writefat_16(struct kfatfs *__restrict self, kfatcls_t cluster, kfatcls_t value);
+extern void kfatfs_writefat_32(struct kfatfs *__restrict self, kfatcls_t cluster, kfatcls_t value);
 
 __DECL_END
 #endif /* __KERNEL__ */

@@ -398,6 +398,9 @@ kproc_getroottask(struct kproc const *__restrict self);
 extern __crit __wunused __nonnull((1)) __ref struct kshlib *
 kproc_getrootexe(struct kproc const *__restrict self);
 
+extern __nomp __wunused __nonnull((1)) struct kprocmodule *
+kproc_getrootmodule_unlocked(struct kproc const *__restrict self);
+
 //////////////////////////////////////////////////////////////////////////
 // Returns TRUE (non-ZERO) if the given process's root task is visible to the caller.
 // NOTE: If the process has no root task (i.e. is a Zombie), return FALSE (ZERO).
@@ -631,24 +634,22 @@ extern           __nonnull((1,2))     void kproc_deltask(struct kproc *__restric
 // Get/Set generic attributes of a given process
 // NOTE: Unrecognized attributes are passed to the root task of the given process.
 // @return: KE_DESTROYED: The given process is a zombie (or doesn't have a root task.)
-extern __crit __wunused __nonnull((1,3)) kerrno_t
-kproc_getattr_c(struct kproc *__restrict self, kattr_t attr,
-                void *__restrict buf, __size_t bufsize,
-                __size_t *__restrict reqsize);
-extern __crit __wunused __nonnull((1,3)) kerrno_t
-kproc_setattr_c(struct kproc *__restrict self, kattr_t attr,
-                void const *__restrict buf, __size_t bufsize);
+extern __crit __wunused __nonnull((1,3)) kerrno_t kproc_user_getattr_c(struct kproc *__restrict self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __crit __wunused __nonnull((1,3)) kerrno_t kproc_user_setattr_c(struct kproc *__restrict self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
 #ifdef __INTELLISENSE__
-extern __wunused __nonnull((1,3)) kerrno_t
-kproc_getattr(struct kproc *__restrict self, kattr_t attr,
-              void *__restrict buf, __size_t bufsize,
-              __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,3)) kerrno_t
-kproc_setattr(struct kproc *__restrict self, kattr_t attr,
-              void const *__restrict buf, __size_t bufsize);
+extern __crit __wunused __nonnull((1,3)) kerrno_t kproc_kernel_getattr_c(struct kproc *__restrict self, kattr_t attr, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __crit __wunused __nonnull((1,3)) kerrno_t kproc_kernel_setattr_c(struct kproc *__restrict self, kattr_t attr, __kernel void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kproc_user_getattr(struct kproc *__restrict self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t kproc_user_setattr(struct kproc *__restrict self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t kproc_kernel_getattr(struct kproc *__restrict self, kattr_t attr, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t kproc_kernel_setattr(struct kproc *__restrict self, kattr_t attr, __kernel void const *__restrict buf, __size_t bufsize);
 #else
-#define kproc_getattr(self,attr,buf,bufsize,reqsize) KTASK_CRIT(kproc_getattr_c(self,attr,buf,bufsize,reqsize))
-#define kproc_setattr(self,attr,buf,bufsize)         KTASK_CRIT(kproc_setattr_c(self,attr,buf,bufsize))
+#define kproc_kernel_getattr_c(self,attr,buf,bufsize,reqsize) KTASK_KEPD(kproc_user_getattr_c(self,attr,buf,bufsize,reqsize))
+#define kproc_kernel_setattr_c(self,attr,buf,bufsize)         KTASK_KEPD(kproc_user_setattr_c(self,attr,buf,bufsize))
+#define kproc_user_getattr(self,attr,buf,bufsize,reqsize)     KTASK_CRIT(kproc_user_getattr_c(self,attr,buf,bufsize,reqsize))
+#define kproc_user_setattr(self,attr,buf,bufsize)             KTASK_CRIT(kproc_user_setattr_c(self,attr,buf,bufsize))
+#define kproc_kernel_getattr(self,attr,buf,bufsize,reqsize)   KTASK_KEPD(kproc_user_getattr(self,attr,buf,bufsize,reqsize))
+#define kproc_kernel_setattr(self,attr,buf,bufsize)           KTASK_KEPD(kproc_user_setattr(self,attr,buf,bufsize))
 #endif
 
 
@@ -695,7 +696,7 @@ kproc_insmod_c(struct kproc *__restrict self,
 //    NOTE: The caller must also 'free(*dep_idv)' when they are done.
 //  - [kproc_delmod2*] Similar to 'kproc_delmod*', but also supports special module ids.
 // @return: KE_OK:        The module was unloaded successfully.
-// @return: KE_NOENT:     The given module wasn't loaded in this process.
+// @return: KE_INVAL:     The given module wasn't loaded in this process.
 // @return: KS_UNCHANGED: The module was loaded more than once (its load
 //                        counter was decremented, but didn't reach ZERO)
 // @return: DE_DESTROYED: [!*_unlocked] The given process is a zombie.

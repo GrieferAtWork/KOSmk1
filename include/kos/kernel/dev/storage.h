@@ -272,7 +272,7 @@ extern __wunused __nonnull((1)) kerrno_t ksdev_new_ramdisk(struct ksdev **result
 // NOTE: The caller is responsible for ensuring the given
 //       start+size are in bounds of the parent device.
 // @return: KE_NOMEM: Not enough memory for the storage device controller
-extern __wunused __nonnull((1,2)) kerrno_t ksdev_new_part(struct ksdev **result, struct ksdev *dev,
+extern __wunused __nonnull((1,2)) kerrno_t ksdev_new_part(struct ksdev **result, struct ksdev *__restrict dev,
                                                           kslba_t start, kslba_t size);
 
 //////////////////////////////////////////////////////////////////////////

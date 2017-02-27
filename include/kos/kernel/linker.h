@@ -29,6 +29,7 @@
 #include <elf.h>
 #include <kos/compiler.h>
 #include <kos/types.h>
+#include <kos/mod.h>
 #include <kos/errno.h>
 #include <kos/kernel/features.h>
 #include <kos/kernel/object.h>
@@ -284,12 +285,17 @@ extern void ksecdata_cacheminmax(struct ksecdata *__restrict self);
 //                        performing another translation.
 // @return: NULL: The given address is invalid
 //               [ksecdata_translate_rw] The associated tab is marked as read-only.
-extern __kernel __wunused __nonnull((1,3)) void const *
+extern __wunused __nonnull((1,3)) __kernel void const *
 ksecdata_translate_ro(struct ksecdata const *__restrict self,
                       ksymaddr_t addr, __size_t *__restrict maxsize);
-extern __kernel __wunused __nonnull((1,3)) void *
+extern __wunused __nonnull((1,3)) __kernel void *
 ksecdata_translate_rw(struct ksecdata *__restrict self,
                       ksymaddr_t addr, __size_t *__restrict maxsize);
+
+//////////////////////////////////////////////////////////////////////////
+// Returns TRUE(1) if the given addr is mapped. FALSE(0) otherwise.
+extern __wunused __nonnull((1)) int 
+ksecdata_ismapped(struct ksecdata const *__restrict self, ksymaddr_t addr);
 
 //////////////////////////////////////////////////////////////////////////
 // Reads/Writes up to 'bufsize' bytes from/to 'addr' into/from 'buf'
@@ -345,13 +351,9 @@ struct kshlib {
  // NOTE: Shared libraries are implicitly synchronized, as all members
  //       must be considered constant post initialization.
  KOBJECT_HEAD
- __atomic __u32          sh_refcnt;    /*< Reference counter. */
- __ref struct kfile     *sh_file;      /*< [1..1] Open file to this shared library (Used to retrieve library name/path). */
-#define KSHLIB_FLAG_NONE         0x00000000
-#define KSHLIB_FLAG_FIXED        0x00000001 /*< The shared library must be loaded at a fixed address (base = NULL). */
-#define KSHLIB_FLAG_PREFER_FIXED 0x00000002 /*< The shared library prefers being loaded to a fixed address (base = NULL), but is capable of being relocated elsewhere. */
-#define KSHLIB_FLAG_LOADED       0x00000004 /*< Set when the library is fully loaded (used to detect cyclic dependencies). */
- __u32                   sh_flags;      /*< Shared library flags. */
+ __atomic __u32          sh_refcnt;     /*< Reference counter. */
+ __ref struct kfile     *sh_file;       /*< [1..1] Open file to this shared library (Used to retrieve library name/path). */
+ kmodkind_t              sh_flags;      /*< Shared library kind & flags. */
  __size_t                sh_cidx;       /*< [lock(kslcache_lock)] Cache index (set to (size_t)-1 when not cached). */
  struct ksymtable        sh_publicsym;  /*< Hash-table of public symbols (exported by this shared library). */
  struct ksymtable        sh_weaksym;    /*< Hash-table of weak symbols (exported by this shared library). */
@@ -513,13 +515,20 @@ extern __crit void kshlibcache_dellib(struct kshlib *__restrict lib);
 //          start with a slash, the function always returns NULL.
 // WARNING: If a cached library was found, the caller is responsible
 //          for ensuring that it has been fully loaded (aka.
-//          the 'KSHLIB_FLAG_LOADED' flag has been set).
+//          the 'KMODFLAG_LOADED' flag has been set).
 //          This must be done to detect and handle cyclic dependencies.
 // @return: NULL: No library with the given path was cached.
 // @return: * :   A new reference to a cached shared library.
 extern __crit __ref struct kshlib *kshlibcache_getlib(char const *__restrict absolute_path);
 extern __crit __ref struct kshlib *kshlibcache_fgetlib(struct kfile *__restrict fp);
 
+//////////////////////////////////////////////////////////////////////////
+// Query information on a given module
+extern __crit __wunused __nonnull((1)) kerrno_t
+kshlib_user_getinfo(struct kshlib *__restrict self,
+                    __user void *module_base, kmodid_t id,
+                    __user struct kmodinfo *buf, __size_t bufsize,
+                    __kernel __size_t *reqsize, __u32 flags);
 
 
 #if KCONFIG_SHLIB_RECENT_CACHE_SIZE

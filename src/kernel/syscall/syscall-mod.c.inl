@@ -104,20 +104,49 @@ SYSCALL(sys_kmod_sym) {
  RETURN(result);
 }
 
-/* _syscall5(kerrno_t,kmod_info,kmodid_t,modid,struct kmodinfo *,buf,size_t,bufsize,size_t *,reqsize,__u32,flags); */
+/* _syscall6(kerrno_t,kmod_info,int,proc,kmodid_t,modid,struct kmodinfo *,buf,size_t,bufsize,size_t *,reqsize,__u32,flags); */
 SYSCALL(sys_kmod_info) {
- LOAD5(kmodid_t         ,K(modid),
-       struct kmodinfo *,U0(buf),
+ LOAD6(int              ,K(procfd),
+       kmodid_t         ,K(modid),
+       struct kmodinfo *,K(buf),
        size_t           ,K(bufsize),
-       size_t          *,U0(reqsize),
+       size_t          *,K(preqsize),
        __u32            ,K(flags));
- kerrno_t error;
+ kerrno_t error; size_t reqsize;
+ struct kproc *proc,*caller = kproc_self();
+ struct kprocmodule *module;
+ struct kfdentry fd;
  if (!buf) bufsize = 0;
-
- (void)modid,(void)buf,(void)bufsize;
- (void)reqsize,(void)flags;
- error = KE_NOSYS; // TODO
-
+ KTASK_CRIT_BEGIN_FIRST
+ if __unlikely(KE_ISERR(error = kproc_getfd(caller,procfd,&fd))) goto end;
+      if (fd.fd_type == KFDTYPE_PROC) proc = fd.fd_proc;
+ else if (fd.fd_type == KFDTYPE_TASK) proc = ktask_getproc(fd.fd_task);
+ else { error = KE_BADF; goto end_fd; }
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_MODS))) goto end_fd;
+ if (modid == KMODID_SELF) {
+  /* symbolic module ID self is only allowed if procfd also described self. */
+  if __unlikely(caller != proc) { error = KE_INVAL; goto end_fd; }
+  error = kproc_getmodat_unlocked(proc,&modid,(void *)regs->regs.eip);
+  if __unlikely(KE_ISERR(error)) goto end_unlock;
+  module = kproc_getrootmodule_unlocked(proc);
+  if __unlikely(!module) { error = KE_DESTROYED; goto end_fd; }
+  goto parse_module;
+ }
+ if __unlikely(modid >= proc->p_modules.pms_moda) error = KE_INVAL;
+ else if __unlikely(!(module = &proc->p_modules.pms_modv[modid])->pm_lib) error = KE_INVAL;
+ else {
+parse_module:
+  error = kshlib_user_getinfo(module->pm_lib,module->pm_base,
+                             (kmodid_t)(module-proc->p_modules.pms_modv),
+                              buf,bufsize,preqsize ? &reqsize : NULL,flags);
+ }
+end_unlock:
+ kproc_unlock(proc,KPROC_LOCK_MODS);
+ if (__likely(KE_ISOK(error)) && preqsize &&
+     __unlikely(copy_to_user(preqsize,&reqsize,sizeof(reqsize)))
+     ) error = KE_FAULT;
+end_fd: kfdentry_quit(&fd);
+end: KTASK_CRIT_END
  RETURN(error);
 }
 

@@ -1505,18 +1505,21 @@ ktask_settls(struct ktask *__restrict self, __ktls_t tlsid,
 // Get/Set task attributes.
 // NOTE: The !*_k versions require the caller to have
 //       GETPROP/SETPROP access respectively.
-extern __wunused __nonnull((1,3)) kerrno_t
-ktask_getattr_k(struct ktask *__restrict self, kattr_t attr,
-                void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,3)) kerrno_t
-ktask_setattr_k(struct ktask *__restrict self, kattr_t attr,
-                void const *__restrict buf, __size_t bufsize);
-extern __wunused __nonnull((1,3)) kerrno_t
-ktask_getattr(struct ktask *__restrict self, kattr_t attr,
-              void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,3)) kerrno_t
-ktask_setattr(struct ktask *__restrict self, kattr_t attr,
-              void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t ktask_user_getattr_k(struct ktask *__restrict self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t ktask_user_setattr_k(struct ktask *__restrict self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t ktask_user_getattr(struct ktask *__restrict self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t ktask_user_setattr(struct ktask *__restrict self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,3)) kerrno_t ktask_kernel_getattr_k(struct ktask *__restrict self, kattr_t attr, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t ktask_kernel_setattr_k(struct ktask *__restrict self, kattr_t attr, __kernel void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3)) kerrno_t ktask_kernel_getattr(struct ktask *__restrict self, kattr_t attr, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3)) kerrno_t ktask_kernel_setattr(struct ktask *__restrict self, kattr_t attr, __kernel void const *__restrict buf, __size_t bufsize);
+#else
+#define ktask_kernel_getattr_k(self,attr,buf,bufsize,reqsize) KTASK_KEPD(ktask_user_getattr_k(self,attr,buf,bufsize,reqsize))
+#define ktask_kernel_setattr_k(self,attr,buf,bufsize)         KTASK_KEPD(ktask_user_setattr_k(self,attr,buf,bufsize))
+#define ktask_kernel_getattr(self,attr,buf,bufsize,reqsize)   KTASK_KEPD(ktask_user_getattr(self,attr,buf,bufsize,reqsize))
+#define ktask_kernel_setattr(self,attr,buf,bufsize)           KTASK_KEPD(ktask_user_setattr(self,attr,buf,bufsize))
+#endif
 #endif /* !__ASSEMBLY__ */
 
 __DECL_END

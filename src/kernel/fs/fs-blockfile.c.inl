@@ -330,13 +330,18 @@ read_buffer:
    if __unlikely(KE_ISERR(kproc_lock(caller->t_proc,KPROC_LOCK_SHM))) goto err_fault;
    kbuf = kshm_translateuser(&caller->t_proc->p_shm,caller->t_epd,
                              buf,self->bf_chunksize,&kbufsize,1);
-   if __unlikely(!kbuf || kbufsize != self->bf_chunksize) error = KE_FAULT;
-   else error = (*kblockfile_type(self)->bft_loadchunk)(self,&self->bf_currchunk,kbuf);
+   if __unlikely(!kbuf) error = KE_FAULT;
+   else if __likely(kbufsize == self->bf_chunksize){
+    /* NOTE: Due to partitioning and copy-on-write, the user-chunk may not be linear. */
+    error = (*kblockfile_type(self)->bft_loadchunk)(self,&self->bf_currchunk,kbuf);
+   }
    kproc_unlock(caller->t_proc,KPROC_LOCK_SHM);
-#else
-   error = (*kblockfile_type(self)->bft_loadchunk)(self,&self->bf_currchunk,self->bf_buffer);
-   if __unlikely(copy_to_user(buf,self->bf_buffer,self->bf_chunksize)) goto err_fault;
+   if (kbufsize != self->bf_chunksize)
 #endif
+   {
+    error = (*kblockfile_type(self)->bft_loadchunk)(self,&self->bf_currchunk,self->bf_buffer);
+    if __unlikely(copy_to_user(buf,self->bf_buffer,self->bf_chunksize)) goto err_fault;
+   }
    if __unlikely(KE_ISERR(error)) goto end;
    kblockfile_selectnextchunk_withoutdata(self);
    *rsize             += self->bf_chunksize;
@@ -364,7 +369,10 @@ endok:
 end:
  kmutex_unlock(&self->bf_lock);
  return error;
-err_fault: error = KE_FAULT; goto end;
+err_fault:
+ _printtraceback_d();
+ error = KE_FAULT;
+ goto end;
 }
 
 
@@ -442,13 +450,18 @@ write_buffer:
   if __unlikely(KE_ISERR(kproc_lock(caller->t_proc,KPROC_LOCK_SHM))) goto err_fault;
   kbuf = kshm_translateuser(&caller->t_proc->p_shm,caller->t_epd,
                             buf,self->bf_chunksize,&kbufsize,0);
-  if __unlikely(!kbuf || kbufsize != self->bf_chunksize) error = KE_FAULT;
-  else error = (*kblockfile_type(self)->bft_savechunk)(self,&self->bf_currchunk,kbuf);
+  if __unlikely(!kbuf) error = KE_FAULT;
+  else if __likely(kbufsize == self->bf_chunksize){
+   /* NOTE: Due to partitioning and copy-on-write, the user-chunk may not be linear. */
+   error = (*kblockfile_type(self)->bft_savechunk)(self,&self->bf_currchunk,kbuf);
+  }
   kproc_unlock(caller->t_proc,KPROC_LOCK_SHM);
-#else
-  if __unlikely(copy_from_user(self->bf_buffer,buf,self->bf_chunksize)) goto err_fault;
-  error = (*kblockfile_type(self)->bft_savechunk)(self,&self->bf_currchunk,self->bf_buffer);
+  if (kbufsize != self->bf_chunksize)
 #endif
+  {
+   if __unlikely(copy_from_user(self->bf_buffer,buf,self->bf_chunksize)) goto err_fault;
+   error = (*kblockfile_type(self)->bft_savechunk)(self,&self->bf_currchunk,self->bf_buffer);
+  }
   if __unlikely(KE_ISERR(error)) goto end;
   kblockfile_selectnextchunk_withoutdata(self);
   *wsize             += self->bf_chunksize;

@@ -50,7 +50,7 @@ extern __wunused __nonnull((1,3))   kerrno_t kpartdev_getattr(kpartdev_t const *
 extern __wunused __nonnull((1,3))   kerrno_t kpartdev_setattr(kpartdev_t *self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
 
 __local __nonnull((1,2)) void kpartdev_create(
- kpartdev_t *self, struct ksdev *dev, kslba_t start, kslba_t size) {
+ kpartdev_t *self, struct ksdev *__restrict dev, kslba_t start, kslba_t size) {
  kassertobj(self); kassertobj(dev);
  assertf(start+size > size,"Empty size, or lba rolls over");
  assertf(start+size <= dev->sd_blockcount

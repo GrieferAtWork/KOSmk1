@@ -34,6 +34,7 @@
 #include <kos/kernel/debug.h>
 #include <kos/kernel/linker.h>
 #include <kos/kernel/shm.h>
+#include <kos/kernel/util/string.h>
 #include <kos/kernel/fs/file.h>
 #include <kos/kernel/fs/fs.h>
 
@@ -262,6 +263,17 @@ void ksecdata_quit(struct ksecdata *__restrict self) {
 }
 
 
+int 
+ksecdata_ismapped(struct ksecdata const *__restrict self,
+                  ksymaddr_t addr) {
+ struct kshlibsection const *iter,*end;
+ end = (iter = self->ed_secv)+self->ed_secc;
+ for (; iter != end; ++iter) {
+  if (addr >= iter->sls_base &&
+      addr < iter->sls_base+iter->sls_size) return 1;
+ }
+ return 0;
+}
 
 __kernel void const *
 ksecdata_translate_ro(struct ksecdata const *__restrict self,
@@ -427,7 +439,7 @@ kshlib_spawn(struct kshlib const *__restrict self,
  struct ktask *result; void *useresp;
  KTASK_CRIT_MARK
  // Can't spawn main task in shared libraries
- if __unlikely(self->sh_callbacks.slc_start == KSYM_INVALID) return NULL;
+ if __unlikely(!(self->sh_flags&KMODFLAG_CANEXEC)) return NULL;
  result = ktask_newuser(ktask_self(),proc,&useresp,
                         KTASK_STACK_SIZE_DEF,KTASK_STACK_SIZE_DEF);
  if __unlikely(!result) return NULL;
@@ -463,7 +475,7 @@ struct kshlib __kshlib_kernel = {
  KOBJECT_INIT(KOBJECT_MAGIC_SHLIB)
  /* sh_refcnt                        */0xffff,
  /* sh_file                          */&kshlibkernel_file,
- /* sh_flags                         */KSHLIB_FLAG_FIXED|KSHLIB_FLAG_LOADED,
+ /* sh_flags                         */KMODFLAG_FIXED|KMODFLAG_LOADED|KMODFLAG_CANEXEC|KMODKIND_KERNEL,
  /* sh_cidx                          */(size_t)-1,
  /* sh_publicsym                     */KSYMTABLE_INIT,
  /* sh_weaksym                       */KSYMTABLE_INIT,
@@ -558,7 +570,7 @@ static kerrno_t check_exec_permissions(struct kfile *__restrict fp) {
 
 __crit kerrno_t
 kshlib_openfileenv(struct kfspathenv const *pathenv,
-                   char const *__restrict filename, __size_t filename_max,
+                   char const *__restrict filename, size_t filename_max,
                    __ref struct kshlib **__restrict result,
                    int require_exec_permissions) {
  struct kfile *fp; kerrno_t error;
@@ -606,7 +618,7 @@ again_true_root:
   * NOTE: It wasn't perfect because it can't handle '.' and '..' references. */
 again_true_root2:
  error = __kfile_kernel_getpathname_fromdirent(fp,kfs_getroot(),trueroot,
-                                        trueroot_size,&trueroot_reqsize);
+                                               trueroot_size,&trueroot_reqsize);
  /* NOTE: Not all files may be able to actually have a path associated
   *       with them. We still allow those files to be loaded if they
   *       are binaries, but we simply don't cache them. */
@@ -641,8 +653,8 @@ err_trueroot:
 
 __crit kerrno_t
 kshlib_opensearch(struct kfspathenv const *pathenv,
-                  char const *__restrict name, __size_t namemax,
-                  char const *__restrict search_paths, __size_t search_paths_max,
+                  char const *__restrict name, size_t namemax,
+                  char const *__restrict search_paths, size_t search_paths_max,
                   __ref struct kshlib **__restrict result,
                   int require_exec_permissions) {
  char search_cat[PATH_MAX];
@@ -719,7 +731,7 @@ again_lookup:
 
 
 __crit kerrno_t
-kshlib_openlib(char const *__restrict name, __size_t namemax,
+kshlib_openlib(char const *__restrict name, size_t namemax,
                __ref struct kshlib **__restrict result) {
  kerrno_t error; struct kfspathenv env;
  env.env_root = NULL;
@@ -774,7 +786,7 @@ kshlib_openlib(char const *__restrict name, __size_t namemax,
 
 
 __crit kerrno_t
-kshlib_openexe(char const *__restrict name, __size_t namemax,
+kshlib_openexe(char const *__restrict name, size_t namemax,
                __ref struct kshlib **__restrict result, __u32 flags) {
  kerrno_t error; struct kfspathenv env;
  char *env_path,*env_pathext;
@@ -835,6 +847,70 @@ end_err:
  kfspathenv_quituser(&env);
  return error;
 }
+
+
+__crit kerrno_t
+kshlib_user_getinfo(struct kshlib *__restrict self,
+                    __user void *module_base, kmodid_t id,
+                    __user struct kmodinfo *buf, size_t bufsize,
+                    __kernel size_t *reqsize, __u32 flags) {
+ struct kmodinfo info;
+ size_t info_size;
+ kerrno_t error = KE_OK;
+ KTASK_CRIT_MARK
+ kassert_kshlib(self);
+ kassertobjnull(reqsize);
+ if ((flags&KMOD_INFO_FLAG_INFO) == KMOD_INFO_FLAG_INFO) {
+  info.mi_id    = id;
+  info.mi_kind  = self->sh_flags;
+  info.mi_base  = module_base;
+  info.mi_begin = (void *)((uintptr_t)module_base+self->sh_data.ed_begin);
+  info.mi_end   = (void *)((uintptr_t)module_base+self->sh_data.ed_end);
+  info.mi_start = (void *)((uintptr_t)module_base+self->sh_callbacks.slc_start);
+ } else {
+  memset(&info,0,offsetof(struct kmodinfo,mi_name));
+  if (flags&KMOD_INFO_FLAG_ID) info.mi_id = id;
+ }
+ if (flags&KMOD_INFO_FLAG_NAME) {
+  info_size    = min(bufsize,sizeof(struct kmodinfo));
+  if (bufsize >= offsetafter(struct kmodinfo,mi_nmsz)) {
+   if __unlikely(copy_from_user(&info.mi_name,&buf->mi_name,
+                                sizeof(info.mi_name)+
+                                sizeof(info.mi_nmsz))
+                 ) return KE_FAULT;
+   /* Check if the info-buffer should be re-used as name buffer. */
+   if (!info.mi_name || !info.mi_nmsz) goto name_from_buf;
+  } else {
+name_from_buf:
+   if (bufsize > sizeof(struct kmodinfo)) {
+    info.mi_name = (char *)(buf+1);
+    info.mi_nmsz = bufsize-sizeof(struct kmodinfo);
+   } else {
+    info.mi_name = NULL;
+    info.mi_nmsz = 0;
+   }
+  }
+  /* Query the module filename/filepath. */
+  error = kfile_user_getattr(self->sh_file,
+                            (flags&(KMOD_INFO_FLAG_PATH&~(KMOD_INFO_FLAG_NAME)))
+                             ? KATTR_FS_PATHNAME : KATTR_FS_FILENAME,
+                             info.mi_name,info.mi_nmsz,&info.mi_nmsz);
+  if __unlikely(KE_ISERR(error)) return error;
+  if (reqsize) *reqsize = sizeof(struct kmodinfo)+info.mi_nmsz;
+ } else if ((flags&KMOD_INFO_FLAG_INFO) == KMOD_INFO_FLAG_INFO) {
+  info_size = min(bufsize,offsetof(struct kmodinfo,mi_name));
+  if (reqsize) *reqsize = offsetof(struct kmodinfo,mi_name);
+ } else if (flags&KMOD_INFO_FLAG_ID) {
+  info_size = min(bufsize,offsetafter(struct kmodinfo,mi_id));
+  if (reqsize) *reqsize = offsetafter(struct kmodinfo,mi_id);
+ } else {
+  info_size = 0;
+  if (reqsize) *reqsize = 0;
+ }
+ if __unlikely(copy_to_user(buf,&info,info_size)) error = KE_FAULT;
+ return error;
+}
+
 
 
 __DECL_END

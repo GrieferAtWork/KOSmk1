@@ -36,7 +36,7 @@
 
 __DECL_BEGIN
 
-kerrno_t kfatfs_fat_close(struct kfatfs *self) {
+kerrno_t kfatfs_fat_close(struct kfatfs *__restrict self) {
  kerrno_t error;
  kassertobj(self);
  kassertmem(self->f_fatv,self->f_fatsize);
@@ -55,28 +55,28 @@ kerrno_t kfatfs_fat_close(struct kfatfs *self) {
 }
 
 
-kfatoff_t kfatfs_getfatsec_12(struct kfatfs *self, kfatcls_t index) { kassertobj(self); return (index+(index/2))/self->f_secsize; }
-kfatoff_t kfatfs_getfatsec_16(struct kfatfs *self, kfatcls_t index) { kassertobj(self); return (index*2)/self->f_secsize; }
-kfatoff_t kfatfs_getfatsec_32(struct kfatfs *self, kfatcls_t index) { kassertobj(self); return (index*4)/self->f_secsize; }
+kfatoff_t kfatfs_getfatsec_12(struct kfatfs *__restrict self, kfatcls_t index) { kassertobj(self); return (index+(index/2))/self->f_secsize; }
+kfatoff_t kfatfs_getfatsec_16(struct kfatfs *__restrict self, kfatcls_t index) { kassertobj(self); return (index*2)/self->f_secsize; }
+kfatoff_t kfatfs_getfatsec_32(struct kfatfs *__restrict self, kfatcls_t index) { kassertobj(self); return (index*4)/self->f_secsize; }
 
-kfatcls_t kfatfs_readfat_12(struct kfatfs *self, kfatcls_t cluster) {
+kfatcls_t kfatfs_readfat_12(struct kfatfs *__restrict self, kfatcls_t cluster) {
  size_t fatoff; kassertobj(self);
  fatoff = (cluster+(cluster/2)) % self->f_fatsize;
  __u16 val = (*(__u16 *)((uintptr_t)self->f_fatv+fatoff));
  if (cluster&1) val >>= 4; else val &= 0x0fff;
  return val;
 }
-kfatcls_t kfatfs_readfat_16(struct kfatfs *self, kfatcls_t cluster) {
+kfatcls_t kfatfs_readfat_16(struct kfatfs *__restrict self, kfatcls_t cluster) {
  size_t fatoff; kassertobj(self);
  fatoff = (cluster*2) % self->f_fatsize;
  return (*(__u16 *)((uintptr_t)self->f_fatv+fatoff));
 }
-kfatcls_t kfatfs_readfat_32(struct kfatfs *self, kfatcls_t cluster) {
+kfatcls_t kfatfs_readfat_32(struct kfatfs *__restrict self, kfatcls_t cluster) {
  size_t fatoff; kassertobj(self);
  fatoff = (size_t)((cluster*4) % self->f_fatsize);
  return (*(__u32 *)((uintptr_t)self->f_fatv+fatoff)) & 0x0FFFFFFF;
 }
-void kfatfs_writefat_12(struct kfatfs *self, kfatcls_t cluster, kfatcls_t value) {
+void kfatfs_writefat_12(struct kfatfs *__restrict self, kfatcls_t cluster, kfatcls_t value) {
  size_t fatoff; kassertobj(self);
  fatoff = (cluster+(cluster/2)) % self->f_fatsize;
  __u16 *val = ((__u16 *)((uintptr_t)self->f_fatv+fatoff));
@@ -86,12 +86,12 @@ void kfatfs_writefat_12(struct kfatfs *self, kfatcls_t cluster, kfatcls_t value)
   *val |= value&0xfff;
  }
 }
-void kfatfs_writefat_16(struct kfatfs *self, kfatcls_t cluster, kfatcls_t value) {
+void kfatfs_writefat_16(struct kfatfs *__restrict self, kfatcls_t cluster, kfatcls_t value) {
  size_t fatoff; kassertobj(self);
  fatoff = (cluster*2) % self->f_fatsize;
  (*(__u16 *)((uintptr_t)self->f_fatv+fatoff)) = value;
 }
-void kfatfs_writefat_32(struct kfatfs *self, kfatcls_t cluster, kfatcls_t value) {
+void kfatfs_writefat_32(struct kfatfs *__restrict self, kfatcls_t cluster, kfatcls_t value) {
  size_t fatoff; kassertobj(self);
  fatoff = (size_t)((cluster*4) % self->f_fatsize);
  *(__u32 *)((uintptr_t)self->f_fatv+fatoff) = value & 0x0FFFFFFF;

@@ -184,18 +184,25 @@ __crit kerrno_t kproc_barrier(struct kproc *__restrict self,
 __crit __ref struct kshlib *
 kproc_getrootexe(struct kproc const *__restrict self) {
  __ref struct kshlib *result = NULL;
- struct kprocmodule *iter,*end;
+ struct kprocmodule *module;
  KTASK_CRIT_MARK
  kassert_kproc(self);
  if __unlikely(KE_ISERR(kproc_lock((struct kproc *)self,KPROC_LOCK_MODS))) return NULL;
- end = (iter = self->p_modules.pms_modv)+self->p_modules.pms_moda;
- for (; iter != end; ++iter) if ((result = iter->pm_lib) != NULL) {
-  if (result->sh_callbacks.slc_start != KSYM_INVALID) goto found;
- }
- result = NULL;
- if (0) {found: if __unlikely(KE_ISERR(kshlib_incref(result))) result = NULL; }
+ if ((module = kproc_getrootmodule_unlocked(self)) != NULL) {
+  if __unlikely(KE_ISERR(kshlib_incref(result = module->pm_lib))) result = NULL; 
+ } else result = NULL;
  kproc_unlock((struct kproc *)self,KPROC_LOCK_MODS);
  return result;
+}
+__nomp struct kprocmodule *
+kproc_getrootmodule_unlocked(struct kproc const *__restrict self) {
+ struct kprocmodule *iter,*end;
+ kassert_kproc(self);
+ end = (iter = self->p_modules.pms_modv)+self->p_modules.pms_moda;
+ for (; iter != end; ++iter) if (iter->pm_lib) {
+  if (iter->pm_lib->sh_flags&KMODFLAG_CANEXEC) return iter;
+ }
+ return NULL;
 }
 
 
