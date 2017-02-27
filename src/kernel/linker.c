@@ -120,9 +120,11 @@ ksymtable_lookupaddr_single(struct ksymtable const *self,
 
 
 struct ksymbol const *
-ksymtable_lookupaddr(struct ksymtable const *self, ksymaddr_t addr) {
+ksymtable_lookupaddr(struct ksymtable const *self,
+                     ksymaddr_t addr, ksymaddr_t addr_min) {
  struct ksymbol const *result;
- while ((result = ksymtable_lookupaddr_single(self,addr)) == NULL && addr--);
+ while ((result = ksymtable_lookupaddr_single(self,addr)) == NULL &&
+        addr-- != addr_min);
  return result;
 }
 
@@ -910,6 +912,51 @@ name_from_buf:
  if __unlikely(copy_to_user(buf,&info,info_size)) error = KE_FAULT;
  return error;
 }
+
+static struct ksymbol const *
+ksymtable_lookupaddr_size(struct ksymtable const *self,
+                          ksymaddr_t sym_address, ksymaddr_t addr_min) {
+ struct ksymbol const *result;
+ result = ksymtable_lookupaddr(self,sym_address,addr_min);
+ return (result && (!result->s_size || sym_address < result->s_addr+result->s_size)) ? result : NULL;
+}
+
+struct ksymbol const *
+kshlib_get_closest_symbol(struct kshlib *__restrict self,
+                          ksymaddr_t sym_address) {
+ struct ksymbol const *symbols[3],*result;
+ size_t diff,newdiff;
+ kassert_kshlib(self);
+ symbols[0] = ksymtable_lookupaddr_size(&self->sh_privatesym,sym_address,self->sh_data.ed_begin);
+ symbols[1] = ksymtable_lookupaddr_size(&self->sh_publicsym,sym_address,self->sh_data.ed_begin);
+ symbols[2] = ksymtable_lookupaddr_size(&self->sh_weaksym,sym_address,self->sh_data.ed_begin);
+              result = symbols[0];
+ if (!result) result = symbols[1];
+ if (!result) result = symbols[2];
+ if (result) {
+  diff = sym_address-result->s_addr;
+#define BETTER(x) \
+  if (x) { newdiff = sym_address-(x)->s_addr; \
+  if (newdiff < diff) { diff = newdiff; result = (x); } }
+  BETTER(symbols[1]);
+  BETTER(symbols[2]);
+#undef BETTER
+ }
+ return result;
+}
+
+struct ksymbol const *
+kshlib_get_any_symbol(struct kshlib *__restrict self,
+                      char const *name, __size_t name_size,
+                      __size_t name_hash) {
+ struct ksymbol const *result;
+ kassert_kshlib(self);
+              result = ksymtable_lookupname_h(&self->sh_publicsym,name,name_size,name_hash);
+ if (!result) result = ksymtable_lookupname_h(&self->sh_privatesym,name,name_size,name_hash);
+ if (!result) result = ksymtable_lookupname_h(&self->sh_weaksym,name,name_size,name_hash);
+ return result;
+}
+
 
 
 

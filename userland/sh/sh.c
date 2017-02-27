@@ -218,8 +218,24 @@ static struct option const longopts[] = {
 __attribute_thread int foo = 42;
 __attribute_thread int bar = 84;
 
+#include <mod.h>
+void addrinfo(void *addr) {
+ syminfo_t *info; char *modname;
+ info = mod_addrinfo(MOD_ALL,addr,NULL,0,MOD_SYMINFO_ALL);
+ if (!info) perror("mod_addrinfo");
+ else {
+  modname = mod_path(info->si_modid,NULL,0);
+  printf("%s(%u) : %q : %q+%Ix : Here\n",
+         info->si_file,info->si_line,modname,info->si_name,
+        (uintptr_t)addr-(uintptr_t)info->si_base);
+  free(modname);
+  free(info);
+ }
+}
+
 int main(int argc, char *argv[]) {
  int error; struct rline *r; int optc;
+ addrinfo(&addrinfo);
  // movl	%gs:0, %eax
  // movl	foo@ntpoff(%eax), %eax
  //int x = foo;

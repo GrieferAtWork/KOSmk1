@@ -153,11 +153,12 @@ __DECL_BEGIN
 #define SYS_kproc_setpriority SYS_ktask_setpriority            /*< _syscall2(kerrno_t,kproc_setpriority,int,self,ktaskprio_t,value); */
 
 // v TODO: [!SYS_kmod_sym] add 'int self' (procfd) to these syscalls & add 'kmod_enum'
-#define SYS_kmod_open  __SYSCALL(SYSCALL_GROUP_MOD,0) /* _syscall4(kerrno_t,kmod_open,char const *,name,size_t,namemax,kmodid_t *,modid,__u32,flags); */
-#define SYS_kmod_fopen __SYSCALL(SYSCALL_GROUP_MOD,1) /* _syscall3(kerrno_t,kmod_open,int,fd,kmodid_t *,modid,__u32,flags); */
-#define SYS_kmod_close __SYSCALL(SYSCALL_GROUP_MOD,2) /* _syscall1(kerrno_t,kmod_close,kmodid_t,modid); */
-#define SYS_kmod_sym   __SYSCALL(SYSCALL_GROUP_MOD,3) /* _syscall3(void *,kmod_sym,kmodid_t,modid,char const *,name,size_t,namemax); */
-#define SYS_kmod_info  __SYSCALL(SYSCALL_GROUP_MOD,4) /* _syscall5(kerrno_t,kmod_info,kmodid_t,modid,struct kmodinfo *,buf,size_t,bufsize,size_t *,reqsize,__u32,flags); */
+#define SYS_kmod_open     __SYSCALL(SYSCALL_GROUP_MOD,0) /* _syscall4(kerrno_t,kmod_open,char const *,name,size_t,namemax,kmodid_t *,modid,__u32,flags); */
+#define SYS_kmod_fopen    __SYSCALL(SYSCALL_GROUP_MOD,1) /* _syscall3(kerrno_t,kmod_open,int,fd,kmodid_t *,modid,__u32,flags); */
+#define SYS_kmod_close    __SYSCALL(SYSCALL_GROUP_MOD,2) /* _syscall1(kerrno_t,kmod_close,kmodid_t,modid); */
+#define SYS_kmod_sym      __SYSCALL(SYSCALL_GROUP_MOD,3) /* _syscall3(void *,kmod_sym,kmodid_t,modid,char const *,name,size_t,namemax); */
+#define SYS_kmod_info     __SYSCALL(SYSCALL_GROUP_MOD,4) /* _syscall6(kerrno_t,kmod_info,int,procfd,kmodid_t,modid,struct kmodinfo *,buf,size_t,bufsize,size_t *,reqsize,__u32,flags); */
+#define SYS_kmod_syminfo  __SYSCALL(SYSCALL_GROUP_MOD,5) /* _syscall7(kerrno_t,kmod_syminfo,int,procfd,kmodid_t,modid,void const *,addr_or_name,struct ksyminfo *,buf,size_t,bufsize,size_t *,reqsize,__u32,flags); */
 
 __DECL_END
 

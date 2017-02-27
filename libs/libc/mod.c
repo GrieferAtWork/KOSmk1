@@ -32,6 +32,7 @@
 #include <errno.h>
 #include <stddef.h>
 #include <limits.h>
+#include <kos/syslog.h>
 
 __DECL_BEGIN
 
@@ -76,6 +77,7 @@ __mod_info(mod_t mod, modinfo_t *buf,
   result = (modinfo_t *)malloc(sizehint);
   if __unlikely(!result) return NULL;
   for (;;) {
+   result->mi_name = NULL;
    error = kmod_info(kproc_self(),mod,result,sizehint,&reqsize,flags);
    if __unlikely(KE_ISERR(error)) { free(result); goto err; }
    if __likely(reqsize <= sizehint) break;
@@ -141,6 +143,48 @@ __mod_name(mod_t mod, char *buf,
  if __unlikely(info.mi_nmsz > bufsize) { __set_errno(EBUFSIZ); return NULL; }
  return buf;
 err: __set_errno(-error);
+ return NULL;
+}
+
+__public syminfo_t *
+__mod_syminfo(mod_t mod, struct ksymname const *addr_or_name,
+              syminfo_t *buf, size_t bufsize, __u32 flags) {
+ kerrno_t error; size_t reqsize;
+ if (!bufsize) {
+  syminfo_t *result,*newresult;
+  size_t sizehint = sizeof(struct ksyminfo);
+  if (flags&KMOD_SYMINFO_FLAG_WANTNAME) sizehint += (256+1)*sizeof(char);
+  if (flags&KMOD_SYMINFO_FLAG_WANTFILE) sizehint += (256+1)*sizeof(char);
+  result = (syminfo_t *)malloc(sizehint);
+  if __unlikely(!result) return NULL;
+  for (;;) {
+   result->si_name = NULL;
+   result->si_file = NULL;
+   error = kmod_syminfo(kproc_self(),mod,addr_or_name,
+                        result,sizehint,&reqsize,flags);
+   if __unlikely(KE_ISERR(error)) { free(result); goto err; }
+   if __likely(reqsize <= sizehint) break;
+   /* Must allocate more memory. */
+   newresult = (syminfo_t *)realloc(result,reqsize);
+   if __unlikely(!newresult) { free(result); return NULL; }
+   /* Try again with a larger buffer. */
+   result   = newresult;
+   sizehint = reqsize;
+  }
+  if (reqsize != sizehint) {
+   newresult = (syminfo_t *)realloc(result,reqsize);
+   if (newresult) result = newresult;
+  }
+  return result;
+ }
+ error = kmod_syminfo(kproc_self(),mod,addr_or_name,
+                      buf,bufsize,&reqsize,flags);
+ if __likely(KE_ISOK(error)) {
+  if (reqsize > bufsize) { __set_errno(EBUFSIZ); return NULL; }
+  return buf;
+ }
+err:
+ __set_errno(-error);
  return NULL;
 }
 

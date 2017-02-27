@@ -160,6 +160,84 @@ __local _syscall3(void *,kmod_sym,kmodid_t,modid,
                   char const *,name,__size_t,namemax);
 #endif /* !__NO_PROTOTYPES */
 
+#ifndef _NO_PROTOTYPES
+
+#ifndef __ksymflag_t_defined
+#define __ksymflag_t_defined 1
+typedef __u32 ksymflag_t;
+#endif
+#define KSYMINFO_FLAG_NONE    0x00000000
+#define KSYMINFO_FLAG_NAME    0x00000100 /*< The symbol has a known name. */
+#define KSYMINFO_FLAG_FILE    0x00000200 /*< The symbol has a known file name. */
+#define KSYMINFO_FLAG_LINE    0x00000400 /*< The symbol has a known line number. */
+#define KSYMINFO_FLAG_SIZE    0x00000800 /*< The symbol has a known size. */
+#define KSYMINFO_FLAG_PUBLIC  0x00010000 /*< The symbol is exported as public. */
+#define KSYMINFO_FLAG_PRIVATE 0x00020000 /*< The symbol is exported as private. */
+#define KSYMINFO_FLAG_WEAK    0x00040000 /*< The symbol is exported as weak. */
+
+#define KSYMINFO_TYPE_NONE    0x00000000
+#define KSYMINFO_TYPE_FUNC    0x00000001 /*< Function symbol. */
+#define KSYMINFO_TYPE_OBJ     0x00000002 /*< Object symbol. */
+
+#define KSYMINFO_TYPE_MASK    0x000000ff
+#define KSYMINFO_FLAG_MASK    0xffffff00
+#define KSYMINFO_TYPE(flags) ((flags)&KSYMINFO_TYPE_MASK)
+#define KSYMINFO_FLAG(flags) ((flags)&KSYMINFO_FLAG_MASK)
+
+struct ksymname {
+ char const *sn_name; /*< [1..sn_size] Symbol name. */
+ __size_t    sn_size; /*< Strnlen-style max symbol name length. */
+};
+
+struct ksyminfo {
+ ksymflag_t   si_flags; /*< Symbol flags & available information (One of 'KSYMINFO_TYPE_*' + set of 'KSYMINFO_FLAG_*'). */
+ kmodid_t     si_modid; /*< Module id that this symbol belongs to. */
+ void        *si_base;  /*< Base address of the symbol. */
+ __size_t     si_size;  /*< Symbol size (ZERO(0) if the 'KSYMINFO_FLAG_SIZE' flag isn't set). */
+ char        *si_name;  /*< [0..1] Symbol name (NULL if 'KSYMINFO_FLAG_NAME' isn't set). */
+ __size_t     si_nmsz;  /*< Size of 'si_name' (WARNING: is bytes & including the terminating \0-character) */
+ /* WARNING: File and line information usually isn't available for ELF files. */
+ char        *si_file;  /*< [0..1] Symbol file name (NULL if 'KSYMINFO_FLAG_FILE' isn't set). */
+ __size_t     si_flsz;  /*< Size of 'si_file' (WARNING: is bytes & including the terminating \0-character) */
+ unsigned int si_line;  /*< Line number of the first address associated with the symbol, or when information
+                            was requested given an address instead of a name, the line number of the given address.
+                            HINT: Symbol line numbers originate at ZERO(0), whilst text editors usually start at ONE(1).
+                            NOTE: When generating tracebacks, you will often see this point to the next line after a call,
+                                  simply because you're looking up the return address, which _does_ point to the next line. */
+};
+
+
+//////////////////////////////////////////////////////////////////////////
+// Lookup a symbol by name or address within a given module,
+// storing symbol information in the given buffer.
+// HINT: This function can also be used to get extended
+//       error information when a call to 'kmod_sym' with
+//       the same arguments returned NULL.
+// NOTE: When an address is provided, the nearest symbol with a lower
+//       base address is searched for (as available through 'si_base').
+// @param: addr_or_name: When 'KMOD_SYMINFO_FLAG_LOOKUPADDR' is set,
+//                       re-interpret this argument as the 'void *'
+//                       pointing to the symbol's address, otherwise
+//                       a 'struct ksymname' structure is located
+//                       here that contains the name of the symbol,
+//                       as well as an strnlen-style max name length.
+// @return: KE_OK: The supplied information buffer was successfully
+//                 filled with the requested set of information.
+// NOTE: The name and file strings behave the same way as described
+//       in the documentation of 'KMOD_INFO_FLAG_NAME', allowing
+//       you to either specify your own buffer, or left 'kmod_syminfo'
+//       re-use the buffer you're providing through 'buf'.
+__local _syscall7(kerrno_t,kmod_syminfo,int,procfd,kmodid_t,modid,
+                  struct ksymname const *,addr_or_name,struct ksyminfo *,buf,
+                  __size_t,bufsize,__size_t *,reqsize,__u32,flags);
+#define KMOD_SYMINFO_FLAG_NONE       0x00000000
+#define KMOD_SYMINFO_FLAG_LOOKUPADDR 0x00000001 /*< 'addr_or_name' is the address of the symbol instead of its name. */
+#define KMOD_SYMINFO_FLAG_WANTNAME   KSYMINFO_FLAG_NAME /*< Fill 'si_name' and 'si_nmsz'. */
+#define KMOD_SYMINFO_FLAG_WANTFILE   KSYMINFO_FLAG_FILE /*< Fill 'si_file' and 'si_flsz'. */
+#define KMOD_SYMINFO_FLAG_WANTLINE   KSYMINFO_FLAG_LINE /*< Fill 'si_line'. */
+
+#endif /* !__NO_PROTOTYPES */
+
 
 #ifndef __kmodkind_t_defined
 #define __kmodkind_t_defined 1

@@ -61,6 +61,10 @@ typedef kmodid_t mod_t;
 #define __modinfo_t_defined 1
 typedef struct kmodinfo modinfo_t;
 #endif
+#ifndef __syminfo_t_defined
+#define __syminfo_t_defined 1
+typedef struct ksyminfo syminfo_t;
+#endif
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -102,9 +106,33 @@ __local __wunused char      *mod_path __P((mod_t __mod, char *__buf, __size_t __
 #define MOD_INFO_NAME   KMOD_INFO_FLAG_NAME
 #define MOD_INFO_PATH   KMOD_INFO_FLAG_PATH
 
+//////////////////////////////////////////////////////////////////////////
+// Returns information about the symbol located at a given address, or with a given name.
+// NOTE: The following functions follow getcwd-style semantics, allowing you
+//       to pass ZERO(0) for BUFSIZE to have the function return a buffer
+//       newly allocated with malloc() (meaning you'll have to free() it).
+// >> syminfo_t *info = mod_addrinfo(MOD_ALL,eip,NULL,0,MOD_SYMINFO_ALL);
+// >> printf("%s(%u) : %q+%Ix : Here\n",
+// >>        info->si_file,info->si_line,info->si_name,
+// >>       (uintptr_t)eip-(uintptr_t)info->si_base);
+// >> free(info);
+// HINT: You can pass MOD_ALL for 'MOD' to search in all modules for a symbol.
+// HINT: These functions are extremely useful for implementing tracebacks,
+//       giving you quick and easy access to addr2line-style functionality.
+// WARNING: Not all types of modules support (all) debug information, or
+//          actually have them, meaning that some fields may not be filled in.
+__local __wunused syminfo_t *mod_syminfo __P((mod_t __mod, char const *__restrict __symname, syminfo_t *__buf, __size_t __bufsize, __u32 __flags));
+__local __wunused syminfo_t *mod_addrinfo __P((mod_t __mod, void const *__symaddr, syminfo_t *__buf, __size_t __bufsize, __u32 __flags));
+#define MOD_SYMINFO_NONE       KMOD_SYMINFO_FLAG_NONE
+#define MOD_SYMINFO_WANTNAME   KMOD_SYMINFO_FLAG_WANTNAME
+#define MOD_SYMINFO_WANTFILE   KMOD_SYMINFO_FLAG_WANTFILE
+#define MOD_SYMINFO_WANTLINE   KMOD_SYMINFO_FLAG_WANTLINE
+#define MOD_SYMINFO_ALL       (MOD_SYMINFO_WANTNAME|MOD_SYMINFO_WANTFILE|MOD_SYMINFO_WANTLINE)
+
 
 extern __wunused modinfo_t *__mod_info __P((mod_t __mod, modinfo_t *__buf, __size_t __bufsize, __u32 __flags));
 extern __wunused char      *__mod_name __P((mod_t __mod, char *__buf, __size_t __bufsize, __u32 __flags));
+extern __wunused syminfo_t *__mod_syminfo __P((mod_t __mod, struct ksymname const *__addr_or_name, syminfo_t *__buf, __size_t __bufsize, __u32 __flags));
 
 
 
@@ -136,6 +164,18 @@ __local __wunused char *mod_file __D3(mod_t,__mod,char *,__buf,__size_t,__bufsiz
 __local __wunused char *mod_path __D3(mod_t,__mod,char *,__buf,__size_t,__bufsize) {
  if (__mod == MOD_SELF && (__mod = mod_id(MOD_SELF)) == MOD_ERR) return NULL;
  return __mod_name(__mod,__buf,__bufsize,MOD_INFO_PATH);
+}
+__local syminfo_t *mod_syminfo __D5(mod_t,__mod,char const *__restrict,__symname,
+                                    syminfo_t *,__buf,__size_t,__bufsize,__u32,__flags) {
+ struct ksymname __name = {__symname,(__size_t)-1};
+ if (__mod == MOD_SELF && (__mod = mod_id(MOD_SELF)) == MOD_ERR) return NULL;
+ return __mod_syminfo(__mod,&__name,__buf,__bufsize,__flags&~(KMOD_SYMINFO_FLAG_LOOKUPADDR));
+}
+__local syminfo_t *mod_addrinfo __D5(mod_t,__mod,void const *,__symaddr,
+                                     syminfo_t *,__buf,__size_t,__bufsize,__u32,__flags) {
+ if (__mod == MOD_SELF && (__mod = mod_id(MOD_SELF)) == MOD_ERR) return NULL;
+ return __mod_syminfo(__mod,(struct ksymname *)__symaddr,__buf,
+                      __bufsize,__flags|KMOD_SYMINFO_FLAG_LOOKUPADDR);
 }
 #endif
 

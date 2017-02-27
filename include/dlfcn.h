@@ -40,7 +40,11 @@ __DECL_BEGIN
 
 extern void *_dlfopen __P((int __fd, int __mode));
 #ifndef __STDC_PURE__
-extern void *dlfopen __P((int __fd, int __mode));
+#ifndef __NO_asmname
+extern void *dlfopen __P((int __fd, int __mode)) __asmname("_dlfopen");
+#else
+#   define dlfopen _dlfopen
+#endif
 #endif
 
 extern void *dlopen __P((char const *__restrict __file, int __mode));
@@ -49,15 +53,16 @@ extern void *dlsym __P((void *__restrict __handle, char const *__restrict __name
 extern char *dlerror __P((void));
 
 typedef struct {
-    // Taken from: https://linux.die.net/man/3/dladdr
+    /* Taken from: https://linux.die.net/man/3/dladdr */
     char const *dli_fname; /*< Pathname of shared object that contains address. */
     void       *dli_fbase; /*< Address at which shared object is loaded. */
     char const *dli_sname; /*< Name of nearest symbol with address lower than addr. */
     void       *dli_saddr; /*< Exact address of symbol named in dli_sname. */
 } Dl_info;
 
-#if 0 /* TODO */
 extern int dladdr __P((void *__addr, Dl_info *__info));
+
+#if 0 /* TODO */
 //extern void *dlvsym(void *handle, char *symbol, char *version); // ???
 #endif
 

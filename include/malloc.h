@@ -156,6 +156,7 @@ void *aligned_alloc __P((__size_t __alignment, __size_t __bytes));
 //  - libc use dlmalloc build on top of <sys/mman.h>
 //  - malloc(0) does NOT return NULL, but some small, non-empty block of memory.
 //  - realloc(p,0) does NOT act as free, but active like free+malloc.
+//  - free() Never modifies the currently set value of 'errno'.
 extern __crit __wunused __sizemalloccall((1)) __ATTRIBUTE_ALIGNED_DEFAULT void *malloc __P((__size_t __bytes));
 extern __crit __wunused __sizemalloccall((1,2)) __ATTRIBUTE_ALIGNED_DEFAULT void *calloc __P((__size_t __count, __size_t __bytes));
 extern __crit __wunused __sizemalloccall((2)) __ATTRIBUTE_ALIGNED_BY_ARGUMENT((1)) void *memalign __P((__size_t __alignment, __size_t __bytes));
@@ -341,6 +342,22 @@ extern void _malloc_printleaks_d __P((void));
 // HINT: Visual C/C++ has an equivalent called '_CrtCheckMemory()'
 extern void _malloc_validate_d __P((void));
 
+//////////////////////////////////////////////////////////////////////////
+// Untrack a given pointer previously allocated through malloc() and friends.
+// When not tracked, the associated allocation cannot be enumerated.
+// WARNING: Causes undefined behavior if the given
+//          pointer isn't really a mall-pointer.
+// NOTE: This function is a no-op if the given MALLPTR wasn't tracked, or if NULL is passed
+// @return: * : Always returns MALLPTR.
+extern void *__malloc_untrack __P((void *__mallptr));
+#if defined(__COMPILER_HAVE_TYPEOF) && (!defined(__INTELLISENSE__) || !defined(__cplusplus))
+#   define _malloc_untrack(mallptr) ((__typeof__(mallptr))__malloc_untrack(mallptr))
+#elif defined(__cplusplus)
+extern "C++" template<class __T> inline __T *_malloc_untrack(__T *__mallptr) { return (__T *)__malloc_untrack((void *)__mallptr); }
+#else
+#   define _malloc_untrack    __malloc_untrack
+#endif
+
 #ifndef __INTELLISENSE__
 #define malloc(bytes)                _malloc_d(bytes __LIBC_DEBUG__ARGS)
 #define calloc(count,bytes)          _calloc_d(count,bytes __LIBC_DEBUG__ARGS)
@@ -367,6 +384,8 @@ struct _mallblock_d;
 #define _malloc_enumblocks_d(callback,closure)        0
 #define _malloc_printleaks_d()                        (void)0
 #define _malloc_validate_d()                          (void)0
+#define __malloc_untrack(mallptr)            ((void *)(mallptr))
+#define _malloc_untrack(mallptr)                      (mallptr)
 #endif /* !__LIBC_HAVE_DEBUG_MALLOC */
 
 #ifndef __KERNEL__

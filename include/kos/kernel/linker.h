@@ -156,7 +156,8 @@ ksymtable_lookupaddr_single(struct ksymtable const *self, ksymaddr_t addr);
 // Lookup the entry closest to the given address, decrementing the
 // given address until ZERO(0) has been reached, or a entry was found.
 extern __wunused __nonnull((1)) struct ksymbol const *
-ksymtable_lookupaddr(struct ksymtable const *self, ksymaddr_t addr);
+ksymtable_lookupaddr(struct ksymtable const *self,
+                     ksymaddr_t addr, ksymaddr_t addr_min);
 
 //////////////////////////////////////////////////////////////////////////
 // Rehash the given symbol table to use 'bucketcount' buckets.
@@ -529,6 +530,18 @@ kshlib_user_getinfo(struct kshlib *__restrict self,
                     __user void *module_base, kmodid_t id,
                     __user struct kmodinfo *buf, __size_t bufsize,
                     __kernel __size_t *reqsize, __u32 flags);
+
+//////////////////////////////////////////////////////////////////////////
+// Returns the symbol closest to the given address,
+// or NULL if not symbol is located at that address.
+extern __wunused __nonnull((1)) struct ksymbol const *
+kshlib_get_closest_symbol(struct kshlib *__restrict self,
+                          ksymaddr_t sym_address);
+
+extern __wunused __nonnull((1,2)) struct ksymbol const *
+kshlib_get_any_symbol(struct kshlib *__restrict self,
+                      char const *name, __size_t name_size,
+                      __size_t name_hash);
 
 
 #if KCONFIG_SHLIB_RECENT_CACHE_SIZE

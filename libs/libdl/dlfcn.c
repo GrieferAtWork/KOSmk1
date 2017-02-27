@@ -31,6 +31,7 @@
 #include <malloc.h>
 #include <string.h>
 #include <stdint.h>
+#include <mod.h>
 
 __DECL_BEGIN
 
@@ -51,7 +52,7 @@ do{ char *new_error = (strdupf)(__VA_ARGS__);\
 }while(0)
 
 
-__public void *dlfopen(int fd, int mode) {
+__public void *_dlfopen(int fd, int mode) {
  kerrno_t error; kmodid_t result;
  error = kmod_fopen(fd,&result,(__u32)mode);
  if __unlikely(KE_ISERR(error)) {
@@ -88,13 +89,39 @@ __public void *dlsym(void *__restrict handle,
  }
  return result;
 }
+
+
+
+__public int dladdr(void *addr, Dl_info *info) {
+ /* We must use a static buffer for this, because
+  * all the information is managed by the kernel. */
+ static syminfo_t *last_syminfo = NULL;
+ static modinfo_t *last_modinfo = NULL;
+ syminfo_t *syminfo;
+ modinfo_t *modinfo;
+ /* Generate symbol and module */
+ syminfo = __mod_syminfo(MOD_ALL,(struct ksymname *)addr,
+                         NULL,0,KMOD_SYMINFO_FLAG_WANTNAME|
+                         KMOD_SYMINFO_FLAG_LOOKUPADDR);
+ if __unlikely(!syminfo) return -1;
+ modinfo = __mod_info(syminfo->si_modid,NULL,0,
+                      MOD_INFO_NAME|MOD_INFO_INFO);
+ if __unlikely(!modinfo) { free(syminfo); return -1; }
+ /* Exchange the latest symbol information, freeing the old stuff.
+  * NOTE: We untrack the new information because it might not get freed... */
+ free(katomic_xch(last_syminfo,_malloc_untrack(syminfo)));
+ free(katomic_xch(last_modinfo,_malloc_untrack(modinfo)));
+
+ info->dli_fname = modinfo->mi_name;
+ info->dli_fbase = modinfo->mi_base;
+ info->dli_saddr = syminfo->si_base;
+ info->dli_sname = syminfo->si_name;
+ return 0;
+}
+
 __public char *dlerror(void) {
  return katomic_xch(dl_currerror,NULL);
 }
-
-#ifndef __STDC_PURE__
-__public __compiler_ALIAS(_dlfopen,dlfopen);
-#endif
 
 __DECL_END
 

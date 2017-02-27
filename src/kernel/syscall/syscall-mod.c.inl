@@ -28,6 +28,8 @@
 #include <kos/kernel/proc.h>
 #include <kos/kernel/fs/file.h>
 #include <kos/kernel/util/string.h>
+#include <sys/types.h>
+#include <stddef.h>
 
 __DECL_BEGIN
 
@@ -104,7 +106,7 @@ SYSCALL(sys_kmod_sym) {
  RETURN(result);
 }
 
-/* _syscall6(kerrno_t,kmod_info,int,proc,kmodid_t,modid,struct kmodinfo *,buf,size_t,bufsize,size_t *,reqsize,__u32,flags); */
+/* _syscall6(kerrno_t,kmod_info,int,procfd,kmodid_t,modid,struct kmodinfo *,buf,size_t,bufsize,size_t *,reqsize,__u32,flags); */
 SYSCALL(sys_kmod_info) {
  LOAD6(int              ,K(procfd),
        kmodid_t         ,K(modid),
@@ -123,17 +125,18 @@ SYSCALL(sys_kmod_info) {
  else if (fd.fd_type == KFDTYPE_TASK) proc = ktask_getproc(fd.fd_task);
  else { error = KE_BADF; goto end_fd; }
  if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_MODS))) goto end_fd;
- if (modid == KMODID_SELF) {
-  /* symbolic module ID self is only allowed if procfd also described self. */
-  if __unlikely(caller != proc) { error = KE_INVAL; goto end_fd; }
-  error = kproc_getmodat_unlocked(proc,&modid,(void *)regs->regs.eip);
-  if __unlikely(KE_ISERR(error)) goto end_unlock;
-  module = kproc_getrootmodule_unlocked(proc);
-  if __unlikely(!module) { error = KE_DESTROYED; goto end_fd; }
-  goto parse_module;
- }
- if __unlikely(modid >= proc->p_modules.pms_moda) error = KE_INVAL;
- else if __unlikely(!(module = &proc->p_modules.pms_modv[modid])->pm_lib) error = KE_INVAL;
+ if __unlikely(modid >= proc->p_modules.pms_moda) {
+  if (modid == KMODID_SELF) {
+   /* symbolic module ID self is only allowed if procfd also described self. */
+   if __unlikely(caller != proc) { error = KE_INVAL; goto end_fd; }
+   error = kproc_getmodat_unlocked(proc,&modid,(void *)regs->regs.eip);
+   if __unlikely(KE_ISERR(error)) goto end_unlock;
+   module = kproc_getrootmodule_unlocked(proc);
+   if __unlikely(!module) { error = KE_DESTROYED; goto end_fd; }
+   goto parse_module;
+  }
+  error = KE_INVAL;
+ } else if __unlikely(!(module = &proc->p_modules.pms_modv[modid])->pm_lib) error = KE_INVAL;
  else {
 parse_module:
   error = kshlib_user_getinfo(module->pm_lib,module->pm_base,
@@ -150,6 +153,226 @@ end: KTASK_CRIT_END
  RETURN(error);
 }
 
+
+
+
+
+static __crit struct ksymbol const *
+proc_find_symbol_by_addr(struct kproc *self,
+                         void const *sym_address,
+                         struct kprocmodule **module,
+                         struct kprocmodule *exclude_module) {
+ struct kprocmodule *iter,*end; ksymaddr_t reladdr;
+ struct ksymbol const *result; struct kshlib *lib;
+ KTASK_CRIT_MARK
+ assert(kproc_islocked(self,KPROC_LOCK_MODS));
+ end = (iter = self->p_modules.pms_modv)+self->p_modules.pms_moda;
+ for (; iter != end; ++iter) if ((lib = iter->pm_lib) != NULL && iter != exclude_module &&
+                                (uintptr_t)sym_address >= (uintptr_t)iter->pm_base) {
+  reladdr = (ksymaddr_t)sym_address-(ksymaddr_t)iter->pm_base;
+  if (reladdr >= lib->sh_data.ed_begin &&
+      reladdr <  lib->sh_data.ed_end) {
+   result = kshlib_get_closest_symbol(lib,reladdr);
+   if (result) { *module = iter; return result; }
+  }
+ }
+ return NULL;
+}
+
+static __crit struct ksymbol const *
+proc_find_symbol_by_name(struct kproc *self, char const *name,
+                         size_t name_size, size_t name_hash,
+                         struct kprocmodule **module,
+                         struct kprocmodule *exclude_module) {
+ struct kprocmodule *iter,*end;
+ struct ksymbol const *result;
+ KTASK_CRIT_MARK
+ assert(kproc_islocked(self,KPROC_LOCK_MODS));
+ end = (iter = self->p_modules.pms_modv)+self->p_modules.pms_moda;
+ for (; iter != end; ++iter) if (iter->pm_lib && iter != exclude_module) {
+  result = kshlib_get_any_symbol(iter->pm_lib,name,name_size,name_hash);
+  if (result) { *module = iter; return result; }
+ }
+ return NULL;
+}
+
+static __crit kerrno_t
+ksymname_copyfromuser(struct ksymname *dst,
+                      struct ksymname const *src) {
+ KTASK_CRIT_MARK
+ if __unlikely(copy_from_user(dst,src,sizeof(struct ksymname))) return KE_FAULT;
+ dst->sn_size = min(dst->sn_size,4096);
+ dst->sn_name = user_strndup(dst->sn_name,dst->sn_size);
+ if __unlikely(!dst->sn_name) return KE_NOMEM;
+ dst->sn_size = strnlen(dst->sn_name,dst->sn_size);
+ return KE_OK;
+}
+
+static __crit kerrno_t
+ksymbol_fillinfo(struct kproc *__restrict proc,
+                 struct kprocmodule *__restrict module,
+                 struct ksymbol const *__restrict symbol,
+                 __user struct ksyminfo *buf,
+                 size_t bufsize, size_t *__restrict reqsize,
+                 __u32 flags) {
+ struct ksyminfo info; byte_t *buf_end;
+ size_t copy_size,bufavail,bufreq,info_size;
+ KTASK_CRIT_MARK
+      if (flags&KMOD_SYMINFO_FLAG_WANTFILE) copy_size = offsetafter(struct ksyminfo,si_flsz);
+ else if (flags&KMOD_SYMINFO_FLAG_WANTNAME) copy_size = offsetafter(struct ksyminfo,si_nmsz);
+ else goto dont_copy_input;
+ if __unlikely(copy_from_user(&info,buf,copy_size)) return KE_FAULT;
+dont_copy_input:
+ /* Fill in generic information, such as base and size. */
+ info.si_flags = KSYMINFO_FLAG_NONE;
+ info.si_modid = (kmodid_t)(module-proc->p_modules.pms_modv);
+ info.si_base  = (void *)((uintptr_t)module->pm_base+symbol->s_addr);
+ if ((info.si_size = symbol->s_size) != 0) info.si_flags |= KSYMINFO_FLAG_SIZE;
+
+ /* Figure out where the buffer of what the user requested ends. */
+      if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info_size = offsetafter(struct ksyminfo,si_line);
+ else if (flags&KMOD_SYMINFO_FLAG_WANTFILE) info_size = offsetafter(struct ksyminfo,si_flsz);
+ else if (flags&KMOD_SYMINFO_FLAG_WANTNAME) info_size = offsetafter(struct ksyminfo,si_nmsz);
+ else                                       info_size = offsetafter(struct ksyminfo,si_size);
+ /* Figure out how much memory is available after the buffer (used for inline strings). */
+ *reqsize = info_size;
+ if (bufsize < info_size) {
+  info_size = bufsize;
+  bufavail  = 0;
+ } else {
+  bufavail  = bufsize-info_size;
+ }
+ buf_end = (byte_t *)buf+info_size;
+ /* Extract the symbol name. */
+ if (flags&KMOD_SYMINFO_FLAG_WANTNAME) {
+  if __likely(symbol->s_nmsz) {
+   info.si_flsz |= KSYMINFO_FLAG_NAME;
+   if (!info.si_name || !info.si_nmsz) {
+    info.si_name = (char *)buf_end;
+    info.si_nmsz = (__size_t)bufavail;
+   }
+   bufreq = (symbol->s_nmsz+1)*sizeof(char);
+   copy_size = min(info.si_nmsz,bufreq);
+   copy_to_user(info.si_name,symbol->s_name,copy_size);
+   if (info.si_name == (char *)buf_end) {
+    if (!info.si_nmsz) info.si_name = NULL;
+    *reqsize += bufreq;
+    buf_end  += copy_size;
+    bufavail -= copy_size;
+   }
+   info.si_nmsz = bufreq;
+  } else {
+   info.si_nmsz = 0;
+  }
+ }
+
+ if (flags&KMOD_SYMINFO_FLAG_WANTFILE) {
+  info.si_flsz = 0; /* TODO. */
+ }
+ if (flags&KMOD_SYMINFO_FLAG_WANTLINE) {
+  info.si_line = 0; /* TODO. */
+ }
+
+ /* Copy the info data block to user-space. */
+ if __unlikely(copy_to_user(buf,&info,info_size)) return KE_FAULT;
+ return KE_OK;
+}
+
+
+
+/* _syscall7(kerrno_t,kmod_syminfo,int,procfd,kmodid_t,modid,void const *,addr_or_name,struct ksyminfo *,buf,size_t,bufsize,size_t *,reqsize,__u32,flags); */
+SYSCALL(sys_kmod_syminfo) {
+ LOAD7(int                    ,K(procfd),
+       kmodid_t               ,K(modid),
+       struct ksymname const *,K(addr_or_name),
+       struct ksyminfo       *,K(buf),
+       size_t                 ,K(bufsize),
+       size_t                *,K(preqsize),
+       __u32                  ,K(flags));
+ kerrno_t error; size_t reqsize;
+ struct kproc *proc,*caller = kproc_self();
+ struct kprocmodule *module; size_t sym_name_hash;
+ struct ksymname sym_name;
+ struct kfdentry fd; struct ksymbol const *symbol;
+ if (!buf) bufsize = 0;
+ KTASK_CRIT_BEGIN_FIRST
+ if __unlikely(KE_ISERR(error = kproc_getfd(caller,procfd,&fd))) goto end;
+      if (fd.fd_type == KFDTYPE_PROC) proc = fd.fd_proc;
+ else if (fd.fd_type == KFDTYPE_TASK) proc = ktask_getproc(fd.fd_task);
+ else { error = KE_BADF; goto end_fd; }
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_MODS))) goto end_fd;
+ if (!(flags&KMOD_SYMINFO_FLAG_LOOKUPADDR)) {
+  error = ksymname_copyfromuser(&sym_name,addr_or_name);
+  if __unlikely(KE_ISERR(error)) goto end_unlock;
+  sym_name_hash = ksymhash_of(sym_name.sn_name,sym_name.sn_size);
+ }
+ if __unlikely(modid >= proc->p_modules.pms_moda) {
+  if (modid == KMODID_SELF) {
+   /* symbolic module ID self is only allowed if procfd also described self. */
+   if __unlikely(caller != proc) { error = KE_INVAL; goto end_fd; }
+   error = kproc_getmodat_unlocked(proc,&modid,(void *)regs->regs.eip);
+   if __unlikely(KE_ISERR(error)) goto end_unlock;
+   module = kproc_getrootmodule_unlocked(proc);
+   if __unlikely(!module) { error = KE_DESTROYED; goto end_fd; }
+   goto parse_module;
+  }
+  if (modid == KMODID_ALL) {
+   module = NULL;
+search_all_modules:
+   /* Search all modules for a viable symbol. */
+   if (flags&KMOD_SYMINFO_FLAG_LOOKUPADDR) {
+    symbol = proc_find_symbol_by_addr(proc,(__user void const *)addr_or_name,
+                                      &module,module);
+   } else {
+    symbol = proc_find_symbol_by_name(proc,sym_name.sn_name,sym_name.sn_size,
+                                      sym_name_hash,&module,module);
+   }
+   goto found_symbol;
+  }
+  if (modid == KMODID_NEXT) {
+   /* Search all modules, excluding that of the calling process. */
+   error = kproc_getmodat_unlocked(proc,&modid,(void *)regs->regs.eip);
+   if __unlikely(KE_ISERR(error)) goto end_unlock;
+   module = proc->p_modules.pms_modv+modid;
+   goto search_all_modules;
+  }
+  error = KE_INVAL;
+ } else if __unlikely(!(module = &proc->p_modules.pms_modv[modid])->pm_lib) error = KE_INVAL;
+ else {
+parse_module:
+  if (flags&KMOD_SYMINFO_FLAG_LOOKUPADDR) {
+   if ((uintptr_t)addr_or_name < (uintptr_t)module->pm_base) {
+    symbol = NULL;
+   } else {
+    symbol = kshlib_get_closest_symbol(module->pm_lib,
+                                      (uintptr_t)addr_or_name-
+                                      (uintptr_t)module->pm_base);
+   }
+  } else {
+   symbol = kshlib_get_any_symbol(module->pm_lib,sym_name.sn_name,
+                                  sym_name.sn_size,sym_name_hash);
+  }
+found_symbol:
+  if __unlikely(!symbol) { error = KE_NOENT; goto end_freename; }
+  assert(module);
+  assert(symbol);
+  error = ksymbol_fillinfo(proc,module,symbol,buf,bufsize,
+                           preqsize ? &reqsize : NULL,flags);
+ }
+end_freename:
+ if (!(flags&KMOD_SYMINFO_FLAG_LOOKUPADDR)) {
+  /* The symbol name was allocated dynamically. */
+  free((char *)sym_name.sn_name);
+ }
+end_unlock:
+ kproc_unlock(proc,KPROC_LOCK_MODS);
+ if (__likely(KE_ISOK(error)) && preqsize &&
+     __unlikely(copy_to_user(preqsize,&reqsize,sizeof(reqsize)))
+     ) error = KE_FAULT;
+end_fd: kfdentry_quit(&fd);
+end: KTASK_CRIT_END
+ RETURN(error);
+}
 
 
 __DECL_END

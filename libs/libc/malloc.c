@@ -709,6 +709,20 @@ static __noinline size_t mall_sizeof(void *__restrict p __LIBC_DEBUG__PARAMS) {
 #endif
 }
 
+void *__malloc_untrack(void *mallptr) {
+ struct mallhead *head;
+ if (mallptr) {
+  head = mall_user2head(mallptr,1 __LIBC_DEBUG__NULL);
+  if (head->mh_file) {
+   MALL_LOCK_ACQUIRE
+   mall_remove_unlocked(head);
+   head->mh_file = NULL;
+   MALL_LOCK_RELEASE
+  }
+ }
+ return mallptr;
+}
+
 
 
 __public __crit void *_malloc_d(size_t s __LIBC_DEBUG__PARAMS) {
