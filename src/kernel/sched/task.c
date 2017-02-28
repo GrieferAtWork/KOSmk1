@@ -1658,10 +1658,12 @@ end_decref:
 break_end:
  {
   NOIRQ_BREAK
+  //if (error == KE_INTR) tb_print();
   return error;
  }
 end:
  NOIRQ_ENDUNLOCK(ktask_unlock(self,KTASK_LOCK_STATE));
+ //if (error == KE_INTR) tb_print();
  return error;
 }
 

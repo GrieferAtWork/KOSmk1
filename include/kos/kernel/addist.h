@@ -70,8 +70,8 @@ struct kaddistticket {
  KOBJECT_HEAD
 #if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  struct kaddist          *dt_dist;  /*< [1..1] Distributor associated with this ticket. */
- struct tbtrace       *dt_mk_tb; /*< [0..1][owned] Traceback to when this ticket was generated. */
- struct tbtrace       *dt_rd_tb; /*< [0..1][lock(:ad_nbdat:KSIGNAL_LOCK_WAIT)][owned] Traceback to when a ready ticket became ready. */
+ struct tbtrace          *dt_mk_tb; /*< [0..1][owned] Traceback to when this ticket was generated. */
+ struct tbtrace          *dt_rd_tb; /*< [0..1][lock(:ad_nbdat:KSIGNAL_LOCK_WAIT)][owned] Traceback to when a ticket became ready. */
 #endif
  struct kaddistticket    *dt_prev;  /*< [0..1][lock(:ad_nbdat:KSIGNAL_LOCK_WAIT)] Previous ready/non-ready ticket. */
  struct kaddistticket    *dt_next;  /*< [0..1][lock(:ad_nbdat:KSIGNAL_LOCK_WAIT)] Next ready/non-ready ticket. */

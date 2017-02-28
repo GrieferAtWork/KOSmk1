@@ -60,6 +60,10 @@ again:
  ticket->dt_prev = NULL;
  ticket->dt_next = self->ad_tiready;
  self->ad_tiready = ticket;
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
+ assert(!ticket->dt_rd_tb);
+ ticket->dt_rd_tb = tbtrace_captureex(1);
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDDDIST */
  /* Unlock the signal and receive unbuffered data. */
 #ifdef TIMEDRECV
  error = _ksignal_vtimedrecv_andunlock_c(&self->ad_nbdat,abstime,buf);
@@ -78,7 +82,15 @@ again:
  }
  /* In the success-case, the sender has done the ready-cleanup
   * and moved the ticket into the list of non-ready tickets. */
- if __likely(KE_ISOK(error)) return error;
+ if __likely(KE_ISOK(error)) {
+#if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
+  ksignal_lock_c(&self->ad_nbdat,KSIGNAL_LOCK_WAIT);
+  free(ticket->dt_rd_tb);
+  ticket->dt_rd_tb = NULL;
+  ksignal_unlock_c(&self->ad_nbdat,KSIGNAL_LOCK_WAIT);
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDDDIST */
+  return error;
+ }
  /* Failed to receive data. - Must unregister the ticket due to that failure.
   * NOTE: The race condition between here and after vrecv is what is handled by 'KS_NODATA'. */
  ksignal_lock_c(&self->ad_nbdat,KSIGNAL_LOCK_WAIT);
@@ -98,7 +110,7 @@ again:
  self->ad_tnready = ticket;
 #if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  free(ticket->dt_rd_tb);
- ticket->dt_rd_tb = tbtrace_captureex(1);
+ ticket->dt_rd_tb = NULL;
 #endif /* KCONFIG_HAVE_DEBUG_TRACKEDDDIST */
 end:
  ksignal_unlock_c(&self->ad_nbdat,KSIGNAL_LOCK_WAIT);

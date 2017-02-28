@@ -29,6 +29,8 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <proc.h>
+#include <limits.h>
 
 
 static int run_builtin(struct shcmd const *builtin,
@@ -55,6 +57,54 @@ end:
  return result;
 }
 
+static int
+cmd_fork_exec(struct cmd_engine *__unused(engine),
+              struct cmd const *cmd,
+              uintptr_t *exitcode) {
+ task_t child_task; int error;
+ sysconf(100000);
+ if ((child_task = task_fork()) == 0) {
+  struct kexecargs args;
+  kerrno_t kerr;
+  if (tcsetpgrp(STDIN_FILENO,getpid())) perror("tcsetpgrp");
+  /* Force-sanitize descriptors, if wanted to. */
+  if (sani_descriptors) {
+   if (!isafile(0)) close(0);
+   if (!isafile(1)) close(1);
+   if (!isafile(2)) close(2);
+   closeall(3,INT_MAX);
+  }
+  /* Enter sandbox-mode, if wanted to. */
+  if (fork_sandlevel) {
+   proc_barrier(KSANDBOX_BARRIERLEVEL(fork_sandlevel));
+  }
+  /* Execute fd-redirections. */
+  cmd_fd_doall(cmd->c_fdc,cmd->c_fdv);
+  /* Setup the arguments to ktask_exec. */
+  args.ea_argc    = cmd->c_args.ca_argc;
+  args.ea_argv    = cmd->c_args.ca_argv;
+  args.ea_arglenv = cmd->c_args.ca_arglenv;
+  args.ea_envc    = 0;
+  args.ea_environ = NULL;
+  args.ea_envlenv = NULL;
+  kerr = ktask_exec(cmd->c_exe,cmd->c_esz,
+                    &args,KTASK_EXEC_FLAG_SEARCHPATH);
+  dprintf(STDERR_FILENO,"exec %.*q: %d: %s\n",
+         (unsigned)cmd->c_esz,cmd->c_exe,
+          -kerr,strerror(-kerr));
+  _exit(kerr == KE_NOENT ? 127 : 126);
+ }
+ if (child_task == -1) return -1;
+ if (cmd->c_detached) {
+  *exitcode = 0;
+ } else {
+  error = task_join(child_task,(void **)exitcode);
+ }
+ sysconf(100001);
+ kfd_close(child_task);
+ return error;
+}
+
 int shcmd_exec(struct cmd_engine *engine,
                struct cmd const *cmd,
                uintptr_t *exitcode) {
@@ -68,7 +118,7 @@ int shcmd_exec(struct cmd_engine *engine,
    return 0;
   }
  }
- error = (*cmd_operations_default.exec)(engine,cmd,exitcode);
+ error = cmd_fork_exec(engine,cmd,exitcode);
  return error;
 }
 

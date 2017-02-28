@@ -29,7 +29,11 @@
 
 #include <kos/config.h>
 /* v define to quickly disable mall-blocks,
-     and use dlmalloc directly. */
+ *   and use dlmalloc directly.
+ *   TODO: I just tried uncommenting this and...
+ *         WOW! This is where all the cpu cycles disappear to!
+ *      >> Somehow make mall faster (like... a lot faster!)
+ */
 //#undef __LIBC_HAVE_DEBUG_MALLOC
 
 
@@ -156,6 +160,9 @@ __DECL_BEGIN
 /* Amount of bytes immediately after a user-block (to detect write-overflow). */
 #define MALL_FOOTERSIZE       16
 
+/* Include a full traceback in every allocation. */
+#define MALL_TRACEBACK         1
+
 /* Validate all allocated memory every 'MALL_VALIDFREQ'th call
  * to any allocating/freeing function. (Define to 0 to disable)
  * WARNING: Validating all dynamic memory is __VERY__ expensive!
@@ -245,6 +252,7 @@ static byte_t mall_footer_seed[4] = {0xCF,0x6A,0xB7,0x97};
 /* ... And I thought I knew what I was doing when I created debug_new.
  *     Yet then it can be so easy to create something so much better ... */
 
+#if MALL_TRACEBACK
 static int capturetb_sizewalker(void const *__restrict instruction_pointer,
                                 void const *__restrict frame_address,
                                 size_t frame_index, size_t *closure) {
@@ -265,6 +273,7 @@ static __noinline size_t capturetbsize(size_t skip) {
 static __noinline void capturetb(void const *addrvec[], size_t skip) {
  tb_walkex((ptbwalker)&capturetb_walker,NULL,addrvec,skip+1);
 }
+#endif /* MALL_TRACEBACK */
 
 #ifdef __KERNEL__
 void kernel_initialize_dlmalloc(void)
@@ -302,8 +311,10 @@ struct mallhead {
  int              mh_line;   /*< [const] Allocation line. */
  char const      *mh_func;   /*< [0..1][const] Allocation function. */
  size_t           mh_usize;  /*< [const] Size of the userdata block. */
- size_t           mh_tsz;    /*< [const] Size of the malloc traceback. */
+#if MALL_TRACEBACK
+ size_t           mh_tsz;    /*< [const] Size of the malloc traceback (in void *-s). */
  void const      *mh_tb[1];  /*< [0..mh_tsz][const] Malloc traceback instruction pointers (inline) */
+#endif /* MALL_TRACEBACK */
 };
 struct malltail {
  struct mallhead *mt_head;  /*< [1..1] Pointer to the malloc header. */
@@ -311,14 +322,22 @@ struct malltail {
  /* User-data is located here. */
  /* MALL_FOOTERSIZE is located here. */
 };
-#define mall_headtail_size \
- (offsetof(struct mallhead,mh_tb)+sizeof(struct malltail))
+#if MALL_TRACEBACK
+#define mall_headtail_size (offsetof(struct mallhead,mh_tb)+sizeof(struct malltail))
+#else /* MALL_TRACEBACK */
+#define mall_headtail_size (sizeof(struct mallhead)+sizeof(struct malltail))
+#endif /* !MALL_TRACEBACK */
 
 /* Convert between various part of mall-blocks. */
+#if MALL_TRACEBACK
 #define mall_head2tail(self) \
  ((struct malltail *)((uintptr_t)(self)+\
    offsetof(struct mallhead,mh_tb)+\
   (self)->mh_tsz*sizeof(void *)))
+#else /* MALL_TRACEBACK */
+#define mall_head2tail(self) \
+ ((struct malltail *)((struct mallhead *)(self)+1))
+#endif /* !MALL_TRACEBACK */
 #define mall_tail2fill(self) (byte_t *)(((struct malltail *)(self))+1)
 #define mall_fill2tail(self) (((struct malltail *)(self))-1)
 #if MALL_HEADERSIZE
@@ -333,7 +352,11 @@ struct malltail {
 #define mall_user2tail(self) (((struct malltail *)mall_user2fill(self))-1)
 #define mall_head2foot(self) ((byte_t *)((uintptr_t)mall_head2user(self)+(self)->mh_usize))
 
+#if MALL_TRACEBACK
 #define mallhead_size(self) (offsetof(struct mallhead,mh_tb)+(self)->mh_tsz*sizeof(void *))
+#else
+#define mallhead_size(self) sizeof(struct mallhead)
+#endif
 
 /* Amount of skipped entries in tracebacks
  * (Adjustment to not include frame entries from mall itself). */
@@ -416,6 +439,7 @@ __local __crit void mall_remove_unlocked(struct mallhead *__restrict head) {
  head->mh_next = NULL;
 }
 
+#if MALL_TRACEBACK
 static int _mallblock_do_traceback_d(struct mallhead const *__restrict self,
                                      ptbwalker callback,
                                      void *closure) {
@@ -438,12 +462,15 @@ printleaks_tb_callback(void const *__restrict addr,
                ((uintptr_t)addr)-1,index,addr);
  return 0;
 }
+#endif /* MALL_TRACEBACK */
+
 static int mall_printleak(struct mallhead const *__restrict head, char const *reason) {
  MALL_SYSPRINTF("##################################################\n"
                 KDEBUG_SOURCEPATH_PREFIX "%s(%d) : %s : %s %Iu bytes at %p\n"
                ,head->mh_file,head->mh_line
                ,head->mh_func,reason,head->mh_usize
                ,mall_head2user(head));
+#if MALL_TRACEBACK
 #ifdef __KERNEL__
  {
   int result = _mallblock_do_traceback_d(head,&printleaks_tb_callback,NULL);
@@ -453,8 +480,16 @@ static int mall_printleak(struct mallhead const *__restrict head, char const *re
 #else
  return _mallblock_do_traceback_d(head,&printleaks_tb_callback,NULL);
 #endif
+#else /* MALL_TRACEBACK */
+ return 0;
+#endif /* MALL_TRACEBACK */
 }
 
+#if 0
+#define MALL_MEMVALIDATE(p,s) kmem_validate(p,s)
+#else
+#define MALL_MEMVALIDATE(p,s) KE_OK
+#endif
 
 
 #define VALIDATE(expr,...) __assert_atf("...",skip+1,expr,__VA_ARGS__)
@@ -464,7 +499,7 @@ static int mall_printleak(struct mallhead const *__restrict head, char const *re
           ,head,tail,(uintptr_t)(head)-(uintptr_t)(tail))
 
 #define VALIDATE_MALLHEAD_TAIL(head,tail) \
-do{ kerrno_t errid = kmem_validate(head,(uintptr_t)(tail)-(uintptr_t)(head));\
+do{ kerrno_t errid = MALL_MEMVALIDATE(head,(uintptr_t)(tail)-(uintptr_t)(head));\
     VALIDATE(errid == KE_OK\
             ,"Invalid mallhead...malltail memory range: %p+%Iu ... %p (%s)"\
             ,head,(uintptr_t)(tail)-(uintptr_t)(head)\
@@ -483,7 +518,7 @@ do{ kerrno_t errid = kmem_validate(head,(uintptr_t)(tail)-(uintptr_t)(head));\
           ,"Expected mallbase address %p below mallhead %p (user: %p) (but lies %Iu bytes above)"\
           ,(head)->mh_base,head,user,(uintptr_t)(head)->mh_base-(uintptr_t)(head));
 #define VALIDATE_MALLHEAD_USER(head,user) \
-do{ kerrno_t errid = kmem_validate(user,(head)->mh_usize);\
+do{ kerrno_t errid = MALL_MEMVALIDATE(user,(head)->mh_usize);\
     VALIDATE(errid == KE_OK\
             ,"Invalid allocated user-memory range (head: %p): %p+%Iu ... %p (%s)"\
             ,head,user,(head)->mh_usize,(uintptr_t)(user)+(head)->mh_usize\
@@ -495,14 +530,15 @@ do{ kerrno_t errid = kmem_validate(user,(head)->mh_usize);\
 do{ byte_t const *iter,*end,*start; byte_t expected_byte;\
     end = (iter = start = mall_tail2fill(tail))+MALL_HEADERSIZE;\
     for (; iter != end; ++iter) {\
-     expected_byte = MALL_HEADERBYTE(iter-start);\
+     size_t byte_index = (size_t)(iter-start);\
+     expected_byte = MALL_HEADERBYTE(byte_index);\
      if __unlikely(*iter != expected_byte) {\
       MALL_SYSPRINTF("\n[HEAP VIOLATION] See reference to allocated block:\n");\
       mall_printleak(head,"Allocated");\
       __assert_atf("byte != MALL_HEADERBYTE(...)",skip+1,0\
                   ,"[MALL:HEAD] Invalid byte in mallheader-filler (head: %p; user: %p) "\
                               "(byte %Iu/%Iu is %#I8x (%I8u) instead of %#I8x (%I8u))"\
-                  ,head,user,(size_t)(iter-start),(size_t)(MALL_HEADERSIZE-1)\
+                  ,head,user,byte_index,(size_t)(MALL_HEADERSIZE-1)\
                   ,*iter,*iter,expected_byte,expected_byte);\
      }\
     }\
@@ -516,14 +552,15 @@ do{ byte_t const *iter,*end,*start; byte_t expected_byte;\
 do{ byte_t const *iter,*end,*start; byte_t expected_byte;\
     end = (iter = start = mall_head2foot(head))+MALL_FOOTERSIZE;\
     for (; iter != end; ++iter) {\
-     expected_byte = MALL_FOOTERBYTE(iter-start);\
+     size_t byte_index = (size_t)(iter-start);\
+     expected_byte = MALL_FOOTERBYTE(byte_index);\
      if __unlikely(*iter != expected_byte) {\
       MALL_SYSPRINTF("\n[HEAP VIOLATION] See reference to allocated block:\n");\
       mall_printleak(head,"Allocated");\
       __assert_atf("byte != MALL_FOOTERBYTE(...)",skip+1,0\
                   ,"[MALL:FOOT] Invalid byte in mallfooter-filler (head: %p; user: %p) "\
                               "(byte %Iu/%Iu is %#I8x (%I8u) instead of %#I8x (%I8u))"\
-                  ,head,user,(size_t)(iter-start),(size_t)(MALL_FOOTERSIZE-1)\
+                  ,head,user,byte_index,(size_t)(MALL_FOOTERSIZE-1)\
                   ,*iter,*iter,expected_byte,expected_byte);\
      }\
     }\
@@ -534,15 +571,23 @@ do{ byte_t const *iter,*end,*start; byte_t expected_byte;\
 
 static __noinline void
 mall_validatehead(int original, struct mallhead const *head, size_t skip __LIBC_DEBUG__PARAMS) {
- kerrno_t errid; size_t tb_space;
- struct malltail *tail; void *user;
+ kerrno_t errid; struct malltail *tail; void *user;
  /*printf("base: %p %p\n",head->mh_base,head);*/
- errid = kmem_validate(head,offsetof(struct mallhead,mh_tb));
+#if MALL_TRACEBACK
+ errid = MALL_MEMVALIDATE(head,offsetof(struct mallhead,mh_tb));
  VALIDATE(errid == KE_OK
          ,"Invalid mallhead...traceback memory range: %p+%Iu ... %p (%s)"
          ,head,offsetof(struct mallhead,mh_tb)
          ,(uintptr_t)head+offsetof(struct mallhead,mh_tb)
          ,kassertmem_msg(errid));
+#else /* MALL_TRACEBACK */
+ errid = MALL_MEMVALIDATE(head,sizeof(struct mallhead));
+ VALIDATE(errid == KE_OK
+         ,"Invalid mallhead...malltail memory range: %p+%Iu ... %p (%s)"
+         ,head,sizeof(struct mallhead)
+         ,(uintptr_t)head+sizeof(struct mallhead)
+         ,kassertmem_msg(errid));
+#endif /* !MALL_TRACEBACK */
  tail = mall_head2tail(head);
  VALIDATE_MALLHEAD_TAIL(head,tail);
  user = mall_tail2user(tail);
@@ -550,24 +595,28 @@ mall_validatehead(int original, struct mallhead const *head, size_t skip __LIBC_
  VALIDATE_MALLHEAD_REFCNT(head,user);
  if (original) VALIDATE_MALLHEAD_BASE(head,user);
  VALIDATE_MALLHEAD_USER(head,user);
- errid = kmem_validate(head->mh_base,(uintptr_t)head-(uintptr_t)head->mh_base);
+ errid = MALL_MEMVALIDATE(head->mh_base,(uintptr_t)head-(uintptr_t)head->mh_base);
  VALIDATE(errid == KE_OK,
           "Invalid mallbase...mallhead memory range: %p+%Iu ... %p (%s)",
           head->mh_base,(uintptr_t)head-(uintptr_t)head->mh_base,
           head,kassertmem_msg(errid));
- tb_space = (uintptr_t)tail-(uintptr_t)head->mh_tb;
- VALIDATE(tb_space == head->mh_tsz*sizeof(void *),
-          "Invalid stored traceback size (Stored size: %Iu; Available space: %Iu)",
-          head->mh_tsz*sizeof(void *),tb_space);
+#if MALL_TRACEBACK
+ {
+  size_t tb_space = (uintptr_t)tail-(uintptr_t)head->mh_tb;
+  VALIDATE(tb_space == head->mh_tsz*sizeof(void *),
+           "Invalid stored traceback size (Stored size: %Iu; Available space: %Iu)",
+           head->mh_tsz*sizeof(void *),tb_space);
+ }
+#endif /* MALL_TRACEBACK */
  VALIDATE_MALLHEAD_HEADER(head,user,tail);
  VALIDATE_MALLHEAD_FOOTER(head,user,tail);
 }
 
 static __noinline __retnonnull struct mallhead *
 mall_user2head(void *__restrict p, size_t skip __LIBC_DEBUG__PARAMS) {
- struct mallhead *result; kerrno_t errid; size_t tb_space;
+ struct mallhead *result; kerrno_t errid;
  struct malltail *tail = mall_user2tail(p);
- errid = kmem_validate(tail,sizeof(struct malltail)+MALL_HEADERSIZE);
+ errid = MALL_MEMVALIDATE(tail,sizeof(struct malltail)+MALL_HEADERSIZE);
  VALIDATE(errid == KE_OK,
           "Invalid malltail...malluser memory range: %p+%Iu ... %p (%s)",
           tail,sizeof(struct malltail),
@@ -580,15 +629,21 @@ mall_user2head(void *__restrict p, size_t skip __LIBC_DEBUG__PARAMS) {
  VALIDATE_MALLHEAD_REFCNT(result,p);
  VALIDATE_MALLHEAD_BASE(result,p);
  VALIDATE_MALLHEAD_USER(result,p);
- errid = kmem_validate(result->mh_base,(uintptr_t)result-(uintptr_t)result->mh_base);
+ errid = MALL_MEMVALIDATE(result->mh_base,
+                         (uintptr_t)result-
+                         (uintptr_t)result->mh_base);
  VALIDATE(errid == KE_OK,
           "Invalid mallbase...mallhead memory range: %p+%Iu ... %p (%s)",
           result->mh_base,(uintptr_t)result-(uintptr_t)result->mh_base,
           result,kassertmem_msg(errid));
- tb_space = (uintptr_t)tail-(uintptr_t)result->mh_tb;
- VALIDATE(tb_space == result->mh_tsz*sizeof(void *),
-          "Invalid stored traceback size (Stored size: %Iu; Available space: %Iu)",
-          result->mh_tsz*sizeof(void *),tb_space);
+#if MALL_TRACEBACK
+ {
+  size_t tb_space = (uintptr_t)tail-(uintptr_t)result->mh_tb;
+  VALIDATE(tb_space == result->mh_tsz*sizeof(void *),
+           "Invalid stored traceback size (Stored size: %Iu; Available space: %Iu)",
+           result->mh_tsz*sizeof(void *),tb_space);
+ }
+#endif /* MALL_TRACEBACK */
  VALIDATE_MALLHEAD_HEADER(result,p,tail);
  VALIDATE_MALLHEAD_FOOTER(result,p,tail);
  return result;
@@ -597,8 +652,11 @@ mall_user2head(void *__restrict p, size_t skip __LIBC_DEBUG__PARAMS) {
 
 /* The main mall-allocator function. */
 static __crit __noinline void *mall_malloc(size_t s, size_t alignment __LIBC_DEBUG__PARAMS) {
- size_t traceback_size,headtailsize; void *result;
- struct mallhead *head; struct malltail *tail; void *baseptr;
+#if MALL_TRACEBACK
+ size_t traceback_size,headtailsize;
+#endif /* MALL_TRACEBACK */
+ void *result; struct mallhead *head;
+ struct malltail *tail; void *baseptr;
 #ifdef KTASK_CRIT_MARK
  KTASK_CRIT_MARK
 #endif
@@ -608,8 +666,12 @@ static __crit __noinline void *mall_malloc(size_t s, size_t alignment __LIBC_DEB
   * potentially causing undefined behavior later down the line... */
  if __unlikely(!s) s = 1;
 #endif
+#if MALL_TRACEBACK
  traceback_size = capturetbsize(MALL_TBOFF);
- headtailsize = mall_headtail_size+traceback_size*sizeof(void *);
+ headtailsize   = mall_headtail_size+traceback_size*sizeof(void *);
+#else /* MALL_TRACEBACK */
+#define headtailsize  mall_headtail_size
+#endif /* MALL_TRACEBACK */
 #if MALL_RANDOMIZE_FOOTER
  {
   time_t t = time(NULL);
@@ -625,6 +687,9 @@ static __crit __noinline void *mall_malloc(size_t s, size_t alignment __LIBC_DEB
  /* Align what will essentially become the malluser by the given alignment. */
  head = (struct mallhead *)(_align((uintptr_t)baseptr+headtailsize+MALL_HEADERSIZE,alignment)-
                                                      (headtailsize+MALL_HEADERSIZE));
+#ifdef headtailsize
+#undef headtailsize
+#endif
  head->mh_magic  = MALL_MAGIC;
  head->mh_refcnt = 1;
  head->mh_base   = baseptr;
@@ -632,8 +697,10 @@ static __crit __noinline void *mall_malloc(size_t s, size_t alignment __LIBC_DEB
  head->mh_line   = __LIBC_DEBUG_LINE;
  head->mh_func   = __LIBC_DEBUG_FUNC;
  head->mh_usize  = s;
+#if MALL_TRACEBACK
  head->mh_tsz    = traceback_size;
  capturetb(head->mh_tb,MALL_TBOFF);
+#endif /* MALL_TRACEBACK */
  tail = mall_head2tail(head);
  tail->mt_head = head;
  mall_insert(head);
@@ -643,7 +710,8 @@ static __crit __noinline void *mall_malloc(size_t s, size_t alignment __LIBC_DEB
   header = mall_tail2fill(tail);
   end = (iter = header)+MALL_HEADERSIZE;
   for (; iter != end; ++iter) {
-   *iter = MALL_HEADERBYTE(iter-header);
+   size_t byte_index = (size_t)(iter-header);
+   *iter = MALL_HEADERBYTE(byte_index);
   }
   result = mall_fill2user(header);
  }
@@ -656,7 +724,8 @@ static __crit __noinline void *mall_malloc(size_t s, size_t alignment __LIBC_DEB
   footer = mall_head2foot(head);
   end = (iter = footer)+MALL_FOOTERSIZE;
   for (; iter != end; ++iter) {
-   *iter = MALL_FOOTERBYTE(iter-footer);
+   size_t byte_index = (size_t)(iter-footer);
+   *iter = MALL_FOOTERBYTE(byte_index);
   }
  }
 #endif
@@ -1002,7 +1071,11 @@ __public int _mallblock_traceback_d(struct mallhead *__restrict self,
                                     ptbwalker callback,
                                     void *closure) {
  mall_validatehead(0,self,1 __LIBC_DEBUG__NULL);
+#if MALL_TRACEBACK
  return _mallblock_do_traceback_d(self,callback,closure);
+#else /* MALL_TRACEBACK */
+ return 0;
+#endif /* MALL_TRACEBACK */
 }
 
 static int printleaks_callback(struct mallhead *__restrict block, void *closure) {
@@ -1024,20 +1097,20 @@ __public void _malloc_validate_d(void) { _malloc_enumblocks_ex_d(NULL,&validate_
 
 /* Map debug malloc functions as dumb aliases for non-debug version.
  * -> This way we can keep binary compatibility between all versions of libc. */
-__public __crit void *_malloc_d(size_t s __LIBC_DEBUG_ENABLED__UPARAMS) { return malloc(s); }
-__public __crit void *_calloc_d(size_t n, size_t s __LIBC_DEBUG_ENABLED__UPARAMS) { return calloc(n,s); }
-__public __crit void *_realloc_d(void *__restrict p, size_t s __LIBC_DEBUG_ENABLED__UPARAMS) { return realloc(p,s); }
-__public __crit void *_memalign_d(size_t alignment, size_t bytes __LIBC_DEBUG_ENABLED__UPARAMS) { return memalign(alignment,bytes); }
-__public __crit void _free_d(void *__restrict p __LIBC_DEBUG_ENABLED__UPARAMS) { free(p); }
-__public __crit char *_strdup_d(char const *__restrict s __LIBC_DEBUG_ENABLED__UPARAMS) { return strdup(s); }
-__public __crit char *_strndup_d(char const *__restrict s, size_t maxchars __LIBC_DEBUG_ENABLED__UPARAMS) { return strndup(s,maxchars); }
-__public __crit void *_memdup_d(void const *__restrict p, size_t bytes __LIBC_DEBUG_ENABLED__UPARAMS) { return _memdup(p,bytes); }
-__public __crit size_t _malloc_usable_size_d(void *__restrict p __LIBC_DEBUG_ENABLED__UPARAMS) { return malloc_usable_size(p); }
-__public __crit int _posix_memalign_d(void **__restrict memptr, size_t alignment, size_t bytes __LIBC_DEBUG_ENABLED__UPARAMS) { return posix_memalign(memptr,alignment,bytes); }
-__public __crit void *_pvalloc_d(size_t bytes __LIBC_DEBUG_ENABLED__UPARAMS) { return pvalloc(bytes); }
-__public __crit void *_valloc_d(size_t bytes __LIBC_DEBUG_ENABLED__UPARAMS) { return valloc(bytes); }
+__public __crit void *_malloc_d(size_t s __LIBC_DEBUG__UPARAMS) { return malloc(s); }
+__public __crit void *_calloc_d(size_t n, size_t s __LIBC_DEBUG__UPARAMS) { return calloc(n,s); }
+__public __crit void *_realloc_d(void *__restrict p, size_t s __LIBC_DEBUG__UPARAMS) { return realloc(p,s); }
+__public __crit void *_memalign_d(size_t alignment, size_t bytes __LIBC_DEBUG__UPARAMS) { return memalign(alignment,bytes); }
+__public __crit void _free_d(void *__restrict p __LIBC_DEBUG__UPARAMS) { free(p); }
+__public __crit char *_strdup_d(char const *__restrict s __LIBC_DEBUG__UPARAMS) { return strdup(s); }
+__public __crit char *_strndup_d(char const *__restrict s, size_t maxchars __LIBC_DEBUG__UPARAMS) { return strndup(s,maxchars); }
+__public __crit void *_memdup_d(void const *__restrict p, size_t bytes __LIBC_DEBUG__UPARAMS) { return _memdup(p,bytes); }
+__public __crit size_t _malloc_usable_size_d(void *__restrict p __LIBC_DEBUG__UPARAMS) { return malloc_usable_size(p); }
+__public __crit int _posix_memalign_d(void **__restrict memptr, size_t alignment, size_t bytes __LIBC_DEBUG__UPARAMS) { return posix_memalign(memptr,alignment,bytes); }
+__public __crit void *_pvalloc_d(size_t bytes __LIBC_DEBUG__UPARAMS) { return pvalloc(bytes); }
+__public __crit void *_valloc_d(size_t bytes __LIBC_DEBUG__UPARAMS) { return valloc(bytes); }
 __public __crit char *_strdupf_d(__LIBC_DEBUG_UPARAMS_ char const *__restrict format, ...) { char *result; va_list args; va_start(args,format); result = _vstrdupf(format,args); va_end(args); return result; }
-__public __crit char *_vstrdupf_d(char const *__restrict format, va_list args __LIBC_DEBUG_ENABLED__UPARAMS) { return _vstrdupf(format,args); }
+__public __crit char *_vstrdupf_d(char const *__restrict format, va_list args __LIBC_DEBUG__UPARAMS) { return _vstrdupf(format,args); }
 __public void *__mallblock_getattrib_d(struct _mallblock_d *__restrict __unused(__self), int __unused(attrib)) { return NULL; }
 __public int _mallblock_traceback_d(struct _mallblock_d *__restrict __unused(self), ptbwalker __unused(callback), void *__unused(closure)) { return 0; }
 __public int _malloc_enumblocks_d(void *__unused(checkpoint), int (*callback)(struct _mallblock_d *__restrict block, void *closure), void *__unused(closure)) { (void)callback; return 0; }

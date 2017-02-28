@@ -26,6 +26,7 @@
 #include "syscall-common.h"
 #include <kos/kernel/linker.h>
 #include <kos/kernel/proc.h>
+#include <kos/kernel/fs/fs.h>
 #include <kos/kernel/fs/file.h>
 #include <kos/kernel/util/string.h>
 #include <sys/types.h>
@@ -284,14 +285,17 @@ dont_copy_input:
    if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info.si_line = 0;
   } else {
    if (flags&KMOD_SYMINFO_FLAG_WANTFILE) {
+    char const *s1,*s2,*s3;
     info.si_flsz |= KSYMINFO_FLAG_FILE;
     if (!info.si_file || !info.si_flsz) {
      info.si_file = (char *)buf_end;
      info.si_flsz = (__size_t)bufavail;
     }
-    print_error = user_snprintf(info.si_file,info.si_flsz,&bufreq,"%s/%s",
-                                fal.fal_path ? fal.fal_path : "",
-                                fal.fal_file ? fal.fal_file : "");
+    if ((s1 = fal.fal_path) == NULL) s1 = "",s2 = "";
+    else { char ch = *s1 ? strend(s1)[-1] : '\0'; s2 = KFS_ISSEP(ch) ? "" : "/"; }
+    if ((s3 = fal.fal_file) == NULL) s3 = "";
+    print_error = user_snprintf(info.si_file,info.si_flsz,
+                                &bufreq,"%s%s%s",s1,s2,s3);
     if (print_error < 0) { kfileandline_quit(&fal); return KE_FAULT; }
     copy_size = bufreq-(size_t)print_error;
     if (info.si_file == (char *)buf_end) {

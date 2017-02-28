@@ -135,7 +135,8 @@ template<> struct static_if<true> { bool __is_true__(); };
         assertf(!is_inside(),"You're not the first to enter the " #name "region!")
 #else
 #   define RUNTIME_REGION_ASSERT(name,is_inside)
-#   define RUNTIME_REGION_ASSERT_MARK(name,is_inside)
+#   define RUNTIME_REGION_ASSERT_MARK(name,is_inside) \
+        assertf(is_inside(),"Region violation: No actually inside a " #name " region.")
 #   define RUNTIME_REGION_ASSERT_FIRST(name,is_inside)
 #endif
 
@@ -146,7 +147,7 @@ template<> struct static_if<true> { bool __is_true__(); };
 #define COMPILER_REGION_MARK(name,is_inside) \
  enum{__REGION_IN_NESTED(name) = __REGION_IN_NORMAL(name)+1\
      ,__REGION_IN_NORMAL(name) = __REGION_NORMAL_YES};\
- RUNTIME_REGION_ASSERT_MARK(is_inside(),name);
+ RUNTIME_REGION_ASSERT_MARK(name,is_inside);
 
 
 #define COMPILER_REGION_ENTER(name,is_inside,do_enter) \

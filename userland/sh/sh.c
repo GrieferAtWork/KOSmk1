@@ -69,7 +69,7 @@ int exec_fork(char *exe, char *argv[]) {
    * For now, this is KOS's shortcut to killing processes, until
    * I've gotten around to properly implement posix signals.
    */
-  tcsetpgrp(STDIN_FILENO,getpid());
+  if (tcsetpgrp(STDIN_FILENO,getpid())) perror("tcsetpgrp");
   /* Force-sanitize descriptors, if wanted to. */
   if (sani_descriptors) {
    if (!isafile(0)) close(0);
@@ -218,24 +218,8 @@ static struct option const longopts[] = {
 __attribute_thread int foo = 42;
 __attribute_thread int bar = 84;
 
-#include <mod.h>
-void addrinfo(void *addr) {
- syminfo_t *info; char *modname;
- info = mod_addrinfo(MOD_ALL,addr,NULL,0,MOD_SYMINFO_ALL);
- if (!info) perror("mod_addrinfo");
- else {
-  modname = mod_path(info->si_modid,NULL,0);
-  printf("%s(%u) : %q : %q+%Ix : Here\n",
-         info->si_file,info->si_line+1,modname,info->si_name,
-        (uintptr_t)addr-(uintptr_t)info->si_base);
-  free(modname);
-  free(info);
- }
-}
-
 int main(int argc, char *argv[]) {
  int error; struct rline *r; int optc;
- addrinfo(&main);
  // movl	%gs:0, %eax
  // movl	foo@ntpoff(%eax), %eax
  //int x = foo;
