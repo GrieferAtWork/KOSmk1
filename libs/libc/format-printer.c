@@ -40,6 +40,8 @@
 #include <time.h>
 #ifdef __KERNEL__
 #include <kos/atomic.h>
+#include <kos/kernel/paging.h>
+#include <kos/kernel/util/string.h>
 #endif
 
 __DECL_BEGIN
@@ -54,14 +56,29 @@ __public int format_printf(pformatprinter printer, void *closure,
  return result;
 }
 
-#define PRINTF_EXTENSION_DOTQUESTION 1 /*< Allow '.?' in place of '.*' to read size_t from the argument list instead of 'unsigned int' */
+#define PRINTF_EXTENSION_POINTERSIZE 1        /*< Allow pointer-size length modifiers 'I' */
+#define PRINTF_EXTENSION_FIXLENGTH   1        /*< Allow fixed length modifiers 'I8|I16|I32|I64' */
+#define PRINTF_EXTENSION_DOTQUESTION 1        /*< Allow '.?' in place of '.*' to read size_t from the argument list instead of 'unsigned int' */
+#define PRINTF_EXTENSION_QUOTESTRING 1        /*< Allow '%q' in place of '%s' for quoting a string (escaping all special characters). */
+#define PRINTF_EXTENSION_NULLSTRING  "(null)" /*< Replace NULL-arguments to %s and %q with this string (don't define to cause undefined behavior) */
+#define STRFTIME_EXTENSION_LONGNAMES 1        /*< Allow %[...] for long attribute names. */
+#define PRINTF_EXTENSION_VIRTUALPTR  1        /*< Allow '%~' to describe virtual pointers. */
 
+#ifndef __KERNEL__
+#undef PRINTF_EXTENSION_VIRTUALPTR
+#define PRINTF_EXTENSION_VIRTUALPTR 0
+#endif
 
 enum printf_length {
- len_I8,len_I16,len_I32,len_I64,len_L = 'L',len_z = 'z',len_t = 't',
+ len_I8,len_I16,len_I32,len_I64,
+ len_L    = 'L',len_z = 'z',len_t = 't',
  len_none = __PP_CAT_2(len_I,__PP_MUL8(__SIZEOF_INT__)),
  len_I    = __PP_CAT_2(len_I,__PP_MUL8(__SIZEOF_POINTER__)),
+#ifdef __SIZEOF_CHAR__
+ len_hh   = __PP_CAT_2(len_I,__PP_MUL8(__SIZEOF_CHAR__)),
+#else
  len_hh   = len_I8,
+#endif
  len_h    = __PP_CAT_2(len_I,__PP_MUL8(__SIZEOF_SHORT__)),
  len_l    = __PP_CAT_2(len_I,__PP_MUL8(__SIZEOF_LONG__)),
  len_ll   = __PP_CAT_2(len_I,__PP_MUL8(__SIZEOF_LONG_LONG__)),
@@ -77,6 +94,9 @@ enum printf_length {
 #define PRINTF_FLAG_HASWIDTH 0x0020 /*< '%123'. */
 #define PRINTF_FLAG_HASPREC  0x0040 /*< '%.123'. */
 #define PRINTF_FLAG_SIGNED   0x0080
+#ifdef __KERNEL__
+#define PRINTF_FLAG_VIRTUAL  0x0100 /*< '%~' (Modifies %s and %q: the pointer referrs to a user-space address). */
+#endif
 
 #ifdef __KERNEL__
 /* Prevent infinite-recursion, as assert() uses this function as well
@@ -100,6 +120,70 @@ while(0)
 #define printf(...) \
 do if __unlikely((error = format_printf(printer,closure,__VA_ARGS__)) != 0) return error;\
 while(0)
+
+#ifdef __KERNEL__
+int format_userprint(pformatprinter printer, void *closure,
+                     __user char const *userstring, size_t maxchars) {
+ struct ktask *caller = ktask_self();
+ struct kproc *proc = ktask_getproc(caller);
+ int error; size_t partmaxsize,partsize; char *addr;
+ KTASK_CRIT_MARK
+ if __unlikely(caller->t_epd == kpagedir_kernel()) {
+  /* Don't acquire the SHM lock if the
+   * page directory is overwritten. */
+  return (*printer)(userstring,maxchars,closure);
+ }
+ if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) return KE_DESTROYED;
+ for (;;) {
+  addr = (char *)kshm_translateuser(kproc_getshm(proc),caller->t_epd,
+                                    userstring,maxchars,&partmaxsize,0);
+  if __unlikely(!addr) { error = KE_FAULT; break; }
+  partmaxsize /= sizeof(char);
+  partsize = strnlen(addr,min(maxchars,partmaxsize))*sizeof(char);
+  error = (*printer)(addr,partsize,closure);
+  if (error != 0 ||
+      partmaxsize != (partsize/sizeof(char)) ||
+      maxchars == partsize) break;
+  *(uintptr_t *)&userstring += partmaxsize;
+  maxchars                  -= partsize;
+ }
+ kproc_unlock(proc,KPROC_LOCK_SHM);
+ return error;
+}
+
+struct format_userquote_args {
+ pformatprinter real_printer;
+ void          *real_closure;
+ __u32          quote_flags;
+};
+static int
+format_userquote_callback(char const *text, size_t maxlen,
+                          struct format_userquote_args *args) {
+ return format_quote(args->real_printer,args->real_closure,
+                     text,maxlen,args->quote_flags);
+}
+
+int format_userquote(pformatprinter printer, void *closure,
+                     __user char const *userstring, size_t maxchars,
+                     __u32 flags) {
+ int error;
+ struct format_userquote_args args = {printer,closure,flags|FORMAT_QUOTE_FLAG_PRINTRAW};
+ if (!(flags&FORMAT_QUOTE_FLAG_PRINTRAW)) {
+  error = (*printer)("\"",1,closure);
+  if __unlikely(error != 0) goto end;
+  error = format_userprint((pformatprinter)&format_userquote_callback,
+                            &args,userstring,maxchars);
+  if __unlikely(error != 0) goto end;
+  error = (*printer)("\"",1,closure);
+ } else {
+  error = format_userprint((pformatprinter)&format_userquote_callback,
+                            &args,userstring,maxchars);
+ }
+end:
+ return error;
+}
+#endif /* __KERNEL__ */
+
 
 __public int format_vprintf(pformatprinter printer, void *closure,
                             char const *__restrict format, va_list args) {
@@ -216,15 +300,29 @@ have_precision:
       length = (enum printf_length)ch;
       ch = readch();
       break;
+#if PRINTF_EXTENSION_POINTERSIZE || PRINTF_EXTENSION_FIXLENGTH
      case 'I': {
+#if PRINTF_EXTENSION_FIXLENGTH
       int off; ch = readch();
       if (ch == '8') length = len_I8,off = 1;
       else if (ch == '1' && peekch() == '6') length = len_I16,off = 2;
       else if (ch == '3' && peekch() == '2') length = len_I32,off = 2;
       else if (ch == '6' && peekch() == '4') length = len_I64,off = 2;
+#if PRINTF_EXTENSION_POINTERSIZE
       else length = len_I,off = 0;
+#else
+      else { --iter; goto def_length; }
+#endif
       iter += off,ch = iter[-1];
+#else /* PRINTF_EXTENSION_FIXLENGTH */
+      length = len_I;
+      ch = readch();
+#endif /* !PRINTF_EXTENSION_FIXLENGTH */
      } break;
+#endif /* PRINTF_EXTENSION_POINTERSIZE || PRINTF_EXTENSION_FIXLENGTH */
+#if !PRINTF_EXTENSION_POINTERSIZE && PRINTF_EXTENSION_FIXLENGTH
+def_length:
+#endif
      default: length = len_none; break;
     }
 
@@ -303,14 +401,37 @@ have_precision:
      {
       char const *arg;
      case 's':
+#if PRINTF_EXTENSION_QUOTESTRING
      case 'q':
+#endif /* PRINTF_EXTENSION_QUOTESTRING */
       arg = va_arg(args,char const *);
-      if __unlikely(!arg) arg = "(null)";
-      if (ch == 's') {
+#if PRINTF_EXTENSION_VIRTUALPTR
+      if (flags&PRINTF_FLAG_VIRTUAL && arg) {
+       if __likely(ch == 's') {
+        error = format_userprint(printer,closure,arg,
+                                (flags&PRINTF_FLAG_HASPREC) ? precision : (size_t)-1);
+       } else {
+        error = format_userquote(printer,closure,arg,
+                                (flags&PRINTF_FLAG_HASPREC) ? precision : (size_t)-1,
+                                (flags&PRINTF_FLAG_PREFIX) ? FORMAT_QUOTE_FLAG_PRINTRAW : FORMAT_QUOTE_FLAG_NONE);
+       }
+       if __unlikely(error != 0) return error;
+      } else
+#endif
+      {
+#ifdef PRINTF_EXTENSION_NULLSTRING
+       if __unlikely(!arg) arg = PRINTF_EXTENSION_NULLSTRING;
+#endif /* PRINTF_EXTENSION_NULLSTRING */
+#if PRINTF_EXTENSION_QUOTESTRING
+       if __likely(ch == 's') {
+        print(arg,(flags&PRINTF_FLAG_HASPREC) ? precision : (size_t)-1);
+       } else {
+        quote(arg,(flags&PRINTF_FLAG_HASPREC) ? precision : (size_t)-1,
+             (flags&PRINTF_FLAG_PREFIX) ? FORMAT_QUOTE_FLAG_PRINTRAW : FORMAT_QUOTE_FLAG_NONE);
+       }
+#else /* PRINTF_EXTENSION_QUOTESTRING */
        print(arg,(flags&PRINTF_FLAG_HASPREC) ? precision : (size_t)-1);
-      } else {
-       quote(arg,(flags&PRINTF_FLAG_HASPREC) ? precision : (size_t)-1,
-            (flags&PRINTF_FLAG_PREFIX) ? FORMAT_QUOTE_FLAG_PRINTRAW : FORMAT_QUOTE_FLAG_NONE);
+#endif /* !PRINTF_EXTENSION_QUOTESTRING */
       }
       break;
      }
@@ -348,6 +469,7 @@ end:
 #undef readch
  return 0;
 }
+
 
 
 __public int format_scanf(pformatscanner scanner, pformatreturn returnch,
@@ -449,7 +571,7 @@ parsefch:
      case 's':
       bufdst = va_arg(args,char *);
       bufend = bufdst+bufsize;
-      // Read until a whitespace character is found
+      /* Read until a whitespace character is found */
       while (bufdst != bufend && width--) {
        load();
        if (rch < 0 || isspace(rch)) break;
@@ -466,7 +588,7 @@ parsefch:
       if (inverse) fch = readch();
       sel_begin = iter;
       while (1) {
-       if (fch == '\\' && peekch()) ++iter; // escape the following character
+       if (fch == '\\' && peekch()) ++iter; /* escape the following character */
        else if (fch == ']') { sel_end = iter,fch = readch(); break; }
        else if (!fch) { sel_end = iter; break; }
        fch = readch();
@@ -479,7 +601,7 @@ parsefch:
        found = 0;
        if (rch < 0) break;
        while (sel_iter != sel_end) {
-        if (sel_iter[1] == '-') { // range
+        if (sel_iter[1] == '-') { /* range */
          if (rch >= sel_iter[0] && rch <= sel_iter[2]) { found = 1; break; }
          sel_iter += 3;
         } else if (*sel_iter == '\\') {
@@ -513,7 +635,7 @@ parsefch:
  }
 done:
  error = nread;
- // Return the last character if it's still stored
+ /* Return the last character if it's still stored */
  if (stored && rch >= 0) retch(rch);
 end:
  return error;
@@ -541,6 +663,7 @@ static char const *full_wday_names[7] = {
 static char const am_pm[2][3] = {"AM","PM"};
 static char const am_pm_lower[2][3] = {"am","pm"};
 
+#if STRFTIME_EXTENSION_LONGNAMES
 enum{
  ID_NONE,
  ID_YEAR,
@@ -610,6 +733,7 @@ __local int strftime_attrid(char const *name_begin, size_t name_len) {
  }
  return ID_NONE;
 }
+#endif /* STRFTIME_EXTENSION_LONGNAMES */
 
 
 int format_strftime(pformatprinter printer, void *closure,
@@ -700,11 +824,12 @@ next:
       if (!ch) goto end;
       break;
 
+#if STRFTIME_EXTENSION_LONGNAMES
      case '[': {
       char const *tag_begin,*tag_end,*mode_begin,*mode_end;
       unsigned int bracket_recursion = 1; unsigned int attribval;
       int repr_mode,attribute_id,width = 0;
-      // Extended formatting
+      /* Extended formatting */
       mode_end = mode_begin = tag_begin = iter;
       while (1) {
        ch = *iter++;
@@ -719,7 +844,7 @@ next:
            *mode_begin == 'S' || *mode_begin == ' ')
         repr_mode = *mode_begin++;
        else repr_mode = 0;
-       // Parse the width modifier
+       /* Parse the width modifier */
        while (mode_begin != mode_end) {
         if (*mode_begin >= '0' && *mode_begin <= '9') {
          width = width*10+(*mode_begin-'0');
@@ -756,6 +881,8 @@ next:
        }
       }
      } break;
+#endif /* STRFTIME_EXTENSION_LONGNAMES */
+
      default:
       format_begin = iter-2;
       goto next;

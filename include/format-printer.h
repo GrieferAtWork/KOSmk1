@@ -54,17 +54,27 @@ typedef int (*pformatreturn) __P((int __ch, void *__closure));
 //  - '%q'-format mode: Semantics equivalent to '%s', this modifier escapes the string using
 //                      'format_quote' with flags set of 'FORMAT_QUOTE_FLAG_NONE', or
 //                      'PRINTF_FLAG_PREFIX' when the '#' flag was used (e.g.: '%#q').
+//  - '%~s'  [KERNEL-ONLY] Print a string from a user-space pointer (may be combined to something like '%~.?s')
+//  - '%.*s' Instead of reading an 'int' and dealing with undefined behavior when negative, an 'unsigned int' is read.
+//  - '%.?s' Similar to '%.*s', but takes an 'size_t' from the argument list instead of an 'unsigned int'
 //  - '%I'   length modifier: Integral length equivalent to sizeof(size_t).
 //  - '%I8'  length modifier: Integral length equivalent to sizeof(int8_t).
 //  - '%I16' length modifier: Integral length equivalent to sizeof(int16_t).
 //  - '%I32' length modifier: Integral length equivalent to sizeof(int32_t).
 //  - '%I64' length modifier: Integral length equivalent to sizeof(int64_t).
+// Unsupported features:
+//  - '%n'   This printf implementation doesn't track how much was already printed,
+//           as doing so would defeat the idea of outputting in strn-style string,
+//           essentially forcing the printer to always call strnlen to figure out
+//           the exact length of a string just in case the user may request this
+//           information at one point.
 // >>> Possible (and actual) uses:
 //  - printf:           Unbuffered output into any kind of stream/file.
 //  - sprintf/snprintf: Unsafe/Counted string formatting into a user-supplied buffer.
 //  - strdupf:          Output into dynamically allocated heap memory,
 //                      increasing the buffer when it gets filled completely.
 //  - k_syslogf:        Unbuffered system-log output.
+//  - ...               There are a _lot_ more...
 extern __nonnull((1,3)) __attribute_vaformat(__printf__,3,4) int
 format_printf __P((pformatprinter __printer, void *__closure,
                    char const *__restrict __format, ...));
@@ -89,7 +99,9 @@ format_vprintf __P((pformatprinter __printer, void *__closure,
 //    - '%[A-Z]'   -- Character ranges in scan patterns
 //    - '%[^abc]'  -- Inversion of a scan pattern
 //    - '\n'       -- Skip any kind of linefeed ('\n', '\r', '\r\n')
-//    - '%.?s'     -- Similar to '%.*s', but instead of reading an 'unsigned int', read a 'size_t'
+//    - '%$s'      -- '$'-modifier, available for any format outputting a string.
+//                    This modifier reads a 'size_t' from the argument list,
+//                    that specifies the size of the following string buffer:
 //                 >> char buffer[64];
 //                 >> sscanf(data,"My name is %.?s\n",sizeof(buffer),buffer);
 // format -> %[*|?][width][length]specifier
@@ -192,17 +204,42 @@ struct stringprinter {
 // >>   handle_error();
 // >> } else {
 // >>   text = stringprinter_pack(&printer,NULL);
-// >>   //stringprinter_quit(&printer); // No-op after pack has been called
+// >>   //stringprinter_quit(&printer); /* No-op after pack has been called */
 // >> }
 // >> ...
 // >> free(text);
-// @param: HINT: A hint as to how big the initial buffer should be allocated as (Pass ZERO if unknown).
+// @param: HINT: A hint as to how big the initial buffer should
+//               be allocated as (Pass ZERO if unknown).
 extern              __nonnull((1)) int   stringprinter_init __P((struct stringprinter *__restrict __self, __size_t __hint));
 extern __retnonnull __nonnull((1)) char *stringprinter_pack __P((struct stringprinter *__restrict __self, __size_t *__length));
 extern              __nonnull((1)) void  stringprinter_quit __P((struct stringprinter *__restrict __self));
 extern int stringprinter_print __P((char const *__restrict __data, __size_t __maxchars, void *__closure));
  
 
+
+#ifdef __KERNEL__
+//////////////////////////////////////////////////////////////////////////
+// Print a given strnlen-style user-string using the given PRINTER.
+// Alongside usual printer-rules, KE_FAULT is returned when the given string is faulty.
+// WARNING: The given printer is executed while the internal function
+//          holds a lock on the calling process's KPROC_LOCK_SHM lock.
+// NOTES:
+//   - Pointer translation respects an overwritten effective
+//     page directory, meaning you can use 'KTASK_KEPD' to
+//     translate kernel pointers one-to-one.
+//   - The given printer will only ever be called with kernel pointers.
+// @return: 0:            Successfully printed the given string.
+// @return: KE_DESTROYED: The calling process was destroyed.
+// @return: KE_FAULT:     The given user string is faulty and non-empty.
+// @return: * :           The first non-ZERO(0) return value of a call to 'PRINTER'.
+extern __nonnull((1)) int
+format_userprint __P((pformatprinter __printer, void *__closure,
+                      __user char const *__userstring, __size_t __maxchars));
+extern __nonnull((1)) int
+format_userquote __P((pformatprinter __printer, void *__closure,
+                      __user char const *__userstring, __size_t __maxchars,
+                      __u32 __flags));
+#endif /* __KERNEL__ */
 
 
 __DECL_END

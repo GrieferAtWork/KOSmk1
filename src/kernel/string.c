@@ -314,7 +314,7 @@ __crit size_t __user_strnlen_c(__user char const *s, size_t maxchars) {
   if (partmaxsize != (partsize/sizeof(char)) ||
       maxchars == partsize) break;
   *(uintptr_t *)&s += partmaxsize;
-  maxchars -= partsize;
+  maxchars         -= partsize;
  }
  kproc_unlock(proc,KPROC_LOCK_SHM);
  return result/sizeof(char);
