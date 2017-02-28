@@ -31,59 +31,61 @@ __DECL_BEGIN
 #ifndef __ASSEMBLY__
 #ifndef __pdebug_stackwalker_defined
 #define __pdebug_stackwalker_defined 1
-typedef int (*_ptraceback_stackwalker_d) __P((void const *__restrict __instruction_pointer,
-                                              void const *__restrict __frame_address,
-                                              __size_t __frame_index, void *__closure));
+typedef int (*ptbwalker) __P((void const *__restrict __instruction_pointer,
+                              void const *__restrict __frame_address,
+                              __size_t __frame_index, void *__closure));
 #endif
-extern int _traceback_errorentry_d __P((int __error, void const *__arg, void *__closure));
+typedef int (*ptberrorhandler) __P((int error, void const *arg, void *closure));
 #endif /* !__ASSEMBLY__ */
 
-#define KDEBUG_STACKERROR_NONE    0
-#define KDEBUG_STACKERROR_EIP   (-1) /*< Invalid instruction pointer (arg: eip). */
-#define KDEBUG_STACKERROR_LOOP  (-2) /*< Stackframes are looping (arg: first looping frame). */
-#define KDEBUG_STACKERROR_FRAME (-3) /*< A stackframe points to an invalid address (arg: addr). */
+#define TRACEBACK_STACKERROR_NONE    0
+#define TRACEBACK_STACKERROR_EIP   (-2) /*< Invalid instruction pointer (arg: eip). */
+#define TRACEBACK_STACKERROR_LOOP  (-3) /*< Stackframes are looping (arg: first looping frame). */
+#define TRACEBACK_STACKERROR_FRAME (-4) /*< A stackframe points to an invalid address (arg: addr). */
 
 #ifndef __ASSEMBLY__
-typedef int (*_ptraceback_stackerror_d) __P((int error, void const *arg, void *closure));
 
-// NOTE: Printing a traceback sends specially formatted commands over the serial port.
-//       In this situation, the kernel expects the 'magic.dee' script to sit at
-//       the other end and parse those command to generate a human-readable (as well
-//       as visual studio clickable) backtrace that is also dumped through OutputDebugString.
-//       >> Essentially, you must run the kernel through the magic.dee script
-//          to have the backtrace show up in the console and Visual Studio.
-extern void _printtraceback_d __P((void));
-extern void _printtracebackex_d __P((__size_t __skip));
-extern __nonnull((1)) void _printtracebackebp_d __P((void const *__ebp));
-extern __nonnull((1)) void _printtracebackebpex_d __P((void const *__ebp, __size_t __skip));
-extern int _walktraceback_d __P((_ptraceback_stackwalker_d __callback,
-                                 _ptraceback_stackerror_d __handle_error,
-                                 void *__closure, __size_t __skip));
-extern __nonnull((1)) int
-_walktracebackebp_d __P((void const *__ebp, _ptraceback_stackwalker_d __callback,
-                         _ptraceback_stackerror_d __handle_error, void *__closure,
-                         __size_t __skip));
+//////////////////////////////////////////////////////////////////////////
+// Default callbacks for print/error
+// NOTE: Unless 'CLOSURE' is NULL, text will be printed to
+//       the system log with KLOG_ERROR and stderr in usermode,
+//       or to serial output 01 and the tty in kernel mode.
+//       When not NULL, it is treated as a 'FILE *' to print into instead.
+// HINT: The implementation uses the kernel to figure out debug information (mod_addrinfo).
+//tbdef_print:
+//   >> print "{file}({line}) : {func} : [{frame_index}][{frame_address}] : {eip}".format({ ... });
+//tbdef_error:
+//   >> print get_error_message(error);
+//   >> return error;
+extern int tbdef_print __P((void const *__restrict __instruction_pointer,
+                            void const *__restrict __frame_address,
+                            __size_t __frame_index, void *__closure));
+extern int tbdef_error __P((int __error, void const *__arg, void *__closure));
 
-#ifdef __KERNEL__
-struct ktask;
-extern __nonnull((1)) void _printtracebacktask_d __P((struct ktask *__restrict __task));
-extern __nonnull((1)) void _printtracebacktaskex_d __P((struct ktask *__restrict __task, __size_t __skip));
-extern __nonnull((1)) int
-_walktracebacktask_d __P((struct ktask *__restrict __task, _ptraceback_stackwalker_d __callback,
-                          _ptraceback_stackerror_d __handle_error, void *__closure,
-                          __size_t __skip));
-#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Print a traceback
+extern                int tb_print      __P((void));
+extern                int tb_printex    __P((__size_t __skip));
+extern __nonnull((1)) int tb_printebp   __P((void const *__ebp));
+extern __nonnull((1)) int tb_printebpex __P((void const *__ebp, __size_t __skip));
+
+
+extern                int tb_walk      __P((ptbwalker __callback, ptberrorhandler __handle_error, void *__closure));
+extern                int tb_walkex    __P((ptbwalker __callback, ptberrorhandler __handle_error, void *__closure, __size_t __skip));
+extern __nonnull((1)) int tb_walkebp   __P((void const *__ebp, ptbwalker __callback, ptberrorhandler __handle_error, void *__closure));
+extern __nonnull((1)) int tb_walkebpex __P((void const *__ebp, ptbwalker __callback, ptberrorhandler __handle_error, void *__closure, __size_t __skip));
 
 //////////////////////////////////////////////////////////////////////////
 // Capture, walk and print tracebacks manually.
 // >> Can be used to track resources that must be released, such as locks.
-struct dtraceback;
-extern __malloccall struct dtraceback *dtraceback_capture __P((void));
-extern __malloccall struct dtraceback *dtraceback_captureex __P((__size_t __skip));
-extern void dtraceback_free __P((struct dtraceback *__restrict __self));
-extern int dtraceback_walk __P((struct dtraceback const *__restrict __self,
-                                _ptraceback_stackwalker_d __callback, void *__closure));
-extern void dtraceback_print __P((struct dtraceback const *__restrict __self));
+struct tbtrace;
+extern __malloccall struct tbtrace *tbtrace_capture __P((void));
+extern __malloccall struct tbtrace *tbtrace_captureex __P((__size_t __skip));
+extern __malloccall struct tbtrace *tbtrace_captureebp __P((void const *__ebp));
+extern __malloccall struct tbtrace *tbtrace_captureebpex __P((void const *__ebp, __size_t __skip));
+extern int tbtrace_walk __P((struct tbtrace const *__restrict __self, ptbwalker __callback, void *__closure));
+extern int tbtrace_print __P((struct tbtrace const *__restrict __self));
 
 #endif /* !__ASSEMBLY__ */
 

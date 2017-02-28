@@ -111,7 +111,7 @@ enditer:
 #endif
  /* Not page available with enough memory --> OUT-OF-MEMORY */
  k_syslogf(KLOG_ERROR,"OUT-OF-MEMORY when trying to allocate %Iu pageframes\n_pages",n_pages);
- _printtraceback_d();
+ tb_print();
  return KPAGEFRAME_INVPTR;
 }
 

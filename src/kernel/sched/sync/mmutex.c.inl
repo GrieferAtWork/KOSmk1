@@ -49,7 +49,7 @@ do{\
  /* Capture a traceback and save the current task as holder. */\
  assert(!DBGSLOT(self,lid).md_locktb);\
  DBGSLOT(self,lid).md_holder = ktask_self();\
- DBGSLOT(self,lid).md_locktb = dtraceback_captureex(1);\
+ DBGSLOT(self,lid).md_locktb = tbtrace_captureex(1);\
 }while(0)
 
 #define KMMUTEX_ONRELEASE(self,id) \
@@ -64,12 +64,12 @@ do{\
         ,ktask_self()->t_tid\
         ,ktask_getname(ktask_self())\
         ,DBGSLOT(self,lid).md_holder);\
-  dtraceback_print(DBGSLOT(self,lid).md_locktb);\
+  tbtrace_print(DBGSLOT(self,lid).md_locktb);\
   printf("See reference to attempted release:\n");\
-  _printtracebackex_d(1);\
+  tb_printex(1);\
   abort();\
  }\
- dtraceback_free(DBGSLOT(self,lid).md_locktb);\
+ free(DBGSLOT(self,lid).md_locktb);\
  DBGSLOT(self,lid).md_locktb = NULL;\
  DBGSLOT(self,lid).md_holder = NULL;\
 }while(0)
@@ -85,9 +85,9 @@ do{\
         ,ktask_self()->t_proc->p_pid\
         ,ktask_self()->t_tid\
         ,ktask_getname(ktask_self()));\
-  dtraceback_print(DBGSLOT(self,lid).md_locktb);\
+  tbtrace_print(DBGSLOT(self,lid).md_locktb);\
   printf("See reference to new acquisition:\n");\
-  _printtracebackex_d(1);\
+  tb_printex(1);\
   abort();\
  }\
 }while(0)

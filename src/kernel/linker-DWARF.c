@@ -159,7 +159,7 @@ fill_missing_ops_per_insn:
  /* Fix invalid members. */
  if (!ili->li_line_range) ili->li_line_range = 1;
 
- /* Later code uses li_length to  */
+ /* Later code using li_length expects it to describe the chunk size post-header. */
  ili->li_length -= (*header_size-(dwarf_64 ? 12 : 4));
 
  return KE_OK;
@@ -183,6 +183,7 @@ ka2ldwarfchunk_init(struct ka2ldwarfchunk *__restrict self,
                                    file,&header_size);
  if __unlikely(KE_ISERR(error)) return error;
  assert(header_size <= section_avail->ds_section_size);
+#if 0
  k_syslogf(KLOG_TRACE
           ,"li_length           = %d\n"
            "li_version          = %d\n"
@@ -202,6 +203,7 @@ ka2ldwarfchunk_init(struct ka2ldwarfchunk *__restrict self,
           ,(int     )self->dc_header.li_line_base
           ,(unsigned)self->dc_header.li_line_range
           ,(unsigned)self->dc_header.li_opcode_base);
+#endif
  /* Now that we're pretty sure its really a DWARF section, read the rest! */
  self->dc_size = (size_t)self->dc_header.li_length;
  if __unlikely(!self->dc_size) self->dc_data = NULL;
@@ -327,8 +329,8 @@ ka2ldwarfchunk_exec(struct ka2ldwarfchunk *__restrict self,
  kassertobj(result);
 #define RESET_STATE_MACHINE() \
   (address = 0,op_index = 0,file = 1,line = 0,\
-   column = 0,has_column = 0/*,is_stmt = is_stmt,basic_block = 0,\
-   end_sequence = 0,last_file_entry = 0*/)
+   column = 0,has_column = 0/*,is_stmt = is_stmt,\
+   basic_block = 0,end_sequence = 0,last_file_entry = 0*/)
  iter = self->dc_code,end = self->dc_codeend;
  more_filetable_entries_c = 0;
  more_filetable_entries_v = NULL;
@@ -336,7 +338,7 @@ ka2ldwarfchunk_exec(struct ka2ldwarfchunk *__restrict self,
  while (iter != end) {
   assert(iter < end);
   opcode = *iter++;
-  /* Store the last state for last comparison. */
+  /* Store the last state for later comparison. */
   last_file    = file;
   last_line    = line;
   last_column  = column;
@@ -534,6 +536,7 @@ ka2ldwarf_doload_unlocked(struct ka2ldwarf *__restrict self,
  struct ka2ldwarfchunk *chunkv,*new_chunkv;
  memcpy(&secdata,&self->d_section,sizeof(struct kdwarf_section));
  chunkc = chunka = 0,chunkv = NULL;
+ /* Load as many sections as possible. */
  while (secdata.ds_section_size) {
   if (chunkc == chunka) {
    new_chunka = chunka ? chunka*2 : 2;
@@ -574,9 +577,14 @@ ka2ldwarf_load_unlocked(struct ka2ldwarf *__restrict self,
  kassertobj(self);
  kassert_kfile(file);
  assert(kmutex_islocked(&self->d_lock));
- if (self->d_flags&A2L_DWARF_FLAG_LOAD) return KE_OK; /* Already loaded. */
+ if (self->d_flags&A2L_DWARF_FLAG_LOAD) return KS_UNCHANGED; /* Already loaded. */
  error = ka2ldwarf_doload_unlocked(self,file);
- if __likely(KE_ISOK(error)) self->d_flags |= A2L_DWARF_FLAG_LOAD;
+ if __likely(KE_ISOK(error)) {
+set_load_flag: self->d_flags |= A2L_DWARF_FLAG_LOAD;
+ } else if (self->d_chunkc) {
+  error = KE_OK; /*< Well... We managed to load something... */
+  goto set_load_flag;
+ }
  return error;
 }
 
@@ -605,7 +613,7 @@ ka2ldwarf_exec(struct ka2ldwarf *__restrict self,
  kassert_kshlib(lib);
  kassertobj(result);
  if __unlikely(KE_ISERR(error = kmutex_lock(&self->d_lock))) return error;
- /* Perform lazy initilization. */
+ /* Perform lazy initialization. */
  error = ka2ldwarf_load_unlocked(self,lib->sh_file);
  if __unlikely(KE_ISERR(error)) goto done;
  /* Iterate all chunks and see if they can translate the address. */
@@ -638,7 +646,7 @@ kshlib_a2l_add_dwarf_debug_line(struct kshlib *__restrict self,
  engine->d_chunkv                    = NULL;
  kmutex_init(&engine->d_lock);
 
- /* Register the gine. */
+ /* Register the engine. */
  slot = kaddr2linelist_alloc(&self->sh_addr2line);
  if __unlikely(!slot) goto err_engine;
  slot->a2l_kind  = KA2L_KIND_DWARF;

@@ -114,7 +114,7 @@ end:
             result,(unsigned)KSEG_ID(result));
  } else {
   k_syslogf(KLOG_ERROR,"[GDT] Failed to allocate GDT entry\n");
-  _printtraceback_d();
+  tb_print();
  }
  return result;
 }
@@ -152,7 +152,7 @@ __crit ksegid_t kgdt_alloc(struct ksegment const *seg) {
   goto end;
  }
  k_syslogf(KLOG_ERROR,"[GDT] Failed to allocate GDT entry\n");
- _printtraceback_d();
+ tb_print();
 end:
  GDT_ALLOC_RELEASE
  if __likely(result != KSEG_NULL) {

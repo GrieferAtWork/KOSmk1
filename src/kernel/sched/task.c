@@ -958,7 +958,7 @@ __noinline void ktask_switchdecref(struct ktask *__restrict newtask,
   printf("newtask-after %p:%I32d:%Iu:%s:\n",
          newtask,newtask->t_proc->p_pid,newtask->t_tid,ktask_getname(newtask));
   printregs(newtask->t_esp);
-  _printtraceback_d();
+  tb_print();
  }
 #endif
 }

@@ -45,7 +45,7 @@ __DECL_BEGIN
 #ifndef __ASSEMBLY__
 struct kmmutex_debug {
  struct ktask      *md_holder; /*< [0..1][lock(this)] Current holder of the mutex lock. */
- struct dtraceback *md_locktb; /*< [0..1][lock(this)] Traceback of where the lock was acquired. */
+ struct tbtrace *md_locktb; /*< [0..1][lock(this)] Traceback of where the lock was acquired. */
 };
 #endif /* !__ASSEMBLY__ */
 #endif /* KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX */
@@ -84,7 +84,7 @@ __local __crit void __kmmutex_free_debug(struct kmmutex *self) {
  struct kmmutex_debug *iter,*end;
  end = (iter = self->mmx_debug)+KMMUTEX_LOCKC;
  for (; iter != end; ++iter) {
-  dtraceback_free(iter->md_locktb);
+  free(iter->md_locktb);
   iter->md_locktb = NULL;
  }
 }

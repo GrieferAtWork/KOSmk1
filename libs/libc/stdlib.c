@@ -85,7 +85,7 @@ __public void abort(void) {
 #if defined(__DEBUG__) && defined(__KERNEL__)
  tty_print("abort() called\n");
  serial_print(SERIAL_01,"abort() called\n");
- _printtracebackex_d(1);
+ tb_printex(1);
 #endif
  ABORT((void *)EXIT_FAILURE);
 }

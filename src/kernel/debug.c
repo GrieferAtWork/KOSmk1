@@ -224,7 +224,7 @@ void printregs(struct ktaskregisters3 *regs) {
 }
 
 void printaddr(void *p) { printf("addr = %p\n",p); }
-void HERE(void) { printf("HERE\n"); _printtracebackex_d(1); }
+void HERE(void) { printf("HERE\n"); tb_printex(1); }
 
 __DECL_END
 #endif /* __DEBUG__ */

@@ -259,13 +259,11 @@ static int capturetb_walker(void const *__restrict instruction_pointer,
 }
 static __noinline size_t capturetbsize(size_t skip) {
  size_t result = 0;
- _walktraceback_d((_ptraceback_stackwalker_d)&capturetb_sizewalker,
-                  NULL,&result,skip+1);
+ tb_walkex((ptbwalker)&capturetb_sizewalker,NULL,&result,skip+1);
  return result;
 }
 static __noinline void capturetb(void const *addrvec[], size_t skip) {
- _walktraceback_d((_ptraceback_stackwalker_d)&capturetb_walker,
-                  NULL,addrvec,skip+1);
+ tb_walkex((ptbwalker)&capturetb_walker,NULL,addrvec,skip+1);
 }
 
 #ifdef __KERNEL__
@@ -419,7 +417,7 @@ __local __crit void mall_remove_unlocked(struct mallhead *__restrict head) {
 }
 
 static int _mallblock_do_traceback_d(struct mallhead const *__restrict self,
-                                     _ptraceback_stackwalker_d callback,
+                                     ptbwalker callback,
                                      void *closure) {
  void const *const *iter,*end;
  size_t pos = 0; int error = 0;
@@ -1001,7 +999,7 @@ __public void *__mallblock_getattrib_d(struct mallhead const *__restrict self, i
  return NULL;
 }
 __public int _mallblock_traceback_d(struct mallhead *__restrict self,
-                                    _ptraceback_stackwalker_d callback,
+                                    ptbwalker callback,
                                     void *closure) {
  mall_validatehead(0,self,1 __LIBC_DEBUG__NULL);
  return _mallblock_do_traceback_d(self,callback,closure);
@@ -1041,7 +1039,7 @@ __public __crit void *_valloc_d(size_t bytes __LIBC_DEBUG_ENABLED__UPARAMS) { re
 __public __crit char *_strdupf_d(__LIBC_DEBUG_UPARAMS_ char const *__restrict format, ...) { char *result; va_list args; va_start(args,format); result = _vstrdupf(format,args); va_end(args); return result; }
 __public __crit char *_vstrdupf_d(char const *__restrict format, va_list args __LIBC_DEBUG_ENABLED__UPARAMS) { return _vstrdupf(format,args); }
 __public void *__mallblock_getattrib_d(struct _mallblock_d *__restrict __unused(__self), int __unused(attrib)) { return NULL; }
-__public int _mallblock_traceback_d(struct _mallblock_d *__restrict __unused(self), _ptraceback_stackwalker_d __unused(callback), void *__unused(closure)) { return 0; }
+__public int _mallblock_traceback_d(struct _mallblock_d *__restrict __unused(self), ptbwalker __unused(callback), void *__unused(closure)) { return 0; }
 __public int _malloc_enumblocks_d(void *__unused(checkpoint), int (*callback)(struct _mallblock_d *__restrict block, void *closure), void *__unused(closure)) { (void)callback; return 0; }
 __public void _malloc_printleaks_d(void) {}
 __public void _malloc_validate_d(void) {}

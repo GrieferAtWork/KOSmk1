@@ -361,6 +361,7 @@ struct kaddr2linelist {
  (void)((self)->a2ll_techc = 0,(self)->a2ll_techv = NULL)
 extern __crit void kaddr2linelist_quit(struct kaddr2linelist *__restrict self);
 
+
 //////////////////////////////////////////////////////////////////////////
 // Allocate an return a new addr2line technology entry.
 // @return: NULL: Not enough available memory.

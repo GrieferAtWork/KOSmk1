@@ -279,7 +279,7 @@ extern char const *_mallblock_getaddr_d(struct _mallblock_d const *__restrict se
 
 #ifndef __pdebug_stackwalker_defined
 #define __pdebug_stackwalker_defined 1
-typedef int (*_ptraceback_stackwalker_d) __P((void const *__restrict __instruction_pointer,
+typedef int (*ptbwalker) __P((void const *__restrict __instruction_pointer,
                                               void const *__restrict __frame_address,
                                               __size_t __frame_index, void *__closure));
 #endif
@@ -291,7 +291,7 @@ typedef int (*_ptraceback_stackwalker_d) __P((void const *__restrict __instructi
 //   with the same non-ZERO returned by CALLBACK.
 extern __nonnull((1,2)) int
 _mallblock_traceback_d __P((struct _mallblock_d *__restrict self,
-                            _ptraceback_stackwalker_d __callback,
+                            ptbwalker __callback,
                             void *__closure));
 
 

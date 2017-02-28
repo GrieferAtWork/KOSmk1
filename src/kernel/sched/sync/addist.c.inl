@@ -82,7 +82,7 @@ _kaddist_genticket_andunlock(struct kaddist *__restrict self,
            ,"[ADDIST] Ticket at %p is already in use\n"
             "See reference to ticket generation:\n"
            ,ticket);
-  dtraceback_print(ticket->dt_mk_tb);
+  tbtrace_print(ticket->dt_mk_tb);
   assertf(0,"Ticket %p is already in use",ticket);
  }
 #endif
@@ -92,7 +92,7 @@ _kaddist_genticket_andunlock(struct kaddist *__restrict self,
  kobject_init(ticket,KOBJECT_MAGIC_ADDIST2TICKET);
 #if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  ticket->dt_dist = self;
- ticket->dt_mk_tb = dtraceback_captureex(1);
+ ticket->dt_mk_tb = tbtrace_captureex(1);
  ticket->dt_rd_tb = NULL;
 #endif
  ticket->dt_async = NULL;
@@ -127,7 +127,7 @@ _kaddist_delticket_andunlock(struct kaddist *__restrict self,
            ,"[ADDIST] Ticket at %p was not registered\n"
             "See reference to ticket generation:\n"
            ,ticket);
-  dtraceback_print(ticket->dt_mk_tb);
+  tbtrace_print(ticket->dt_mk_tb);
   assertf(0,"Ticket %p not registered",ticket);
  }
  if (kaddist_hasreadyticket(self,ticket) == YES) {
@@ -135,9 +135,9 @@ _kaddist_delticket_andunlock(struct kaddist *__restrict self,
            ,"[ADDIST] Cannot delete ticket in use by a blocking receive operation\n"
             "See reference to ticket generation:\n"
            ,ticket);
-  dtraceback_print(ticket->dt_mk_tb);
+  tbtrace_print(ticket->dt_mk_tb);
   k_syslogf(KLOG_ERROR,"See reference to ticket receive:\n");
-  dtraceback_print(ticket->dt_rd_tb);
+  tbtrace_print(ticket->dt_rd_tb);
   assertf(0,"Ticket %p used by receive",ticket);
  }
 #endif
@@ -201,8 +201,8 @@ _kaddist_delticket_andunlock(struct kaddist *__restrict self,
 #if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  /* Free debug information. */
  ticket->dt_dist = NULL;
- dtraceback_free(ticket->dt_mk_tb);
- dtraceback_free(ticket->dt_rd_tb);
+ free(ticket->dt_mk_tb);
+ free(ticket->dt_rd_tb);
 #endif
 }
 
@@ -230,7 +230,7 @@ kaddist_vtryrecv_unlocked(struct kaddist *__restrict self,
            ,"[ADDIST] Ticket at %p was not registered\n"
             "See reference to ticket generation:\n"
            ,ticket);
-  dtraceback_print(ticket->dt_mk_tb);
+  tbtrace_print(ticket->dt_mk_tb);
   assertf(0,"Ticket %p not registered",ticket);
  }
  if (kaddist_hasreadyticket(self,ticket) == YES) {
@@ -238,9 +238,9 @@ kaddist_vtryrecv_unlocked(struct kaddist *__restrict self,
            ,"[ADDIST] Cannot receive ticket in use by a blocking receive operation\n"
             "See reference to ticket generation:\n"
            ,ticket);
-  dtraceback_print(ticket->dt_mk_tb);
+  tbtrace_print(ticket->dt_mk_tb);
   k_syslogf(KLOG_ERROR,"See reference to ticket receive:\n");
-  dtraceback_print(ticket->dt_rd_tb);
+  tbtrace_print(ticket->dt_rd_tb);
   assertf(0,"Ticket %p used by blocking receive",ticket);
  }
 #endif

@@ -89,9 +89,9 @@ __crit kerrno_t kddist_adduser(struct kddist *self) {
     printf("kddist_adduser() : Calling task %I32d:%Iu:%s was already registered\n"
            "--- See reference to last registration:\n",
            caller->t_proc->p_pid,caller->t_tid,ktask_getname(caller));
-    dtraceback_print(iter->ds_tb);
+    tbtrace_print(iter->ds_tb);
     printf("--- See reference to new registration:\n");
-    _printtracebackex_d(1);
+    tb_printex(1);
     abort();
    }
    iter = (struct kddist_debug_slot *)realloc(self->dd_debug.ddd_regv,
@@ -102,7 +102,7 @@ __crit kerrno_t kddist_adduser(struct kddist *self) {
     self->dd_debug.ddd_regv = iter;
     iter += self->dd_debug.ddd_regc;
     iter->ds_task = caller;
-    iter->ds_tb = dtraceback_captureex(1);
+    iter->ds_tb = tbtrace_captureex(1);
    } else {
     self->dd_debug.ddd_flags |= (KDDIST_DEBUG_FLAG_NOMEM);
    }
@@ -126,7 +126,7 @@ __crit void kddist_deluser(struct kddist *self) {
   iter = (end = self->dd_debug.ddd_regv)+self->dd_debug.ddd_regc;
   while (--iter != end) if (iter->ds_task == caller) {
    // Found it!
-   dtraceback_free(iter->ds_tb);
+   free(iter->ds_tb);
    memmove(iter,iter+1,(self->dd_debug.ddd_regc-1)-(iter-end)*
            sizeof(struct kddist_debug_slot));
    assert(end == self->dd_debug.ddd_regv);
@@ -146,7 +146,7 @@ __crit void kddist_deluser(struct kddist *self) {
    printf("kddist_deluser() : Calling task %I32d:%Iu:%s hadn't been registered\n"
           "--- See reference to un-registration attempt:\n",
           caller->t_proc->p_pid,caller->t_tid,ktask_getname(caller));
-   _printtracebackex_d(1);
+   tb_printex(1);
    abort();
   }
 found_it:
@@ -344,7 +344,7 @@ again:
          ktask_self()->t_proc->p_pid,
          ktask_self()->t_tid,
          ktask_getname(ktask_self()));
-  _printtraceback_d();
+  tb_print();
   error = _ksignal_recv_andunlock_c(&self->dd_sigpost);
   if __unlikely(KE_ISERR(error)) return error;
   // The signal was received.

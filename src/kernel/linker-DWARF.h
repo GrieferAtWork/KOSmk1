@@ -34,7 +34,7 @@
  * You'd think there'd be a lot of good information on this on the Internet,
  * but the only ~good~ source I could find is the binutils source for
  * what happens when you type: 'readelf --debug-debug=line ...',
- * which tought me everything I've implement here. */
+ * which thought me _everything_ I've implement here. */
 
 __DECL_BEGIN
 
@@ -77,12 +77,12 @@ union __packed {
 #define DW_LNS_set_epilogue_begin 0x0b
 #define DW_LNS_set_isa            0x0c
 
-#define DW_LNE_end_sequence      0x01
-#define DW_LNE_set_address       0x02
-#define DW_LNE_define_file       0x03
-#define DW_LNE_set_discriminator 0x04
-#define DW_LNE_lo_user           0x80
-#define DW_LNE_hi_user           0xff
+#define DW_LNE_end_sequence       0x01
+#define DW_LNE_set_address        0x02
+#define DW_LNE_define_file        0x03
+#define DW_LNE_set_discriminator  0x04
+#define DW_LNE_lo_user            0x80
+#define DW_LNE_hi_user            0xff
 
 struct kdwarf_section;
 
@@ -202,6 +202,14 @@ ka2ldwarf_exec(struct ka2ldwarf *__restrict self,
 //////////////////////////////////////////////////////////////////////////
 // Perform lazy loading of debug information.
 // NOTE: The caller is responsible for ensuring that 'self->d_lock' is locked.
+// @return: KE_OK:        Successfully loaded .debug_line debug information.
+//                        NOTE: If the non-first chunk cannot be loaded, the
+//                              error is silently discarded and KE_OK is returned.
+// @return: KS_UNCHANGED: Debug information was already loaded.
+// @return: KE_NOSYS:     Unsupported DWARF version.
+// @return: KE_NOMEM:     Not enough available memory.
+// @return: KE_NOSPC:     The original section was too small for the header.
+// @return: * :           Some other, file-specific error.
 extern __crit __nonnull((1)) kerrno_t ka2ldwarf_doload_unlocked(struct ka2ldwarf *__restrict self, struct kfile *__restrict file);
 extern __crit __nonnull((1)) kerrno_t ka2ldwarf_load_unlocked(struct ka2ldwarf *__restrict self, struct kfile *__restrict file);
 
@@ -210,7 +218,8 @@ extern __crit __nonnull((1)) kerrno_t ka2ldwarf_load_unlocked(struct ka2ldwarf *
 
 
 //////////////////////////////////////////////////////////////////////////
-// Register an available DWARF .debug_line section.
+// Register an available DWARF .debug_line section for lazy initialization.
+// @return: KE_OK:    Successfully registered an engine at the given location.
 // @return: KE_NOMEM: Not enough available memory to register the dwarf engine.
 extern __crit kerrno_t
 kshlib_a2l_add_dwarf_debug_line(struct kshlib *__restrict self,

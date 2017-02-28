@@ -234,7 +234,6 @@ void kernel_main(void) {
  assert(!karch_irq_enabled());
  karch_irq_enable();
 
-
  //k_sysloglevel = KLOG_TRACE;
  //ktask_suspend(ktask_self());
 

@@ -376,7 +376,7 @@ _kfatfs_fat_getfreecluster_unlocked(struct kfatfs *__restrict self,
    return KE_OK;
   }
  }
- _printtraceback_d();
+ tb_print();
  return KE_NOSPC;
 }
 

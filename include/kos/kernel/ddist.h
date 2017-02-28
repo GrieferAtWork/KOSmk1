@@ -98,12 +98,12 @@ __DECL_BEGIN
 struct timespec;
 
 #if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
-struct dtraceback;
+struct tbtrace;
 struct kddist_debug_slot {
  struct ktask      *ds_task; /*< [1..1] Task registered to this slot.
                                   NOTE: Registered pointer may not necessarily point to valid tasks.
                                   e.g.: When a task terminates without unregistering itself, it remains dangling. */
- struct dtraceback *ds_tb;   /*< [1..1] Traceback used for  */
+ struct tbtrace *ds_tb;   /*< [1..1] Traceback used for  */
 };
 struct kddist_debug {
  __un(KCONFIG_DDIST_USERBITS)     ddd_regc;  /*< Amount of registered users. */
@@ -120,7 +120,7 @@ struct kddist_debug {
   __dsend = (__dsiter = (self)->ddd_regv)+(self)->ddd_regc;\
   for (; __dsiter != __dsend; ++__dsiter) {\
    kassert_ktask(__dsiter->ds_task);\
-   dtraceback_free(__dsiter->ds_tb);\
+   free(__dsiter->ds_tb);\
   }\
   free((self)->ddd_regv);\
   (self)->ddd_regv = NULL;\

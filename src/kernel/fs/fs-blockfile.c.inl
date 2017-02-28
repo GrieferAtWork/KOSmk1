@@ -370,7 +370,7 @@ end:
  kmutex_unlock(&self->bf_lock);
  return error;
 err_fault:
- _printtraceback_d();
+ tb_print();
  error = KE_FAULT;
  goto end;
 }

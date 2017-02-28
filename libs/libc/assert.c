@@ -85,7 +85,7 @@ __public void __builtin_unreachable_d(__LIBC_DEBUG_PARAMS) {
                ,__LIBC_DEBUG_FILE
                ,__LIBC_DEBUG_LINE
                ,__LIBC_DEBUG_FUNC);
- _printtracebackex_d(1);
+ tb_printex(1);
 #ifdef __KERNEL__
  arch_hang();
 #else
@@ -122,7 +122,7 @@ void __assertion_failedf(__LIBC_DEBUG_PARAMS_ char const *expr,
  }
  ASSERT_PRINTF("===================================================\n");
 #ifdef __DEBUG__
- _printtracebackex_d(skip+1);
+ tb_printex(skip+1);
 #endif
 #ifdef __KERNEL__
  {
@@ -169,7 +169,7 @@ void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *fmt, ...) {
  }
  PANIC_PRINTF("===================================================\n");
 #ifdef __DEBUG__
- _printtracebackex_d(1);
+ tb_printex(1);
 #endif
  {
   struct ktask *task = ktask_self();

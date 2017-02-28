@@ -240,9 +240,9 @@ void __kirq_default_handler(struct kirq_registers *regs) {
                 "#!$ addr2line(%p) '{file}({line}) : {func} : %p'\n",
                 regs->regs.eip,regs->regs.eip);
   serial_print(SERIAL_01,"########### Traceback (EBP):\n");
-  _printtracebackebp_d((void *)(uintptr_t)regs->regs.ebp);
+  tb_printebp((void *)(uintptr_t)regs->regs.ebp);
   serial_print(SERIAL_01,"########### Traceback (interrupt):\n");
-  _printtraceback_d();
+  tb_print();
 #endif
   {
    struct kpagedir *pd = NULL;
@@ -329,7 +329,7 @@ void x86_interrupt_handler(struct kirq_registers *regs) {
         regs->regs.intno >= 32 ? regs->regs.intno-32 : regs->regs.intno,
         handler);
  //kirq_print_registers(regs);
- //_printtraceback_d();
+ //tb_print();
 #endif
  assertf(handler,"NULL-handler for interrupt %u at %p",
          regs->regs.intno,&interrupt_handlers[regs->regs.intno]);

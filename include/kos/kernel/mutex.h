@@ -60,11 +60,11 @@ struct kmutex {
 #define m_locked    m_sig.s_useru /*< [atomic] 0: unlocked; 1: locked */
 #if KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
  struct ktask      *m_holder; /*< [0..1][lock(this)] Current holder of the mutex lock. */
- struct dtraceback *m_locktb; /*< [0..1][lock(this)] Traceback of where the lock was acquired. */
+ struct tbtrace *m_locktb; /*< [0..1][lock(this)] Traceback of where the lock was acquired. */
 #endif /* KCONFIG_HAVE_DEBUG_TRACKEDMUTEX */
 };
 #if KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
-#define /*__crit*/ __kmutex_free_debug(self)   dtraceback_free((self)->m_locktb)
+#define /*__crit*/ __kmutex_free_debug(self)   free((self)->m_locktb)
 #define /*__crit*/ __kmutex_init_debug(self) ((self)->m_holder = NULL,(self)->m_locktb = NULL)
 #define            __KMUTEX_INIT_DEBUG ,NULL,NULL
 #else

@@ -45,7 +45,7 @@ do{\
  /* Capture a traceback and save the current task as holder. */\
  assert(!self->m_locktb);\
  self->m_holder = ktask_self();\
- self->m_locktb = dtraceback_captureex(1);\
+ self->m_locktb = tbtrace_captureex(1);\
 }while(0)
 
 #define KMUTEX_ONRELEASE(self) \
@@ -58,12 +58,12 @@ do{\
         ,ktask_self()->t_tid\
         ,ktask_getname(ktask_self())\
         ,self->m_holder);\
-  dtraceback_print(self->m_locktb);\
+  tbtrace_print(self->m_locktb);\
   printf("See reference to attempted release:\n");\
-  _printtracebackex_d(1);\
+  tb_printex(1);\
   abort();\
  }\
- dtraceback_free(self->m_locktb);\
+ free(self->m_locktb);\
  self->m_locktb = NULL;\
  self->m_holder = NULL;\
 }while(0)
@@ -77,15 +77,15 @@ do{\
         ,self,ktask_self()->t_proc->p_pid\
         ,ktask_self()->t_tid\
         ,ktask_getname(ktask_self()));\
-  dtraceback_print(self->m_locktb);\
+  tbtrace_print(self->m_locktb);\
   printf("See reference to new acquisition:\n");\
-  _printtracebackex_d(1);\
+  tb_printex(1);\
   abort();\
  }\
 }while(0)
 
 // struct ktask      *m_holder; /*< [0..1][lock(this)] Current holder of the mutex lock. */
-// struct dtraceback *m_locktb; /*< [0..1][lock(this)] Traceback of where the lock was acquired. */
+// struct tbtrace *m_locktb; /*< [0..1][lock(this)] Traceback of where the lock was acquired. */
 #else
 #define KMUTEX_ONACQUIRE(self)   (void)0
 #define KMUTEX_ONRELEASE(self)   (void)0

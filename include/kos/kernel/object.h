@@ -138,7 +138,7 @@ extern int ktask_iscrit(void);
    assertf(__refcnt != 0,#funname "(%p) on dead " #T " object",__self);\
    if __unlikely(__refcnt == (__Tref)-1) return KE_OVERFLOW;\
   } while (!katomic_cmpxch(__self->refcnt_member,__refcnt,__refcnt+1));\
-  _printtracebackex_d(1);\
+  tb_printex(1);\
   return KE_OK;\
  }
 #define KOBJECT_DEFINE_DECREF_D(funname,T,refcnt_member,kassert,destroy_funname) \
@@ -149,7 +149,7 @@ extern int ktask_iscrit(void);
   __refcnt = katomic_decfetch(__self->refcnt_member);\
   assertf(__refcnt != (__Tref)-1,#funname "(%p) on dead " #T " object",__self);\
   if __unlikely(!__refcnt) destroy_funname(__self);\
-  _printtracebackex_d(1);\
+  tb_printex(1);\
  }
 #endif
 #else /* !__ASSEMBLY__ */

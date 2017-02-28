@@ -32,14 +32,21 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <string.h>
 #include <traceback.h>
+#include <format-printer.h>
 #ifdef __KERNEL__
-#include <kos/kernel/task.h>
+#include <kos/kernel/fs/file.h>
 #include <kos/kernel/serial.h>
+#include <kos/kernel/tty.h>
 #else /* __KERNEL__ */
+#include <kos/syslog.h>
 #include <kos/syscall.h>
 #include <kos/syscallno.h>
 #include <stdio.h>
+#include <errno.h>
+#include <unistd.h>
+#include <mod.h>
 #endif /* __KERNEL__ */
 
 __DECL_BEGIN
@@ -51,25 +58,76 @@ __DECL_BEGIN
 #define PRINT(...) fprintf(stderr,__VA_ARGS__)
 #endif
 
-static int debug_print_traceback_entry(void const *addr, void const *frame_address,
-                                       size_t index, void *__unused(closure)) {
- PRINT("#!$ addr2line(%p) '{file}({line}) : {func} : [%Ix][%p] : %p'\n",
-       ((uintptr_t)addr)-1,index,frame_address,addr);
+static int
+tbprint_callback(char const *data,
+                 size_t max_data,
+                 void *closure) {
+ if (closure) {
+#ifdef __KERNEL__
+  kerrno_t error = kfile_kernel_writeall((struct kfile *)closure,data,
+                                         strnlen(data,max_data)*sizeof(char));
+  return KE_ISERR(error) ? error : 0;
+#else
+  max_data = strnlen(data,max_data);
+  __evalexpr(fwrite(data,sizeof(char),max_data,(FILE *)closure));
+#endif
+ } else {
+#ifdef __KERNEL__
+  tty_printn(data,max_data);
+  serial_printn(SERIAL_01,data,max_data);
+#else
+  k_syslog(KLOG_ERROR,data,max_data);
+  if (write(STDERR_FILENO,data,strnlen(data,max_data)*sizeof(char)) < 0) return -1;
+#endif
+ }
  return 0;
 }
 
-__public int _traceback_errorentry_d(int error, void const *arg,
-                                     void *__unused(closure)) {
+__public int
+tbdef_print(void const *__restrict instruction_pointer,
+            void const *__restrict frame_address,
+            size_t frame_index, void *closure) {
+#ifdef __KERNEL__
+ /* Placeholder until the kernel can load its own DWARF .debug_line information. */
+ return format_printf(&tbprint_callback,closure
+                     ,"#!$ addr2line(%p) '{file}({line}) : {func} : [%Ix][%p] : %p'\n"
+                     ,((uintptr_t)instruction_pointer)-1,frame_index,frame_address,instruction_pointer);
+#else
+ int error; syminfo_t *sym; char buffer[512];
+           sym = mod_addrinfo(MOD_ALL,instruction_pointer,(syminfo_t *)buffer,sizeof(buffer),MOD_SYMINFO_ALL);
+ if (!sym) sym = mod_addrinfo(MOD_ALL,instruction_pointer,NULL,0,MOD_SYMINFO_ALL);
+ if (!sym) format_printf(&tbprint_callback,closure,
+                         "??" "?(??" "?) : ??" "? : [%Ix][%p] : %p (Unknown: %s)\n",
+                         strerror(errno));
+ else {
+  error = format_printf(&tbprint_callback,closure,
+                        "%s(%u) : %s : [%Ix][%p] : %p\n",
+                        sym->si_file ? sym->si_file : "??" "?",
+                        sym->si_line+1,
+                        sym->si_name ? sym->si_name : "??" "?",
+                        frame_index,frame_address,
+                        instruction_pointer);
+  if (sym != (syminfo_t *)buffer) free(sym);
+ }
+ return error;
+#endif
+}
+__public int
+tbdef_error(int error, void const *arg, void *closure) {
  char const *reason;
  switch (error) {
-  case KDEBUG_STACKERROR_EIP:   reason = "Invalid instruction pointer"; error = 0; break;
-  case KDEBUG_STACKERROR_LOOP:  reason = "Stackframes are looping"; break;
-  case KDEBUG_STACKERROR_FRAME: reason = "A stackframe points to an invalid address"; break;
-  default: return 0;
+  case TRACEBACK_STACKERROR_EIP  : reason = "Invalid instruction pointer"; error = 0; break;
+  case TRACEBACK_STACKERROR_LOOP : reason = "Stackframes are looping"; break;
+  case TRACEBACK_STACKERROR_FRAME: reason = "A stackframe points to an invalid address"; break;
+  default                        : return 0;
  }
- PRINT("!!! CORRUPTED STACK !!! - %s (%p)\n",reason,arg);
+ if (format_printf(&tbprint_callback,closure,
+                   "CORRUPTED STACK: %s (%p)\n",
+                   reason,arg) != 0) return -1;
  return error;
 }
+
+
 
 
 
@@ -96,17 +154,17 @@ __local _syscall2(kerrno_t,kmem_validate,void const *__restrict,addr,__size_t,by
 #endif
 #endif
 
-static __noinline int
-debug_dostackwalk(struct stackframe *start, _ptraceback_stackwalker_d callback,
-                  _ptraceback_stackerror_d handle_error, void *closure, size_t skip) {
+static int
+debug_dostackwalk(struct stackframe *start, ptbwalker callback,
+                  ptberrorhandler handle_error, void *closure, size_t skip) {
  struct stackframe *frame,*next,*check; int temp;
  size_t didskip = 0,index = 0; frame = start;
  while (frame) {
   kerrno_t error = kmem_validate(frame,sizeof(struct stackframe));
   // Validate the stack frame address
   if (KE_ISERR(error)) {
-   if (!handle_error) return KDEBUG_STACKERROR_FRAME;
-   temp = (*handle_error)(KDEBUG_STACKERROR_FRAME,(void const *)frame,closure);
+   if (!handle_error) return TRACEBACK_STACKERROR_FRAME;
+   temp = (*handle_error)(TRACEBACK_STACKERROR_FRAME,(void const *)frame,closure);
 #ifdef __KERNEL__
    if (temp != 0 && error != KE_INVAL) return temp;
 #else
@@ -115,8 +173,8 @@ debug_dostackwalk(struct stackframe *start, _ptraceback_stackwalker_d callback,
   }
   // Validate the instruction pointer
   if (KE_ISERR(kmem_validatebyte((byte_t const *)(uintptr_t)frame->eip))) {
-   if (!handle_error) return KDEBUG_STACKERROR_EIP;
-   temp = (*handle_error)(KDEBUG_STACKERROR_EIP,(void const *)(uintptr_t)frame->eip,closure);
+   if (!handle_error) return TRACEBACK_STACKERROR_EIP;
+   temp = (*handle_error)(TRACEBACK_STACKERROR_EIP,(void const *)(uintptr_t)frame->eip,closure);
    if (temp != 0) return temp;
   }
   // Call the stack entry enumerator
@@ -131,8 +189,8 @@ debug_dostackwalk(struct stackframe *start, _ptraceback_stackwalker_d callback,
   for (;;) {
    if (check == next) {
     // The stackframes are recursive
-    if (!handle_error) return KDEBUG_STACKERROR_LOOP;
-    temp = (*handle_error)(KDEBUG_STACKERROR_LOOP,(void const *)next,closure);
+    if (!handle_error) return TRACEBACK_STACKERROR_LOOP;
+    temp = (*handle_error)(TRACEBACK_STACKERROR_LOOP,(void const *)next,closure);
     if (temp != 0) return temp;
     break;
    }
@@ -143,88 +201,62 @@ debug_dostackwalk(struct stackframe *start, _ptraceback_stackwalker_d callback,
  }
  return 0;
 }
-__public int _walktraceback_d(_ptraceback_stackwalker_d callback,
-                              _ptraceback_stackerror_d handle_error,
-                              void *closure, size_t skip) {
- struct stackframe *stack;
- __asm_volatile__("movl %%ebp, %0" : "=r" (stack));
- return debug_dostackwalk(stack,callback,handle_error,closure,skip);
-}
-__public int _walktracebackebp_d(void const *ebp,
-                                 _ptraceback_stackwalker_d callback,
-                                 _ptraceback_stackerror_d handle_error,
-                                 void *closure, size_t skip) {
- return debug_dostackwalk((struct stackframe *)ebp,callback,handle_error,closure,skip);
-}
-
-__public void _printtraceback_d(void) { _printtracebackex_d(1); }
-__public void _printtracebackebp_d(void const *ebp) { _printtracebackebpex_d(ebp,1); }
-__public void _printtracebackex_d(size_t skip) { _walktraceback_d(&debug_print_traceback_entry,&_traceback_errorentry_d,NULL,skip+1); }
-__public void _printtracebackebpex_d(void const *ebp, size_t skip) { _walktracebackebp_d(ebp,&debug_print_traceback_entry,&_traceback_errorentry_d,NULL,skip); }
-#ifdef __KERNEL__
-int _walktracebacktask_d(struct ktask *task, _ptraceback_stackwalker_d callback,
-                        _ptraceback_stackerror_d handle_error, void *closure, size_t skip) {
- struct stackframe *stack;
- if (task == ktask_self()) _walktraceback_d(callback,handle_error,closure,skip+1);
- stack = (struct stackframe *)ktask_getkernelesp(task);
- return debug_dostackwalk(stack,callback,handle_error,closure,skip);
-}
-void _printtracebacktask_d(struct ktask *task) {
- _printtracebacktaskex_d(task,1);
-}
-void _printtracebacktaskex_d(struct ktask *task, size_t skip) {
- if (task == ktask_self()) _printtracebackex_d(skip+1);
- _walktracebacktask_d(task,
-                     &debug_print_traceback_entry,
-                     &_traceback_errorentry_d,
-                     NULL,skip+1);
-}
-#endif /* __KERNEL__ */
+__public __noinline int tb_walk(ptbwalker callback, ptberrorhandler handle_error, void *closure) { return tb_walkex(callback,handle_error,closure,1); }
+__public __noinline int tb_walkex(ptbwalker callback, ptberrorhandler handle_error, void *closure, size_t skip) { struct stackframe *stack; __asm_volatile__("movl %%ebp, %0" : "=r" (stack)); return debug_dostackwalk(stack,callback,handle_error,closure,skip); }
+__public            int tb_walkebp(void const *ebp, ptbwalker callback, ptberrorhandler handle_error, void *closure) { return tb_walkebpex(ebp,callback,handle_error,closure,0); }
+__public            int tb_walkebpex(void const *ebp, ptbwalker callback, ptberrorhandler handle_error, void *closure, size_t skip) { return debug_dostackwalk((struct stackframe *)ebp,callback,handle_error,closure,skip); }
+__public __noinline int tb_print(void)                              { return tb_walkex(&tbdef_print,&tbdef_error,NULL,1); }
+__public __noinline int tb_printex(size_t skip)                     { return tb_walkex(&tbdef_print,&tbdef_error,NULL,skip+1); }
+__public            int tb_printebp(void const *ebp)                { return tb_walkebpex(ebp,&tbdef_print,&tbdef_error,NULL,0); }
+__public            int tb_printebpex(void const *ebp, size_t skip) { return tb_walkebpex(ebp,&tbdef_print,&tbdef_error,NULL,skip); }
 
 struct dtracebackentry {
  void const *tb_eip;
  void const *tb_esp;
 };
-struct dtraceback {
+struct tbtrace {
  size_t                 tb_entryc;
  struct dtracebackentry tb_entryv[1024];
 };
 
-static int tbcapture_walkcount(void const *__restrict __unused(instruction_pointer),
-                               void const *__restrict __unused(frame_address),
-                               size_t frame_index, size_t *closure) {
+static __noinline int
+tbcapture_walkcount(void const *__restrict __unused(instruction_pointer),
+                    void const *__restrict __unused(frame_address),
+                    size_t frame_index, size_t *closure) {
  if (frame_index >= *closure) *closure = frame_index+1;
  return 0;
 }
-static int tbcapture_walkcollect(void const *__restrict instruction_pointer,
-                                 void const *__restrict frame_address,
-                                 size_t frame_index, struct dtraceback *tb) {
+static __noinline int
+tbcapture_walkcollect(void const *__restrict instruction_pointer,
+                      void const *__restrict frame_address,
+                      size_t frame_index, struct tbtrace *tb) {
  assertf(frame_index < tb->tb_entryc,"%Iu >= %Iu",frame_index,tb->tb_entryc);
  tb->tb_entryv[frame_index].tb_eip = instruction_pointer;
  tb->tb_entryv[frame_index].tb_esp = frame_address;
  return 0;
 }
 
-__public struct dtraceback *dtraceback_capture(void) {
- return dtraceback_captureex(1);
-}
-__public struct dtraceback *dtraceback_captureex(size_t skip) {
- struct dtraceback *result; size_t entrycount = 0;
- _walktraceback_d((_ptraceback_stackwalker_d)&tbcapture_walkcount,NULL,&entrycount,skip+1);
- result = (struct dtraceback *)malloc(offsetof(struct dtraceback,tb_entryv)+
+__public __noinline struct tbtrace *tbtrace_capture(void) { return tbtrace_captureex(1); }
+__public __noinline struct tbtrace *tbtrace_captureex(size_t skip) { void *ebp; __asm_volatile__("movl %%ebp, %0" : "=r" (ebp)); return tbtrace_captureebpex(ebp,skip+1); }
+__public struct tbtrace *tbtrace_captureebp(void const *ebp) { return tbtrace_captureebpex(ebp,0); }
+__public struct tbtrace *tbtrace_captureebpex(void const *ebp, size_t skip) {
+ struct tbtrace *result; size_t entrycount = 0;
+ tb_walkex((ptbwalker)&tbcapture_walkcount,NULL,&entrycount,skip);
+ result = (struct tbtrace *)malloc(offsetof(struct tbtrace,tb_entryv)+
                                       entrycount*sizeof(struct dtracebackentry));
  if __unlikely(!result) return NULL;
  result->tb_entryc = entrycount;
- _walktraceback_d((_ptraceback_stackwalker_d)&tbcapture_walkcollect,NULL,result,skip+1);
+ tb_walkex((ptbwalker)&tbcapture_walkcollect,NULL,result,skip);
  return result;
 }
-__public void dtraceback_free(struct dtraceback *__restrict self) { free(self); }
-__public int dtraceback_walk(struct dtraceback const *__restrict self,
-                             _ptraceback_stackwalker_d callback,
-                             void *closure) {
+
+__public int
+tbtrace_walk(struct tbtrace const *__restrict self,
+             ptbwalker callback,
+             void *closure) {
  struct dtracebackentry const *elemv; size_t i; int error;
- if __unlikely(!self) return 0; // Ingore NULL tracebacks
- kassertmem(self,offsetof(struct dtraceback,tb_entryv));
+ if __unlikely(!self) return 0; /* Ignore NULL tracebacks */
+ kassertmem(self,offsetof(struct tbtrace,tb_entryv));
  kassertmem(self->tb_entryv,self->tb_entryc*sizeof(struct dtracebackentry));
  kassertbyte(callback); elemv = self->tb_entryv;
  for (i = 0; i < self->tb_entryc; ++i) {
@@ -235,8 +267,8 @@ __public int dtraceback_walk(struct dtraceback const *__restrict self,
  }
  return 0;
 }
-__public void dtraceback_print(struct dtraceback const *__restrict self) {
- if (self) dtraceback_walk(self,&debug_print_traceback_entry,NULL);
+__public int tbtrace_print(struct tbtrace const *__restrict self) {
+ return tbtrace_walk(self,&tbdef_print,NULL);
 }
 
 
