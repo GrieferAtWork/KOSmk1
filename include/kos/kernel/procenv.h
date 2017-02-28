@@ -35,28 +35,26 @@
 
 __DECL_BEGIN
 
-//
-// Process environment variables management
-// NOTE: This sub-system is mainly used by windows, as in posix
-//       management of environment variables is not actually
-//       done by the kernel, but by the processes themselves.
-//
-// NOTE: Since the kernel is forced to have environment variables
-//       as well, it fills its own with the arguments provided
-//       on the grub command line.
-//
+/* Process environment variables management
+ * NOTE: This sub-system is mainly used by windows, as in posix
+ *       management of environment variables is not actually
+ *       done by the kernel, but by the processes themselves.
+ *
+ * NOTE: Since the kernel is forced to have environment variables
+ *       as well, it fills its own with the arguments provided
+ *       on the grub command line. */
 
 
 #define KOBJECT_MAGIC_PROCENV  0x960CE74 /*< PROCENV. */
 #define kassert_kprocenv(self) kassert_object(self,KOBJECT_MAGIC_PROCENV)
 
-// Prefer using a static hash, as most processes
-// usually have ~some~ variables set.
+/* Prefer using a static hash, as most processes
+ * usually have ~some~ variables set. */
 #define KPROCENV_HASH_SIZE 16
 
 
 #ifndef __ASSEMBLY__
-// Returns the hash of a given environment variable name.
+/* Returns the hash of a given environment variable name. */
 extern __size_t kenventry_hashof(char const *__restrict text, __size_t text_size);
 
 struct kenventry {
@@ -107,7 +105,7 @@ kprocenv_initcopy(struct kprocenv *__restrict self,
 
 #define KPROCENV_FOREACH_BREAK    {__pe_map_iter=__pe_map_end;break;}
 
-// KPROCENV_FOREACH(struct kprocenv const *self, char *&name, char *&value) { ... }
+/* KPROCENV_FOREACH(struct kprocenv const *self, char *&name, char *&value) { ... } */
 #define KPROCENV_FOREACH(self,name,value) \
  for (struct kenventry **__pe_map_iter = (self)->pe_map,\
                        **__pe_map_end = __pe_map_iter+KOBJECT_MAGIC_PROCENV,\

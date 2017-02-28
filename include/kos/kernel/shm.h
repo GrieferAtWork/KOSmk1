@@ -36,9 +36,10 @@
 #include <math.h>
 #include <strings.h>
 
-// TODO: Make SHM branches use 
+// TODO: Make SHM branches use <kos/addrtree.h>
 
-// Shared memory layout
+/* Shared memory management. */
+
 __DECL_BEGIN
 
 //////////////////////////////////////////////////////////////////////////
@@ -452,8 +453,6 @@ kshmregion_extractpart(__ref struct kshmregion *self,
 //    or didn't lead to any other branches, we were able to
 //    stop searching before even getting to step #5.
 //
-
-
 #define KSHMBRANCH_SIZEOF                (__SIZEOF_POINTER__*8+__SIZEOF_SIZE_T__)
 #define KSHMBRANCH_OFFSETOF_MIN          (0)
 #define KSHMBRANCH_OFFSETOF_MAX          (__SIZEOF_POINTER__)
@@ -1020,7 +1019,7 @@ kshm_devaccess(struct ktask *__restrict caller,
 
 
 
-// === Local descriptor table ===
+/* === Local descriptor table === */
 
 //////////////////////////////////////////////////////////////////////////
 // Allocate/Free segments within a local descriptor table.

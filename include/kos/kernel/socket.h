@@ -82,9 +82,19 @@ struct ksocket_packet {
  __ref struct ktask *sp_recvthread; /*< [1..1][atomic] A thread used to receive ethernet packets (this is what populates s_iobuf). */
 };
 
+//////////////////////////////////////////////////////////////////////////
 // Create a socket from 'socket(AF_PACKET,SOCK_RAW,ntoh16(sp_proto))'
-extern __crit kerrno_t ksocket_packet_new_raw(__ref struct ksocket **result, struct ksockdev *dev, __be16 sp_proto);
-extern __crit kerrno_t ksocket_packet_new(__ref struct ksocket **result, struct ksockdev *dev, int type, __be16 sp_proto);
+// @return: KE_NOMEM: Not enough available memory.
+extern __crit kerrno_t
+ksocket_packet_new_raw(__ref struct ksocket **__restrict result,
+                       struct ksockdev *__restrict dev,
+                       __be16 sp_proto);
+
+
+extern __crit kerrno_t
+ksocket_packet_new(__ref struct ksocket **__restrict result,
+                   struct ksockdev *__restrict dev,
+                   int type, __be16 sp_proto);
 
 
 struct ksocket {
@@ -110,7 +120,7 @@ __local KOBJECT_DEFINE_DECREF(ksocket_decref,struct ksocket,s_refcnt,kassert_kso
 // @return: KE_NOSYS: The given combination of af, type and protocol is not supported/invalid.
 // @return: KE_NOMEM: Not enough memory.
 extern __crit kerrno_t
-ksocket_new(__ref struct ksocket **result, struct ksockdev *dev,
+ksocket_new(__ref struct ksocket **__restrict result, struct ksockdev *__restrict dev,
             sa_family_t af, int type, int protocol);
 
 //////////////////////////////////////////////////////////////////////////

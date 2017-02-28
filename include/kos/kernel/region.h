@@ -103,7 +103,7 @@ template<> struct static_if<true> { bool __is_true__(); };
  * >>
  * >> // Compile-time check if the caller is in 'myregion'
  * >> // If this returns true, '__is_inside_myregion' is guarantied to be true as well!
- * >> #define IN_MYREGION_P()   COMPILER_REGION_P(myregion)
+ * >> #define IN_MYREGION_P     COMPILER_REGION_P(myregion)
  * >> 
  */
 

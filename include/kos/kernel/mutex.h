@@ -34,14 +34,12 @@
 
 __DECL_BEGIN
 
+/* A non-recursive bi-state mutex. */
+
 __struct_fwd(kmutex);
 
 #define KOBJECT_MAGIC_MUTEX  0x707E3E /*< MUTEX */
 #define kassert_kmutex(self) kassert_object(self,KOBJECT_MAGIC_MUTEX)
-
-//////////////////////////////////////////////////////////////////////////
-// A non-recursive bi-state mutex.
-
 
 #define KMUTEX_OFFSETOF_SIG    (KOBJECT_SIZEOFHEAD)
 #define KMUTEX_OFFSETOF_LOCKED (KOBJECT_SIZEOFHEAD+KSIGNAL_OFFSETOF_USER)

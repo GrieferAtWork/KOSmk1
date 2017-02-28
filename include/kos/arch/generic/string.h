@@ -96,6 +96,15 @@ __forcelocal void *__karch_constant_memcpy(void *__dst, void const *__src, __siz
   default: break;
  }
 #undef __X
+#ifdef __karch_raw_memcpy_q
+ if (!(__bytes%8)) return __karch_raw_memcpy_q(__dst,__src,__bytes/8);
+#endif /* __karch_raw_memcpy_q */
+#ifdef __karch_raw_memcpy_l
+ if (!(__bytes%4)) return __karch_raw_memcpy_l(__dst,__src,__bytes/4);
+#endif /* __karch_raw_memcpy_l */
+#ifdef __karch_raw_memcpy_w
+ if (!(__bytes%2)) return __karch_raw_memcpy_w(__dst,__src,__bytes/2);
+#endif /* __karch_raw_memcpy_w */
  return __karch_raw_memcpy(__dst,__src,__bytes);
 }
 #define karch_memcpy(dst,src,bytes) \
@@ -130,6 +139,15 @@ __forcelocal void *__karch_constant_memset(void *__dst, int __c, __size_t __byte
   default: break;
  }
 #undef __X
+#ifdef __karch_raw_memset_q
+ if (!(__bytes%8)) return __karch_raw_memset_q(__dst,__c,__bytes/8);
+#endif /* __karch_raw_memset_q */
+#ifdef __karch_raw_memset_l
+ if (!(__bytes%4)) return __karch_raw_memset_l(__dst,__c,__bytes/4);
+#endif /* __karch_raw_memset_l */
+#ifdef __karch_raw_memset_w
+ if (!(__bytes%2)) return __karch_raw_memset_w(__dst,__c,__bytes/2);
+#endif /* __karch_raw_memset_w */
  return __karch_raw_memset(__dst,__c,__bytes);
 }
 

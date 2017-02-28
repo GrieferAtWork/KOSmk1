@@ -111,7 +111,7 @@ extern __crit           __nonnull((1,2))   kerrno_t _ksignal_vrecv_andunlock_c(s
 extern __crit           __nonnull((2,3))   kerrno_t _ksignal_vrecvs_andunlock_c(__size_t sigc, struct ksignal *const *__restrict sigv, __kernel void *__restrict buf);
 extern __crit __wunused __nonnull((1,2,3)) kerrno_t _ksignal_vtimedrecv_andunlock_c(struct ksignal *self, struct timespec const *__restrict abstime, __kernel void *__restrict buf);
 extern __crit __wunused __nonnull((2,3,4)) kerrno_t _ksignal_vtimedrecvs_andunlock_c(__size_t sigc, struct ksignal *const *__restrict sigv, struct timespec const *__restrict abstime, __kernel void *__restrict buf);
-extern __crit __wunused __nonnull((1,2,3)) kerrno_t _ksignal_vtimeoutrecv_andunlock_c(struct ksignal *self, struct timespec const *timeout, __kernel void *__restrict buf);
+extern __crit __wunused __nonnull((1,2,3)) kerrno_t _ksignal_vtimeoutrecv_andunlock_c(struct ksignal *self, struct timespec const *__restrict timeout, __kernel void *__restrict buf);
 extern __crit __wunused __nonnull((2,3,4)) kerrno_t _ksignal_vtimeoutrecvs_andunlock_c(__size_t sigc, struct ksignal *const *__restrict sigv, struct timespec const *__restrict timeout, __kernel void *__restrict buf);
 #else
 #define ksignal_vrecv(signal,buf) \

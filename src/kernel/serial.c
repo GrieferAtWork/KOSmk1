@@ -23,12 +23,17 @@
 #ifndef __KOS_KERNEL_SERIAL_C__
 #define __KOS_KERNEL_SERIAL_C__ 1
 
+#define SERIAL_CAN_USE_OUTS 0
+
 #include <stddef.h>
 #include <sys/io.h>
 #include <kos/compiler.h>
 #include <kos/kernel/serial.h>
 #include <stdint.h>
 #include <format-printer.h>
+#if SERIAL_CAN_USE_OUTS
+#include <string.h>
+#endif
 
 __DECL_BEGIN
 
@@ -44,9 +49,18 @@ void serial_enable(int device) {
  outb(0xC7,device+2); // Enable FIFO, clear them, with 14-byte threshold
  outb(0x0B,device+4); // IRQs enabled, RTS/DSR set
 }
+#if 0
+#define is_transmit_empty(device) 1
+#else
 #define is_transmit_empty(device) (inb((device)+5)&0x20)
+#endif
 
 size_t serial_printn(int device, char const *data, size_t maxchars) {
+#if SERIAL_CAN_USE_OUTS
+ maxchars = strnlen(data,maxchars);
+ outsb(device,data,maxchars);
+ return maxchars;
+#else
  char const *iter,*end; char ch;
  end = (iter = data)+maxchars;
  while (iter != end) {
@@ -55,29 +69,46 @@ size_t serial_printn(int device, char const *data, size_t maxchars) {
   outb(device,(unsigned char)ch); 
  }
  return (size_t)(iter-data);
+#endif
 }
-void serial_prints(int device, char const *data, size_t maxchars) {
+size_t serial_prints(int device, char const *data, size_t datasize) {
+#if SERIAL_CAN_USE_OUTS
+ outsb(device,data,datasize);
+#else
  char const *iter,*end; char ch;
- end = (iter = data)+maxchars;
+ end = (iter = data)+datasize;
  while (iter != end) {
   ch = *iter++;
   while (is_transmit_empty(device) == 0);
   outb(device,(unsigned char)ch); 
  }
+#endif
+ return datasize;
 }
 
-void serial_printf(int device, char const *format, ...) {
- va_list args;
+size_t serial_printf(int device, char const *format, ...) {
+ va_list args; size_t result;
  va_start(args,format);
- serial_vprintf(device,format,args);
+ result = serial_vprintf(device,format,args);
  va_end(args);
+ return result;
 }
-static int serial_vprintf_callback(char const *data, size_t maxchars, void *device) {
- serial_printn((int)(uintptr_t)device,data,maxchars);
+
+struct serial_printf_data {
+ int    device;
+ size_t result;
+};
+static int
+serial_vprintf_callback(char const *data, size_t maxchars,
+                        struct serial_printf_data *arg) {
+ arg->result += serial_printn(arg->device,data,maxchars);
  return 0;
 }
-void serial_vprintf(int device, char const *format, va_list args) {
- format_vprintf(&serial_vprintf_callback,(void *)(uintptr_t)device,format,args);
+size_t serial_vprintf(int device, char const *format, va_list args) {
+ struct serial_printf_data closure = {device,0};
+ format_vprintf((pformatprinter)&serial_vprintf_callback,
+                &closure,format,args);
+ return closure.result;
 }
 
 

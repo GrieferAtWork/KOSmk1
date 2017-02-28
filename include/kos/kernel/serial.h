@@ -33,14 +33,19 @@ __DECL_BEGIN
 
 #define SERIAL_01 0x3F8
 
+//////////////////////////////////////////////////////////////////////////
+// Initialize the serial driver
 extern void kernel_initialize_serial(void);
 extern void serial_enable(int device);
 
-#define serial_print(device,data) serial_printn(device,data,(__size_t)-1)
+//////////////////////////////////////////////////////////////////////////
+// Print data to a given serial device.
+// @return: * : Amount of bytes actually transmitted.
 extern __nonnull((2)) __size_t serial_printn(int device, char const *__restrict data, __size_t maxchars);
-extern __nonnull((2)) void serial_prints(int device, char const *__restrict data, __size_t maxchars);
-extern __nonnull((2)) __attribute_vaformat(__printf__,2,3) void serial_printf(int device, char const *__restrict format, ...);
-extern __nonnull((2)) __attribute_vaformat(__printf__,2,0) void serial_vprintf(int device, char const *__restrict format, va_list args);
+extern __nonnull((2)) __size_t serial_prints(int device, char const *__restrict data, __size_t maxchars);
+extern __nonnull((2)) __attribute_vaformat(__printf__,2,3) __size_t serial_printf(int device, char const *__restrict format, ...);
+extern __nonnull((2)) __attribute_vaformat(__printf__,2,0) __size_t serial_vprintf(int device, char const *__restrict format, va_list args);
+#define serial_print(device,data)  serial_printn(device,data,(__size_t)-1)
 
 __DECL_END
 #endif /* __KERNEL__ */

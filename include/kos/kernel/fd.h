@@ -56,13 +56,13 @@ typedef __u16 kfdflag_t;
 #define KFD_ATTR(type,flags) ((__u32)(flags)|((__u32)(type) << 16))
 #endif
 
-// Process file descriptor management
+/* Process file descriptor management */
 #ifndef __ASSEMBLY__
 struct __packed kfdentry {
- // NOTE: Members of this structure are protected
- //       by the associated fd manager.
- //       >> Though you can take a reference to the linked resource
- //          and unlock the fd manager before operation on that resource.
+ /* NOTE: Members of this structure are protected
+  *       by the associated fd manager.
+  *       >> Though you can take a reference to the linked resource
+  *          and unlock the fd manager before operation on that resource. */
  union __packed {
   struct __packed {
    kfdtype_t            fd_type; /*< File descriptor type. */
@@ -98,24 +98,24 @@ __local __crit kerrno_t kfdentry_initcopy(struct kfdentry *__restrict self,
 extern __crit void kfdentry_quitex(kfdtype_t type, void *__restrict data);
 __local __crit void kfdentry_quit(struct kfdentry *__restrict self);
 
-extern        kerrno_t kfdentry_user_read(struct kfdentry *__restrict self, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
-extern        kerrno_t kfdentry_user_write(struct kfdentry *__restrict self, __user void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
-extern        kerrno_t kfdentry_user_pread(struct kfdentry *__restrict self, __pos_t pos, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
-extern        kerrno_t kfdentry_user_pwrite(struct kfdentry *__restrict self, __pos_t pos, __user void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
-extern        kerrno_t kfdentry_user_ioctl(struct kfdentry *__restrict self, kattr_t cmd, __user void *arg);
-extern        kerrno_t kfdentry_user_getattr(struct kfdentry *__restrict self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
-extern        kerrno_t kfdentry_user_setattr(struct kfdentry *__restrict self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
-extern        kerrno_t kfdentry_user_enumtasks(struct kfdentry *__restrict self, __user __size_t *__restrict idv, __size_t idc, __kernel __size_t *__restrict reqidc);
+extern kerrno_t kfdentry_user_read(struct kfdentry *__restrict self, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern kerrno_t kfdentry_user_write(struct kfdentry *__restrict self, __user void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern kerrno_t kfdentry_user_pread(struct kfdentry *__restrict self, __pos_t pos, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern kerrno_t kfdentry_user_pwrite(struct kfdentry *__restrict self, __pos_t pos, __user void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern kerrno_t kfdentry_user_ioctl(struct kfdentry *__restrict self, kattr_t cmd, __user void *arg);
+extern kerrno_t kfdentry_user_getattr(struct kfdentry *__restrict self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern kerrno_t kfdentry_user_setattr(struct kfdentry *__restrict self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
+extern kerrno_t kfdentry_user_enumtasks(struct kfdentry *__restrict self, __user __size_t *__restrict idv, __size_t idc, __kernel __size_t *__restrict reqidc);
 
 #ifdef __INTELLISENSE__
-extern        kerrno_t kfdentry_kernel_read(struct kfdentry *__restrict self, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
-extern        kerrno_t kfdentry_kernel_write(struct kfdentry *__restrict self, __kernel void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
-extern        kerrno_t kfdentry_kernel_pread(struct kfdentry *__restrict self, __pos_t pos, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
-extern        kerrno_t kfdentry_kernel_pwrite(struct kfdentry *__restrict self, __pos_t pos, __kernel void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
-extern        kerrno_t kfdentry_kernel_ioctl(struct kfdentry *__restrict self, kattr_t cmd, __kernel void *arg);
-extern        kerrno_t kfdentry_kernel_getattr(struct kfdentry *__restrict self, kattr_t attr, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
-extern        kerrno_t kfdentry_kernel_setattr(struct kfdentry *__restrict self, kattr_t attr, __kernel void const *__restrict buf, __size_t bufsize);
-extern        kerrno_t kfdentry_kernel_enumtasks(struct kfdentry *__restrict self, __kernel __size_t *__restrict idv, __size_t idc, __kernel __size_t *__restrict reqidc);
+extern kerrno_t kfdentry_kernel_read(struct kfdentry *__restrict self, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern kerrno_t kfdentry_kernel_write(struct kfdentry *__restrict self, __kernel void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern kerrno_t kfdentry_kernel_pread(struct kfdentry *__restrict self, __pos_t pos, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict rsize);
+extern kerrno_t kfdentry_kernel_pwrite(struct kfdentry *__restrict self, __pos_t pos, __kernel void const *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
+extern kerrno_t kfdentry_kernel_ioctl(struct kfdentry *__restrict self, kattr_t cmd, __kernel void *arg);
+extern kerrno_t kfdentry_kernel_getattr(struct kfdentry *__restrict self, kattr_t attr, __kernel void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern kerrno_t kfdentry_kernel_setattr(struct kfdentry *__restrict self, kattr_t attr, __kernel void const *__restrict buf, __size_t bufsize);
+extern kerrno_t kfdentry_kernel_enumtasks(struct kfdentry *__restrict self, __kernel __size_t *__restrict idv, __size_t idc, __kernel __size_t *__restrict reqidc);
 #else
 #define kfdentry_kernel_read(self,buf,bufsize,rsize)           KTASK_KEPD(kfdentry_user_read(self,buf,bufsize,rsize))
 #define kfdentry_kernel_write(self,buf,bufsize,wsize)          KTASK_KEPD(kfdentry_user_write(self,buf,bufsize,wsize))
@@ -158,8 +158,9 @@ extern __nonnull((1))   kerrno_t kfd_setflags(struct kfdentry *__restrict self, 
 
 
 #ifndef __INTELLISENSE__
-__local __crit kerrno_t kfdentry_initcopy(struct kfdentry *__restrict self,
-                                          struct kfdentry const *__restrict right) {
+__local __crit kerrno_t
+kfdentry_initcopy(struct kfdentry *__restrict self,
+                  struct kfdentry const *__restrict right) {
  kassertobj(self); kassert_kfdentry(right);
  self->fd_attr = right->fd_attr;
  self->fd_data = right->fd_data;

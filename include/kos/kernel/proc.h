@@ -45,10 +45,10 @@
 
 __DECL_BEGIN
 
-// NOTE: kproc (Processes) were originally called ktaskctx (task-contexts).
-//       At some point I realized that's a really $h177y name and started
-//       calling it by what is really just simply is.
-//       So if see me mention ktaskctx anywhere, I'm talking about processes.
+/* NOTE: kproc (Processes) were originally called ktaskctx (task-contexts).
+ *       At some point I realized that's a really $h177y name and started
+ *       calling it by what is really just simply is.
+ *       So if see me mention ktaskctx anywhere, I'm talking about processes. */
 
 #ifndef __ASSEMBLY__
 struct ktask;
@@ -63,22 +63,22 @@ struct kdirentname;
 
 #ifndef __ASSEMBLY__
 struct kprocsand {
- // (expected) ORDER: ts_gpbarrier >= ts_spbarrier >= ts_gmbarrier >= ts_smbarrier
- //                  (Where >= means ktask_issameorchildof(rhs,lhs))
- // [1..1] Barriers describing privilege levels of a given task.
+ /* (expected) ORDER: ts_gpbarrier >= ts_spbarrier >= ts_gmbarrier >= ts_smbarrier
+  *                  (Where >= means ktask_issameorchildof(rhs,lhs)) */
+ /* [1..1] Barriers describing privilege levels of a given task. */
  __atomic __ref struct ktask *ts_gpbarrier; /*< GETPROP/VISIBLE. */
  __atomic __ref struct ktask *ts_spbarrier; /*< SETPROP. */
  __atomic __ref struct ktask *ts_gmbarrier; /*< GETMEM. */
  __atomic __ref struct ktask *ts_smbarrier; /*< SETMEM. */
- // NOTE: Priority limits only affect a task's ability of setting
- //       the priorities of other tasks. If 
+ /* NOTE: Priority limits only affect a task's ability of setting the
+  *       priorities of some tasks, or having set their own priority in some way. */
  __atomic ktaskprio_t ts_priomin; /*< Lowest allowed priority to be set. */
  __atomic ktaskprio_t ts_priomax; /*< Greatest allowed priority to be set. */
 #if KCONFIG_HAVE_TASK_NAMES
  __atomic __size_t    ts_namemax; /*< Max allowed task name length to be set. */
 #endif
  __atomic __size_t    ts_pipemax; /*< Max allowed pipe size to be set. */
- // NOTE: The [-] means that the flag can only ever be removed, but never (re-)added.
+ /* NOTE: The [-] means that the flag can only ever be removed, but never (re-)added. */
 #define KPROCSAND_FLAG_NONE          0x00000000
 #define KPROCSAND_FLAG_FORKROOT      0x00000001 /*< [-] Allow forkas without password (required for 'su -l <username>'). */
 #define KPROCSAND_FLAG_PRIOSUSPENDED 0x00000002 /*< [-] Allow 'KTASK_PRIORITY_SUSPENDED'-priority tasks (even if 'st_priomin..st_priomax' would prevent it) */
@@ -168,7 +168,7 @@ extern struct kproc __kproc_kernel;
 // Create a new root task context (with all permissions enabled)
 extern __crit __ref struct kproc *kproc_newroot(void);
 
-// === Helper functions for implementing fork()-exec() through system-calls.
+/* === Helper functions for implementing fork()-exec() through system-calls. */
 
 //////////////////////////////////////////////////////////////////////////
 // Copies a given task context, returning the new copy.
@@ -261,7 +261,7 @@ extern __wunused __nonnull((1)) __ref struct ktask *kproc_getbarrier_r_impl(stru
 extern __wunused __nonnull((1))       struct ktask *kproc_getbarrier(struct kproc const *__restrict self, ksandbarrier_t mode);
 extern __wunused __nonnull((1)) __ref struct ktask *kproc_getbarrier_r(struct kproc const *__restrict self, ksandbarrier_t mode);
 #else
-// Allow for compiler optimizations of known barrier modes
+/* Allow for compiler optimizations of known barrier modes */
 #define kproc_getbarrier(self,mode) \
  (__builtin_constant_p(mode) ? (\
    (mode) == KSANDBOX_BARRIER_NOGETPROP ? kproc_getgpbarrier(self) :\
@@ -596,11 +596,11 @@ extern        __wunused __nonnull((1,2)) kerrno_t kproc_enumcmd(struct kproc *__
 
 
 
-// ===============================================
-// Process --> task interface
-// >> Since a task context is basically a process,
-//    all of its tasks are considered its threads.
-// ===============================================
+/* ===============================================
+ * Process --> task interface
+ * >> Since a task context is basically a process,
+ *    all of its tasks are considered its threads.
+ * =============================================== */
 
 //////////////////////////////////////////////////////////////////////////
 // Return the a given task by its thread id (tid)
@@ -769,9 +769,9 @@ kproc_dlsym(struct kproc *__restrict self,
 #endif
 
 
-// Max allowed PID value.
-// >> Posix wants this to be a signed value, so
-//    there goes half of all possible values...
+/* Max allowed PID value.
+ * >> Posix wants this to be a signed value, so
+ *    there goes half of all possible values... */
 #define PID_MAX    INT32_MAX
 
 //////////////////////////////////////////////////////////////////////////

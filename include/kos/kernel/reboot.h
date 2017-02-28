@@ -29,8 +29,15 @@
 
 __DECL_BEGIN
 
-extern void hw_reboot(void);
-extern void hw_shutdown(void);
+//////////////////////////////////////////////////////////////////////////
+// Perform a low-level hardware-based reboot/shutdown.
+// WARNING: Once these are called, there is no turning back,
+//          nor any way of previously registering some hooks
+//          to-be called before commencing.
+//       >> Only call these if you're absolutely
+//          sure that that's what you want to do.
+extern __noreturn void hw_reboot(void);
+extern __noreturn void hw_shutdown(void);
 
 __DECL_END
 #endif /* __KERNEL__ */

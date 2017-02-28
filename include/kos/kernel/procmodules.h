@@ -32,10 +32,8 @@
 
 __DECL_BEGIN
 
-//////////////////////////////////////////////////////////////////////////
-// Process modules (aka.: How KOS tracks shared libraries loaded into processes)
-// NOTE: These are mostly data structures. - Most magic happens in <kos/kernel/linker.(h|c)>
-//////////////////////////////////////////////////////////////////////////
+/* Process modules (aka.: How KOS tracks shared libraries loaded into processes)
+ * NOTE: These are mostly data structures. - The real magic happens in "/src/kernel/linker/*" */
 
 #define KOBJECT_MAGIC_PROCMODULE  0x960C40D  /*< PROCMOD */
 #define KOBJECT_MAGIC_PROCMODULES 0x960C40D5 /*< PROCMODS */

@@ -78,7 +78,7 @@ int pthread_tryjoin_np(pthread_t th, void **thread_return) {
  kfd_close(th);
  return 0;
 }
-int pthread_timedjoin_np(pthread_t th, void **thread_return, struct timespec const *abstime) {
+int pthread_timedjoin_np(pthread_t th, void **thread_return, struct timespec const *__restrict abstime) {
  kerrno_t error = ktask_timedjoin(th,abstime,thread_return,0);
  if __unlikely(KE_ISERR(error)) return -error;
  kfd_close(th);

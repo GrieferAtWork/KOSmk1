@@ -32,12 +32,14 @@
 
 __DECL_BEGIN
 
-// Scheduler-level preemption
+/* Scheduler-level preemption */
+
+
 //////////////////////////////////////////////////////////////////////////
 // Willingly Yields execution to a different task
 // @return: KE_OK:        Execution has returned after other tasks were executed.
 // @return: KS_UNCHANGED: No task to switch to was available.
-// @return: KE_OVERFLOW:  A reference overflow occurred.
+// @return: KE_OVERFLOW:  A reference overflow occurred and no switch was performed.
 // WARNING: Upon return, interrupts have the same state as they did upon entry,
 //          though in the before the function returns, they have be re-enabled,
 //          or disabled multiple times.
@@ -45,7 +47,7 @@ extern kerrno_t ktask_tryyield(void);
 extern void ktask_yield(void);
 
 #ifndef __INTELLISENSE__
-/* ktask_yield can be overwritten by re-defining this macro! */
+/* ktask_yield can be overwritten locally by re-defining this macro! */
 #define ktask_yield (void)ktask_tryyield
 #endif
 
@@ -60,7 +62,7 @@ __DECL_END
 #define KTASK_SPIN(try_operation)   __xblock({ while (!(try_operation)) ktask_yield(); (void)0; })
 #elif 1 /* Test case: Full preemption has no unwanted side-effects. */
 #define KTASK_SPIN(try_operation)   __xblock({ do ktask_yield(); while (!(try_operation)); (void)0; })
-#else /* Unused case: Don't use preemption (Don't even know why this is an option...) */
+#else /* Unused case: Don't use preemption (Don't even know why I added this as an option...) */
 #define KTASK_SPIN(try_operation)   __xblock({ while (!(try_operation)); (void)0; })
 #endif
 

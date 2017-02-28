@@ -71,38 +71,38 @@ struct __packed kirq_userregisters {
  /*7*/__uintptr_t edi,esi,ebp,ebx,edx,ecx,eax;
  /*2*/__u32       intno,ecode;
  /*3*/__uintptr_t eip,cs,eflags;
- // WARNING: The following two fields are only
- //          valid for user (aka. ring-3) tasks.
- //       >> They may only be accessed or modified
- //          if the lower two bits in 'cs' are set:
- //       >> if (regs->regs.cs&0x3) {
- //       >>   regs->regs.useresp = 42;
- //       >> }
+ /* WARNING: The following two fields are only
+  *          valid for user (aka. ring-3) tasks.
+  *       >> They may only be accessed or modified
+  *          if the lower two bits in 'cs' are set:
+  *       >> if (regs->regs.cs&0x3) {
+  *       >>   regs->regs.useresp = 42;
+  *       >> } */
  /*2*/__uintptr_t useresp,ss;
 };
 struct __packed kirq_registers {
- // User-mapped registers address (usually part of kernel stack)
+ /* User-mapped registers address (usually part of kernel stack) */
  __user struct kirq_userregisters *userregs;
- // User-set page directory (usually equal to 'kpagedir_user()')
+ /* User-set page directory (usually equal to 'kpagedir_user()') */
  __kernel struct kpagedir         *usercr3;
- // NOTE: The following 'regs' object is what the
- //       above 'userregs' user-memory pointer maps to.
- //    >> The registers in 'regs' may be modified
- //       freely and upon IRQ return will be applied.
- // WARNING: 'userregs' may be changed, but if so, registers
- //          will be popped from its new location instead
- //          of that described by the 'regs' below.
- //       >> The kernel is therefor responsible to ensure
- //          that upon changing 'userregs', the new value describes
- //          a valid user pointer pointing at another instance
- //          of a 'kirq_userregisters' structure.
- // WARNING: While inside an interrupt handle, paging will be
- //          disabled, though the user-space page directory
- //          is still set in the CR3 register.
- //       >> Unless the kernel is attempting to perform a
- //          context switch (which should really just be left
- //          to the scheduler), the CR3 register must be
- //          set to the page directory of the new task as well.
+ /* NOTE: The following 'regs' object is what the
+  *       above 'userregs' user-memory pointer maps to.
+  *    >> The registers in 'regs' may be modified
+  *       freely and upon IRQ return will be applied.
+  * WARNING: 'userregs' may be changed, but if so, registers
+  *          will be popped from its new location instead
+  *          of that described by the 'regs' below.
+  *       >> The kernel is therefor responsible to ensure
+  *          that upon changing 'userregs', the new value describes
+  *          a valid user pointer pointing at another instance
+  *          of a 'kirq_userregisters' structure.
+  * WARNING: While inside an interrupt handle, paging will be
+  *          disabled, though the user-space page directory
+  *          is still set in the CR3 register.
+  *       >> Unless the kernel is attempting to perform a
+  *          context switch (which should really just be left
+  *          to the scheduler), the CR3 register must be
+  *          set to the page directory of the new task as well. */
  struct kirq_userregisters         regs;
 };
 __COMPILER_PACK_POP
@@ -194,9 +194,9 @@ extern __wunused __constcall struct kirq_siginfo const *kirq_getsiginfo(kirq_t s
 #ifndef __ASSEMBLY__
 #ifdef CONFIG_COMPILETIME_NOINTERRUPT_OPTIMIZATIONS
 /* These symbol are overwritten locally whenever code is
-   being compiled within a specially protected block.
-   This way, we can detect such a block at compile-time
-   and generate must more optimized code. */
+ * being compiled within a specially protected block.
+ * This way, we can detect such a block at compile-time
+ * and generate must more optimized code. */
 REGION_DEFINE(NOIRQ);
 
 /* Returns true if in a no-interrupt block. */
@@ -259,6 +259,7 @@ RUNTIME_REGION_DEFINE(NOIRQ);
  REGION_ENTER_LOCK(NOIRQ,!karch_irq_enabled\
                   ,karch_irq_disable,karch_irq_enable,trylock)
 
+//////////////////////////////////////////////////////////////////////////
 // Begin a nointerrupt block by locking a volatile lock.
 // While the lock is held, the volatile memory is unchangeable,
 // NOTE: 'ob' should be a local variable

@@ -105,7 +105,7 @@ struct ksymtablebucket {
 };
 
 struct ksymtable {
- // Symbol table (resolve name -> address)
+ /* Symbol table (resolve name -> address) */
  KOBJECT_HEAD
  __size_t                st_size;  /*< Amount of existing symbol. */
  __size_t                st_mapa;  /*< Allocated symbol table size (Also used as modulator for hashes). */
@@ -255,7 +255,7 @@ kreloc_exec(struct kreloc *__restrict self,
 
 struct kshmregion;
 struct kshlibsection {
- // Loaded data of a shared library
+ /* Loaded data of a shared library (one section) */
  __ref struct kshmregion *sls_region;    /*< [1..1] Shared memory region. */
  __pagealigned ksymaddr_t sls_albase;    /*< Starting symbol address (page-aligned). */
  ksymaddr_t               sls_base;      /*< Starting symbol address. */
@@ -265,7 +265,7 @@ struct kshlibsection {
 };
 
 struct ksecdata {
- // Loaded data of a shared library
+ /* Loaded data of a shared library (many sections) */
  __size_t              ed_secc;  /*< Amount of sections. */
  struct kshlibsection *ed_secv;  /*< [0..ed_secc][owned] Vector of sections. */
  ksymaddr_t            ed_begin; /*< Lowest address of any valid section (page-aligned), or 'KSYM_INVALID' if 'ed_secc == 0'. */
@@ -382,7 +382,7 @@ kaddr2linelist_exec(struct kaddr2linelist const *__restrict self,
 
 
 struct kshlib_callbacks {
- // NOTE: Callbacks not specified are marked with 'KSYM_INVALID'
+ /* NOTE: Callbacks not specified are marked with 'KSYM_INVALID' */
  ksymaddr_t slc_start;           /*< void(*)(void):  Address of the '_start'-function (NOTE: Shared library usually don't have this...). */
  ksymaddr_t slc_preinit_array_v; /*< void(**)(void): Address of an array of pre-initialization functions. */
  __size_t   slc_preinit_array_c; /*< Max amount of functions in 'slc_init_array_v' (terminate on first NULL entry). */
@@ -418,10 +418,10 @@ kshliblist_append_inherited(struct kshliblist *__restrict self,
 
 
 struct kshlib {
- // Shared library/cached executable controller object
- // NOTE: At this point, shared libs and exe-s are the same thing
- // NOTE: Shared libraries are implicitly synchronized, as all members
- //       must be considered constant post initialization.
+ /* Shared library/cached executable controller object
+  * NOTE: At this point, shared libs and exe-s (aka. binaries) are the same thing.
+  * NOTE: Shared libraries are implicitly synchronized, as all members
+  *       must be considered constant post initialization. */
  KOBJECT_HEAD
  __atomic __u32          sh_refcnt;     /*< Reference counter. */
  __ref struct kfile     *sh_file;       /*< [1..1] Open file to this shared library (Used to retrieve library name/path). */

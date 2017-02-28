@@ -404,7 +404,7 @@ __local __crit void ketherframe_destroy(struct ketherframe *ob) {
  ketherframe_free(ob);
 }
 __local __crit __ref struct ketherframe *
-ketherframe_new(struct ksockdev *dev,
+ketherframe_new(struct ksockdev *__restrict dev,
                 struct etherframe *frame,
                 __size_t frame_size) {
  __ref struct ketherframe *result;

@@ -31,7 +31,7 @@ __DECL_BEGIN
 
 
 __crit kerrno_t
-ksocket_new(__ref struct ksocket **result, struct ksockdev *dev,
+ksocket_new(__ref struct ksocket **__restrict result, struct ksockdev *__restrict dev,
             sa_family_t af, int type, int protocol) {
  KTASK_CRIT_MARK
  switch (af) {

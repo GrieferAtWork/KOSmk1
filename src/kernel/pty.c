@@ -100,9 +100,9 @@ __crit void kpty_quit(struct kpty *self) {
  kassert_kpty(self);
  kiobuf_quit(&self->ty_s2m);
  kiobuf_quit(&self->ty_m2s);
- //KTASK_NOINTR_BEGIN
+ /* KTASK_NOINTR_BEGIN */
  __evalexpr(krwlock_close(&self->ty_lock));
- //KTASK_NOINTR_END
+ /* KTASK_NOINTR_END */
  krawbuf_quit(&self->ty_canon);
  if (self->ty_cproc) kproc_decref(self->ty_cproc);
  if (self->ty_fproc) kproc_decref(self->ty_fproc);
@@ -145,7 +145,7 @@ kpty_user_ioctl(struct kpty *__restrict self,
    if __unlikely(copy_from_user(&new_winsize,arg,sizeof(new_winsize))) goto err_fault;
    if __likely(KE_ISOK(error = krwlock_beginwrite(&self->ty_lock))) {
     memcpy(&self->ty_size,&new_winsize,sizeof(struct winsize));
-    // TODO: Send SIGWINCH to ty_fproc
+    /* TODO: Send SIGWINCH to ty_fproc */
     krwlock_endwrite(&self->ty_lock);
    }
    break;
@@ -183,12 +183,12 @@ end_setios:
   case TIOCSPGRP:
    if __unlikely(copy_from_user(&pid,arg,sizeof(pid))) goto err_fault;
    newproc = (struct kproc *)kproclist_getproc(pid);
-   // NOTE: To not undermine the idea of the GETPROP/VISIBILITY barrier,
-   //       we don't differentiate between invisible and invalid PIDs.
+   /* NOTE: To not undermine the idea of the GETPROP/VISIBILITY barrier,
+    *       we don't differentiate between invisible and invalid PIDs. */
    if __unlikely(!newproc) { error = KE_PERM; goto end; }
    if __likely(KE_ISOK(error = krwlock_beginwrite(&self->ty_lock))) {
-    oldproc = self->ty_fproc; // Inherit reference
-    self->ty_fproc = newproc; // Inherit reference
+    oldproc = self->ty_fproc; /*< Inherit reference */
+    self->ty_fproc = newproc; /*< Inherit reference */
     k_syslogf(KLOG_INFO,"[PTY] Set group %I32d (%p)\n",pid,newproc);
     krwlock_endwrite(&self->ty_lock);
     if (oldproc) kproc_decref(oldproc);
@@ -225,7 +225,7 @@ kpty_s2m_write_crlf_unlocked(struct kpty *__restrict self,
  char const *iter,*end,*flush_start;
  kerrno_t error; size_t partsize,didpartsize;
  *wsize = 0;
- // Must convert '\n' to '\r\n'
+ /* Must convert '\n' to '\r\n' (LF -> CRLF; 10 -> 13,10) */
  end = (flush_start = iter = (char const *)buf)+(bufsize/sizeof(char));
  for (;;) {
   if (iter == end || *iter == '\n') {
@@ -287,7 +287,7 @@ kerrno_t kpty_m_special_canon(struct kpty *__restrict self, __u8 ch) {
  kassert_kpty(self);
  if (ch == self->ty_ios.c_cc[VKILL]) {
   size_t capture_size;
-  // Clear input line and ERASE echo text
+  /* Clear input line and ERASE echo text */
   KTASK_CRIT_BEGIN
   krawbuf_capture_begin(&self->ty_canon);
   capture_size = krawbuf_capture_size(&self->ty_canon);
@@ -312,14 +312,14 @@ kerrno_t kpty_m_special_canon(struct kpty *__restrict self, __u8 ch) {
   goto ret_error_nosignal;
  } else if (ch == self->ty_ios.c_cc[VERASE]) {
   int did_erase;
-  // Erase single character from canon
+  /* Erase single character from canon */
   KTASK_CRIT_BEGIN
   krawbuf_lock(&self->ty_canon,KRAWBUF_LOCK_DATA);
   did_erase = (self->ty_canon.rb_bufpos != self->ty_canon.rb_buffer);
   if (did_erase) --self->ty_canon.rb_bufpos;
   krawbuf_unlock(&self->ty_canon,KRAWBUF_LOCK_DATA);
   KTASK_CRIT_END
-  // Send erase sequence to pty mater
+  /* Send erase sequence to pty mater */
   return (did_erase && (self->ty_ios.c_lflag & ECHO))
           ? kiobuf_write(&self->ty_s2m,ERASE,sizeof(ERASE),
                          &temp,PTY_WRITE_BLOCKING_MODE)
@@ -331,7 +331,7 @@ kerrno_t kpty_m_special_canon(struct kpty *__restrict self, __u8 ch) {
    error = kpty_s2m_write_unlocked(self,out_text,sizeof(out_text),&temp);
    if __unlikely(KE_ISERR(error)) return error;
   }
-  // TODO: Send SIGINT/SIGQUIT to 'self->ty_fproc' instead of just terminating it...
+  /* TODO: Send SIGINT/SIGQUIT to 'self->ty_fproc' instead of just terminating it... */
   if (self->ty_fproc) {
    struct ktask *root_task;
    KTASK_CRIT_BEGIN
@@ -347,8 +347,8 @@ kerrno_t kpty_m_special_canon(struct kpty *__restrict self, __u8 ch) {
  } else if (ch == self->ty_ios.c_cc[VEOF]) {
   KTASK_CRIT_BEGIN
   krawbuf_capture_begin(&self->ty_canon);
-  // Flush the canon, or interrupt a block-first read
-  // operation originating from the pty slave process.
+  /* Flush the canon, or interrupt a block-first read
+   * operation originating from the pty slave process. */
   if (krawbuf_capture_size(&self->ty_canon)) {
    void  *canbuf     = krawbuf_capture_data(&self->ty_canon);
    size_t canbufsize = krawbuf_capture_size(&self->ty_canon);
@@ -375,7 +375,8 @@ kpty_mwrite_canon_unlocked(struct kpty *__restrict self, __kernel void const *bu
  cc_t const *iter,*end,*canon_start,*new_canon_start;
  kassert_kpty(self);
  assert(krwlock_isreadlocked(&self->ty_lock));
- // Must use the line buffer, as well as check for control characters
+ /* Must use the line buffer, as well
+  * as check for control characters */
  end = (canon_start = iter = (cc_t const *)buf)+bufsize;
 again:
  for (;;) {
@@ -395,8 +396,9 @@ flush_canon:
    if (new_canon_start == iter) {
     size_t canbufsize; void *canbuf;
     assert(iter != (cc_t const *)buf);
-    //assertf(iter[-1] == '\n',"'%c' %I8x",iter[-1],iter[-1]);
-    // Write the canon to the slave
+    /* Can't assert because user may have changed it:
+     * assertf(iter[-1] == '\n',"'%c' %I8x",iter[-1],iter[-1]); */
+    /* Write the canon to the slave */
     KTASK_CRIT_BEGIN
     krawbuf_capture_begin(&self->ty_canon);
 #if 0
@@ -510,18 +512,18 @@ kerrno_t kpty_user_sread(struct kpty *__restrict self, __user void *buf,
  kassert_kpty(self);
  KTASK_CRIT_BEGIN
  if __likely(KE_ISOK(error = krwlock_beginread(&self->ty_lock))) {
-  // In canonical mode, block until the first byte has been read
+  /* In canonical mode, block until the first byte has been read */
   if (self->ty_ios.c_lflag&ICANON) iomode = KIO_BLOCKFIRST;
   else if ((min_read = self->ty_ios.c_cc[VMIN]) == 0) {
-   // Non-blocking read, when data is available
+   /* Non-blocking read, when data is available */
    iomode = KIO_BLOCKNONE;
   } else {
    size_t part;
-   // Blocking read, until at least 'min_read' characters have been read
+   /* Blocking read, until at least 'min_read' characters have been read */
    krwlock_endread(&self->ty_lock);
    *rsize = 0; do {
     error = kiobuf_user_read(&self->ty_m2s,buf,bufsize,&part,KIO_BLOCKFIRST);
-    // Shouldn't happen, but might due to race conditions... (I/O interrupt)
+    /* Shouldn't happen, but might due to race conditions... (I/O interrupt) */
     if __unlikely(!part) break;
     *rsize += part;
    } while (*rsize < min_read);
@@ -563,7 +565,7 @@ kerrno_t kpty_user_swrite(struct kpty *__restrict self,
 
 
 kerrno_t
-kfspty_mgetattr(struct kfspty const *self,
+kfspty_user_mgetattr(struct kfspty const *self,
                 size_t ac, __user union kinodeattr av[]) {
  kerrno_t error;
  union kinodeattr attr;
@@ -591,7 +593,7 @@ next_attr:;
  return KE_OK;
 }
 kerrno_t
-kfspty_sgetattr(struct kfspty const *self, size_t ac,
+kfspty_user_sgetattr(struct kfspty const *self, size_t ac,
                 __user union kinodeattr av[]) {
  kerrno_t error;
  union kinodeattr attr;
@@ -652,7 +654,7 @@ static void kfspty_slave_inode_quit(struct kinode *__restrict self) {
 struct kinodetype kfspty_slave_type = {
  .it_size    = sizeof(struct kfspty_slave_inode),
  .it_quit    = &kfspty_slave_inode_quit,
- .it_getattr = (kerrno_t(*)(struct kinode const *,size_t,union kinodeattr *))&kfspty_sgetattr,
+ .it_getattr = (kerrno_t(*)(struct kinode const *,size_t,union kinodeattr *))&kfspty_user_sgetattr,
 };
 
 
@@ -663,7 +665,7 @@ static void kfspty_quit(struct kinode *__restrict self) {
 struct kinodetype kfspty_type = {
  .it_size    = sizeof(struct kfspty),
  .it_quit    = &kfspty_quit,
- .it_getattr = (kerrno_t(*)(struct kinode const *,size_t,union kinodeattr *))&kfspty_mgetattr,
+ .it_getattr = (kerrno_t(*)(struct kinode const *,size_t,union kinodeattr *))&kfspty_user_mgetattr,
 };
 
 

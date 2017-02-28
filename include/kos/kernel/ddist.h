@@ -135,7 +135,7 @@ struct kddist {
  KOBJECT_HEAD
  struct ksignal        dd_sigpoll; /*< Signal send when data can be polled (NOTE: Data is transferred through this signal). */
  struct ksignal        dd_sigpost; /*< Signal send when all registered users are ready (NOTE: This just is a secondary signal). */
- // NOTE: When both signals must be locked, 'dd_sigpoll' must be locked first!
+ /* NOTE: When both signals must be locked, 'dd_sigpoll' must be locked first! */
  __un(KCONFIG_DDIST_USERBITS) dd_ready;   /*< [lock(dd_sigpoll:KSIGNAL_LOCK_WAIT)] Amount of registered+ready users. */
 #if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  struct kddist_debug   dd_debug;   /*< [lock(dd_sigpoll:KSIGNAL_LOCK_WAIT)] Debug information for tracking registered users. */

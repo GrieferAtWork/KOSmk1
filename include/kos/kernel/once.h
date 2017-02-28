@@ -36,9 +36,6 @@ __DECL_BEGIN
 struct konce { int ko_didrun; };
 #define KONCE_INIT         {0}
 
-// TODO: This implementation is flawed. - It doesn't wait for completion
-//       if another thread currently performing the once-task.
-
 #ifdef __INTELLISENSE__
 //////////////////////////////////////////////////////////////////////////
 // Quick & easy run-once solution:

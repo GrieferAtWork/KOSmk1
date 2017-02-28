@@ -271,7 +271,7 @@ extern void kassert_ksignals(__size_t sigc, struct ksignal const *const *sigv);
 // NOTES:
 //  - A signal is really just that: a signal that can be send
 //    and received safely and effortlessly between multiple tasks.
-//    (With the extensions of waiting with a given timeout)
+//   (With the extension of waiting with a given timeout)
 //  - A signal on its own doesn't have any kind of additional
 //    information, neither when send, nor when received.
 //  - Signals are fair, meaning that the task that started receiving
@@ -300,8 +300,6 @@ extern void kassert_ksignals(__size_t sigc, struct ksignal const *const *sigv);
 //    terminated, the signal will be informed, and the task is
 //    removed from the signal's list of waiting tasks, the same
 //    way as it also would if the receive had timed out.
-//////////////////////////////////////////////////////////////////////////
-
 #define KSIGNAL_SIZEOF             (KOBJECT_SIZEOFHEAD+4+2*__SIZEOF_POINTER__)
 #define KSIGNAL_OFFSETOF_LOCKS     (KOBJECT_SIZEOFHEAD+0)
 #define KSIGNAL_OFFSETOF_FLAGS     (KOBJECT_SIZEOFHEAD+1)
@@ -729,7 +727,7 @@ extern __crit           __nonnull((1))   kerrno_t _ksignal_recv_andunlock_c(stru
 extern __crit           __nonnull((2))   kerrno_t _ksignal_recvs_andunlock_c(__size_t sigc, struct ksignal *const *__restrict sigv);
 extern __crit __wunused __nonnull((1,2)) kerrno_t _ksignal_timedrecv_andunlock_c(struct ksignal *self, struct timespec const *__restrict abstime);
 extern __crit __wunused __nonnull((2,3)) kerrno_t _ksignal_timedrecvs_andunlock_c(__size_t sigc, struct ksignal *const *__restrict sigv, struct timespec const *__restrict abstime);
-extern __crit __wunused __nonnull((1,2)) kerrno_t _ksignal_timeoutrecv_andunlock_c(struct ksignal *self, struct timespec const *timeout);
+extern __crit __wunused __nonnull((1,2)) kerrno_t _ksignal_timeoutrecv_andunlock_c(struct ksignal *self, struct timespec const *__restrict timeout);
 extern __crit __wunused __nonnull((2,3)) kerrno_t _ksignal_timeoutrecvs_andunlock_c(__size_t sigc, struct ksignal *const *__restrict sigv, struct timespec const *__restrict timeout);
 
 //////////////////////////////////////////////////////////////////////////

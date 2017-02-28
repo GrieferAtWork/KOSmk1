@@ -74,7 +74,7 @@ struct kpipefile {
 extern __crit __ref struct kpipefile *kpipefile_newreader(struct kpipe *__restrict pipe, struct kdirent *dent);
 extern __crit __ref struct kpipefile *kpipefile_newwriter(struct kpipe *__restrict pipe, struct kdirent *dent);
 
-// File types for pipe readers/writers
+/* File types for pipe readers/writers */
 extern struct kfiletype kpipesuper_type;
 extern struct kfiletype kpipereader_type;
 extern struct kfiletype kpipewriter_type;

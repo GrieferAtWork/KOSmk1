@@ -30,29 +30,28 @@
 #include <kos/kernel/signal.h>
 #include <kos/kernel/object.h>
 
-//
-// Similar to a regular ddist (<kos/include/ddist.h>),
-// an asynchronous ddist merely adds the ability to
-// send data from inside an IRQ handler, even when
-// the calling task (and therefor its stack) are
-// currently receiving that same signal.
-// 
-// This is achieved by kind-of bending the rules concerning
-// unbuffered data transfer, by keeping a small internal
-// buffer that is filled with data when that data cannot be
-// send asynchronously.
-//
-// Take for example the keyboard driver: In 99% of all
-// key strokes, this buffer will remain unused as strokes
-// can be broadcast directly to all receivers.
-// It is only if not all receivers are present that the
-// dynamic data buffer will start being used.
-//
-// Correct order of data is still guarantied.
-//
-// NOTE: An asynchronous ddist cannot be used to
-//       send/recv data in unregistered mode!
-//
+/* Similar to a regular ddist (<kos/include/ddist.h>),
+ * an asynchronous ddist merely adds the ability to
+ * send data from inside an IRQ handler, even when
+ * the calling task (and therefor its stack) are
+ * currently receiving that same signal.
+ * 
+ * This is achieved by kind-of bending the rules concerning
+ * unbuffered data transfer, by keeping a small internal
+ * buffer that is filled with data when that data cannot be
+ * send asynchronously.
+ *
+ * Take for example the keyboard driver: In 99% of all
+ * key strokes, this buffer will remain unused as strokes
+ * can be broadcast directly to all receivers.
+ * It is only if not all receivers are present that the
+ * dynamic data buffer will start being used.
+ *
+ * Correct order of data is still guarantied.
+ *
+ * NOTE: An asynchronous ddist cannot be used to
+ *       send/recv data in unregistered mode!
+ */
 
 __DECL_BEGIN
 

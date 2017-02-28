@@ -36,17 +36,17 @@
 __DECL_BEGIN
 
 static void *ksocket_packet_threadmain(struct ksocket *self) {
- struct ksockdev *dev = self->s_dev;
+ struct ksockdev *__restrict dev = self->s_dev;
  struct ketherframe *frame; kerrno_t error;
  KTASK_CRIT_BEGIN
  if __unlikely(KE_ISERR(ksockdev_beginpoll(dev))) goto end;
- // The pollframe will fail/abort with KE_INTR if a termination was requested
+ /* The pollframe will fail/abort with KE_INTR if a termination was requested */
  while (KE_ISOK(ksockdev_pollframe_t(dev,self->s_pck.sp_proto,&frame))) {
   size_t wsize;
-  // TODO: This can be optimized:
-  //   >> If the I/O buffer is full, stop polling frames until
-  //      more space becomes available. - That way, we can reduce
-  //      the load on the ddist used for spreading frames.
+  /* TODO: This can be optimized:
+   *   >> If the I/O buffer is full, stop polling frames until
+   *      more space becomes available. - That way, we can reduce
+   *      the load on the ddist used for spreading frames. */
   error = kiobuf_write(&self->s_iobuf,frame->ef_frame,
                        frame->ef_size,&wsize,
                        KIO_BLOCKNONE|KIO_NONE);
@@ -109,8 +109,8 @@ ksocket_packet_shutdown(struct ksocket *__restrict self, int how) {
  KTASK_CRIT_MARK
  if (SHUT_ISRD(how)) {
   struct ktask *old_task = katomic_xch(self->s_pck.sp_recvthread,NULL);
-  if __unlikely(!old_task) return KE_DESTROYED; // Already shut down
-  // Terminate & join the task (use kernel permissions to skip access checks)
+  if __unlikely(!old_task) return KE_DESTROYED; /* Already shut down */
+  /* Terminate & join the task (use kernel permissions to skip access checks) */
   ktask_terminate_k(old_task,NULL);
   ktask_decref(old_task);
  }
@@ -128,8 +128,8 @@ static struct ksocket_operations ksocket_pack_ops = {
 };
 
 __crit kerrno_t
-ksocket_packet_new_raw(__ref struct ksocket **result,
-                       struct ksockdev *dev, __be16 sp_proto) {
+ksocket_packet_new_raw(__ref struct ksocket **__restrict result,
+                       struct ksockdev *__restrict dev, __be16 sp_proto) {
  __ref struct ksocket *ressock; kerrno_t error;
  KTASK_CRIT_MARK
  ressock = (struct ksocket *)omalloc(struct ksocket_packet);
@@ -146,12 +146,12 @@ ksocket_packet_new_raw(__ref struct ksocket **result,
  ressock->s_opflags  = 0;
  kiobuf_init(&ressock->s_iobuf);
  ressock->s_pck.sp_proto = sp_proto;
- // Create and start the kernel thread used to handle incoming packets.
- // NOTE: We use a fairly small stack (1k) and allocate it using malloc,
- //       in order to keep the memory footprint as small as possible.
- // NOTE: Also make sure to spawn the thread with the thread stack of the
- //       kernel, as it could otherwise be terminated prematurely, or be
- //       accessed in dangerous ways from within user-land.
+ /* Create and start the kernel thread used to handle incoming packets.
+  * NOTE: We use a fairly small stack (1k) and allocate it using malloc,
+  *       in order to keep the memory footprint as small as possible.
+  * NOTE: Also make sure to spawn the thread with the thread stack of the
+  *       kernel, as it could otherwise be terminated prematurely, or be
+  *       accessed in dangerous ways from within user-land. */
  ressock->s_pck.sp_recvthread = ktask_newctxex(ktask_zero(),kproc_kernel(),
                                               (void*(*)(void*))&ksocket_packet_threadmain,
                                                ressock,1024,KTASK_FLAG_MALLKSTACK);
@@ -165,8 +165,8 @@ ksocket_packet_new_raw(__ref struct ksocket **result,
 }
 
 __crit kerrno_t
-ksocket_packet_new(__ref struct ksocket **result,
-                   struct ksockdev *dev, int type, __be16 sp_proto) {
+ksocket_packet_new(__ref struct ksocket **__restrict result,
+                   struct ksockdev *__restrict dev, int type, __be16 sp_proto) {
  KTASK_CRIT_MARK
  switch (type) {
   case SOCK_RAW: return ksocket_packet_new_raw(result,dev,sp_proto);

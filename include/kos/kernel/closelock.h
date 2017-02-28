@@ -69,7 +69,7 @@ struct kcloselock {
 #define KCLOSELOCK_FLAG_CLOSEING  \
        KSIGNAL_FLAG_USER(0) /*< [lock(KSIGNAL_LOCK_WAIT)] Set while attempting to close the object. */
  struct ksignal cl_opsig;   /*< The signal a closing task waits for. */
- // [lock(KSIGNAL_LOCK_WAIT)] Amount of tasks currently performing operations.
+ /* [lock(KSIGNAL_LOCK_WAIT)] Amount of tasks currently performing operations. */
 #if KCONFIG_CLOSELOCK_OPCOUNTBITS <= KSIGNAL_USERBITS
 #define cl_opcount            cl_opsig.s_useru
 #else

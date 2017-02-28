@@ -35,7 +35,7 @@ __DECL_BEGIN
 #ifndef __ASSEMBLY__
 __COMPILER_PACK_PUSH(1)
 
-// Segment Descriptor / GDT (Global Descriptor Table) Entry
+/* Segment Descriptor / GDT (Global Descriptor Table) Entry */
 struct __packed ksegment {
 union __packed {
 struct __packed { __u32 ul32,uh32; };
@@ -51,28 +51,28 @@ struct __packed {
  unsigned int type:       4;
  unsigned int __unnamed2: 4;
 };struct __packed {
- // Just set to 0. The CPU sets this to 1 when the segment is accessed.
+ /* Just set to 0. The CPU sets this to 1 when the segment is accessed. */
  unsigned int accessed:    1; /*< Accessed bit. */
- // Readable bit for code selectors:
- //   Whether read access for this segment is allowed.
- //   Write access is never allowed for code segments.
- // Writable bit for data selectors:
- //   Whether write access for this segment is allowed.
- //   Read access is always allowed for data segments. 
+ /* Readable bit for code selectors:
+  *   Whether read access for this segment is allowed.
+  *   Write access is never allowed for code segments.
+  * Writable bit for data selectors:
+  *   Whether write access for this segment is allowed.
+  *   Read access is always allowed for data segments. */
  unsigned int rw:          1; /*< Also the busy bit of tasks. */
- // Direction bit for data selectors:
- //   Tells the direction. 0 the segment grows up. 1 the segment
- //   grows down, ie. the offset has to be greater than the limit.
- // Conforming bit for code selectors:
- //     If 1: code in this segment can be executed from an equal or lower
- //           privilege level. For example, code in ring 3 can far-jump to
- //           conforming code in a ring 2 segment. The privl-bits represent
- //           the highest privilege level that is allowed to execute the segment.
- //           For example, code in ring 0 cannot far-jump to a conforming code
- //           segment with privl==0x2, while code in ring 2 and 3 can. Note that
- //           the privilege level remains the same, ie. a far-jump form ring
- //           3 to a privl==2-segment remains in ring 3 after the jump.
- //     If 0: code in this segment can only be executed from the ring set in privl. 
+ /* Direction bit for data selectors:
+  *   Tells the direction. 0 the segment grows up. 1 the segment
+  *   grows down, ie. the offset has to be greater than the limit.
+  * Conforming bit for code selectors:
+  *     If 1: code in this segment can be executed from an equal or lower
+  *           privilege level. For example, code in ring 3 can far-jump to
+  *           conforming code in a ring 2 segment. The privl-bits represent
+  *           the highest privilege level that is allowed to execute the segment.
+  *           For example, code in ring 0 cannot far-jump to a conforming code
+  *           segment with privl==0x2, while code in ring 2 and 3 can. Note that
+  *           the privilege level remains the same, ie. a far-jump form ring
+  *           3 to a privl==2-segment remains in ring 3 after the jump.
+  *     If 0: code in this segment can only be executed from the ring set in privl. */
  unsigned int dc:          1; /*< Direction bit/Conforming bit. */
  unsigned int execute:     1; /*< Executable bit. If 1 code in this segment can be executed, ie. a code selector. If 0 it is a data selector. */
  unsigned int system:      1; /*< 0: System descriptor; 1: Code/Data/Stack (always set to 1) */
@@ -87,14 +87,14 @@ struct __packed {
  unsigned int sizehigh:    4;
  unsigned int available:   1; /*< Availability bit (Set to 1). */
  unsigned int longmode:    1; /*< Set to 0 (Used in x86-64). */
- // Indicates how the instructions(80386 and up) access register and memory data in protected mode.
- // If 0: instructions are 16-bit instructions, with 16-bit offsets and 16-bit registers.
- //       Stacks are assumed 16-bit wide and SP is used.
- // If 1: 32-bits are assumed.
- // Allows 8086-80286 programs to run.
+ /* Indicates how the instructions(80386 and up) access register and memory data in protected mode.
+  * If 0: instructions are 16-bit instructions, with 16-bit offsets and 16-bit registers.
+  *       Stacks are assumed 16-bit wide and SP is used.
+  * If 1: 32-bits are assumed.
+  * Allows 8086-80286 programs to run. */
  unsigned int dbbit:       1;
- // If 0: segments can be 1 byte to 1MB in length.
- // If 1: segments can be 4KB to 4GB in length. 
+ /* If 0: segments can be 1 byte to 1MB in length.
+  * If 1: segments can be 4KB to 4GB in length. */
  unsigned int granularity: 1;
 };};
  __u8         basehigh;
@@ -126,24 +126,24 @@ __COMPILER_PACK_POP
  (((ex)?SEG_ACCESS_EXECUTE:0)|((dc)?SEG_ACCESS_DC:0)|\
   ((rw)?SEG_ACCESS_RW:0)|((ac)?SEG_ACCESS_ACCESSED:0))
 
-#define SEG_DATA_RD        SEG_ACCESS(0,0,0,0) // Read-Only
-#define SEG_DATA_RDA       SEG_ACCESS(0,0,0,1) // Read-Only, accessed
-#define SEG_DATA_RDWR      SEG_ACCESS(0,0,1,0) // Read/Write
-#define SEG_DATA_RDWRA     SEG_ACCESS(0,0,1,1) // Read/Write, accessed
-#define SEG_DATA_RDEXPD    SEG_ACCESS(0,1,0,0) // Read-Only, expand-down
-#define SEG_DATA_RDEXPDA   SEG_ACCESS(0,1,0,1) // Read-Only, expand-down, accessed
-#define SEG_DATA_RDWREXPD  SEG_ACCESS(0,1,1,0) // Read/Write, expand-down
-#define SEG_DATA_RDWREXPDA SEG_ACCESS(0,1,1,1) // Read/Write, expand-down, accessed
-#define SEG_CODE_EX        SEG_ACCESS(1,0,0,0) // Execute-Only
-#define SEG_CODE_EXA       SEG_ACCESS(1,0,0,1) // Execute-Only, accessed
-#define SEG_CODE_EXRD      SEG_ACCESS(1,0,1,0) // Execute/Read
-#define SEG_CODE_EXRDA     SEG_ACCESS(1,0,1,1) // Execute/Read, accessed
-#define SEG_CODE_EXC       SEG_ACCESS(1,1,0,0) // Execute-Only, conforming
-#define SEG_CODE_EXCA      SEG_ACCESS(1,1,0,1) // Execute-Only, conforming, accessed
-#define SEG_CODE_EXRDC     SEG_ACCESS(1,1,1,0) // Execute/Read, conforming
-#define SEG_CODE_EXRDCA    SEG_ACCESS(1,1,1,1) // Execute/Read, conforming, accessed
+#define SEG_DATA_RD        SEG_ACCESS(0,0,0,0) /*< Read-Only. */
+#define SEG_DATA_RDA       SEG_ACCESS(0,0,0,1) /*< Read-Only, accessed. */
+#define SEG_DATA_RDWR      SEG_ACCESS(0,0,1,0) /*< Read/Write. */
+#define SEG_DATA_RDWRA     SEG_ACCESS(0,0,1,1) /*< Read/Write, accessed. */
+#define SEG_DATA_RDEXPD    SEG_ACCESS(0,1,0,0) /*< Read-Only, expand-down. */
+#define SEG_DATA_RDEXPDA   SEG_ACCESS(0,1,0,1) /*< Read-Only, expand-down, accessed. */
+#define SEG_DATA_RDWREXPD  SEG_ACCESS(0,1,1,0) /*< Read/Write, expand-down. */
+#define SEG_DATA_RDWREXPDA SEG_ACCESS(0,1,1,1) /*< Read/Write, expand-down, accessed. */
+#define SEG_CODE_EX        SEG_ACCESS(1,0,0,0) /*< Execute-Only. */
+#define SEG_CODE_EXA       SEG_ACCESS(1,0,0,1) /*< Execute-Only, accessed. */
+#define SEG_CODE_EXRD      SEG_ACCESS(1,0,1,0) /*< Execute/Read. */
+#define SEG_CODE_EXRDA     SEG_ACCESS(1,0,1,1) /*< Execute/Read, accessed. */
+#define SEG_CODE_EXC       SEG_ACCESS(1,1,0,0) /*< Execute-Only, conforming. */
+#define SEG_CODE_EXCA      SEG_ACCESS(1,1,0,1) /*< Execute-Only, conforming, accessed. */
+#define SEG_CODE_EXRDC     SEG_ACCESS(1,1,1,0) /*< Execute/Read, conforming. */
+#define SEG_CODE_EXRDCA    SEG_ACCESS(1,1,1,1) /*< Execute/Read, conforming, accessed. */
 
-// Flags
+/* Flags */
 #define SEG_FLAG_GRAN      0x00800000 /*< Granularity (0 for 1B - 1MB, 1 for 4KB - 4GB). */
 #define SEG_FLAG_32BIT     0x00400000 /*< dbbit = 1. */
 #define SEG_FLAG_LONGMODE  0x00200000 /*< longmode = 1. */
@@ -195,7 +195,7 @@ ksegment_encode(struct ksegment *self, __uintptr_t base,
 #endif
 
 #ifdef __MAIN_C__
-// Initialize the GDT
+/* Initialize the GDT */
 extern __crit void kernel_initialize_gdt(void);
 #endif
 #endif /* !__ASSEMBLY__ */
@@ -224,8 +224,8 @@ __STATIC_ASSERT(sizeof(struct ksegment) == 8);
 #define KSEG_KERNEL_DATA_16 KSEG(4) /*< [0x20] Ring #0 16-bit data segment. */
 #define KSEG_KERNELLDT      KSEG(5) /*< [0x28] Symbolic kernel LDT (Usually empty). */
 #define KSEG_CPU0TSS        KSEG(6) /*< [0x30] kcpu_zero()-tss segment. */
-//#define KSEG_USER_CODE      KSEG(7) /*< [0x38] Ring #3 code segment. */         
-//#define KSEG_USER_DATA      KSEG(8) /*< [0x40] Ring #3 data segment. */
+//#define KSEG_USER_CODE    KSEG(7) /*< [0x38] Ring #3 code segment. */         
+//#define KSEG_USER_DATA    KSEG(8) /*< [0x40] Ring #3 data segment. */
 
 #ifdef KSEG_USER_DATA
 #define KSEG_BUILTIN          9

@@ -42,16 +42,14 @@
 
 __DECL_BEGIN
 
-//
-// A simple, asynchronous buffer, not capable of
-// performing any blocking, and meant for intermediate
-// storage of data only arriving in small chunks,
-// but required to be flushed as a whole when a
-// specific event occurs, such as a control input
-// arriving.
-// 
-// (This is what implements the canon, aka. line-buffer in terminals)
-//
+/* A simple, asynchronous buffer, not capable of
+ * performing any blocking, and meant for intermediate
+ * storage of data only arriving in small chunks,
+ * but required to be flushed as a whole when a
+ * specific event occurs, such as a control input
+ * arriving.
+ * 
+ * (This is what implements the canon, aka. line-buffer in terminals) */
 
 #define KOBJECT_MAGIC_RAWBUF 0x6A7BCF /*< RAWBUF. */
 #define kassert_krawbuf(self) kassert_object(self,KOBJECT_MAGIC_RAWBUF)

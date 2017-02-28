@@ -37,10 +37,8 @@
 
 __DECL_BEGIN
 
-//
-// Pseudo terminal device
-// Fun fact: TTY stands for 'Tele TYping machine'
-//
+/* Pseudo terminal device
+ * Fun fact: TTY stands for 'Tele TYping machine' */
 
 #define KOBJECT_MAGIC_PTY 0x971 /*< PTY. */
 #define kassert_kpty(self) kassert_object(self,KOBJECT_MAGIC_PTY)
@@ -73,25 +71,64 @@ extern void kpty_init(struct kpty *__restrict self,
 extern __crit void kpty_quit(struct kpty *__restrict self);
 extern kerrno_t kpty_user_ioctl(struct kpty *__restrict self, kattr_t cmd, __user void *arg);
 
+//////////////////////////////////////////////////////////////////////////
 // Write data to the master (Usually keyboard input)
+// @return: KE_OK:        Successfully written all given data.
+// @return: KE_DESTROYED: The given PTY was destroyed.
+// @return: KE_FAULT:     [kpty_user_mwrite*] A given pointer was faulty.
+// @return: KE_TIMEDOUT:  A timeout previously set using alarm() has expired.
+// @return: KE_INTR:      The calling thread was interrupted.
 extern kerrno_t kpty_mwrite_unlocked(struct kpty *__restrict self, __kernel void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
 extern kerrno_t kpty_mwrite(struct kpty *__restrict self, __kernel void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
 extern kerrno_t kpty_user_mwrite_unlocked(struct kpty *__restrict self, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
 extern kerrno_t kpty_user_mwrite(struct kpty *__restrict self, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
 
+//////////////////////////////////////////////////////////////////////////
 // Read data from perspective of the master (aka. output of slave)
+// @return: KE_OK:        Successfully read all given data.
+// @return: KE_DESTROYED: The given PTY was destroyed.
+// @return: KE_FAULT:    [kpty_user_mread] A given pointer was faulty.
+// @return: KE_TIMEDOUT:  A timeout previously set using alarm() has expired.
+// @return: KE_INTR:      The calling thread was interrupted.
 #define kpty_mread(self,buf,bufsize,rsize) \
  kiobuf_read(&(self)->ty_s2m,buf,bufsize,rsize,KIO_BLOCKFIRST)
 #define kpty_user_mread(self,buf,bufsize,rsize) \
  kiobuf_user_read(&(self)->ty_s2m,buf,bufsize,rsize,KIO_BLOCKFIRST)
 
-// Write data to the slave (Usually text that meant as output to the terminal; usually allowed to contain control characters)
+//////////////////////////////////////////////////////////////////////////
+// Write data to the slave.
+//  - Usually text that meant as output to the terminal.
+//  - Usually allowed to contain control characters.
+// @return: KE_OK:        Successfully wrote the given data.
+// @return: KE_DESTROYED: The given PTY was destroyed.
+// @return: KE_TIMEDOUT:  A timeout previously set using alarm() has expired.
+// @return: KE_INTR:      The calling task was interrupted.
+// @return: KE_FAULT:    [kpty_user_swrite] A given pointer was faulty.
 extern kerrno_t kpty_swrite(struct kpty *__restrict self, __kernel void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
 extern kerrno_t kpty_user_swrite(struct kpty *__restrict self, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize);
 
-// Read data from perspective of the slave (usually processed & filtered keyboard input)
+//////////////////////////////////////////////////////////////////////////
+// Read data from perspective of the slave.
+//  - Usually processed & filtered keyboard input.
+// @return: KE_OK:        Successfully wrote the given data.
+// @return: KE_DESTROYED: The given PTY was destroyed.
+// @return: KE_TIMEDOUT:  A timeout previously set using alarm() has expired.
+// @return: KE_INTR:      The calling task was interrupted.
+// @return: KE_FAULT:    [kpty_user_sread] A given pointer was faulty.
+// @return: KS_EMPTY:     The associated I/O buffer was interrupted using
+//                        'kiobuf_interrupt' ('*rsize' is set to ZERO(0)).
+//                        This usually happens if the PTY was disconnected,
+//                        such as a remote connection being reset, causing
+//                        a blocking read operation in the slave process to
+//                        be interrupted.
 extern kerrno_t kpty_user_sread(struct kpty *__restrict self, __user void *buf,
                                 __size_t bufsize, __kernel __size_t *__restrict rsize);
+#ifdef __INTELLISENSE__
+extern kerrno_t kpty_sread(struct kpty *__restrict self, __kernel void *buf,
+                           __size_t bufsize, __kernel __size_t *__restrict rsize);
+#else
+#define kpty_sread(self,buf,bufsize,rsize) KTASK_KEPD(kpty_user_sread(self,buf,bufsize,rsize))
+#endif
 
 
 struct kfspty {
@@ -100,8 +137,21 @@ struct kfspty {
  struct kpty   fp_pty;  /*< Associated PTY. */
 };
 
-extern kerrno_t kfspty_mgetattr(struct kfspty const *__restrict self, __size_t ac, __user union kinodeattr av[]);
-extern kerrno_t kfspty_sgetattr(struct kfspty const *__restrict self, __size_t ac, __user union kinodeattr av[]);
+//////////////////////////////////////////////////////////////////////////
+// Get the attributes of of a given PTY.
+// NOTE: For convenience, PTY devices implement the 'KATTR_FS_SIZE'
+//       interface, allowing you to query a hint for a required
+//       buffer size when reading large portions of data.
+// @return: KE_OK:     Successfully read all given attributes.
+// @return: KE_FAULT: [kfspty_user_*] A given pointer was faulty.
+// @return: * :        Some other attribute-secific error occurred
+//                    (s.a. kinode_user_generic_(g|s)etattr).
+extern __wunused __nonnull((1)) kerrno_t
+kfspty_user_mgetattr(struct kfspty const *__restrict self,
+                     __size_t ac, __user union kinodeattr av[]);
+extern __wunused __nonnull((1)) kerrno_t
+kfspty_user_sgetattr(struct kfspty const *__restrict self,
+                     __size_t ac, __user union kinodeattr av[]);
 
 
 //////////////////////////////////////////////////////////////////////////

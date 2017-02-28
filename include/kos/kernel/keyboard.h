@@ -35,7 +35,7 @@ __DECL_BEGIN
 
 extern void kernel_initialize_keyboard(void);
 
-// Data distributer for keyboard input
+/* Data distributer for keyboard input */
 extern struct kaddist keyboard_input; /* Values send are of type 'struct kbevent'. */
 extern struct kkeymap const *kkeymap_current;
 

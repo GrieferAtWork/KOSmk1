@@ -84,17 +84,12 @@ __DECL_BEGIN
 #ifndef __ASSEMBLY__
 //////////////////////////////////////////////////////////////////////////
 // Generally useful helper macros
-#define KOBJECT_DECLARE_INCREF(funname,T) \
- __crit __wunused __nonnull((1)) kerrno_t funname(T *__restrict __self)
-#define KOBJECT_DECLARE_DECREF(funname,T) \
- __crit __nonnull((1)) void funname(T *__restrict __self)
+#define KOBJECT_DECLARE_INCREF(funname,T) __crit __wunused __nonnull((1)) kerrno_t funname(T *__restrict __self)
+#define KOBJECT_DECLARE_DECREF(funname,T) __crit __nonnull((1)) void funname(T *__restrict __self)
 #ifdef __INTELLISENSE__
-#define KOBJECT_DEFINE_INCREF(funname,T,refcnt_member,kassert) \
- KOBJECT_DECLARE_INCREF(funname,T) { /*kassert(__self); __self->refcnt_member;*/ return KE_OK; }
-#define KOBJECT_DEFINE_TRYINCREF(funname,T,refcnt_member,kassert) \
- KOBJECT_DECLARE_INCREF(funname,T) { /*kassert(__self); __self->refcnt_member;*/ return KE_OK; }
-#define KOBJECT_DEFINE_DECREF(funname,T,refcnt_member,kassert,destroy_funname) \
- KOBJECT_DECLARE_DECREF(funname,T) { /*kassert(__self); __self->refcnt_member;*/ }
+#define KOBJECT_DEFINE_INCREF(funname,T,refcnt_member,kassert)                 KOBJECT_DECLARE_INCREF(funname,T) { /*kassert(__self); __self->refcnt_member;*/ return KE_OK; }
+#define KOBJECT_DEFINE_TRYINCREF(funname,T,refcnt_member,kassert)              KOBJECT_DECLARE_INCREF(funname,T) { /*kassert(__self); __self->refcnt_member;*/ return KE_OK; }
+#define KOBJECT_DEFINE_DECREF(funname,T,refcnt_member,kassert,destroy_funname) KOBJECT_DECLARE_DECREF(funname,T) { /*kassert(__self); __self->refcnt_member;*/ }
 #define KOBJECT_DEFINE_INCREF_D KOBJECT_DEFINE_INCREF
 #define KOBJECT_DEFINE_DECREF_D KOBJECT_DEFINE_DECREF
 #else

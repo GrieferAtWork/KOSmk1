@@ -76,7 +76,7 @@
 __DECL_BEGIN
 
 #ifdef __INTELLISENSE__
-// Syntax highlighting...
+/* Syntax highlighting... */
 extern __wunused unsigned char inb(unsigned short port);
 extern __wunused unsigned char inb_p(unsigned short port);
 extern __wunused unsigned short inw(unsigned short port);
@@ -179,14 +179,14 @@ extern __nonnull((2)) void outsl __P((unsigned short __port, const void *__addr,
 #endif /* !__KERNEL__ */
 
 #if defined(__LEGACY_OUT_PARAMORDER__) || defined(__STDC_PURE__)
-// Legacy-style parameter order is requested.
+/* Legacy-style parameter order is requested. */
 #ifdef __KERNEL__
-#   define outb(value,port)   outb(port,value)
-#   define outb_p(value,port) outb_p(port,value)
-#   define outw(value,port)   outw(port,value)
-#   define outw_p(value,port) outw_p(port,value)
-#   define outl(value,port)   outl(port,value)
-#   define outl_p(value,port) outl_p(port,value)
+#   define outb(value,port)   __outb(port,value)
+#   define outb_p(value,port) __outb_p(port,value)
+#   define outw(value,port)   __outw(port,value)
+#   define outw_p(value,port) __outw_p(port,value)
+#   define outl(value,port)   __outl(port,value)
+#   define outl_p(value,port) __outl_p(port,value)
 #else
 extern void outb __P((unsigned char __value, unsigned short __port));
 extern void outb_p __P((unsigned char __value, unsigned short __port));

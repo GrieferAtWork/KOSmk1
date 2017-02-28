@@ -53,7 +53,7 @@ __DECL_BEGIN
 
 
 
-void k_writesyslog(int level, char const *msg, __size_t msg_max) {
+__nomp void k_writesyslog(int level, char const *msg, __size_t msg_max) {
  /* TODO: Do something more with this... */
  (void)level;
  serial_printn(SERIAL_01,msg,msg_max);
@@ -61,7 +61,7 @@ void k_writesyslog(int level, char const *msg, __size_t msg_max) {
 
 struct syslog_callback_data {
  int    level;
- void (*print_prefix)(int,void *);
+ psyslogprefix print_prefix;
  void  *closure;
 };
 static int syslog_callback(char const *msg, size_t msg_max, void *data) {
@@ -71,12 +71,12 @@ static int syslog_callback(char const *msg, size_t msg_max, void *data) {
  return 0;
 }
 
-void k_dovsyslogf(int level, void (*print_prefix)(int,void *), void *closure,
+void k_dovsyslogf(int level, psyslogprefix print_prefix, void *closure,
                   char const *fmt, va_list args) {
  struct syslog_callback_data data = {level,print_prefix,closure};
  format_vprintf(&syslog_callback,&data,fmt,args);
 }
-void k_dosyslogf(int level, void (*print_prefix)(int,void *), void *closure,
+void k_dosyslogf(int level, psyslogprefix print_prefix, void *closure,
                  char const *fmt, ...) {
  va_list args;
  va_start(args,fmt);
@@ -114,7 +114,7 @@ static void print_file_name(int level, struct kfile *file) {
 
 
 void k_dosyslog_prefixfile(int level, struct kfile *file, char const *s, __size_t maxlen) {
- k_dosyslog(level,(void(*)(int,void *))&print_file_name,file,s,maxlen);
+ k_dosyslog(level,(psyslogprefix)&print_file_name,file,s,maxlen);
 }
 struct printf_prefixfile_data {
  int level;

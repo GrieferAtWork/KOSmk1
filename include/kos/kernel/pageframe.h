@@ -63,9 +63,11 @@ union __packed {
 };
 };
 
-// Define as something to return for ZERO-allocation, or leave
-// undefined to have zero-allocations cause undefined behavior.
-//#define KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE NULL
+/* Define as something to return for ZERO-allocation, or leave
+ * undefined to have zero-allocations cause undefined behavior. */
+#if 0
+#define KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE NULL
+#endif
 
 #if 1
 #   define KPAGEFRAME_INVPTR NULL
@@ -122,9 +124,9 @@ kpageframe_realloc(__kernel __pagealigned struct kpageframe *old_start,
 
 
 //////////////////////////////////////////////////////////////////////////
-// Allocate consecutive page frames at a pre-defined address
-// @return: KPAGEFRAME_INVPTR: The given start+n area is already allocated, or not mapped
-// @return: start: Successfully allocated 'n_pages' of memory starting at 'start'
+// Allocate consecutive page frames at a pre-defined address.
+// @return: KPAGEFRAME_INVPTR: The given start+n area is already allocated, or not mapped.
+// @return: start:             Successfully allocated 'n_pages' of memory starting at 'start'.
 extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *
 kpageframe_allocat(__kernel __pagealigned struct kpageframe *__restrict start, __size_t n_pages);
 

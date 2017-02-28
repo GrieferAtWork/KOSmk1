@@ -72,7 +72,7 @@ extern int pthread_create(pthread_t *newthread, pthread_attr_t const *attr,
 extern __noreturn void pthread_exit(void *retval);
 extern int pthread_join(pthread_t th, void **thread_return);
 extern int pthread_tryjoin_np(pthread_t th, void **thread_return);
-extern int pthread_timedjoin_np(pthread_t th, void **thread_return, struct timespec const *abstime);
+extern int pthread_timedjoin_np(pthread_t th, void **thread_return, struct timespec const *__restrict abstime);
 extern int pthread_detach(pthread_t th);
 extern __constcall pthread_t pthread_self(void);
 extern __constcall int pthread_equal(pthread_t thread1, pthread_t thread2);
@@ -135,7 +135,7 @@ extern int pthread_once(pthread_once_t *once_control, void (*init_routine)(void)
 //extern int pthread_mutex_destroy(pthread_mutex_t *mutex);
 //extern int pthread_mutex_trylock(pthread_mutex_t *mutex);
 //extern int pthread_mutex_lock(pthread_mutex_t *mutex);
-//extern int pthread_mutex_timedlock(pthread_mutex_t *mutex, struct timespec const *abstime);
+//extern int pthread_mutex_timedlock(pthread_mutex_t *mutex, struct timespec const *__restrict abstime);
 //extern int pthread_mutex_unlock(pthread_mutex_t *mutex);
 //extern int pthread_mutex_getprioceiling(pthread_mutex_t const *mutex, int *prioceiling);
 //extern int pthread_mutex_setprioceiling(pthread_mutex_t *mutex, int prioceiling, int *old_ceiling);
@@ -160,10 +160,10 @@ extern int pthread_once(pthread_once_t *once_control, void (*init_routine)(void)
 //extern int pthread_rwlock_destroy(pthread_rwlock_t *rwlock);
 //extern int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock);
 //extern int pthread_rwlock_tryrdlock(pthread_rwlock_t *rwlock);
-//extern int pthread_rwlock_timedrdlock(pthread_rwlock_t *rwlock, struct timespec const *abstime);
+//extern int pthread_rwlock_timedrdlock(pthread_rwlock_t *rwlock, struct timespec const *__restrict abstime);
 //extern int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock);
 //extern int pthread_rwlock_trywrlock(pthread_rwlock_t *rwlock);
-//extern int pthread_rwlock_timedwrlock(pthread_rwlock_t *rwlock, struct timespec const *abstime);
+//extern int pthread_rwlock_timedwrlock(pthread_rwlock_t *rwlock, struct timespec const *__restrict abstime);
 //extern int pthread_rwlock_unlock(pthread_rwlock_t *rwlock);
 //extern int pthread_rwlockattr_init(pthread_rwlockattr_t *attr);
 //extern int pthread_rwlockattr_destroy(pthread_rwlockattr_t *attr);
@@ -177,7 +177,7 @@ extern int pthread_once(pthread_once_t *once_control, void (*init_routine)(void)
 //extern int pthread_cond_signal(pthread_cond_t *cond);
 //extern int pthread_cond_broadcast(pthread_cond_t *cond);
 //extern int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
-//extern int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex, struct timespec const *abstime);
+//extern int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex, struct timespec const *__restrict abstime);
 //extern int pthread_condattr_init(pthread_condattr_t *attr);
 //extern int pthread_condattr_destroy(pthread_condattr_t *attr);
 //extern int pthread_condattr_getpshared(pthread_condattr_t const *attr, int *pshared);

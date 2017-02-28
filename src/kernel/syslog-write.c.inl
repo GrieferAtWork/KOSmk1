@@ -64,7 +64,7 @@ static struct kproc *syslog_last_writer = NULL;
 kerrno_t k_dosyslog_u(struct kproc *caller, int level, 
                       __user char const *s, size_t maxlen)
 #else
-void k_dosyslog(int level, void (*print_prefix)(int,void *),
+void k_dosyslog(int level, psyslogprefix print_prefix,
                 void *closure, __kernel char const *s, size_t maxlen)
 #define caller  kproc_kernel()
 #endif

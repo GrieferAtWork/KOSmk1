@@ -24,7 +24,7 @@
 #define __KOS_ARCH_X86_STRING_H__ 1
 
 #include <kos/compiler.h>
-#include <kos/kernel/types.h>
+#include <kos/types.h>
 
 __DECL_BEGIN
 
@@ -75,8 +75,22 @@ __local void *__karch_memcpy_l(void *__restrict __dst,
                   : : "memory");
  return __result;
 }
+#ifdef __x86_64__
+__local void *__karch_memcpy_q(void *__restrict __dst,
+                               void const *__restrict __src,
+                               __size_t __qwords) {
+ void *__result = __dst;
+ __asm_volatile__("cld\n"
+                  "rep movsq\n"
+                  : "+c" (__qwords)
+                  , "+S" (__src)
+                  , "+D" (__dst)
+                  : : "memory");
+ return __result;
+}
+#endif /* __x86_64__ */
 __local void *__karch_memset_b(void *__restrict __dst,
-                               unsigned char __byte, __size_t __bytes) {
+                               __u8 __byte, __size_t __bytes) {
  void *__result = __dst;
  __asm_volatile__("cld\n"
                   "rep stosb\n"
@@ -87,27 +101,43 @@ __local void *__karch_memset_b(void *__restrict __dst,
  return __result;
 }
 __local void *__karch_memset_w(void *__restrict __dst,
-                               unsigned short __word, __size_t __bytes) {
+                               __u16 __word,
+                               __size_t __words) {
  void *__result = __dst;
  __asm_volatile__("cld\n"
                   "rep stosw\n"
-                  : "+c" (__bytes)
+                  : "+c" (__words)
                   , "+D" (__dst)
                   : "a" (__word)
                   : "memory");
  return __result;
 }
 __local void *__karch_memset_l(void *__restrict __dst,
-                               unsigned long __dword, __size_t __bytes) {
+                               __u32 __dword,
+                               __size_t __dwords) {
  void *__result = __dst;
  __asm_volatile__("cld\n"
                   "rep stosl\n"
-                  : "+c" (__bytes)
+                  : "+c" (__dwords)
                   , "+D" (__dst)
                   : "a" (__dword)
                   : "memory");
  return __result;
 }
+#ifdef __x86_64__
+__local void *__karch_memset_q(void *__restrict __dst,
+                               __u64 __qword,
+                               __size_t __qwords) {
+ void *__result = __dst;
+ __asm_volatile__("cld\n"
+                  "rep stosq\n"
+                  : "+c" (__qwords)
+                  , "+D" (__dst)
+                  : "a" (__qword)
+                  : "memory");
+ return __result;
+}
+#endif /* __x86_64__ */
 __local char *__karch_strend(char const *__s) {
  char *__result;
  __asm_volatile__("movl %1, %%edi\n"   /* Store the search string in EDI. */
@@ -190,6 +220,10 @@ __local __size_t __karch_strnlen(char const *__s, __size_t __maxchars) {
 #define __karch_raw_memset_b __karch_memset_b
 #define __karch_raw_memset_w __karch_memset_w
 #define __karch_raw_memset_l __karch_memset_l
+#ifdef __x86_64__
+#define __karch_raw_memcpy_q __karch_memcpy_q
+#define __karch_raw_memset_q __karch_memset_q
+#endif /* __x86_64__ */
 #define __karch_raw_strend   __karch_strend
 #define __karch_raw_strnend  __karch_strnend
 #define __karch_raw_strlen   __karch_strlen

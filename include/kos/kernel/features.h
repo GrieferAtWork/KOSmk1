@@ -27,16 +27,15 @@
 
 #ifdef __KERNEL__
 #define KCONFIG_HAVE_IRQ 1
-//#define KCONFIG_HAVE_SINGLECORE
 
 /* Count allocated pages within the pageframe allocator.
  * >> Required for x/y-style memory usage statistics. */
 #define KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED 1
 
 
-// Save all segment registers individually during a task switch
-// When not defined, only '%es' is saved.
-// Otherwise '%es', '%ds', '%fs' and '%gs' are saved.
+/* Save all segment registers individually during a task switch
+ * When not defined, only '%es' is saved.
+ * Otherwise '%es', '%ds', '%fs' and '%gs' are saved. */
 #define KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS 1
 
 //#define KCONFIG_HAVE_SINGLECORE 1
@@ -53,18 +52,18 @@
 
 
 
-// NOTE: Special size optimizations may be performed for bit sizes fitting
-//       inside of 'KSIGNAL_USERBITS' (16) (s.a.: <kos/kernel/signal.h>)
+/* NOTE: Special size optimizations may be performed for bit sizes fitting
+ *       inside of 'KSIGNAL_USERBITS' (16) (s.a.: <kos/kernel/signal.h>) */
 #define KCONFIG_CLOSELOCK_OPCOUNTBITS  32 /*< Amount of bits used for recursion in close locks. */
 #define KCONFIG_SEMAPHORE_TICKETBITS   32 /*< Amount of bits used to represent semaphore tickets. */
 #define KCONFIG_RWLOCK_READERBITS      32 /*< Amount of bits used for recursive reading in R/W locks. */
 #define KCONFIG_DDIST_USERBITS         32 /*< Amount of bits available tracking the amount of registered users. */
 
 #ifdef __DEBUG__
-// Track the holder of non-recursive mutex locks and assert that any
-// given task doesn't attempt to acquire a single mutex more than once.
-// NOTE: Due to the fact that the traceback of acquired locks is stored
-//       as well, non-released locks will be dumped as memory leaks.
+/* Track the holder of non-recursive mutex locks and assert that any
+ * given task doesn't attempt to acquire a single mutex more than once.
+ * NOTE: Due to the fact that the traceback of acquired locks is stored
+ *       as well, non-released locks will be dumped as memory leaks. */
 #define KCONFIG_HAVE_DEBUG_TRACKEDMUTEX  1
 #define KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX 1
 #define KCONFIG_HAVE_DEBUG_TRACKEDDDIST  1
@@ -74,10 +73,6 @@
 /* Size for the global cache of recently loaded shared libraries
  * & executables. Define as ZERO(0) to disable this cache. */
 #define KCONFIG_SHLIB_RECENT_CACHE_SIZE 32
-
-
-// Not fully implemented yet: copy-on-write fork() paging
-#define KCONFIG_HAVE_SHM_COPY_ON_WRITE 0
 
 
 
@@ -128,9 +123,6 @@
 #endif
 #ifndef KCONFIG_HAVE_DEBUG_TRACKEDDDIST
 #define KCONFIG_HAVE_DEBUG_TRACKEDDDIST 0
-#endif
-#ifndef KCONFIG_HAVE_SHM_COPY_ON_WRITE
-#define KCONFIG_HAVE_SHM_COPY_ON_WRITE 0
 #endif
 #ifndef KCONFIG_SHLIB_RECENT_CACHE_SIZE
 #define KCONFIG_SHLIB_RECENT_CACHE_SIZE 0

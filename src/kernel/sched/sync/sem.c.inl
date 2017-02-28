@@ -33,7 +33,7 @@
 
 __DECL_BEGIN
 
-kerrno_t ksem_post(struct ksem *self,
+kerrno_t ksem_post(struct ksem *__restrict self,
                    ksemcount_t  new_tickets,
                    ksemcount_t *old_tickets) {
  ksemcount_t oldcount,newcount;
@@ -52,7 +52,7 @@ kerrno_t ksem_post(struct ksem *self,
  return ksignal_sendn(&self->s_sig,new_tickets,NULL);
 }
 
-kerrno_t ksem_trywait(struct ksem *self) {
+kerrno_t ksem_trywait(struct ksem *__restrict self) {
  ksemcount_t oldcount;
  kassert_ksem(self);
  do {
@@ -61,7 +61,7 @@ kerrno_t ksem_trywait(struct ksem *self) {
  } while (!katomic_cmpxch(self->s_tck,oldcount,oldcount-1));
  return KE_OK;
 }
-kerrno_t ksem_wait(struct ksem *self) {
+kerrno_t ksem_wait(struct ksem *__restrict self) {
  kerrno_t error;
  kassert_ksem(self);
  do {
@@ -75,8 +75,8 @@ kerrno_t ksem_wait(struct ksem *self) {
  } while (error == KE_OK);
  return error;
 }
-kerrno_t ksem_timedwait(struct ksem *self,
-                        struct timespec const *abstime) {
+kerrno_t ksem_timedwait(struct ksem *__restrict self,
+                        struct timespec const *__restrict abstime) {
  kerrno_t error;
  kassert_ksem(self);
  kassertobj(abstime);
@@ -91,8 +91,8 @@ kerrno_t ksem_timedwait(struct ksem *self,
  } while (error == KE_OK);
  return error;
 }
-kerrno_t ksem_timoutwait(struct ksem *self,
-                         struct timespec const *timeout) {
+kerrno_t ksem_timoutwait(struct ksem *__restrict self,
+                         struct timespec const *__restrict timeout) {
  struct timespec abstime;
  kassert_ksem(self);
  kassertobj(timeout);
@@ -116,10 +116,10 @@ struct ksem *ksem_trywaits(__size_t semc, struct ksem *const *semv) {
 struct ksem *ksem_waits(__size_t semc, struct ksem *const *semv) {
  return NULL; // TODO
 }
-struct ksem *ksem_timedwaits(__size_t semc, struct ksem *const *semv, struct timespec const *abstime) {
+struct ksem *ksem_timedwaits(__size_t semc, struct ksem *const *semv, struct timespec const *__restrict abstime) {
  return NULL; // TODO
 }
-struct ksem *ksem_timoutwaits(__size_t semc, struct ksem *const *semv, struct timespec const *timeout) {
+struct ksem *ksem_timoutwaits(__size_t semc, struct ksem *const *semv, struct timespec const *__restrict timeout) {
  return NULL; // TODO
 }
 

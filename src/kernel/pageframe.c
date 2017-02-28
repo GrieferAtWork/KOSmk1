@@ -133,6 +133,8 @@ void kernel_initialize_raminfo(void) {
  char   cmdline_safe_v[3*sizeof(void *)];
  size_t cmdline_safe_c;
  memset(&__kpagedir_kernel,0,sizeof(__kpagedir_kernel));
+ /* TODO: Now that we can emulate realmode, we could
+  *       have a fallback for detecting our own memory... */
  if (__grub_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
   k_syslogf(KLOG_ERROR,"KOS Must be booted with a multiboot-compatible bootloader (e.g.: grub)\n");
   goto nocmdline;
@@ -470,10 +472,13 @@ kpageframe_memcpy(__pagealigned struct kpageframe *__restrict dst,
  assert(isaligned((uintptr_t)src,PAGEALIGN));
  kassertmem(dst,n_pages*PAGESIZE);
  kassertmem(src,n_pages*PAGESIZE);
-#if defined(__karch_raw_memcpy_l) && \
-    !(PAGESIZE % __SIZEOF_LONG__)
- /* Use 'rep movsl' (copy 4 bytes at a time). */
+ /* Use 'rep movs*' (copy 2/4/8 bytes at a time). */
+#if defined(__karch_raw_memcpy_q) && !(PAGESIZE % 8)
+ __karch_raw_memcpy_q(dst,src,n_pages*PAGESIZE/8);
+#elif defined(__karch_raw_memcpy_l) && !(PAGESIZE % 4)
  __karch_raw_memcpy_l(dst,src,n_pages*PAGESIZE/4);
+#elif defined(__karch_raw_memcpy_w) && !(PAGESIZE % 2)
+ __karch_raw_memcpy_w(dst,src,n_pages*PAGESIZE/2);
 #else
  memcpy(dst,src,n_pages*PAGESIZE);
 #endif

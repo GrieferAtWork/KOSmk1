@@ -31,14 +31,14 @@ __DECL_BEGIN
 
 
 #ifndef __ASSEMBLY__
-// Physical Pointer
 typedef union __packed __x86_pptr {
+ /* Physical Pointer */
  __u32 u;
  __s32 s;
 } x86_pptr;
 
-// Virtual Pointer
 typedef union __packed __x86_vptr {
+ /* Virtual Pointer */
  __u32 u;
  __s32 s;
  struct __packed {
@@ -56,15 +56,15 @@ typedef union __packed __x86_vptr {
 
 
 
-// Page Directory Entry 
+/* Page Directory Entry */
 #define X86_PDE4DIC  1024
 #define X86_PTE4PDE  1024
 #ifndef __ASSEMBLY__
 typedef union __packed __x86_pde {
  __s32     s;
  __u32     u;
- // Upper 20 bits describe the address of a PTE if 'present' isn't set.
- // NOTE: Not meant for use; Only meant for illustration
+ /* Upper 20 bits describe the address of a PTE if 'present' isn't set.
+  * NOTE: Not meant for use; Only meant for illustration */
  union __x86_pte (*__pte)/*[X86_PTE4PDE]*/;
  struct __packed {
   unsigned int present:        1; /*< Page is present (aka. has an x86_pte associated with id). */
@@ -87,7 +87,7 @@ typedef union __packed __x86_pde {
 #define x86_pde_getpte(self) ((x86_pte *)(uintptr_t)((self)->u&X86_PDE_MASK_PTE))
 #endif /* !__ASSEMBLY__ */
 
-// Flags matching the offsets in the structure above
+/* Flags matching the offsets in the structure above */
 #define X86_PDE_MASK_PTE            UINT32_C(0xfffff000)
 #define X86_PDE_MASK_FLAGS          UINT32_C(0x00000fff)
 #define X86_PDE_FLAG_GLOBAL         UINT32_C(0x00000100)
@@ -100,13 +100,13 @@ typedef union __packed __x86_pde {
 #define X86_PDE_FLAG_PRESENT        UINT32_C(0x00000001)
 
 
-// Page Table Entry (Must be 4-kilobyte aligned)
+/* Page Table Entry (Must be 4-kilobyte aligned) */
 #ifndef __ASSEMBLY__
 typedef union __packed __x86_pte {
  __s32      s;
  __u32      u;
- // Upper 20 bits describe a physical address.
- // NOTE: Not meant for use; Only meant for illustration
+ /* Upper 20 bits describe a physical address.
+  * NOTE: Not meant for use; Only meant for illustration */
  union __x86_pptr *__pptr;
  struct __packed {
   unsigned int present:        1; /*< Page is present. */
@@ -129,7 +129,7 @@ typedef union __packed __x86_pte {
 #define x86_pte_getpptr(self) ((uintptr_t)((self)->u&X86_PTE_MASK_PPTR))
 #endif /* !__ASSEMBLY__ */
 
-// Flags matching the offsets in the structure above
+/* Flags matching the offsets in the structure above */
 #define X86_PTE_MASK_PPTR           UINT32_C(0xfffff000)
 #define X86_PTE_MASK_FLAGS          UINT32_C(0x00000fff)
 #define X86_PTE_FLAG_GLOBAL         UINT32_C(0x00000100)
@@ -166,18 +166,18 @@ typedef union __packed __x86_pte {
     pop  %eax
 .endm
 
-// Translate a virtual address into its physical counterpart
-// NOTES:
-//  - None of the given registers may overlap
-//  - Does not make use of the stack
-//  - Paging must be disabled (cr0&0x80000000 == 0), but the page
-//    directory used for translation must still be stored in CR3.
-// >> This macro is used to implement a safe way of switching to
-//    physical addresses after encountering an interrupt in usercode.
+/* Translate a virtual address into its physical counterpart
+ * NOTES:
+ *  - None of the given registers may overlap
+ *  - Does not make use of the stack
+ *  - Paging must be disabled (cr0&0x80000000 == 0), but the page
+ *    directory used for translation must still be stored in CR3.
+ * >> This macro is used to implement a safe way of switching to
+ *    physical addresses after encountering an interrupt in usercode. */
 .macro TRANSLATE_VADDR rIN, rOUT, rCLOB
     movI %cr3, \rOUT
     movI \rIN, \rCLOB
-    // X86_VPTR_GET_PDID: ((\rCLOB & 0xffc00000) >> 22) * sizeof(x86_pte)
+    /* X86_VPTR_GET_PDID: ((\rCLOB & 0xffc00000) >> 22) * sizeof(x86_pte) */
     andI $0xffc00000, \rCLOB
 #if __SIZEOF_POINTER__ == 4
     shrI $20, \rCLOB
@@ -189,10 +189,10 @@ typedef union __packed __x86_pte {
     addI \rCLOB, \rOUT
     movI (\rOUT), \rOUT
     andI $X86_PDE_MASK_PTE, \rOUT
-    // We now have the address of the PTE stored in \rOUT
-    // >> Now add the PTID offset
+    /* We now have the address of the PTE stored in \rOUT
+     * >> Now add the PTID offset */
     movI \rIN, \rCLOB
-    // X86_VPTR_GET_PTID: ((\rCLOB & 0x003ff000) >> 12) * sizeof(x86_pde)
+    /* X86_VPTR_GET_PTID: ((\rCLOB & 0x003ff000) >> 12) * sizeof(x86_pde) */
     andI $0x003ff000, \rCLOB
 #if __SIZEOF_POINTER__ == 4
     shrI $10, \rCLOB
@@ -204,7 +204,7 @@ typedef union __packed __x86_pte {
     addI \rCLOB, \rOUT
     movI (\rOUT), \rOUT
     andI $X86_PTE_MASK_PPTR, \rOUT
-    // Add the pptr offset from EAX
+    /* Add the pptr offset from EAX */
     movI \rIN, \rCLOB
     andI $0x00000fff, \rCLOB
     addI \rCLOB, \rOUT

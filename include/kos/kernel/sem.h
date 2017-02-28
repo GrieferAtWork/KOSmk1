@@ -78,9 +78,10 @@ struct ksem {
 // @return: KE_OVERFLOW:  Adding 'new_tickets' would overflow the ticket counter
 //                       (No tickets were added, but '*old_tickets' was filled)
 // @return: KE_DESTROYED: The semaphore was destroyed
-extern __wunused __nonnull((1)) kerrno_t ksem_post(struct ksem *self,
-                                                   ksemcount_t  new_tickets,
-                                            /*opt*/ksemcount_t *old_tickets);
+extern __wunused __nonnull((1)) kerrno_t
+ksem_post(struct ksem *__restrict self,
+          ksemcount_t  new_tickets,
+   /*opt*/ksemcount_t *old_tickets);
 
 //////////////////////////////////////////////////////////////////////////
 // Waits for a ticket to become available, and returns it.
@@ -88,10 +89,10 @@ extern __wunused __nonnull((1)) kerrno_t ksem_post(struct ksem *self,
 // @return: KE_WOULDBLOCK: [ksem_trywait] Failed to acquire a ticket lock immediately.
 // @return: KE_TIMEDOUT:   [ksem_(timed|timeout)wait] The given timeout has passed.
 // @return: KE_INTR:      [!ksem_trywait] The calling task was interrupted.
-extern __wunused __nonnull((1))   kerrno_t ksem_wait(struct ksem *self);
-extern __wunused __nonnull((1))   kerrno_t ksem_trywait(struct ksem *self);
-extern __wunused __nonnull((1,2)) kerrno_t ksem_timedwait(struct ksem *self, struct timespec const *abstime);
-extern __wunused __nonnull((1,2)) kerrno_t ksem_timoutwait(struct ksem *self, struct timespec const *timeout);
+extern __wunused __nonnull((1))   kerrno_t ksem_wait(struct ksem *__restrict self);
+extern __wunused __nonnull((1))   kerrno_t ksem_trywait(struct ksem *__restrict self);
+extern __wunused __nonnull((1,2)) kerrno_t ksem_timedwait(struct ksem *__restrict self, struct timespec const *__restrict abstime);
+extern __wunused __nonnull((1,2)) kerrno_t ksem_timoutwait(struct ksem *__restrict self, struct timespec const *__restrict timeout);
 
 __DECL_END
 #endif /* __KERNEL__ */

@@ -39,13 +39,11 @@
 
 __DECL_BEGIN
 
-//
-// An I/O Buffer for one-directional read/write.
-// >> Specially designed to be written to from
-//    something like an interrupt handler, while
-//    being read from normal code.
-// >> Features a runtime-configurable max-size
-//
+/* An I/O Buffer for one-directional read/write.
+ * >> Specially designed to be written to from
+ *    something like an interrupt handler, while
+ *    being read from normal code.
+ * >> Features a runtime-configurable max-size */
 
 #define KOBJECT_MAGIC_IOBUF  0x10BCF /*< IOBUF */
 #define kassert_kiobuf(self) kassert_object(self,KOBJECT_MAGIC_IOBUF)
@@ -245,7 +243,7 @@ extern __nonnull((1)) kerrno_t kiobuf_flush(struct kiobuf *__restrict self);
 // @param: rsize|wsize: Amount of bytes transferred after a success call.
 // @return: KE_OK:        Up to 'bufsize' bytes were transferred (exact size is stored in '*rsize' / '*wsize')
 // @return: KE_DESTROYED: The given I/O buffer was closed.
-// @return: KE_FAULT:     [kiobuf_user_*] The given pointer is faulty.
+// @return: KE_FAULT:     [kiobuf_user_*] A given pointer was faulty.
 // @return: KE_TIMEDOUT:  [!KIO_BLOCKNONE] A timeout previously set using alarm() has expired.
 // @return: KE_INTR:      [!KIO_BLOCKNONE] The calling thread was interrupted.
 // @return: KS_EMPTY:     [kiobuf_read&KIO_BLOCKFIRST] The I/O buffer was interrupted using 'kiobuf_interrupt' ('*rsize' is set to ZERO(0)).
