@@ -470,10 +470,6 @@ not_a_number:
  return kvsdirnode_walk(self,name,resnode);
 }
 
-#define yield(node,name) \
-do if __unlikely((error = (*callback)(name,name,closure)) != KE_OK) return error;\
-while(0)
-
 static kerrno_t
 kfsproc_enumdir(struct kinode *__restrict self,
                 pkenumdir callback,

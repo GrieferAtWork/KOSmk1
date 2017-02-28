@@ -61,7 +61,7 @@ void raminfo_addregion(__u64 start, __u64 size) {
  size_t native_size,used_size;
  extern __u8 __kernel_begin[];
  extern __u8 __kernel_end[];
- // Quickly dismiss regions too small to use for anything
+ /* Quickly dismiss regions too small to use for anything */
  if __unlikely(size < PAGESIZE) return;
  end = start+(size-1);
  if (end > UINT32_MAX || end < start) {
@@ -89,7 +89,7 @@ void raminfo_addregion(__u64 start, __u64 size) {
  assert(!(native_start < (uintptr_t)__kernel_end &&
           native_start+native_size > (uintptr_t)__kernel_begin));
 
- // Align the used memory by the alignment of pages
+ /* Align the used memory by the alignment of pages */
  used_start = align(native_start,PAGEALIGN);
  used_size  = native_size-(used_start-native_start);
  used_size  = alignd(used_size,PAGESIZE);
@@ -104,8 +104,8 @@ void raminfo_addregion(__u64 start, __u64 size) {
           ,"[RAM] Determined usable memory %Ix+%Ix...%Ix (Using %Ix+%Ix...%Ix)\n"
           ,native_start,native_size,native_start+native_size
           ,used_start,used_size,used_start+used_size);
- // Simply mask the region as free!
- // NOTE: Dividing by PAGESIZE truncates
+ /* Simply mask the region as free!
+  * NOTE: Dividing by PAGESIZE truncates to not use partial pages. */
  kpageframe_free((struct kpageframe *)used_start,
                  used_size/PAGESIZE);
 }
@@ -141,8 +141,9 @@ void kernel_initialize_raminfo(void) {
   cmdline_addr = (char *)__grub_mbt->cmdline;
   if (!cmdline_addr) cmdline_length = 0;
   else cmdline_length = strlen(cmdline_addr);
-  // Save the first 12/24 bytes of the commandline, as they may potentially get
-  // overwritten if the commandline starts where a memory region starts.
+  /* Save the first 12/24 bytes of the commandline, as they may potentially get
+   * overwritten if the commandline starts where a memory region starts.
+   * >> The 3 pointers are the 'pff_*' members from kpageframe. */
   cmdline_safe_c = min(sizeof(cmdline_safe_v),cmdline_length);
   memcpy(cmdline_safe_v,cmdline_addr,cmdline_safe_c);
  } else {
@@ -157,7 +158,6 @@ void kernel_initialize_raminfo(void) {
    if (iter->type == 1) {
     __u64 begin = ((__u64)iter->base_addr_high << 32) | (__u64)iter->base_addr_low;
     __u64 size  = ((__u64)iter->length_high << 32) | (__u64)iter->length_low;
-    //debug_addknownramregion((void *)(uintptr_t)begin,(size_t)size);
     raminfo_addregion(begin,size);
    }
    iter = (memory_map_t *)((uintptr_t)iter+(iter->size+sizeof(iter->size)));
@@ -167,14 +167,14 @@ void kernel_initialize_raminfo(void) {
  }
 
  if (cmdline_length) {
-  // Available RAM was enumerated.
-  // Time to allocate the pages belonging to the cmdline
+  /* Available RAM was enumerated.
+   * Time to allocate the pages belonging to the cmdline. */
   uintptr_t aligned_cmdline;
   if (!cmdline_length) goto nocmdline;
   aligned_cmdline = alignd((uintptr_t)cmdline_addr,PAGEALIGN);
   cmdline_page_c = ceildiv(((uintptr_t)cmdline_addr-aligned_cmdline)+cmdline_length,PAGESIZE);
   assert(cmdline_page_c);
-  // Allocate
+  /* Allocate the pages we've already been using for the commandline */
   cmdline_page_v = kpageframe_allocat((struct kpageframe *)aligned_cmdline,cmdline_page_c);
   if (!cmdline_page_v) {
    k_syslogf(KLOG_ERROR,"Failed to allocate CMDLINE page %px%Iu\n",
@@ -200,8 +200,8 @@ nocmdline:
   extern int kernel_initialize_dlmalloc(void);
   kernel_initialize_dlmalloc();
  }
- // Dynamic memory (including the kernel heap) is now initialized!
- // NOTE: The pages containing our cmdline are preserved
+ /* Dynamic memory (including the kernel heap) is now initialized!
+  * NOTE: The pages containing our cmdline are preserved. */
  assert((cmdline_addr != NULL) == (cmdline_page_v != NULL));
  assert((cmdline_addr != NULL) == (cmdline_length != 0));
  assert((cmdline_addr != NULL) == (cmdline_page_c != 0));
@@ -230,9 +230,9 @@ nocmdline:
   }
  }
  if (cmdline_page_v) {
-  // Implemented in '/src/kernel/procenv.c'
+  /* Implemented in '/src/kernel/procenv.c' */
   extern void kernel_initialize_cmdline(char const *cmd, size_t cmdlen);
-  // Restore the saved cmdline portion (leading (up to) 12/24 bytes)
+  /* Restore the saved cmdline portion (leading (up to) 12/24 bytes) */
   memcpy(cmdline_addr,cmdline_safe_v,cmdline_safe_c);
   x64_reserve_realmode_bootstrap();
   kernel_initialize_cmdline(cmdline_addr,cmdline_length);

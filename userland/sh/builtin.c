@@ -133,11 +133,12 @@ int builtin_exit(int argc, char *argv[]) {
 
 
 #include <mod.h>
+#include <traceback.h>
 
 int builtin_color(int argc, char *argv[]) {
 #if 1
  mod_t md;
- //md = mod_open("/bin/pe-test");
+ //md = mod_open("/bin/pe-test",MOD_OPEN_NONE);
  md = mod_open("/usr/lib/pe-lib.dll",MOD_OPEN_NONE);
  void (*callback)(void);
  if (md == MOD_ERR) perror("mod_open");
@@ -147,6 +148,7 @@ int builtin_color(int argc, char *argv[]) {
   else (*callback)();
   mod_close(md);
  }
+ tb_print();
 #else
  dprintf(STDOUT_FILENO,
          "\033[48;5;0;37m00\033[48;5;1;30m01\033[48;5;2;30m02\033[48;5;3;30m03\033[48;5;4;37m04\033[48;5;5;30m05\033[48;5;6;30m06\033[48;5;7;30m07\n"

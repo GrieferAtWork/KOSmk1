@@ -137,7 +137,6 @@ void tty_clear(void) {
 void kernel_initialize_tty(void) {
  tty_color = VGA_DEFAULT_COLOR;
  tty_buffer_set(VGA_ADDR);
- //debug_addknownramregion(VGA_ADDR,VGA_WIDTH*VGA_HEIGHT*2);
  tty_clear_unlocked();
 }
 
