@@ -356,7 +356,7 @@ krelocvec_exec(struct krelocvec *__restrict self,
   case KRELOCVEC_TYPE_PE32_RELOC:
    kreloc_pe32_reloc_exec(self,memspace,proc,reloc_module,start_module);
    break;
-  default: __builtin_unreachable(); break;
+  default: __compiler_unreachable(); break;
  }
 }
 void kreloc_exec(struct kreloc *__restrict self,

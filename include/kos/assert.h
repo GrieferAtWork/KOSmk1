@@ -39,17 +39,18 @@ extern __noinline __noclone __noreturn __coldcall
 #else
 #      error "FIXME"
 #endif
-void __assertion_failedf __P((__LIBC_DEBUG_PARAMS_ char const *expr,
-                              unsigned int skip, char const *fmt, ...));
+void __assertion_failedf __P((__LIBC_DEBUG_PARAMS_ char const *__expr,
+                              unsigned int __skip, char const *__fmt, ...));
 extern __noinline __noclone __noreturn __coldcall
 #if __LIBC_HAVE_DEBUG_PARAMS == 3
        __nonnull((1,3))
 #endif
-void __builtin_unreachable_d __P((__LIBC_DEBUG_PARAMS));
+void __libc_unreachable_d __P((__LIBC_DEBUG_PARAMS));
 __DECL_END
 
 #ifndef __INTELLISENSE__
-#   define __builtin_unreachable() __builtin_unreachable_d(__LIBC_DEBUG_ARGS)
+#   undef  __compiler_unreachable
+#   define __compiler_unreachable() __libc_unreachable_d(__LIBC_DEBUG_ARGS)
 #endif
 #   define __assert(expr)                      (!(expr)?__assertion_failedf(__LIBC_DEBUG_ARGS_ #expr,0,(char const *)0):(void)0)
 #   define __assertf(expr,...)                 (!(expr)?__assertion_failedf(__LIBC_DEBUG_ARGS_ #expr,0,__VA_ARGS__):(void)0)

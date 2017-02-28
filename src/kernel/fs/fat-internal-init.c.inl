@@ -134,7 +134,7 @@ kfatfs_init(struct kfatfs *__restrict self,
    self->f_rootcls       = leswap_32(header->x32.x32_root_cluster);
    break;
   }
-  default: __builtin_unreachable();
+  default: __compiler_unreachable();
  }
  if __unlikely(self->f_clseof_marker < self->f_clseof)
   self->f_clseof = self->f_clseof_marker;

@@ -79,7 +79,7 @@ __DECL_BEGIN
 #endif
 
 
-__public void __builtin_unreachable_d(__LIBC_DEBUG_PARAMS) {
+__public void __libc_unreachable_d(__LIBC_DEBUG_PARAMS) {
  ASSERT_PRINTF(KDEBUG_SOURCEPATH_PREFIX
                "%s(%d) : %s : Unreachable code reached\n"
                ,__LIBC_DEBUG_FILE
@@ -133,7 +133,7 @@ void __assertion_failedf(__LIBC_DEBUG_PARAMS_ char const *expr,
   else ASSERT_PRINTF("NO PAGE DIRECTORY (task: %p, proc: %p, pd: %p)\n",task,proc,pd);
  }
  arch_hang();
- __builtin_unreachable();
+ __compiler_unreachable();
 #else
  abort();
 #endif
@@ -147,7 +147,7 @@ void __assertion_failedf(__LIBC_DEBUG_PARAMS_ char const *expr,
 #   define PANIC_PRINTF(...)           (serial_printf(SERIAL_01,__VA_ARGS__),tty_printf(__VA_ARGS__))
 #   define PANIC_VPRINTF(format,args) (serial_vprintf(SERIAL_01,format,args),tty_vprintf(format,args))
 #endif
-void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *fmt, ...) {
+void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *__restrict fmt, ...) {
  karch_irq_disable();
 #ifdef __x86__ // (Light) red screen!
  tty_x86_setcolors(vga_entry_color(VGA_COLOR_WHITE,VGA_COLOR_LIGHT_RED));
@@ -179,7 +179,7 @@ void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *fmt, ...) {
   else ASSERT_PRINTF("NO PAGE DIRECTORY (task: %p, proc: %p, pd: %p)\n",task,proc,pd);
  }
  arch_hang();
- __builtin_unreachable();
+ __compiler_unreachable();
 }
 #endif
 

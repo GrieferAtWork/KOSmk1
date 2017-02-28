@@ -56,7 +56,7 @@
 
 __DECL_BEGIN
 
-__public int fprintf(FILE *fp, char const *fmt, ...) {
+__public int fprintf(FILE *fp, char const *__restrict fmt, ...) {
  va_list args; int result;
  va_start(args,fmt);
  result = vfprintf(fp,fmt,args);
@@ -200,7 +200,7 @@ static int stdio_file_formatprinter(char const *data,
  if __unlikely(KE_ISERR(error)) return error;
  return wsize == maxchars ? KE_OK : KE_NOSPC;
 }
-__public int vfprintf(FILE *fp, char const *fmt, va_list args) {
+__public int vfprintf(FILE *fp, char const *__restrict fmt, va_list args) {
  return format_vprintf((pformatprinter)&stdio_file_formatprinter,fp,fmt,args);
 }
 static int fscanf_scanner(int *__restrict ch,
@@ -406,7 +406,7 @@ static int stdio_file_formatprinter(char const *data,
  return write(fp->f_fd,data,strnlen(data,maxchars)) < 0 ? -1 : 0;
 }
 
-__public int vfprintf(FILE *fp, char const *fmt, va_list args) {
+__public int vfprintf(FILE *fp, char const *__restrict fmt, va_list args) {
  if __unlikely(!fp || !fmt) return -1;
  return format_vprintf((pformatprinter)&stdio_file_formatprinter,fp,fmt,args);
 }

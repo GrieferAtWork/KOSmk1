@@ -68,13 +68,13 @@ extern __wunused __size_t user_strncpy(__user char *p, __kernel char const *s, _
 // small, or the negative amount not written if the buffer was faulty.
 // >> if (user_snprintf(...) < 0) return KE_FAULT;
 // NOTE: '*reqsize' is filled with the required size including the terminating \0-character.
-extern __wunused __ssize_t user_snprintf(__user char *buf, __size_t bufsize, /*opt*/__kernel __size_t *reqsize, __kernel char const *fmt, ...);
-extern __wunused __ssize_t user_vsnprintf(__user char *buf, __size_t bufsize, /*opt*/__kernel __size_t *reqsize, __kernel char const *fmt, va_list args);
+extern __wunused __ssize_t user_snprintf(__user char *buf, __size_t bufsize, /*opt*/__kernel __size_t *reqsize, __kernel char const *__restrict fmt, ...);
+extern __wunused __ssize_t user_vsnprintf(__user char *buf, __size_t bufsize, /*opt*/__kernel __size_t *reqsize, __kernel char const *__restrict fmt, va_list args);
 #else
 extern __crit __wunused __size_t __user_memset_c(__user void *p, int byte, __size_t bytes);
 extern __crit __wunused __size_t __user_strncpy_c(__user char *p, __kernel char const *s, __size_t maxchars);
-extern __crit __wunused __ssize_t __user_snprintf_c(__user char *buf, __size_t bufsize, /*opt*/__kernel __size_t *reqsize, __kernel char const *fmt, ...);
-extern __crit __wunused __ssize_t __user_vsnprintf_c(__user char *buf, __size_t bufsize, /*opt*/__kernel __size_t *reqsize, __kernel char const *fmt, va_list args);
+extern __crit __wunused __ssize_t __user_snprintf_c(__user char *buf, __size_t bufsize, /*opt*/__kernel __size_t *reqsize, __kernel char const *__restrict fmt, ...);
+extern __crit __wunused __ssize_t __user_vsnprintf_c(__user char *buf, __size_t bufsize, /*opt*/__kernel __size_t *reqsize, __kernel char const *__restrict fmt, va_list args);
 #define __user_memset(p,byte,bytes)                    KTASK_CRIT(__user_memset_c(p,byte,bytes))
 #define __user_strncpy(p,s,maxchars)                   KTASK_CRIT(__user_strncpy_c(p,s,maxchars))
 #define __user_snprintf(buf,bufsize,reqsize,...)       KTASK_CRIT(__user_snprintf_c(buf,bufsize,reqsize,__VA_ARGS__))

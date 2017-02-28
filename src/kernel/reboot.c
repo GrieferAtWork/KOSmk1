@@ -68,7 +68,7 @@ void hw_shutdown(void) {
   karch_irq_disable();
   karch_irq_idle();
  }
- __builtin_unreachable();
+ __compiler_unreachable();
 }
 
 #endif /* !__KOS_KERNEL_REBOOT_C__ */

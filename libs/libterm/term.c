@@ -724,10 +724,10 @@ static int term_printer(char const *__restrict data,
  return 0;
 }
 
-__public void term_voutf(struct term *self, char const *fmt, va_list args) {
+__public void term_voutf(struct term *self, char const *__restrict fmt, va_list args) {
  format_vprintf((pformatprinter)&term_printer,self,fmt,args);
 }
-__public void term_outf(struct term *self, char const *fmt, ...) {
+__public void term_outf(struct term *self, char const *__restrict fmt, ...) {
  va_list args;
  va_start(args,fmt);
  term_voutf(self,fmt,args);

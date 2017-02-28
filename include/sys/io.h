@@ -118,12 +118,12 @@ extern void outl_p(unsigned short port, unsigned int value);
 
 #ifdef __KERNEL__
 #if !KOS_ARCH_HAVE(IO_H)
-#   define inb(port)          __builtin_unreachable()
-#   define inw(port)          __builtin_unreachable()
-#   define inl(port)          __builtin_unreachable()
-#   define __outb(port,value) __builtin_unreachable()
-#   define __outw(port,value) __builtin_unreachable()
-#   define __outl(port,value) __builtin_unreachable()
+#   define inb(port)          __compiler_unreachable()
+#   define inw(port)          __compiler_unreachable()
+#   define inl(port)          __compiler_unreachable()
+#   define __outb(port,value) __compiler_unreachable()
+#   define __outw(port,value) __compiler_unreachable()
+#   define __outl(port,value) __compiler_unreachable()
 #endif /* !KOS_ARCH_HAVE(IO_H) */
 #ifndef inb_p
 __forcelocal unsigned char  inb_p __D1(unsigned short,__port) { __u8  result = inb(__port); __IOPAUSE(); return result; }

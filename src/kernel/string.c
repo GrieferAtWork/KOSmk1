@@ -121,7 +121,7 @@ __user_strncpy_c(__user char *p, __kernel char const *s, size_t maxchars) {
 __crit ssize_t
 __user_snprintf_c(__user char *buf, size_t bufsize,
                   /*opt*/__kernel size_t *reqsize,
-                  __kernel char const *fmt, ...) {
+                  __kernel char const *__restrict fmt, ...) {
  va_list args;
  ssize_t result;
  va_start(args,fmt);
@@ -177,7 +177,7 @@ user_vsnprintf_callback(__kernel char const *s, size_t maxlen,
 __crit ssize_t
 __user_vsnprintf_c(__user char *buf, size_t bufsize,
                    /*opt*/__kernel size_t *reqsize,
-                   __kernel char const *fmt, va_list args) {
+                   __kernel char const *__restrict fmt, va_list args) {
  struct user_vsnprintf_data data;
  ssize_t result; __user char *real_bufend;
  struct ktask *caller = ktask_self();

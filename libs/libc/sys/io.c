@@ -69,18 +69,18 @@ __public unsigned char  inb(unsigned short port) { return karch_inb(port); }
 __public unsigned short inw(unsigned short port) { return karch_inw(port); }
 __public unsigned int   inl(unsigned short port) { return karch_inl(port); }
 #else
-__public unsigned char  inb(unsigned short __unused(port)) { __builtin_unreachable(); }
-__public unsigned short inw(unsigned short __unused(port)) { __builtin_unreachable(); }
-__public unsigned int   inl(unsigned short __unused(port)) { __builtin_unreachable(); }
+__public unsigned char  inb(unsigned short __unused(port)) { __compiler_unreachable(); }
+__public unsigned short inw(unsigned short __unused(port)) { __compiler_unreachable(); }
+__public unsigned int   inl(unsigned short __unused(port)) { __compiler_unreachable(); }
 #endif
 #ifdef karch_outb
 __public void __outb(unsigned short port, unsigned char  value) { karch_outb(port,value); }
 __public void __outw(unsigned short port, unsigned short value) { karch_outw(port,value); }
 __public void __outl(unsigned short port, unsigned int   value) { karch_outl(port,value); }
 #else
-__public void __outb(unsigned short __unused(port), unsigned char  __unused(value)) { __builtin_unreachable(); }
-__public void __outw(unsigned short __unused(port), unsigned short __unused(value)) { __builtin_unreachable(); }
-__public void __outl(unsigned short __unused(port), unsigned int   __unused(value)) { __builtin_unreachable(); }
+__public void __outb(unsigned short __unused(port), unsigned char  __unused(value)) { __compiler_unreachable(); }
+__public void __outw(unsigned short __unused(port), unsigned short __unused(value)) { __compiler_unreachable(); }
+__public void __outl(unsigned short __unused(port), unsigned int   __unused(value)) { __compiler_unreachable(); }
 #endif
 #ifdef karch_inb_p
 __public unsigned char  inb_p(unsigned short port) { return karch_inb_p(port); }

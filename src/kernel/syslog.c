@@ -72,12 +72,12 @@ static int syslog_callback(char const *msg, size_t msg_max, void *data) {
 }
 
 void k_dovsyslogf(int level, psyslogprefix print_prefix, void *closure,
-                  char const *fmt, va_list args) {
+                  char const *__restrict fmt, va_list args) {
  struct syslog_callback_data data = {level,print_prefix,closure};
  format_vprintf(&syslog_callback,&data,fmt,args);
 }
 void k_dosyslogf(int level, psyslogprefix print_prefix, void *closure,
-                 char const *fmt, ...) {
+                 char const *__restrict fmt, ...) {
  va_list args;
  va_start(args,fmt);
  k_dovsyslogf(level,print_prefix,closure,fmt,args);

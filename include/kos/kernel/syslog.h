@@ -47,8 +47,8 @@ typedef void (*psyslogprefix)(int level, void *closure);
 // Do low-level syslog output with the ability of declaring a custom
 // callback of printing additional content at the start of each line.
 extern void k_dosyslog(int level, psyslogprefix print_prefix, void *closure, __kernel char const *s, __size_t maxlen);
-extern void k_dosyslogf(int level, psyslogprefix print_prefix, void *closure, char const *fmt, ...);
-extern void k_dovsyslogf(int level, psyslogprefix print_prefix, void *closure, char const *fmt, va_list args);
+extern void k_dosyslogf(int level, psyslogprefix print_prefix, void *closure, char const *__restrict fmt, ...);
+extern void k_dovsyslogf(int level, psyslogprefix print_prefix, void *closure, char const *__restrict fmt, va_list args);
 
 //////////////////////////////////////////////////////////////////////////
 // Output strings to the syslog, prefixing each line with "['/foo/bar/foobar.txt']"
@@ -71,8 +71,8 @@ extern int k_sysloglevel;
 // WARNING: Do _NOT_ put any code within the arguments that
 //          you rely on being evaluated (because it might not).
 extern void k_syslog(int level, char const *s, __size_t maxlen);
-extern void k_syslogf(int level, char const *fmt, ...);
-extern void k_vsyslogf(int level, char const *fmt, va_list args);
+extern void k_syslogf(int level, char const *__restrict fmt, ...);
+extern void k_vsyslogf(int level, char const *__restrict fmt, va_list args);
 extern void k_syslog_prefixfile(int level, struct kfile *file, char const *s, __size_t maxlen);
 extern void k_syslogf_prefixfile(int level, struct kfile *file, char const *format, ...);
 extern void k_vsyslogf_prefixfile(int level, struct kfile *file, char const *format, va_list args);

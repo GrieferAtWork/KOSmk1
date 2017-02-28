@@ -56,7 +56,7 @@ void _start(void) {
            environ));
 
  /* We should never get here! */
- __builtin_unreachable();
+ __compiler_unreachable();
 }
 
 __DECL_END

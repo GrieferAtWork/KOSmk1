@@ -1242,7 +1242,7 @@ __ktask_unschedule_nocpu(struct ktask *__restrict self, __u8 newstate, void *__r
    self->t_exitcode = arg;
    katomic_store(self->t_state,newstate);
    return KE_OK;
-  default: __builtin_unreachable();
+  default: __compiler_unreachable();
  }
 }
 
@@ -1324,7 +1324,7 @@ reschedule_running:
    self->t_exitcode = arg;
    error = KE_OK;
    break;
-  default: __builtin_unreachable();
+  default: __compiler_unreachable();
  }
  // At this point, we still own a reference to the task 'self'
  // >> Unlock the task, decref it, then re-enable interrupt and exit with KE_OK
@@ -1571,7 +1571,7 @@ restart_cputask:
      /* The following call will not return
       * because the new state is termination */
      ktask_selectcurr_anddecref_ni(self);
-     __builtin_unreachable();
+     __compiler_unreachable();
     } else {
      ktask_unlock(self,KTASK_LOCK_STATE);
      ktask_selectcurrunlock_anddecref_ni(cpuself,self);
@@ -1713,7 +1713,7 @@ ktask_unschedule_aftercrit(struct ktask *__restrict self) {
     NOIRQ_BREAK
     return;
    }
-  default: __builtin_unreachable();
+  default: __compiler_unreachable();
  }
  NOIRQ_ENDUNLOCK(ktask_unlock(self,KTASK_LOCK_STATE));
 }
@@ -1906,7 +1906,7 @@ reschedule_first:
     goto reschedule_first;
    }
    break;
-  default: __builtin_unreachable();
+  default: __compiler_unreachable();
  }
 /*endok:*/
  error = KE_OK;

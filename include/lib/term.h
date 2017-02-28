@@ -172,8 +172,8 @@ extern __nonnull((1)) void term_outc(struct term *self, char ch);
 extern __nonnull((1)) void term_outs(struct term *self, char const *s);
 extern __nonnull((1)) void term_outn(struct term *self, char const *p, size_t max_chars);
 extern __nonnull((1)) void term_outl(struct term *self, void const *p, size_t len);
-extern __nonnull((1)) void term_outf(struct term *self, char const *fmt, ...);
-extern __nonnull((1)) void term_voutf(struct term *self, char const *fmt, va_list args);
+extern __nonnull((1)) void term_outf(struct term *self, char const *__restrict fmt, ...);
+extern __nonnull((1)) void term_voutf(struct term *self, char const *__restrict fmt, va_list args);
 
 #define ANSI_ESCAPE    '\033' /* '\e' */
 #define ANSI_ESCAPE_S  "\033" /* "\e" */

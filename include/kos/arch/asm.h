@@ -34,7 +34,7 @@ __DECL_BEGIN
 #ifndef arch_hang
 #define arch_hang() \
  __xblock({ for (;;) {} \
-            __builtin_unreachable();\
+            __compiler_unreachable();\
  })
 
 #endif

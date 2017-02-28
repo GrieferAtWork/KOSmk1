@@ -33,7 +33,7 @@ __DECL_BEGIN
 #define arch_hang() \
  __xblock({ __karch_raw_irq_disable();\
             for (;;) __karch_raw_irq_idle();\
-            __builtin_unreachable();\
+            __compiler_unreachable();\
  })
 #endif
 

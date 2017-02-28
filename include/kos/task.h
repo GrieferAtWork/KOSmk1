@@ -275,7 +275,7 @@ extern __wunused __constcall ktask_t ktask_proc(void);
 __local __noreturn void ktask_exit(void *exitcode) {
  // NOTE: Don't terminate child-threads here.
  ktask_terminate(ktask_self(),exitcode,KTASKOPFLAG_NONE);
- __builtin_unreachable();
+ __compiler_unreachable();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -284,7 +284,7 @@ __local __noreturn void kproc_exit(void *exitcode) {
  // NOTE: Since this call won't return, we don't care about
  //       the leaked file descriptor returned by 'ktask_proc()'
  ktask_terminate(ktask_proc(),exitcode,KTASKOPFLAG_RECURSIVE);
- __builtin_unreachable();
+ __compiler_unreachable();
 }
 #endif /* !__ASSEMBLY__ */
 

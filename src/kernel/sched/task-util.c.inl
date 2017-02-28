@@ -241,7 +241,7 @@ kerrno_t ktask_terminateex_k(struct ktask *__restrict self,
 
 void ktask_exit(void *exitcode) {
  __evalexpr(_ktask_terminate_k(ktask_self(),exitcode));
- __builtin_unreachable();
+ __compiler_unreachable();
 }
 
 

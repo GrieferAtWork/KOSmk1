@@ -34,7 +34,7 @@
  *         WOW! This is where all the cpu cycles disappear to!
  *      >> Somehow make mall faster (like... a lot faster!)
  */
-//#undef __LIBC_HAVE_DEBUG_MALLOC
+#undef __LIBC_HAVE_DEBUG_MALLOC
 
 
 #include <kos/compiler.h>
@@ -440,9 +440,10 @@ __local __crit void mall_remove_unlocked(struct mallhead *__restrict head) {
 }
 
 #if MALL_TRACEBACK
-static int _mallblock_do_traceback_d(struct mallhead const *__restrict self,
-                                     ptbwalker callback,
-                                     void *closure) {
+static int
+_mallblock_do_traceback_d(struct mallhead const *__restrict self,
+                          ptbwalker callback,
+                          void *closure) {
  void const *const *iter,*end;
  size_t pos = 0; int error = 0;
  end = (iter = self->mh_tb)+self->mh_tsz;
@@ -464,7 +465,9 @@ printleaks_tb_callback(void const *__restrict addr,
 }
 #endif /* MALL_TRACEBACK */
 
-static int mall_printleak(struct mallhead const *__restrict head, char const *reason) {
+static int
+mall_printleak(struct mallhead const *__restrict head,
+               char const *reason) {
  MALL_SYSPRINTF("##################################################\n"
                 KDEBUG_SOURCEPATH_PREFIX "%s(%d) : %s : %s %Iu bytes at %p\n"
                ,head->mh_file,head->mh_line
@@ -570,7 +573,8 @@ do{ byte_t const *iter,*end,*start; byte_t expected_byte;\
 #endif
 
 static __noinline void
-mall_validatehead(int original, struct mallhead const *head, size_t skip __LIBC_DEBUG__PARAMS) {
+mall_validatehead(int original, struct mallhead const *head,
+                  size_t skip __LIBC_DEBUG__PARAMS) {
  kerrno_t errid; struct malltail *tail; void *user;
  /*printf("base: %p %p\n",head->mh_base,head);*/
 #if MALL_TRACEBACK
@@ -651,7 +655,8 @@ mall_user2head(void *__restrict p, size_t skip __LIBC_DEBUG__PARAMS) {
 #undef VALIDATE
 
 /* The main mall-allocator function. */
-static __crit __noinline void *mall_malloc(size_t s, size_t alignment __LIBC_DEBUG__PARAMS) {
+static __crit __noinline void *
+mall_malloc(size_t s, size_t alignment __LIBC_DEBUG__PARAMS) {
 #if MALL_TRACEBACK
  size_t traceback_size,headtailsize;
 #endif /* MALL_TRACEBACK */
@@ -736,7 +741,9 @@ static __crit __noinline void *mall_malloc(size_t s, size_t alignment __LIBC_DEB
  /*mall_validatehead(1,head,1 __LIBC_DEBUG__FWD);*/
  return result;
 }
-static __crit __noinline void mall_free(void *__restrict p __LIBC_DEBUG__PARAMS) {
+
+static __crit __noinline void
+mall_free(void *__restrict p __LIBC_DEBUG__PARAMS) {
  struct mallhead *head;
  /* Ignore NULL-pointers. */
  if __unlikely(!p) return;
@@ -756,7 +763,8 @@ static __crit __noinline void mall_free(void *__restrict p __LIBC_DEBUG__PARAMS)
   MALL_LOCK_RELEASE
  }
 }
-static __noinline size_t mall_sizeof(void *__restrict p __LIBC_DEBUG__PARAMS) {
+static __noinline size_t
+mall_sizeof(void *__restrict p __LIBC_DEBUG__PARAMS) {
  struct mallhead *head;
  if __unlikely(!p) return 0;
  head = mall_user2head(p,MALL_TBOFF __LIBC_DEBUG__FWD);
@@ -776,7 +784,8 @@ static __noinline size_t mall_sizeof(void *__restrict p __LIBC_DEBUG__PARAMS) {
 #endif
 }
 
-void *__malloc_untrack(void *mallptr) {
+__public void *
+__malloc_untrack(void *mallptr) {
  struct mallhead *head;
  if (mallptr) {
   head = mall_user2head(mallptr,1 __LIBC_DEBUG__NULL);
@@ -792,15 +801,18 @@ void *__malloc_untrack(void *mallptr) {
 
 
 
-__public __crit void *_malloc_d(size_t s __LIBC_DEBUG__PARAMS) {
+__public __crit void *
+_malloc_d(size_t s __LIBC_DEBUG__PARAMS) {
  return mall_malloc(s,MALLOC_ALIGNMENT __LIBC_DEBUG__FWD);
 }
-__public __crit void *_calloc_d(size_t n, size_t s __LIBC_DEBUG__PARAMS) {
+__public __crit void *
+_calloc_d(size_t n, size_t s __LIBC_DEBUG__PARAMS) {
  void *result = mall_malloc(n*s,MALLOC_ALIGNMENT __LIBC_DEBUG__FWD);
  if __likely(result) memset(result,0,n*s);
  return result;
 }
-__public __crit void *_realloc_d(void *__restrict p, size_t s __LIBC_DEBUG__PARAMS) {
+__public __crit void *
+_realloc_d(void *__restrict p, size_t s __LIBC_DEBUG__PARAMS) {
  void *result;
  result = mall_malloc(s,MALLOC_ALIGNMENT __LIBC_DEBUG__FWD);
  if (p && result) {
@@ -809,11 +821,13 @@ __public __crit void *_realloc_d(void *__restrict p, size_t s __LIBC_DEBUG__PARA
  }
  return result;
 }
-__public __crit void *_memalign_d(size_t alignment, size_t bytes __LIBC_DEBUG__PARAMS) {
+__public __crit void *
+_memalign_d(size_t alignment, size_t bytes __LIBC_DEBUG__PARAMS) {
  return mall_malloc(bytes,alignment __LIBC_DEBUG__FWD);
 }
-__public __crit int _posix_memalign_d(void **__restrict memptr, size_t alignment,
-                                      size_t bytes __LIBC_DEBUG__PARAMS) {
+__public __crit int
+_posix_memalign_d(void **__restrict memptr, size_t alignment,
+                  size_t bytes __LIBC_DEBUG__PARAMS) {
  size_t d = alignment / sizeof(void*);
  size_t r = alignment % sizeof(void*);
  if (r != 0 || d == 0 || (d & (d-SIZE_T_ONE)) != 0) return EINVAL;
@@ -821,47 +835,56 @@ __public __crit int _posix_memalign_d(void **__restrict memptr, size_t alignment
  return *memptr ? EOK : ENOMEM;
 }
 __public __crit void _free_d(void *p __LIBC_DEBUG__PARAMS) { mall_free(p __LIBC_DEBUG__FWD); }
-__public __crit char *_strdup_d(char const *__restrict s __LIBC_DEBUG__PARAMS) {
+__public __crit char *
+_strdup_d(char const *__restrict s __LIBC_DEBUG__PARAMS) {
  size_t slen = strlen(s)+1;
  char *result = (char *)mall_malloc(slen*sizeof(char),MALLOC_ALIGNMENT __LIBC_DEBUG__FWD);
  if (result) memcpy(result,s,slen*sizeof(char));
  return result;
 }
-__public __crit char *_strndup_d(char const *__restrict s, size_t maxchars __LIBC_DEBUG__PARAMS) {
+__public __crit char *
+_strndup_d(char const *__restrict s, size_t maxchars __LIBC_DEBUG__PARAMS) {
  size_t slen = strnlen(s,maxchars);
  char *result = (char *)mall_malloc((slen+1)*sizeof(char),MALLOC_ALIGNMENT __LIBC_DEBUG__FWD);
  if (result) { memcpy(result,s,slen*sizeof(char)); result[slen] = '\0'; }
  return result;
 }
-__public __crit void *_memdup_d(void const *__restrict p, size_t bytes __LIBC_DEBUG__PARAMS) {
+__public __crit void *
+_memdup_d(void const *__restrict p, size_t bytes __LIBC_DEBUG__PARAMS) {
  char *result = (char *)mall_malloc(bytes,MALLOC_ALIGNMENT __LIBC_DEBUG__FWD);
  if (result) memcpy(result,p,bytes);
  return result;
 }
-__public __crit size_t _malloc_usable_size_d(void *__restrict p __LIBC_DEBUG__PARAMS) {
+__public __crit size_t
+_malloc_usable_size_d(void *__restrict p __LIBC_DEBUG__PARAMS) {
  return mall_sizeof(p __LIBC_DEBUG__FWD);
 }
-__public __crit void *_pvalloc_d(size_t bytes __LIBC_DEBUG__PARAMS) {
- size_t pagesz = MALL_SYSPAGESIZE;
+__public __crit void *
+_pvalloc_d(size_t bytes __LIBC_DEBUG__PARAMS) {
+ size_t const pagesz = MALL_SYSPAGESIZE; /***Take from dlmalloc***/
  return mall_malloc((bytes + pagesz - SIZE_T_ONE) & ~(pagesz - SIZE_T_ONE),pagesz __LIBC_DEBUG__FWD);
 }
-__public __crit void *_valloc_d(size_t bytes __LIBC_DEBUG__PARAMS) {
- size_t pagesz = MALL_SYSPAGESIZE;
+__public __crit void *
+_valloc_d(size_t bytes __LIBC_DEBUG__PARAMS) {
+ size_t const pagesz = MALL_SYSPAGESIZE;
  return mall_malloc(bytes,pagesz __LIBC_DEBUG__FWD);
 }
 
 
 //////////////////////////////////////////////////////////////////////////
-// Non-debug versions still use debug allocator (for binary compability)
-__public __crit void *malloc(size_t s) {
+// Non-debug versions still use debug allocator (for binary compatibility)
+__public __crit void *
+malloc(size_t s) {
  return mall_malloc(s,MALLOC_ALIGNMENT __LIBC_DEBUG__NULL);
 }
-__public __crit void *calloc(size_t n, size_t s) {
+__public __crit void *
+calloc(size_t n, size_t s) {
  void *result = mall_malloc(n*s,MALLOC_ALIGNMENT __LIBC_DEBUG__NULL); ;
  if __likely(result) memset(result,0,n*s);
  return result;
 }
-__public __crit void *realloc(void *__restrict p, size_t s) {
+__public __crit void *
+realloc(void *__restrict p, size_t s) {
  void *result;
  result = mall_malloc(s,MALLOC_ALIGNMENT __LIBC_DEBUG__NULL);
  if (p && result) {
@@ -870,43 +893,60 @@ __public __crit void *realloc(void *__restrict p, size_t s) {
  }
  return result;
 }
-__public __crit void *memalign(size_t alignment, size_t bytes) {
+__public __crit void *
+memalign(size_t alignment, size_t bytes) {
  return mall_malloc(bytes,alignment __LIBC_DEBUG__NULL);
 }
-__public __crit int posix_memalign(void **__restrict memptr,
-                                   size_t alignment, size_t bytes) {
+__public __crit int
+posix_memalign(void **__restrict memptr,
+               size_t alignment, size_t bytes) {
  size_t d = alignment / sizeof(void*);
  size_t r = alignment % sizeof(void*);
  if (r != 0 || d == 0 || (d & (d-SIZE_T_ONE)) != 0) return EINVAL;
  *memptr = mall_malloc(bytes,alignment __LIBC_DEBUG__NULL);
  return *memptr ? EOK : ENOMEM;
 }
-__public __crit void free(void *__restrict p) {
+__public __crit void
+free(void *__restrict p) {
  mall_free(p __LIBC_DEBUG__NULL);
 }
-__public __crit char *strdup(char const *__restrict s) {
+__public __crit char *
+strdup(char const *__restrict s) {
  size_t slen = strlen(s)+1;
- char *result = (char *)mall_malloc(slen*sizeof(char),MALLOC_ALIGNMENT __LIBC_DEBUG__NULL);
+ char *result = (char *)mall_malloc(slen*sizeof(char),
+                                    MALLOC_ALIGNMENT
+                                    __LIBC_DEBUG__NULL);
  if (result) memcpy(result,s,slen*sizeof(char));
  return result;
 }
-__public __crit char *strndup(char const *__restrict s, size_t maxchars) {
+__public __crit char *
+strndup(char const *__restrict s, size_t maxchars) {
  size_t slen = strnlen(s,maxchars);
- char *result = (char *)mall_malloc((slen+1)*sizeof(char),MALLOC_ALIGNMENT __LIBC_DEBUG__NULL);
- if (result) { memcpy(result,s,slen*sizeof(char)); result[slen] = '\0'; }
+ char *result = (char *)mall_malloc((slen+1)*sizeof(char),
+                                    MALLOC_ALIGNMENT
+                                    __LIBC_DEBUG__NULL);
+ if (result) {
+  memcpy(result,s,slen*sizeof(char));
+  result[slen] = '\0';
+ }
  return result;
 }
-__public __crit void *_memdup(void const *__restrict p, size_t bytes) {
- char *result = (char *)mall_malloc(bytes,MALLOC_ALIGNMENT __LIBC_DEBUG__NULL);
+__public __crit void *
+_memdup(void const *__restrict p, size_t bytes) {
+ char *result = (char *)mall_malloc(bytes,MALLOC_ALIGNMENT
+                                    __LIBC_DEBUG__NULL);
  if (result) memcpy(result,p,bytes);
  return result;
 }
-__public size_t malloc_usable_size(void *__restrict p) {
+__public size_t
+malloc_usable_size(void *__restrict p) {
  return mall_sizeof(p __LIBC_DEBUG__NULL);
 }
 __public __crit void *pvalloc(size_t bytes) {
  size_t pagesz = MALL_SYSPAGESIZE;
- return mall_malloc((bytes + pagesz - SIZE_T_ONE) & ~(pagesz - SIZE_T_ONE),pagesz __LIBC_DEBUG__NULL);
+ return mall_malloc((bytes + pagesz - SIZE_T_ONE) &
+                   ~(pagesz - SIZE_T_ONE),
+                     pagesz __LIBC_DEBUG__NULL);
 }
 __public __crit void *valloc(size_t bytes) {
  size_t pagesz = MALL_SYSPAGESIZE;
@@ -964,12 +1004,11 @@ _vstrdupf(char const *__restrict format,
 
 //////////////////////////////////////////////////////////////////////////
 // Public mallblock interface
-static int printleaks_callback(struct mallhead *__restrict block, void *closure);
-static int validate_callback(struct mallhead *__restrict block, void *closure);
-int _malloc_enumblocks_ex_d(void *checkpoint,
-                            int (*callback)(struct mallhead *__restrict block,
-                                            void *closure),
-                            void *closure, size_t tb_skip) {
+static int
+_malloc_enumblocks_ex_d(void *checkpoint,
+                        int (*callback)(struct mallhead *__restrict block,
+                                        void *closure),
+                        void *closure, size_t tb_skip) {
 #define PASS_COPY 0
  struct mallhead *blocks,*iter,*next,*oldtop;
 #if PASS_COPY
@@ -1047,14 +1086,16 @@ int _malloc_enumblocks_ex_d(void *checkpoint,
 #endif
  return error;
 }
-__public int _malloc_enumblocks_d(void *checkpoint,
-                                  int (*callback)(struct mallhead *__restrict block,
-                                                  void *closure),
-                                  void *closure) {
+__public int
+_malloc_enumblocks_d(void *checkpoint,
+                     int (*callback)(struct mallhead *__restrict block,
+                                     void *closure),
+                     void *closure) {
  return _malloc_enumblocks_ex_d(checkpoint,callback,closure,1);
 }
 
-__public void *__mallblock_getattrib_d(struct mallhead const *__restrict self, int attrib) {
+__public void *
+__mallblock_getattrib_d(struct mallhead const *__restrict self, int attrib) {
  kassertobj(self);
  mall_validatehead(0,self,1 __LIBC_DEBUG__NULL);
  switch (attrib) {
@@ -1067,9 +1108,10 @@ __public void *__mallblock_getattrib_d(struct mallhead const *__restrict self, i
  }
  return NULL;
 }
-__public int _mallblock_traceback_d(struct mallhead *__restrict self,
-                                    ptbwalker callback,
-                                    void *closure) {
+__public int
+_mallblock_traceback_d(struct mallhead *__restrict self,
+                       ptbwalker callback,
+                       void *closure) {
  mall_validatehead(0,self,1 __LIBC_DEBUG__NULL);
 #if MALL_TRACEBACK
  return _mallblock_do_traceback_d(self,callback,closure);
@@ -1078,11 +1120,15 @@ __public int _mallblock_traceback_d(struct mallhead *__restrict self,
 #endif /* MALL_TRACEBACK */
 }
 
-static int printleaks_callback(struct mallhead *__restrict block, void *closure) {
+static int
+printleaks_callback(struct mallhead *__restrict block,
+                    void *__unused(closure)) {
  mall_validatehead(0,block,3 __LIBC_DEBUG__NULL);
  return mall_printleak(block,"Leaked");
 }
-static int validate_callback(struct mallhead *__restrict block, void *closure) {
+static int
+validate_callback(struct mallhead *__restrict block,
+                  void *__unused(closure)) {
  mall_validatehead(0,block,3 __LIBC_DEBUG__NULL);
  return 0;
 }
@@ -1096,7 +1142,7 @@ __public void _malloc_validate_d(void) { _malloc_enumblocks_ex_d(NULL,&validate_
 #else
 
 /* Map debug malloc functions as dumb aliases for non-debug version.
- * -> This way we can keep binary compatibility between all versions of libc. */
+ * -> This way we can keep full binary compatibility between all versions of libc. */
 __public __crit void *_malloc_d(size_t s __LIBC_DEBUG__UPARAMS) { return malloc(s); }
 __public __crit void *_calloc_d(size_t n, size_t s __LIBC_DEBUG__UPARAMS) { return calloc(n,s); }
 __public __crit void *_realloc_d(void *__restrict p, size_t s __LIBC_DEBUG__UPARAMS) { return realloc(p,s); }
@@ -1116,7 +1162,6 @@ __public int _mallblock_traceback_d(struct _mallblock_d *__restrict __unused(sel
 __public int _malloc_enumblocks_d(void *__unused(checkpoint), int (*callback)(struct _mallblock_d *__restrict block, void *closure), void *__unused(closure)) { (void)callback; return 0; }
 __public void _malloc_printleaks_d(void) {}
 __public void _malloc_validate_d(void) {}
-
 
 /* Non-debug implementations of malloc helpers. */
 __public __crit void *_memdup(void const *__restrict p, size_t bytes) {
@@ -1145,8 +1190,7 @@ __public __crit char *_strdupf(char const *__restrict format, ...) {
 }
 
 struct strdup_formatdata { char *start,*iter,*end; };
-
-static int
+static __nonnull((1,3)) int
 strdupf_printer(char const *__restrict data, size_t maxchars,
                 struct strdup_formatdata *__restrict fmt) {
  char *newiter;
@@ -1213,11 +1257,15 @@ __public __compiler_ALIAS(cfree,free);
 __public __compiler_ALIAS(aligned_alloc,memalign);
 #endif /* !__KERNEL__ */
 
-static int __printfsize_callback(char const *data, size_t maxlen, size_t *result) {
+static int
+__printfsize_callback(char const *__restrict data,
+                      size_t maxlen,
+                      size_t *__restrict result) {
  *result += strnlen(data,maxlen);
  return 0;
 }
-__local size_t __printfsize(char const *fmt, va_list args) {
+__local size_t
+__printfsize(char const *__restrict fmt, va_list args) {
  size_t result = 1; /*< +1 for ZERO-termination. */
  format_vprintf((pformatprinter)&__printfsize_callback,
                 &result,fmt,args);
@@ -1225,7 +1273,8 @@ __local size_t __printfsize(char const *fmt, va_list args) {
 }
 
 #undef _vstrdupaf
-__public char *__cdecl _vstrdupaf(char const *fmt, va_list args) {
+__public char *__cdecl
+_vstrdupaf(char const *__restrict fmt, va_list args) {
  /* For a more detailed explanation of
   * what happens here, see '_strdupaf'. */
  size_t reqsize; char *result;
@@ -1243,11 +1292,12 @@ __public char *__cdecl _vstrdupaf(char const *fmt, va_list args) {
  __asm_volatile__("mov %0, %%eax\n"
                   "jmp __strdupaf_end\n"
                   : : "g" (result));
- __builtin_unreachable();
+ __compiler_unreachable();
 }
 
 #undef _strdupaf
-__public char *__cdecl _strdupaf(char const *fmt, ...) {
+__public char *__cdecl
+_strdupaf(char const *__restrict fmt, ...) {
  size_t reqsize; char *result; va_list args;
  /* Since we need the exact size beforehand, and since
   * we can't realloc alloca-ted memory, we must sadly
@@ -1293,7 +1343,7 @@ __public char *__cdecl _strdupaf(char const *fmt, ...) {
   */
  __asm_volatile__("mov %0, %%eax\n"
 "__strdupaf_end:\n"
-                  /* Extract the return address and retore the original %EBP. */
+                  /* Extract the return address and restore the original %EBP. */
                   "mov 4(%%ebp), %%ebx\n"
                   "mov 0(%%ebp), %%ebp\n"
                   /* Push the return address to have ret return to the caller. */
@@ -1302,7 +1352,7 @@ __public char *__cdecl _strdupaf(char const *fmt, ...) {
                    * the allocated memory onwards to the caller. */
                   "ret\n"
                   : : "g" (result));
- __builtin_unreachable();
+ __compiler_unreachable();
 }
 
 

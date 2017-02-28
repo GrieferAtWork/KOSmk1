@@ -38,7 +38,7 @@ extern __noinline __noclone __noreturn __coldcall
 #else
 #      error "FIXME"
 #endif
-void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *fmt, ...);
+void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *__restrict fmt, ...);
 
 //////////////////////////////////////////////////////////////////////////
 // Invoke kernel panic.
