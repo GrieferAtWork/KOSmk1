@@ -473,16 +473,19 @@ kshlib_elf32_load_rel(struct kshlib *__restrict self,
  kassert_kfile(elf_file);
  relsize = (size_t)shdr->sh_size;
  if __unlikely(!relsize || !shdr->sh_entsize) {
-  // Empty section
+  /* Empty section */
+#ifdef __DEBUG__
   k_syslogf_prefixfile(KLOG_WARN,elf_file
                       ,"[ELF] Empty ELF REL%s section: %s\n"
                       ,is_rela ? "A" : "",name);
+#endif
   return KE_OK;
  }
  rel_data = (Elf32_Rel *)malloc(relsize);
  if __unlikely(!rel_data) return KE_NOMEM;
+ /* Extract relocation information from the binary. */
  error = kfile_kernel_preadall(elf_file,shdr->sh_offset,
-                        rel_data,relsize);
+                               rel_data,relsize);
  if __unlikely(KE_ISERR(error)) goto end_reldata;
  newreloc = (struct krelocvec *)realloc(self->sh_reloc.r_vecv,
                                        (self->sh_reloc.r_vecc+1)*
@@ -494,10 +497,12 @@ kshlib_elf32_load_rel(struct kshlib *__restrict self,
                               relsize/shdr->sh_entsize,is_rela);
  if (error == KS_FOUND) error = KE_OK;
  else {
-  newreloc = (struct krelocvec *)realloc(self->sh_reloc.r_vecv,
-                                        (--self->sh_reloc.r_vecc)*
-                                         sizeof(struct krelocvec));
-  if (newreloc) self->sh_reloc.r_vecv = newreloc;
+  if __unlikely(KE_ISERR(error)) {
+   newreloc = (struct krelocvec *)realloc(self->sh_reloc.r_vecv,
+                                         (--self->sh_reloc.r_vecc)*
+                                          sizeof(struct krelocvec));
+   if (newreloc) self->sh_reloc.r_vecv = newreloc;
+  }
 end_reldata:
   free(rel_data);
  }
@@ -553,23 +558,24 @@ kshlib_elf32_load_sheaders(struct kshlib *__restrict self,
  for (; shdr_iter != shdr_end; *(uintptr_t *)&shdr_iter += ehdr->e_shentsize) {
   int hrdtype = shdr_iter->sh_type;
   char const *__restrict name = STRAT(shdr_iter->sh_name);
-  k_syslogf_prefixfile(KLOG_TRACE,elf_file,"[ELF] %.8p %8I64x %6I64d %3d %s\n"
-                      ,(uintptr_t)shdr_iter->sh_addr
-                      ,(__u64)shdr_iter->sh_offset
-                      ,(__u64)shdr_iter->sh_size
-                      ,hrdtype,name);
+  k_syslogf_prefixfile(KLOG_TRACE,elf_file,"[ELF] %.8p %8I64x %6I64d %3d %s\n",
+                      (uintptr_t)shdr_iter->sh_addr,
+                      (__u64)shdr_iter->sh_offset,
+                      (__u64)shdr_iter->sh_size,
+                       hrdtype,name);
   switch (hrdtype) {
    case SHT_NULL: break; // Just ignore this one...
    case SHT_PROGBITS:
+    /* Parse DWARF .debug_line debug sections. */
     if (!strcmp(name,".debug_line")) {
      /* Ignore errors if this fails. */
      kshlib_a2l_add_dwarf_debug_line(self,
                                     (__u64)shdr_iter->sh_offset,
                                     (__u64)shdr_iter->sh_size);
     }
-    break; // Used for debug information and such...
-   case SHT_NOBITS: break; // For bss sections (Already parsed by program headers, right?)
-   case SHT_HASH: break; // We do our own hashing
+    break; /* Used for debug information and such... */
+   case SHT_NOBITS: break; /* For bss sections (Already parsed by program headers, right?) */
+   case SHT_HASH: break; /* We do our own hashing */
    case SHT_STRTAB:
     if (name) {
           if (!strcmp(name,".dynstr")) sh_dynstr = shdr_iter;
@@ -589,7 +595,7 @@ kshlib_elf32_load_sheaders(struct kshlib *__restrict self,
     if __unlikely(KE_ISERR(error)) goto err_strtab_data;
     break;
    default:
-    // Don't warn about these...
+    /* Don't warn about these... */
     if (hrdtype >= SHT_LOPROC && hrdtype <= SHT_HIPROC) break;
     if (hrdtype >= SHT_LOUSER && hrdtype <= SHT_HIUSER) break;
     k_syslogf_prefixfile(KLOG_WARN,elf_file

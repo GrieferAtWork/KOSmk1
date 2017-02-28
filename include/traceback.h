@@ -35,9 +35,10 @@ typedef int (*ptbwalker) __P((void const *__restrict __instruction_pointer,
                               void const *__restrict __frame_address,
                               __size_t __frame_index, void *__closure));
 #endif
-typedef int (*ptberrorhandler) __P((int error, void const *arg, void *closure));
+typedef int (*ptberrorhandler) __P((int __error, void const *__arg, void *__closure));
 #endif /* !__ASSEMBLY__ */
 
+/* Values for 'ERROR' recognized by ptberrorhandler-callbacks. */
 #define TRACEBACK_STACKERROR_NONE    0
 #define TRACEBACK_STACKERROR_EIP   (-2) /*< Invalid instruction pointer (arg: eip). */
 #define TRACEBACK_STACKERROR_LOOP  (-3) /*< Stackframes are looping (arg: first looping frame). */
@@ -64,27 +65,36 @@ extern int tbdef_error __P((int __error, void const *__arg, void *__closure));
 
 
 //////////////////////////////////////////////////////////////////////////
-// Print a traceback
+// Print a traceback, using 'tbdef_print'
 extern                int tb_print      __P((void));
 extern                int tb_printex    __P((__size_t __skip));
 extern __nonnull((1)) int tb_printebp   __P((void const *__ebp));
 extern __nonnull((1)) int tb_printebpex __P((void const *__ebp, __size_t __skip));
 
-
+//////////////////////////////////////////////////////////////////////////
+// Manually walk a stack, executing the provided callbacks.
 extern                int tb_walk      __P((ptbwalker __callback, ptberrorhandler __handle_error, void *__closure));
 extern                int tb_walkex    __P((ptbwalker __callback, ptberrorhandler __handle_error, void *__closure, __size_t __skip));
 extern __nonnull((1)) int tb_walkebp   __P((void const *__ebp, ptbwalker __callback, ptberrorhandler __handle_error, void *__closure));
 extern __nonnull((1)) int tb_walkebpex __P((void const *__ebp, ptbwalker __callback, ptberrorhandler __handle_error, void *__closure, __size_t __skip));
 
+struct tbtrace;
+
 //////////////////////////////////////////////////////////////////////////
 // Capture, walk and print tracebacks manually.
-// >> Can be used to track resources that must be released, such as locks.
-struct tbtrace;
+// HINT: Useful to track resources that must be released, such as locks.
+// @return: * :   A pointer to a dynamically allocated structure
+//                that can be used in further calls to 'tbtrace_walk' and
+//               'tbtrace_print', before being freed through use of 'free'.
+// @return: NULL: Not enough available memory (errno is set to ENOMEM)
 extern __malloccall struct tbtrace *tbtrace_capture __P((void));
 extern __malloccall struct tbtrace *tbtrace_captureex __P((__size_t __skip));
 extern __malloccall struct tbtrace *tbtrace_captureebp __P((void const *__ebp));
 extern __malloccall struct tbtrace *tbtrace_captureebpex __P((void const *__ebp, __size_t __skip));
-extern int tbtrace_walk __P((struct tbtrace const *__restrict __self, ptbwalker __callback, void *__closure));
+
+//////////////////////////////////////////////////////////////////////////
+// Walk/Print a previously captured traceback.
+extern int tbtrace_walk  __P((struct tbtrace const *__restrict __self, ptbwalker __callback, void *__closure));
 extern int tbtrace_print __P((struct tbtrace const *__restrict __self));
 
 #endif /* !__ASSEMBLY__ */
