@@ -476,6 +476,7 @@ kshlib_pe32_new(struct kshlib **__restrict result,
  ksymtable_init(&lib->sh_weaksym);
  ksymtable_init(&lib->sh_privatesym);
 
+ kaddr2linelist_init(&lib->sh_addr2line);
  kshliblist_init(&lib->sh_deps);
  kreloc_init(&lib->sh_reloc);
 
@@ -610,6 +611,7 @@ err_secheaders: free(section_headers);
  if (0) {err_data: ksecdata_quit(&lib->sh_data); }
 err_reloc: kreloc_quit(&lib->sh_reloc);
  kshliblist_quit(&lib->sh_deps);
+ kaddr2linelist_quit(&lib->sh_addr2line);
  ksymtable_quit(&lib->sh_privatesym);
  ksymtable_quit(&lib->sh_weaksym);
  ksymtable_quit(&lib->sh_publicsym);

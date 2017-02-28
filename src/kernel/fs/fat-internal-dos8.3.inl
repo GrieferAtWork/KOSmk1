@@ -27,6 +27,7 @@
 #include <kos/kernel/fs/fat-internal.h>
 #include <kos/kernel/debug.h>
 #include <sys/types.h>
+#include <math.h>
 #include <assert.h>
 #include <ctype.h>
 
@@ -37,19 +38,17 @@ __local int kdos83_isvalch(char ch) {
  if (strchr("\"*+,/:;<=>?\\[]|.",ch)) return 0;
  return 1;
 }
-__local char tohex(int x) {
- return (char)(x >= 10 ? 'A'+(x-10) : '0'+x);
-}
 
 
 int kdos83_makeshort(char const *__restrict name, size_t namesize,
-                     int retry, __u8 *__restrict ntflags, char result[11]) {
+                     int retry, __u8 *__restrict ntflags,
+                     char result[KFATFILE_NAMEMAX+KFATFILE_EXTMAX]) {
  char const *extstart,*iter,*end; char *dst,ch;
  size_t basesize,extsize,matchsize;
  int retry_hex,retry_dig,has_mixed_case = 0;
  kassertobj(name);
  kassertobj(ntflags);
- kassertmem(result,11*sizeof(char));
+ kassertmem(result,(KFATFILE_NAMEMAX+KFATFILE_EXTMAX)*sizeof(char));
  assert(retry < KDOS83_RETRY_COUNT);
  *ntflags = KFATFILE_NFLAG_NONE;
  // Strip leading dots
@@ -64,12 +63,12 @@ int kdos83_makeshort(char const *__restrict name, size_t namesize,
   basesize = (size_t)(extstart-name)-1;
   extsize = (namesize-basesize)-1;
  }
- memset(result,' ',11);
+ memset(result,' ',(KFATFILE_NAMEMAX+KFATFILE_EXTMAX)*sizeof(char));
 
  // Generate the extension
  if (extsize) {
-  dst = result+8;
-  end = (iter = extstart)+(extsize > 3 ? 3 : extsize);
+  dst = result+KFATFILE_NAMEMAX;
+  end = (iter = extstart)+min(extsize,KFATFILE_EXTMAX);
   *ntflags |= KFATFILE_NFLAG_LOWEXT;
   while (iter != end) {
    ch = *iter++;
@@ -85,7 +84,8 @@ int kdos83_makeshort(char const *__restrict name, size_t namesize,
   }
  }
 
- if (basesize <= 8 && extsize <= 3) {
+ if (basesize <= KFATFILE_NAMEMAX &&
+     extsize <= KFATFILE_EXTMAX) {
   // We can generate a (possibly mixed-case) 8.3-compatible filename
   end = (iter = name)+basesize,dst = result;
   *ntflags |= KFATFILE_NFLAG_LOWBASE;
@@ -124,10 +124,10 @@ int kdos83_makeshort(char const *__restrict name, size_t namesize,
   // Following the matching characters are 4 hex-chars
   // whenever more than 9 retry attempts have failed
   // >> This multiplies the amount of available names by 0xffff
-  *dst++ = tohex((retry_hex & 0xf000) >> 12);
-  *dst++ = tohex((retry_hex & 0x0f00) >> 8);
-  *dst++ = tohex((retry_hex & 0x00f0) >> 4);
-  *dst++ = tohex((retry_hex & 0x000f));
+  *dst++ = tohex(1,(retry_hex & 0xf000) >> 12);
+  *dst++ = tohex(1,(retry_hex & 0x0f00) >> 8);
+  *dst++ = tohex(1,(retry_hex & 0x00f0) >> 4);
+  *dst++ = tohex(1,(retry_hex & 0x000f));
  }
  assert(dst <= result+6);
  // Following the shared name and the hex part is always a tilde '~'

@@ -273,6 +273,12 @@
     <ClInclude Include="..\src\kernel\linker-pe32.h">
       <Filter>src\kernel</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\kernel\linker-DWARF.h">
+      <Filter>src\kernel</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\gc.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.c">
@@ -378,6 +384,12 @@
       <Filter>src\kernel\fs</Filter>
     </ClCompile>
     <ClCompile Include="..\src\kernel\shm.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\linker-DWARF.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\gc.c">
       <Filter>src\kernel</Filter>
     </ClCompile>
   </ItemGroup>

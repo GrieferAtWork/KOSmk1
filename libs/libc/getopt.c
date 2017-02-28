@@ -62,7 +62,7 @@ static int optwhere = 0;
 #define RETURN_IN_ORDER 1
 #define REQUIRE_ORDER   2
 
-static void rev_order(char **argv, int num) {
+static void rev_order(char *argv[], int num) {
  char *tmp; int i;
  for (i = 0; i < (num >> 1); ++i) {
   tmp = argv[i];
@@ -71,7 +71,7 @@ static void rev_order(char **argv, int num) {
  }
 }
 
-static void permute(char **argv, int len1, int len2) {
+static void permute(char *argv[], int len1, int len2) {
  rev_order(argv,len1);
  rev_order(argv,len1+len2);
  rev_order(argv,len2);

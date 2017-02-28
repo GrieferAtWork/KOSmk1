@@ -1175,13 +1175,13 @@ kexecargs_fromsentinel(struct kexecargs *self,
  argv = (char const **)malloc((argc+1)*sizeof(char const *));
  if __unlikely(!argv) return -1;
  self->ea_argc = argc;
- self->ea_argv = argv;
+ self->ea_argv = (char const *const *)argv;
  *argv++ = arg;
  while ((*argv++ = va_arg(args,char const *)) != NULL);
  assert(argv == self->ea_argv+(argc+1));
  self->ea_arglenv = NULL;
  self->ea_envc    = has_envp ? (size_t)-1 : 0;
- self->ea_environ = has_envp ? va_arg(args,char const **) : NULL;
+ self->ea_environ = has_envp ? va_arg(args,char const *const *) : NULL;
  self->ea_envlenv = NULL;
  return 0;
 };
@@ -1218,7 +1218,7 @@ __public int _fexecv(int fd, char *const argv[]) {
  struct kexecargs argvdat;
  memset(&argvdat,0,sizeof(argvdat));
  argvdat.ea_argc = (size_t)-1;
- argvdat.ea_argv = (char const **)argv;
+ argvdat.ea_argv = (char const *const *)argv;
  error = ktask_fexec(fd,&argvdat,KTASK_EXEC_FLAG_NONE);
  assert(KE_ISERR(error));
  __set_errno(-error);
@@ -1229,9 +1229,9 @@ __public int _fexecve(int fd, char *const argv[], char *const envp[]) {
  struct kexecargs argvdat;
  memset(&argvdat,0,sizeof(argvdat));
  argvdat.ea_argc = (size_t)-1;
- argvdat.ea_argv = (char const **)argv;
+ argvdat.ea_argv = (char const *const *)argv;
  argvdat.ea_envc = (size_t)-1;
- argvdat.ea_environ = (char const **)envp;
+ argvdat.ea_environ = (char const *const *)envp;
  error = ktask_fexec(fd,&argvdat,KTASK_EXEC_FLAG_NONE);
  assert(KE_ISERR(error));
  __set_errno(-error);
@@ -1297,7 +1297,7 @@ __public int execv(char const *path, char *const argv[]) {
  struct kexecargs argvdat;
  memset(&argvdat,0,sizeof(argvdat));
  argvdat.ea_argc = (size_t)-1;
- argvdat.ea_argv = (char const **)argv;
+ argvdat.ea_argv = (char const *const *)argv;
  error = ktask_exec(path,(size_t)-1,&argvdat,KTASK_EXEC_FLAG_NONE);
  assert(KE_ISERR(error));
  __set_errno(-error);
@@ -1308,7 +1308,7 @@ __public int execvp(char const *file, char *const argv[]) {
  struct kexecargs argvdat;
  memset(&argvdat,0,sizeof(argvdat));
  argvdat.ea_argc = (size_t)-1;
- argvdat.ea_argv = (char const **)argv;
+ argvdat.ea_argv = (char const *const *)argv;
  error = ktask_exec(file,(size_t)-1,&argvdat,KTASK_EXEC_FLAG_SEARCHPATH);
  assert(KE_ISERR(error));
  __set_errno(-error);
@@ -1319,9 +1319,9 @@ __public int execve(char const *path, char *const argv[], char *const envp[]) {
  struct kexecargs argvdat;
  memset(&argvdat,0,sizeof(argvdat));
  argvdat.ea_argc = (size_t)-1;
- argvdat.ea_argv = (char const **)argv;
+ argvdat.ea_argv = (char const *const *)argv;
  argvdat.ea_envc = (size_t)-1;
- argvdat.ea_environ = (char const **)envp;
+ argvdat.ea_environ = (char const *const *)envp;
  error = ktask_exec(path,(size_t)-1,&argvdat,
                     KTASK_EXEC_FLAG_NONE);
  assert(KE_ISERR(error));
@@ -1333,9 +1333,9 @@ __public int execvpe(char const *file, char *const argv[], char *const envp[]) {
  struct kexecargs argvdat;
  memset(&argvdat,0,sizeof(argvdat));
  argvdat.ea_argc = (size_t)-1;
- argvdat.ea_argv = (char const **)argv;
+ argvdat.ea_argv = (char const *const *)argv;
  argvdat.ea_envc = (size_t)-1;
- argvdat.ea_environ = (char const **)envp;
+ argvdat.ea_environ = (char const *const *)envp;
  error = ktask_exec(file,(size_t)-1,&argvdat,
                     KTASK_EXEC_FLAG_SEARCHPATH);
  assert(KE_ISERR(error));

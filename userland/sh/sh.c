@@ -62,7 +62,7 @@ void term_setbuffered(void) {
  if (tcsetattr(STDIN_FILENO,TCSAFLUSH,&oldios) == -1) perror("tcsetattr");
 }
 
-int exec_fork(char *exe, char **argv) {
+int exec_fork(char *exe, char *argv[]) {
  int childfd;
  if ((childfd = task_fork()) == 0) {
   /* Set the child process as CTRL+C-termination target.
@@ -127,7 +127,7 @@ char **split_argv(char *cmd) {
  return result;
 }
 
-int exec_unistd(char *exe, char **argv) {
+int exec_unistd(char *exe, char *argv[]) {
  struct shcmd const *iter = shbuiltin;
  while (iter->name) {
   if (!strcmp(iter->name,exe)) {
@@ -226,7 +226,7 @@ void addrinfo(void *addr) {
  else {
   modname = mod_path(info->si_modid,NULL,0);
   printf("%s(%u) : %q : %q+%Ix : Here\n",
-         info->si_file,info->si_line,modname,info->si_name,
+         info->si_file,info->si_line+1,modname,info->si_name,
         (uintptr_t)addr-(uintptr_t)info->si_base);
   free(modname);
   free(info);

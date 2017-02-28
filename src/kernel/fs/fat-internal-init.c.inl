@@ -105,8 +105,8 @@ kfatfs_init(struct kfatfs *__restrict self,
    // Check the FAT12/16 signature
    if (header->x16.x16_signature != 0x28 &&
        header->x16.x16_signature != 0x29) return KE_INVAL;
-   memcpy(self->f_label,header->x16.x16_label,11);
-   memcpy(self->f_sysname,header->x16.x16_sysname,8);
+   memcpy(self->f_label,header->x16.x16_label,sizeof(header->x16.x16_label));
+   memcpy(self->f_sysname,header->x16.x16_sysname,sizeof(header->x16.x16_sysname));
    self->f_rootsec = leswap_16(header->com.bpb_reserved_sectors)+
                     (header->com.bpb_fatc*leswap_16(header->com.bpb_sectors_per_fat));
    self->f_sec4fat = leswap_16(header->com.bpb_sectors_per_fat);
@@ -119,8 +119,8 @@ kfatfs_init(struct kfatfs *__restrict self,
    // Check the FAT32 signature
    if (header->x32.x32_signature != 0x28 &&
        header->x32.x32_signature != 0x29) return KE_INVAL;
-   memcpy(self->f_label,header->x32.x32_label,11);
-   memcpy(self->f_sysname,header->x32.x32_sysname,8);
+   memcpy(self->f_label,header->x32.x32_label,sizeof(header->x32.x32_label));
+   memcpy(self->f_sysname,header->x32.x32_sysname,sizeof(header->x32.x32_sysname));
    self->f_readfat       = &kfatfs_readfat_32;
    self->f_writefat      = &kfatfs_writefat_32;
    self->f_getfatsec     = &kfatfs_getfatsec_32;

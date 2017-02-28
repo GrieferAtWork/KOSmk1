@@ -30,18 +30,16 @@
 #include <kos/kernel/linker.h>
 #include <kos/kernel/fs/file.h>
 #include <elf.h>
+#include <sys/types.h>
 #include <malloc.h>
 #include <stddef.h>
 #include <assert.h>
 #include <string.h>
 
-#if 0
-/* DWARF: DWARF2_Internal_LineInfo */
-#include "../../binutils/binutils-2.27/binutils/dwarf.h"
-#include "../../binutils/binutils-2.27/binutils/dwarf.c"
-#endif
+#include "linker-DWARF.h"
 
 __DECL_BEGIN
+
 
 __crit kerrno_t
 ksecdata_elf32_init(struct ksecdata *__restrict self,
@@ -150,7 +148,7 @@ kshlib_elf32_load_symtable(struct kshlib *__restrict self, Elf32_Shdr const *__r
   strtable = (char *)malloc(strtable_size+sizeof(char));
   if __unlikely(!strtable) return KE_NOMEM;
   error = kfile_kernel_preadall(elf_file,strtab->sh_offset,
-                         strtable,strtable_size);
+                                strtable,strtable_size);
   if __unlikely(KE_ISERR(error)) goto end_strtable;
   strtable[strtable_size/sizeof(char)] = '\0';
  }
@@ -562,7 +560,14 @@ kshlib_elf32_load_sheaders(struct kshlib *__restrict self,
                       ,hrdtype,name);
   switch (hrdtype) {
    case SHT_NULL: break; // Just ignore this one...
-   case SHT_PROGBITS: break; // Used for debug information and such...
+   case SHT_PROGBITS:
+    if (!strcmp(name,".debug_line")) {
+     /* Ignore errors if this fails. */
+     kshlib_a2l_add_dwarf_debug_line(self,
+                                    (__u64)shdr_iter->sh_offset,
+                                    (__u64)shdr_iter->sh_size);
+    }
+    break; // Used for debug information and such...
    case SHT_NOBITS: break; // For bss sections (Already parsed by program headers, right?)
    case SHT_HASH: break; // We do our own hashing
    case SHT_STRTAB:
@@ -668,6 +673,7 @@ __crit kerrno_t kshlib_elf32_new(__ref struct kshlib **result, struct kfile *__r
  ksymtable_init(&lib->sh_publicsym);
  ksymtable_init(&lib->sh_weaksym);
  ksymtable_init(&lib->sh_privatesym);
+ kaddr2linelist_init(&lib->sh_addr2line);
  kreloc_init(&lib->sh_reloc);
  error = kshlib_elf32_load_sheaders(lib,&dyninfo,elf_file,&ehdr);
  if __unlikely(KE_ISERR(error)) goto err_post_pheaders;
@@ -681,6 +687,7 @@ __crit kerrno_t kshlib_elf32_new(__ref struct kshlib **result, struct kfile *__r
  return error;
 err_post_pheaders:
  kreloc_quit(&lib->sh_reloc);
+ kaddr2linelist_quit(&lib->sh_addr2line);
  ksymtable_quit(&lib->sh_privatesym);
  ksymtable_quit(&lib->sh_weaksym);
  ksymtable_quit(&lib->sh_publicsym);

@@ -37,32 +37,37 @@ __DECL_BEGIN
 
 //////////////////////////////////////////////////////////////////////////
 // === kvfile ===
+#define SELF  ((struct kvfile *)self)
 extern struct kfiletype kvfile_empty_type;
 void kvfile_quit(struct kfile *__restrict self) {
- kinode_decref(((struct kvfile *)self)->vf_inode);
- kdirent_decref(((struct kvfile *)self)->vf_dent);
+ kinode_decref(SELF->vf_inode);
+ kdirent_decref(SELF->vf_dent);
 }
-kerrno_t kvfile_open(struct kfile *__restrict self, struct kdirent *__restrict dirent,
-                    struct kinode *__restrict inode, __openmode_t __unused(mode)) {
+kerrno_t
+kvfile_open(struct kfile *__restrict self,
+            struct kdirent *__restrict dirent,
+            struct kinode *__restrict inode,
+            openmode_t __unused(mode)) {
  kerrno_t error;
  if __unlikely(KE_ISERR(error = kinode_incref(inode))) return error;
  if __unlikely(KE_ISERR(error = kdirent_incref(dirent))) { kinode_decref(inode); return error; }
- ((struct kvfile *)self)->vf_inode = inode;
- ((struct kvfile *)self)->vf_dent = dirent;
+ SELF->vf_inode = inode;
+ SELF->vf_dent = dirent;
  return KE_OK;
 }
 __ref struct kinode *kvfile_getinode(struct kfile *__restrict self) {
  struct kinode *result;
- result = ((struct kvfile *)self)->vf_inode;
+ result = SELF->vf_inode;
  if __unlikely(KE_ISERR(kinode_incref(result))) result = NULL;
  return result;
 }
 __ref struct kdirent *kvfile_getdirent(struct kfile *__restrict self) {
  struct kdirent *result;
- result = ((struct kvfile *)self)->vf_dent;
+ result = SELF->vf_dent;
  if __unlikely(KE_ISERR(kdirent_incref(result))) result = NULL;
  return result;
 }
+#undef SELF
 struct kfiletype kvfile_empty_type = {
  .ft_size      = sizeof(struct kvfile),
  .ft_quit      = &kvfile_quit,
@@ -75,6 +80,7 @@ struct kfiletype kvfile_empty_type = {
 
 //////////////////////////////////////////////////////////////////////////
 // === kvsdirnode ===
+#define SELF   ((struct kvsdirnode *)self)
 extern struct ksuperblocktype kvsdirnode_type;
 kerrno_t
 kvsdirnode_walk(struct kinode *__restrict self,
@@ -82,7 +88,7 @@ kvsdirnode_walk(struct kinode *__restrict self,
                 __ref struct kinode **resnode) {
  struct kvsdirent *iter;
  //assert(self->i_type == &kvsdirnode_type.st_node);
- iter = ((struct kvsdirnode *)self)->dn_dir;
+ iter = SELF->dn_dir;
  kassertobj(iter);
  while (!kdirentname_isempty(&iter->vd_name)) {
   if (kdirentname_lazyequal(&iter->vd_name,name))
@@ -95,7 +101,7 @@ kerrno_t
 kvsdirnode_enumdir(struct kinode *__restrict self, pkenumdir callback, void *closure) {
  kerrno_t error; struct kvsdirent *iter;
  //assert(self->i_type == &kvsdirnode_type.st_node);
- iter = ((struct kvsdirnode *)self)->dn_dir;
+ iter = SELF->dn_dir;
  kassertobj(iter);
  while (!kdirentname_isempty(&iter->vd_name)) {
   kdirentname_lazyhash(&iter->vd_name);
@@ -105,6 +111,7 @@ kvsdirnode_enumdir(struct kinode *__restrict self, pkenumdir callback, void *clo
  }
  return KE_OK;
 }
+#undef SELF
 struct ksuperblocktype kvsdirnode_type = {
  .st_node = {
   .it_size    = sizeof(struct kvsdirnode),
@@ -119,15 +126,16 @@ struct ksuperblocktype kvsdirnode_type = {
 
 //////////////////////////////////////////////////////////////////////////
 // === Virtual Symbolic Link File ===
-__ref struct kinode *
+__crit __ref struct kinode *
 kvlinknode_new(struct ksuperblock *superblock,
                char const *text) {
  __ref struct kvlinknode *result;
- if ((text = (char const *)strdup(text)) == NULL) return NULL;
+ KTASK_CRIT_MARK
+ if __unlikely((text = (char const *)strdup(text)) == NULL) return NULL;
  result = (__ref struct kvlinknode *)__kinode_alloc(superblock,
-                                                     &kvlinknode_type,
-                                                     &kvfile_empty_type,
-                                                      S_IFLNK);
+                                                   &kvlinknode_type,
+                                                   &kvfile_empty_type,
+                                                    S_IFLNK);
  if __unlikely(!result) { free((void *)text); return NULL; }
  kdirentname_init(&result->ln_name,(char *)text);
  return (struct kinode *)result;
@@ -246,11 +254,13 @@ vfs_mount(char const *__restrict path,
  }
 }
 
-
+#define MOUNT(path,fs) \
+ vfs_mount(path,(struct ksuperblock *)&(fs));
 void kernel_initialize_vfs(void) {
- vfs_mount("/dev",(struct ksuperblock *)&kvfs_dev);
- vfs_mount("/proc",(struct ksuperblock *)&kvfs_proc);
+ MOUNT("/dev",kvfs_dev);
+ MOUNT("/proc",kvfs_proc);
 }
+#undef MOUNT
 
 
 __DECL_END

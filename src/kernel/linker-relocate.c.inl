@@ -96,7 +96,7 @@ __dlsym(struct kproc *__restrict proc,
  // $ gcc -o main main.c -ldl -lc
  // 
  // main.c:
- // >> int main(int argc, char **argv) {
+ // >> int main(int argc, char *argv[]) {
  // >>   // libc is already loaded, meaning that an existing
  // >>   // definition of 'errno' must be preferred over
  // >>   // a definition that would otherwise be loaded

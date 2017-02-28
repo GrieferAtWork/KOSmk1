@@ -170,7 +170,8 @@ typedef __u32 ksymflag_t;
 #define KSYMINFO_FLAG_NAME    0x00000100 /*< The symbol has a known name. */
 #define KSYMINFO_FLAG_FILE    0x00000200 /*< The symbol has a known file name. */
 #define KSYMINFO_FLAG_LINE    0x00000400 /*< The symbol has a known line number. */
-#define KSYMINFO_FLAG_SIZE    0x00000800 /*< The symbol has a known size. */
+#define KSYMINFO_FLAG_BASE    0x00001000 /*< The symbol has a known base. */
+#define KSYMINFO_FLAG_SIZE    0x00002000 /*< The symbol has a known size. */
 #define KSYMINFO_FLAG_PUBLIC  0x00010000 /*< The symbol is exported as public. */
 #define KSYMINFO_FLAG_PRIVATE 0x00020000 /*< The symbol is exported as private. */
 #define KSYMINFO_FLAG_WEAK    0x00030000 /*< The symbol is exported as weak. */

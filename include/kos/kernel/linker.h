@@ -68,35 +68,6 @@ extern __wunused __nonnull((1)) ksymhash_t
 ksymhash_of(char const *__restrict text, __size_t size);
 #endif
 
-struct kfileandline {
- char const  *fal_path;  /*< [0..1] Path name. */
- char const  *fal_file;  /*< [0..1] File name. */
- unsigned int fal_line;  /*< Line number. */
- __u32        fal_flags; /*< flags (Set of 'KFILEANDLINE_FLAG_*'). */
-#define KFILEANDLINE_FLAG_NONE     0x00000000
-#define KFILEANDLINE_FLAG_FREEPATH 0x00000001 /*< Caller must free() 'fal_path'. */
-#define KFILEANDLINE_FLAG_FREEFILE 0x00000002 /*< Caller must free() 'fal_file'. */
-};
-#define kfileandline_quit(self) \
- (((self)->fal_flags&KFILEANDLINE_FLAG_FREEPATH) ? free((char *)(self)->fal_path) : (void)0,\
-  ((self)->fal_flags&KFILEANDLINE_FLAG_FREEFILE) ? free((char *)(self)->fal_file) : (void)0)
-
-
-struct kaddr2line {
- __u32 a2l_kind; /*< The kind of addr2line technology used. */
-};
-
-//////////////////////////////////////////////////////////////////////////
-// Invoke an addr2line technology, as described by 'lib'.
-// Upon success, '*result' is filled with a
-// valid instance of an'kfileandline' structure.
-extern __crit __wunused __nonnull((1,2,4)) kerrno_t
-kaddr2line_exec(struct kaddr2line const *__restrict self,
-                struct kshlib *__restrict lib,
-                ksymaddr_t addr, struct kfileandline *__restrict result);
-
-
-
 
 struct ksymbol {
  struct ksymbol    *s_nextname; /*< [0..1][owned] Next symbol who's name has the same hash. */
@@ -104,7 +75,6 @@ struct ksymbol {
  ksymaddr_t         s_addr;     /*< Address associated with this symbol. */
  __size_t           s_size;     /*< Size of this symbol (Or ZERO(0) if not known). */
  ksymhash_t         s_hash;     /*< Unmodulated hash of this symbol. */
- struct kaddr2line *s_a2l;      /*< [0..1] The addr2line engine used for unwinding, or NULL if not available. */
  __size_t           s_shndx;    /*< Section index of this symbol (== Elf32_Sym::st_shndx).
                                     NOTE: In PE-mode, this field is set to 'SHN_UNDEF' for imported symbols, and
                                           some other value for those either exported, or simply not imported. */
@@ -341,6 +311,75 @@ ksecdata_setmem(struct ksecdata *__restrict self, ksymaddr_t addr,
                 void const *__restrict buf, __size_t bufsize);
 
 
+
+//////////////////////////////////////////////////////////////////////////
+// Addr2line support
+struct kfileandline {
+ char const  *fal_path;   /*< [0..1] Path name. */
+ char const  *fal_file;   /*< [0..1] File name. */
+ unsigned int fal_line;   /*< Line number. */
+ unsigned int fal_column; /*< Column number. */
+ __u32        fal_flags;  /*< flags (Set of 'KFILEANDLINE_FLAG_*'). */
+#define KFILEANDLINE_FLAG_NONE     0x00000000
+#define KFILEANDLINE_FLAG_FREEPATH 0x00000001 /*< Caller must free() 'fal_path'. */
+#define KFILEANDLINE_FLAG_FREEFILE 0x00000002 /*< Caller must free() 'fal_file'. */
+#define KFILEANDLINE_FLAG_HASLINE  0x00000010 /*< 'fal_line' is filled with a sensible value. */
+#define KFILEANDLINE_FLAG_HASCOL   0x00000020 /*< 'fal_column' is filled with a sensible value. */
+};
+#define kfileandline_quit(self) \
+ (((self)->fal_flags&KFILEANDLINE_FLAG_FREEPATH) ? free((char *)(self)->fal_path) : (void)0,\
+  ((self)->fal_flags&KFILEANDLINE_FLAG_FREEFILE) ? free((char *)(self)->fal_file) : (void)0)
+
+struct ka2ldwarf;
+
+#define KA2L_KIND_NONE   0
+#define KA2L_KIND_DWARF  1
+struct kaddr2line {
+ __u32 a2l_kind; /*< The kind of addr2line technology used. */
+ union{
+  struct ka2ldwarf *a2l_dwarf; /*< [1..1][owned] Dwarf address2line engine. */
+ };
+};
+extern __crit __nonnull((1)) void kaddr2line_quit(struct kaddr2line *__restrict self);
+
+//////////////////////////////////////////////////////////////////////////
+// Invoke an addr2line technology, as described by 'lib'.
+// Upon success, '*result' is filled with a
+// valid instance of an 'kfileandline' structure.
+// @return: KE_NOENT: No information available for the given address.
+extern __crit __wunused __nonnull((1,2,4)) kerrno_t
+kaddr2line_exec(struct kaddr2line const *__restrict self,
+                struct kshlib *__restrict lib, ksymaddr_t addr,
+                struct kfileandline *__restrict result);
+
+
+struct kaddr2linelist {
+ __size_t           a2ll_techc; /*< Amount of available technologies. */
+ struct kaddr2line *a2ll_techv; /*< [0..a2ll_techc][owned] Vector of technologies. */
+};
+#define kaddr2linelist_init(self) \
+ (void)((self)->a2ll_techc = 0,(self)->a2ll_techv = NULL)
+extern __crit void kaddr2linelist_quit(struct kaddr2linelist *__restrict self);
+
+//////////////////////////////////////////////////////////////////////////
+// Allocate an return a new addr2line technology entry.
+// @return: NULL: Not enough available memory.
+extern __crit __wunused __nonnull((1)) struct kaddr2line *
+kaddr2linelist_alloc(struct kaddr2linelist *__restrict self);
+
+
+//////////////////////////////////////////////////////////////////////////
+// Invoke all available addr2line technologies, returning the
+// error of the first one that didn't return KE_NOENT.
+// @return: KE_NOENT: No information available for the given address.
+extern __crit __wunused __nonnull((1,2,4)) kerrno_t
+kaddr2linelist_exec(struct kaddr2linelist const *__restrict self,
+                    struct kshlib *__restrict lib, ksymaddr_t addr,
+                    struct kfileandline *__restrict result);
+
+
+
+
 struct kshlib_callbacks {
  // NOTE: Callbacks not specified are marked with 'KSYM_INVALID'
  ksymaddr_t slc_start;           /*< void(*)(void):  Address of the '_start'-function (NOTE: Shared library usually don't have this...). */
@@ -394,12 +433,11 @@ struct kshlib {
  struct ksecdata         sh_data;       /*< Section data. */
  struct kreloc           sh_reloc;      /*< Relocation information. */
  struct kshlib_callbacks sh_callbacks;  /*< Special callbacks recognized by the linker. */
+ struct kaddr2linelist   sh_addr2line;  /*< Address->line technologies. */
 };
 
 __local KOBJECT_DEFINE_INCREF(kshlib_incref,struct kshlib,sh_refcnt,kassert_kshlib);
 __local KOBJECT_DEFINE_DECREF(kshlib_decref,struct kshlib,sh_refcnt,kassert_kshlib,kshlib_destroy);
-
-//#define KSHLIB_INIT  {KOBJECT_INIT(KOBJECT_MAGIC_SHLIB) KSYMTABLE_INIT}
 
 //////////////////////////////////////////////////////////////////////////
 // Initialize a shared library/executable from a given file.

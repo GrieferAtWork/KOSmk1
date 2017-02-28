@@ -38,6 +38,8 @@
 #include <kos/kernel/fs/file.h>
 #include <kos/kernel/fs/fs.h>
 
+#include "linker-DWARF.h"
+
 __DECL_BEGIN
 
 static char const default_libsearch_paths[] = "/lib:/usr/lib";
@@ -65,32 +67,12 @@ ksymbol_new(char const *__restrict name) {
  if __likely(result) {
   result->s_hash = ksymhash_of(name,name_size);
   result->s_nmsz = name_size;
-  result->s_a2l  = NULL;
   memcpy(result->s_name,name,name_size*sizeof(char));
   result->s_name[name_size] = '\0';
  }
  return result;
 }
 
-
-__crit kerrno_t
-kaddr2line_exec(struct kaddr2line const *__restrict self,
-                struct kshlib *__restrict lib,
-                ksymaddr_t addr, struct kfileandline *__restrict result) {
- KTASK_CRIT_MARK
- kassertobj(self);
- kassertobj(result);
- kassert_kshlib(lib);
-
- result->fal_path  = NULL;
- result->fal_file  = NULL;
- result->fal_line  = 42;
- result->fal_flags = KFILEANDLINE_FLAG_NONE;
-
- /* TODO */
-
- return KE_OK;
-}
 
 
 
@@ -441,11 +423,74 @@ kshliblist_append_inherited(struct kshliblist *__restrict self,
 }
 
 
+//////////////////////////////////////////////////////////////////////////
+// === kaddr2line ===
+__crit void kaddr2line_quit(struct kaddr2line *__restrict self) {
+ if (self->a2l_kind == KA2L_KIND_DWARF) {
+  ka2ldwarf_delete(self->a2l_dwarf);
+ }
+}
+__crit kerrno_t
+kaddr2line_exec(struct kaddr2line const *__restrict self,
+                struct kshlib *__restrict lib, ksymaddr_t addr,
+                struct kfileandline *__restrict result) {
+ if (self->a2l_kind == KA2L_KIND_DWARF) {
+  return ka2ldwarf_exec(self->a2l_dwarf,lib,addr,result);
+ }
+ return KE_NOENT;
+}
 
 
+
+//////////////////////////////////////////////////////////////////////////
+// === kaddr2linelist ===
+__crit void
+kaddr2linelist_quit(struct kaddr2linelist *__restrict self) {
+ struct kaddr2line *iter,*end;
+ KTASK_CRIT_MARK
+ kassertobj(self);
+ end = (iter = self->a2ll_techv)+self->a2ll_techc;
+ for (; iter != end; ++iter) kaddr2line_quit(iter);
+ free(self->a2ll_techv);
+}
+__crit struct kaddr2line *
+kaddr2linelist_alloc(struct kaddr2linelist *__restrict self) {
+ struct kaddr2line *result;
+ KTASK_CRIT_MARK
+ kassertobj(self);
+ result = (struct kaddr2line *)realloc(self->a2ll_techv,(self->a2ll_techc+1)*
+                                       sizeof(struct kaddr2line));
+ if __unlikely(!result) return NULL;
+ self->a2ll_techv = result;
+ result += self->a2ll_techc++;
+ return result;
+}
+__crit kerrno_t
+kaddr2linelist_exec(struct kaddr2linelist const *__restrict self,
+                    struct kshlib *__restrict lib, ksymaddr_t addr,
+                    struct kfileandline *__restrict result) {
+ struct kaddr2line *iter,*end; kerrno_t error;
+ KTASK_CRIT_MARK
+ kassertobj(self);
+ kassert_kshlib(lib);
+ end = (iter = self->a2ll_techv)+self->a2ll_techc;
+ for (; iter != end; ++iter) {
+  error = kaddr2line_exec(iter,lib,addr,result);
+  if (error != KE_NOENT) return error;
+ }
+ return KE_NOENT;
+}
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////
+// === kshlib ===
 void kshlib_destroy(struct kshlib *__restrict self) {
  kassert_object(self,KOBJECT_MAGIC_SHLIB);
  kshlibcache_dellib(self);
+ kaddr2linelist_quit(&self->sh_addr2line);
  kreloc_quit(&self->sh_reloc);
  ksecdata_quit(&self->sh_data);
  ksymtable_quit(&self->sh_privatesym);
@@ -520,7 +565,10 @@ struct kshlib __kshlib_kernel = {
  /* sh_callbacks.slc_init_array_c    */0,
  /* sh_callbacks.slc_fini            */KSYM_INVALID,
  /* sh_callbacks.slc_fini_array_v    */KSYM_INVALID,
- /* sh_callbacks.slc_fini_array_c    */0}
+ /* sh_callbacks.slc_fini_array_c    */0},
+ /* sh_addr2line                     */{
+ /* sh_addr2line.a2ll_techc          */0,
+ /* sh_addr2line.a2ll_techv          */NULL}
 };
 
 __crit kerrno_t

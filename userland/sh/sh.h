@@ -33,9 +33,9 @@ extern char *prompt;
 extern void term_setunbuffered(void);
 extern void term_setbuffered(void);
 
-extern int exec_fork(char *exe, char **argv);
+extern int exec_fork(char *exe, char *argv[]);
 extern char **split_argv(char *cmd);
-extern int exec_unistd(char *exe, char **argv);
+extern int exec_unistd(char *exe, char *argv[]);
 extern int exec_system(char *cmd);
 extern int joinproc(int p);
 extern int do_system(char *cmd);

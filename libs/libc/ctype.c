@@ -48,6 +48,13 @@ __public __u8 const __ctype_map[256] = {
  0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
 };
 
+#ifdef ____ctype_tohex_defined
+__public char const __ctype_tohex[2][16] = {
+ {'0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'},
+ {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'}};
+#endif
+
+
 __DECL_END
 
 #endif /* !__CTYPE_C__ */

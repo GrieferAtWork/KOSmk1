@@ -43,9 +43,9 @@ __DECL_BEGIN
 
 
 __ref struct kfatinode *
-kfatinode_new(struct kfatsuperblock *superblock,
+kfatinode_new(struct kfatsuperblock *__restrict superblock,
               struct kfatfilepos const *__restrict fpos,
-              struct kfatfileheader const *fheader) {
+              struct kfatfileheader const *__restrict fheader) {
  struct kfatinode *result;
  kassert_ksuperblock((struct ksuperblock *)superblock);
  kassertobj(fheader);
@@ -503,7 +503,7 @@ struct kblockfiletype kfatfile_file_type = {
 
 
 
-kerrno_t kfatsuperblock_init(struct kfatsuperblock *self, struct ksdev *__restrict dev) {
+kerrno_t kfatsuperblock_init(struct kfatsuperblock *__restrict self, struct ksdev *__restrict dev) {
  kerrno_t error;
  if __unlikely(KE_ISERR(error = kfatfs_init(&self->f_fs,dev))) return error;
  // todo: Special node type for root directory
@@ -530,7 +530,7 @@ static void kfatsuperinode_quit(struct kinode *__restrict self) {
 }
 
 
-static __ref struct ksdev *kfatsuperblock_getdev(struct kfatsuperblock *self) {
+static __ref struct ksdev *kfatsuperblock_getdev(struct kfatsuperblock *__restrict self) {
  struct ksdev *result = self->f_fs.f_dev;
  if __unlikely(KE_ISERR(ksdev_incref(result))) result = NULL;
  return result;

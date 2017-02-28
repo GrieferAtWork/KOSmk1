@@ -45,7 +45,6 @@ ksecdata_elf32_init(struct ksecdata *__restrict self,
                     __size_t pheaderc, __size_t pheadersize,
                     struct kfile *__restrict elf_file);
 
-
 static __wunused __nonnull((1,2,3,4)) kerrno_t
 kshlib_elf32_load_symtable(struct kshlib *__restrict self,
                            Elf32_Shdr const *__restrict strtab,

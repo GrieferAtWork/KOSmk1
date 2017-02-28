@@ -114,7 +114,7 @@ extern struct kinodetype kvlinknode_type;
 
 //////////////////////////////////////////////////////////////////////////
 // Return, and return a new virtual
-extern __ref struct kinode *
+extern __crit __ref struct kinode *
 kvlinknode_new(struct ksuperblock *superblock, char const *text);
 
 
@@ -140,8 +140,8 @@ extern kerrno_t kvproxyfile_seek(struct kfile *__restrict self, __off_t off, int
 extern kerrno_t kvproxyfile_trunc(struct kfile *__restrict self, __pos_t size); /*< Set the current end-of-file marker to 'size' */
 extern kerrno_t kvproxyfile_flush(struct kfile *__restrict self);
 extern kerrno_t kvproxyfile_readdir(struct kfile *__restrict self, __ref struct kinode **__restrict inode, struct kdirentname **__restrict name, __u32 flags); /*< Returns KS_EMPTY when the end is reached. */
-extern __ref struct kinode *kvproxyfile_getinode(struct kfile *__restrict self);
-extern __ref struct kdirent *kvproxyfile_getdirent(struct kfile *__restrict self);
+extern __crit __ref struct kinode *kvproxyfile_getinode(struct kfile *__restrict self);
+extern __crit __ref struct kdirent *kvproxyfile_getdirent(struct kfile *__restrict self);
 #ifdef __INTELLISENSE__
 #define KVPROXYFILE_TYPE_INIT /* nothing */
 #else

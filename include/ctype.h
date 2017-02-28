@@ -58,6 +58,21 @@ __DECL_BEGIN
 extern __u8 const __ctype_map[256];
 #endif
 
+#ifndef ____ctype_tohex_defined
+#define ____ctype_tohex_defined 1
+extern char const __ctype_tohex[2][16];
+#endif
+
+#ifndef __STDC_PURE__
+#ifdef __INTELLISENSE__
+#define _tohex  tohex
+#define _tohex2 tohex2
+#else
+#define tohex  _tohex
+#define tohex2 _tohex2
+#endif
+#endif
+
 #ifndef __F_IS_CNTRL
 #define __F_IS_CNTRL 0x01
 #define __F_IS_PUNCT 0x02
@@ -98,11 +113,18 @@ __local __wunused __constcall int isxdigit(int __ch) { return (__ch >= 'a' && __
 
 __local __wunused __constcall int tolower(int __ch) { return __ch >= 'A' && __ch <= 'Z' ? __ch+('a'-'A') : __ch; }
 __local __wunused __constcall int toupper(int __ch) { return __ch >= 'a' && __ch <= 'z' ? __ch+('A'-'a') : __ch; }
+#ifdef ____ctype_tohex_defined
+__local __wunused __constcall char _tohex(int __uppercase, int __x) { __assertf(__x < 16,"%d is not a hex",__x); return __ctype_tohex[!!__uppercase][__x]; }
+__local __wunused __constcall char _tohex2(int __uppercase, int __x) { return __ctype_tohex[!!__uppercase][__x&0xf]; }
+#else
+__local __wunused __constcall char _tohex(int __uppercase, int __x) { __assertf(__x < 16,"%d is not a hex",x); return __x >= 10 ? ((__uppercase ? 'A' : 'a')+(__x-10)) : '0'+__x; }
+__local __wunused __constcall char _tohex2(int __uppercase, int __x) { return __x >= 10 ? ((__uppercase ? 'A' : 'a')+(__x-10)) : '0'+__x; }
+#endif
 
 #ifdef __DEBUG__
-__local __wunused __constcall int _tolower(int __ch) { __assertf(isupper(__ch),"'%c' is not uppercase",__ch); return __ch+('a'-'A'); }
+__local __wunused __constcall int _tolower(int __ch) { __assertf(isupper(__ch),"'%c' is not __uppercase",__ch); return __ch+('a'-'A'); }
 __local __wunused __constcall int _toupper(int __ch) { __assertf(islower(__ch),"'%c' is not lowercase",__ch); return __ch+('A'-'a'); }
-__forcelocal __wunused __constcall int __tolower_d(int __ch __LIBC_DEBUG__PARAMS) { __assert_atf("_tolower(...)",0,isupper(__ch),"'%c' is not uppercase",__ch); return __ch+('a'-'A'); }
+__forcelocal __wunused __constcall int __tolower_d(int __ch __LIBC_DEBUG__PARAMS) { __assert_atf("_tolower(...)",0,isupper(__ch),"'%c' is not __uppercase",__ch); return __ch+('a'-'A'); }
 __forcelocal __wunused __constcall int __toupper_d(int __ch __LIBC_DEBUG__PARAMS) { __assert_atf("_toupper(...)",0,islower(__ch),"'%c' is not lowercase",__ch); return __ch+('A'-'a'); }
 #define _tolower(ch) __tolower_d(ch __LIBC_DEBUG__ARGS)
 #define _toupper(ch) __toupper_d(ch __LIBC_DEBUG__ARGS)
@@ -113,6 +135,15 @@ __local int _toupper(int __ch) { return __ch+('A'-'a'); }
 #define _tolower(__ch) ((__ch)+('a'-'A'))
 #define _toupper(__ch) ((__ch)+('A'-'a'))
 #endif /* !__CCTYPE__ */
+#endif
+
+#ifndef __INTELLISENSE__
+#ifdef ____ctype_tohex_defined
+#ifndef __DEBUG__
+#define _tohex(__uppercase,__x)  (__ctype_tohex[!!(__uppercase)][(__x)])
+#endif /* !__DEBUG__ */
+#define _tohex2(__uppercase,__x) (__ctype_tohex[!!(__uppercase)][(__x)&0xf])
+#endif /* ____ctype_tohex_defined */
 #endif
 
 __DECL_END

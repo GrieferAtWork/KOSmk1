@@ -410,7 +410,8 @@ kfatfs_mkshortname(struct kfatfs *__restrict self, kfatcls_t dir, int dir_is_sec
 //                             requires the use of a long filename entry.
 //                             Note through, that 'retry' cannot be used to generate more names.
 extern int kdos83_makeshort(char const *__restrict name, __size_t namesize,
-                            int retry, __u8 *__restrict ntflags, char result[11]);
+                            int retry, __u8 *__restrict ntflags,
+                            char result[KFATFILE_NAMEMAX+KFATFILE_EXTMAX]);
 #define KDOS83_KIND_SHORT   0
 #define KDOS83_KIND_LONG    1
 #define KDOS83_KIND_CASE    2

@@ -33,6 +33,7 @@
 #include <kos/config.h>
 #include <kos/kernel/debug.h>
 #include <kos/syscall.h>
+#include <ctype.h>
 #include <math.h>
 #include <stddef.h>
 #include <string.h>
@@ -784,8 +785,6 @@ end:
 
 
 #define tooct(x) ('0'+(x))
-#define __tohex(x) ((x) >= 10 ? (flags&FORMAT_QUOTE_FLAG_UPPERSUF ? 'A' : 'a')+((x)-10) : '0'+(x))
-#define tohex(x) __xblock({ __u8 const __x = (x); __xreturn __tohex(__x); })
 
 int
 format_quote(pformatprinter printer, void *closure,
@@ -856,11 +855,11 @@ special_control:
 encode_hex:
     encoded_text[1] = flags&FORMAT_QUOTE_FLAG_UPPERPRE ? 'X' : 'x';
     if ((__u8)ch <= 0xf) {
-     encoded_text[2] = tohex((__u8)ch);
+     encoded_text[2] = tohex(flags&FORMAT_QUOTE_FLAG_UPPERSUF,(__u8)ch);
      encoded_text_size = 3;
     } else {
-     encoded_text[2] = tohex(((__u8)ch & 0xf0) >> 4);
-     encoded_text[3] = tohex( (__u8)ch & 0x0f);
+     encoded_text[2] = tohex(flags&FORMAT_QUOTE_FLAG_UPPERSUF,((__u8)ch & 0xf0) >> 4);
+     encoded_text[3] = tohex(flags&FORMAT_QUOTE_FLAG_UPPERSUF, (__u8)ch & 0x0f);
      encoded_text_size = 4;
     }
 print_encoded:

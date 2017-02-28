@@ -229,8 +229,14 @@ dont_copy_input:
  /* Fill in generic information, such as base and size. */
  info.si_flags = symbol_flags;
  info.si_modid = (kmodid_t)(module-proc->p_modules.pms_modv);
- info.si_base  = (void *)((uintptr_t)module->pm_base+symbol->s_addr);
- if ((info.si_size = symbol->s_size) != 0) info.si_flags |= KSYMINFO_FLAG_SIZE;
+ if (symbol) {
+  info.si_base   = (void *)((uintptr_t)module->pm_base+symbol->s_addr);
+  info.si_flags |= KSYMINFO_FLAG_BASE;
+  if ((info.si_size = symbol->s_size) != 0) info.si_flags |= KSYMINFO_FLAG_SIZE;
+ } else {
+  info.si_base = NULL;
+  info.si_size = 0;
+ }
 
  /* Figure out where the buffer of what the user requested ends. */
       if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info_size = offsetafter(struct ksyminfo,si_line);
@@ -248,7 +254,7 @@ dont_copy_input:
  buf_end = (byte_t *)buf+info_size;
  /* Extract the symbol name. */
  if (flags&KMOD_SYMINFO_FLAG_WANTNAME) {
-  if __likely(symbol->s_nmsz) {
+  if __likely(symbol && symbol->s_nmsz) {
    info.si_flsz |= KSYMINFO_FLAG_NAME;
    if (!info.si_name || !info.si_nmsz) {
     info.si_name = (char *)buf_end;
@@ -270,10 +276,13 @@ dont_copy_input:
  }
 
  if (flags&(KMOD_SYMINFO_FLAG_WANTFILE|KMOD_SYMINFO_FLAG_WANTLINE)) {
-  if (symbol->s_a2l) {
-   struct kfileandline fal; ssize_t print_error;
-   error = kaddr2line_exec(symbol->s_a2l,module->pm_lib,effective_addr,&fal);
-   if __unlikely(KE_ISERR(error)) goto no_fal;
+  struct kfileandline fal; ssize_t print_error;
+  error = kaddr2linelist_exec(&module->pm_lib->sh_addr2line,
+                              module->pm_lib,effective_addr,&fal);
+  if __unlikely(KE_ISERR(error)) {
+   if (flags&KMOD_SYMINFO_FLAG_WANTFILE) info.si_flsz = 0;
+   if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info.si_line = 0;
+  } else {
    if (flags&KMOD_SYMINFO_FLAG_WANTFILE) {
     info.si_flsz |= KSYMINFO_FLAG_FILE;
     if (!info.si_file || !info.si_flsz) {
@@ -297,10 +306,6 @@ dont_copy_input:
    }
    if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info.si_line = fal.fal_line;
    kfileandline_quit(&fal);
-  } else {
-no_fal:
-   if (flags&KMOD_SYMINFO_FLAG_WANTFILE) info.si_flsz = 0;
-   if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info.si_line = 0;
   }
  }
 
@@ -386,9 +391,11 @@ parse_module:
                                   &symbol_flags);
   }
 found_symbol:
-  if __unlikely(!symbol) { error = KE_NOENT; goto end_freename; }
+  /* If we're not looking up an address and didn't find the symbol,
+   * don't continue because we don't even have an address to go on. */
+  if __unlikely(!symbol && !(flags&KMOD_SYMINFO_FLAG_LOOKUPADDR))
+  { error = KE_NOENT; goto end_freename; }
   assert(module);
-  assert(symbol);
   error = ksymbol_fillinfo(proc,module,symbol,(flags&KMOD_SYMINFO_FLAG_LOOKUPADDR)
                            ? ((uintptr_t)addr_or_name-(uintptr_t)module->pm_base)
                            : symbol->s_addr,buf,bufsize,preqsize
