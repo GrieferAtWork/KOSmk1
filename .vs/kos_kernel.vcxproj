@@ -104,6 +104,9 @@
     <ClCompile Include="..\src\kernel\iobuf.c" />
     <ClCompile Include="..\src\kernel\keyboard.c" />
     <ClCompile Include="..\src\kernel\linker-DWARF.c" />
+    <ClCompile Include="..\src\kernel\linker-elf32.c" />
+    <ClCompile Include="..\src\kernel\linker-pe32.c" />
+    <ClCompile Include="..\src\kernel\linker-relocate.c" />
     <ClCompile Include="..\src\kernel\linker.c" />
     <ClCompile Include="..\src\kernel\pageframe.c" />
     <ClCompile Include="..\src\kernel\paging.c" />
@@ -165,10 +168,7 @@
     <None Include="..\src\kernel\iobuf-readimpl.c.inl" />
     <None Include="..\src\kernel\iobuf-writeimpl.c.inl" />
     <None Include="..\src\kernel\linker-cache.c.inl" />
-    <None Include="..\src\kernel\linker-elf32.c.inl" />
-    <None Include="..\src\kernel\linker-pe32.c.inl" />
     <None Include="..\src\kernel\linker-recent.c.inl" />
-    <None Include="..\src\kernel\linker-relocate.c.inl" />
     <None Include="..\src\kernel\linker-slloaders.c.inl" />
     <None Include="..\src\kernel\pageframe-alloc.c.inl" />
     <None Include="..\src\kernel\paging-map.c.inl" />

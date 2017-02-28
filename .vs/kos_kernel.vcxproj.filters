@@ -392,6 +392,15 @@
     <ClCompile Include="..\src\kernel\gc.c">
       <Filter>src\kernel</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\kernel\linker-elf32.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\linker-pe32.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\linker-relocate.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\src\kernel\dev\storage-ata-rwlba.c.inl">
@@ -462,9 +471,6 @@
       <Filter>src\kernel</Filter>
     </None>
     <None Include="..\src\kernel\linker-slloaders.c.inl">
-      <Filter>src\kernel</Filter>
-    </None>
-    <None Include="..\src\kernel\linker-relocate.c.inl">
       <Filter>src\kernel</Filter>
     </None>
     <None Include="..\src\kernel\linker-cache.c.inl">
@@ -662,12 +668,6 @@
     <None Include="..\src\kernel\iobuf-writeimpl.c.inl">
       <Filter>src\kernel</Filter>
     </None>
-    <None Include="..\src\kernel\linker-elf32.c.inl">
-      <Filter>src\kernel</Filter>
-    </None>
     <None Include="..\magic.dee" />
-    <None Include="..\src\kernel\linker-pe32.c.inl">
-      <Filter>src\kernel</Filter>
-    </None>
   </ItemGroup>
 </Project>

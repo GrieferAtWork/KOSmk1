@@ -33,6 +33,8 @@ __DECL_BEGIN
 
 struct kfile;
 struct kshlib;
+struct ksecdata;
+struct krelocvec;
 
 //////////////////////////////////////////////////////////////////////////
 // Load shared library data from a given file.

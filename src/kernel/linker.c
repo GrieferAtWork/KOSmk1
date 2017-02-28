@@ -1038,10 +1038,7 @@ __DECL_END
 
 #ifndef __INTELLISENSE__
 #include "linker-cache.c.inl"
-#include "linker-elf32.c.inl"
-#include "linker-pe32.c.inl"
 #include "linker-recent.c.inl"
-#include "linker-relocate.c.inl"
 #include "linker-slloaders.c.inl"
 #include "procmodules.c.inl"
 #endif
