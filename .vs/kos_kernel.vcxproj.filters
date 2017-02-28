@@ -52,6 +52,9 @@
     <Filter Include="src\misc">
       <UniqueIdentifier>{210e5188-ff10-4332-880b-cb036f903447}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\kernel\linker">
+      <UniqueIdentifier>{7e994a64-3cbd-4d65-b874-8675b03f7ce8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\kos\kernel\fd.h">
@@ -267,17 +270,17 @@
     <ClInclude Include="..\include\kos\kernel\panic.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\kernel\linker-elf32.h">
-      <Filter>src\kernel</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\kernel\linker-pe32.h">
-      <Filter>src\kernel</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\kernel\linker-DWARF.h">
-      <Filter>src\kernel</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\kos\kernel\gc.h">
       <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\kernel\linker\linker-DWARF.h">
+      <Filter>src\kernel\linker</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\kernel\linker\linker-elf32.h">
+      <Filter>src\kernel\linker</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\kernel\linker\linker-pe32.h">
+      <Filter>src\kernel\linker</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -321,9 +324,6 @@
       <Filter>src\kernel</Filter>
     </ClCompile>
     <ClCompile Include="..\src\kernel\sysconf.c">
-      <Filter>src\kernel</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\kernel\linker.c">
       <Filter>src\kernel</Filter>
     </ClCompile>
     <ClCompile Include="..\src\kernel\dev\socket.c">
@@ -386,20 +386,23 @@
     <ClCompile Include="..\src\kernel\shm.c">
       <Filter>src\kernel</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\kernel\linker-DWARF.c">
-      <Filter>src\kernel</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\kernel\gc.c">
       <Filter>src\kernel</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\kernel\linker-elf32.c">
-      <Filter>src\kernel</Filter>
+    <ClCompile Include="..\src\kernel\linker\linker-elf32.c">
+      <Filter>src\kernel\linker</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\kernel\linker-pe32.c">
-      <Filter>src\kernel</Filter>
+    <ClCompile Include="..\src\kernel\linker\linker-pe32.c">
+      <Filter>src\kernel\linker</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\kernel\linker-relocate.c">
-      <Filter>src\kernel</Filter>
+    <ClCompile Include="..\src\kernel\linker\linker-relocate.c">
+      <Filter>src\kernel\linker</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\linker\linker.c">
+      <Filter>src\kernel\linker</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\linker\linker-DWARF.c">
+      <Filter>src\kernel\linker</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -468,12 +471,6 @@
       <Filter>src\kernel</Filter>
     </None>
     <None Include="..\src\kernel\tty-print.c.inl">
-      <Filter>src\kernel</Filter>
-    </None>
-    <None Include="..\src\kernel\linker-slloaders.c.inl">
-      <Filter>src\kernel</Filter>
-    </None>
-    <None Include="..\src\kernel\linker-cache.c.inl">
       <Filter>src\kernel</Filter>
     </None>
     <None Include="..\src\kernel\socket-packet.c.inl">
@@ -650,9 +647,6 @@
     <None Include="..\src\kernel\sched\sync\addist-recv.c.inl">
       <Filter>src\kernel\sched\sync</Filter>
     </None>
-    <None Include="..\src\kernel\linker-recent.c.inl">
-      <Filter>src\kernel</Filter>
-    </None>
     <None Include="..\src\kernel\arch\x86\realmode.S">
       <Filter>src\kernel\arch\x86</Filter>
     </None>
@@ -669,5 +663,14 @@
       <Filter>src\kernel</Filter>
     </None>
     <None Include="..\magic.dee" />
+    <None Include="..\src\kernel\linker\linker-recent.c.inl">
+      <Filter>src\kernel\linker</Filter>
+    </None>
+    <None Include="..\src\kernel\linker\linker-slloaders.c.inl">
+      <Filter>src\kernel\linker</Filter>
+    </None>
+    <None Include="..\src\kernel\linker\linker-cache.c.inl">
+      <Filter>src\kernel\linker</Filter>
+    </None>
   </ItemGroup>
 </Project>

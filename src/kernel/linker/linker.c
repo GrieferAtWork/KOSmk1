@@ -1040,7 +1040,7 @@ __DECL_END
 #include "linker-cache.c.inl"
 #include "linker-recent.c.inl"
 #include "linker-slloaders.c.inl"
-#include "procmodules.c.inl"
+#include "../procmodules.c.inl"
 #endif
 
 #endif /* !__KOS_KERNEL_LINKER_C__ */

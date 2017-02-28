@@ -16,6 +16,7 @@
 	kernel/*.S;
 	kernel/dev/*.c;
 	kernel/fs/*.c;
+	kernel/linker/*.c;
 	kernel/sched/*.c;
 	kernel/sched/*.S;
 	kernel/sched/sync/*.c;
