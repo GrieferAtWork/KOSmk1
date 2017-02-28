@@ -89,12 +89,10 @@ format_vprintf __P((pformatprinter __printer, void *__closure,
 //    - '%[A-Z]'   -- Character ranges in scan patterns
 //    - '%[^abc]'  -- Inversion of a scan pattern
 //    - '\n'       -- Skip any kind of linefeed ('\n', '\r', '\r\n')
-//    - '%$s'      -- '$'-modifier, available for any format outputing a string.
-//                    This modifier reads a 'size_t' from the argument list,
-//                    that specifies the size of the following string buffer:
+//    - '%.?s'     -- Similar to '%.*s', but instead of reading an 'unsigned int', read a 'size_t'
 //                 >> char buffer[64];
-//                 >> sscanf(data,"My name is %$s\n",sizeof(buffer),buffer);
-// format -> %[*][$][width][length]specifier
+//                 >> sscanf(data,"My name is %.?s\n",sizeof(buffer),buffer);
+// format -> %[*|?][width][length]specifier
 // @return: The number of parsed arguments, or an non-zero value returned by 'SCANNER' or 'RETURNCH'
 extern __nonnull((1,4)) __attribute_vaformat(__scanf__,4,5) int
 format_scanf __P((pformatscanner __scanner, pformatreturn __returnch,

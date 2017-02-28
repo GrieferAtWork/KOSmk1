@@ -541,8 +541,8 @@ static void *relay_incoming_threadmain(void *__unused(closure)) {
      break;
    }
    if (iter != text) {
-    //printf("[TERMINAL-VGA] Relay: %Iu %.*q\n",
-    //        iter-text,(unsigned)(iter-text),text);
+    //printf("[TERMINAL-VGA] Relay: %Iu %.?q\n",
+    //        iter-text,(size_t)(iter-text),text);
     if (write(amaster,text,(size_t)(iter-text)) == -1)
      perror("Relay failed");
    }

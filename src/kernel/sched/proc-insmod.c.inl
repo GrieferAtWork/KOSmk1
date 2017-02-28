@@ -532,8 +532,8 @@ kproc_dlsymex_unlocked(struct kproc *__restrict self,
  return NULL;
 found_symbol:
 #if 0
- printf("Found symbol: %.*q @ %Iu\n",
-       (unsigned)name_size,name,symbol->s_addr);
+ printf("Found symbol: %.?q @ %Iu\n",
+        name_size,name,symbol->s_addr);
 #endif
  return (__user void *)((uintptr_t)module->pm_base+symbol->s_addr);
 }

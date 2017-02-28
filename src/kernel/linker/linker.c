@@ -675,8 +675,8 @@ again_true_root:
   goto err_trueroot;
  }
  /* Must opening a new shared library. */
- //printf("filename = %.*q\n",(unsigned)filename_max,filename);
- //printf("trueroot = %.*q\n",(unsigned)trueroot_size,trueroot);
+ //printf("filename = %.?q\n",filename_max,filename);
+ //printf("trueroot = %.?q\n",trueroot_size,trueroot);
  error = kdirent_openat(pathenv,trueroot,trueroot_size,O_RDONLY,0,NULL,&fp);
  if (KE_ISERR(error)) goto err_trueroot;
  if (require_exec_permissions) {
@@ -755,9 +755,9 @@ kshlib_opensearch(struct kfspathenv const *pathenv,
    memcpy(path+partsize,name,namemax*sizeof(char));
    path[partsize+namemax] = '\0';
 #if 0
-   printf("Searchcat: %.*q + %.*q -> %.*q\n",
-          (unsigned)(hassep ? partsize : partsize-1),iter,(unsigned)namemax,name,
-          (unsigned)(partsize+namemax),path);
+   printf("Searchcat: %.?q + %.?q -> %.?q\n",
+          (size_t)(hassep ? partsize : partsize-1),iter,namemax,name,
+          (size_t)(partsize+namemax),path);
 #endif
    error = kshlib_openfileenv(pathenv,path,(reqsize/sizeof(char))-1,
                               result,require_exec_permissions);

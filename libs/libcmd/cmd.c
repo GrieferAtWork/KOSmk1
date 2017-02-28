@@ -207,9 +207,9 @@ done:
  assert(iter >= self->cp_begin &&
         iter <= self->cp_end);
  self->cp_begin = iter;
- k_syslogf(KLOG_DEBUG,"TOKEN: %d : %.*q\n",
+ k_syslogf(KLOG_DEBUG,"TOKEN: %d : %.?q\n",
            token->ct_kind,
-          (unsigned)(token->ct_end-token->ct_begin),
+          (size_t)(token->ct_end-token->ct_begin),
            token->ct_begin);
  return token->ct_kind;
 }
@@ -358,8 +358,8 @@ cmd_capturefd(struct cmd_operations const *__restrict ops,
               void *ops_closure) {
  int pipes[2],error;
  char buffer[256]; ssize_t rsize;
-k_syslogf(KLOG_DEBUG,"Capturing fd %d of %.*q\n",
-          capfd,(unsigned)textsize,text);
+k_syslogf(KLOG_DEBUG,"Capturing fd %d of %.?q\n",
+          capfd,textsize,text);
  if (pipe(pipes) == -1) return -1;
  error = cmd_capturefdf(ops,text,textsize,capfd,
                         pipes[1],ops_closure);
@@ -397,9 +397,8 @@ default_exec(struct cmd_engine *__unused(engine),
   args.ea_envlenv = NULL;
   kerr = ktask_exec(cmd->c_exe,cmd->c_esz,
                     &args,KTASK_EXEC_FLAG_SEARCHPATH);
-  dprintf(STDERR_FILENO,"exec %.*q: %d: %s\n",
-         (unsigned)cmd->c_esz,cmd->c_exe,
-          -kerr,strerror(-kerr));
+  dprintf(STDERR_FILENO,"exec %.?q: %d: %s\n",
+          cmd->c_esz,cmd->c_exe,-kerr,strerror(-kerr));
   _exit(kerr == KE_NOENT ? 127 : 126);
  }
  if (child_task == -1) return -1;

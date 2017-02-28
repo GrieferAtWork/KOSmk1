@@ -78,7 +78,7 @@ struct sockaddr {
 #define MSG_ERRQUEUE     0x00002000 /*< Fetch message from error queue. */
 #define MSG_NOSIGNAL     0x00004000 /*< Do not generate SIGPIPE. */
 #define MSG_MORE         0x00008000 /*< Sender will send more. */
-#define MSG_WAITFORONE   0x00010000 /*< Wait for at least one packet to return.*/
+#define MSG_WAITFORONE   0x00010000 /*< Wait for at least one packet to return. */
 #define MSG_FASTOPEN     0x20000000 /*< Send data in TCP SYN. */
 #define MSG_CMSG_CLOEXEC 0x40000000 /*< Set close_on_exit for file descriptor received through SCM_RIGHTS. */
 

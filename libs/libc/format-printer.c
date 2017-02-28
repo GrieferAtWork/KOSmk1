@@ -54,6 +54,8 @@ __public int format_printf(pformatprinter printer, void *closure,
  return result;
 }
 
+#define PRINTF_EXTENSION_DOTQUESTION 1 /*< Allow '.?' in place of '.*' to read size_t from the argument list instead of 'unsigned int' */
+
 
 enum printf_length {
  len_I8,len_I16,len_I32,len_I64,len_L = 'L',len_z = 'z',len_t = 't',
@@ -63,7 +65,7 @@ enum printf_length {
  len_h    = __PP_CAT_2(len_I,__PP_MUL8(__SIZEOF_SHORT__)),
  len_l    = __PP_CAT_2(len_I,__PP_MUL8(__SIZEOF_LONG__)),
  len_ll   = __PP_CAT_2(len_I,__PP_MUL8(__SIZEOF_LONG_LONG__)),
- len_j    = len_I64, // intmax_t
+ len_j    = len_I64, /* intmax_t */
 };
 
 #define PRINTF_FLAG_NONE     0x0000
@@ -77,9 +79,9 @@ enum printf_length {
 #define PRINTF_FLAG_SIGNED   0x0080
 
 #ifdef __KERNEL__
-// Prevent infinite-recursion, as assert() uses this function as well
-// >> While this should _never_ happen, it can potentially prevent
-//    the worst-case-scenario during absolute fatality.
+/* Prevent infinite-recursion, as assert() uses this function as well
+ * >> While this should _never_ happen, it can potentially prevent
+ *    the worst-case-scenario during absolute fatality. */
 static __atomic int __in_formatprintf_check = 0;
 #define __printf_assert(x) \
  (katomic_cmpxch(__in_formatprintf_check,0,1)\
@@ -118,12 +120,13 @@ next:
    case '\0': goto end;
    case '%': {
     enum printf_length length;
-    unsigned int flags,width,precision;
+    unsigned int flags;
+    size_t width,precision;
     if (format_begin != iter) {
      print(format_begin,((size_t)(iter-format_begin))-1);
     }
     flags = PRINTF_FLAG_NONE;
-flag_next: // Flags
+flag_next: /* Flags */
     ch = readch();
     switch (ch) {
      case '-': flags |= PRINTF_FLAG_LJUST;   goto flag_next;
@@ -133,38 +136,70 @@ flag_next: // Flags
      case '0': flags |= PRINTF_FLAG_PADZERO; goto flag_next;
      default: break;
     }
-    // Width
-    if (ch == '*') {
-     width = va_arg(args,unsigned int); // Technically int, but come on...
+    /* Width */
+#if PRINTF_EXTENSION_DOTQUESTION
+#if __SIZEOF_INT__ != __SIZEOF_SIZE_T__
+    if (ch == '?') {
+     width = va_arg(args,size_t);
+     goto have_width;
+    } else
+    if (ch == '*')
+#else
+    if (ch == '*' || ch == '?')
+#endif
+#else
+    if (ch == '*')
+#endif
+    {
+     width = (size_t)va_arg(args,unsigned int); /* Technically int, but come on... */
+#if PRINTF_EXTENSION_DOTQUESTION && (__SIZEOF_INT__ != __SIZEOF_SIZE_T__)
+have_width:
+#endif
      flags |= PRINTF_FLAG_HASWIDTH;
      ch = readch();
     } else if (ch >= '0' && ch <= '9') {
-     width = ch-'0';
+     width = (size_t)(ch-'0');
      for (;;) {
       ch = readch();
       if (ch < '0' || ch > '9') break;
-      width = width*10+(ch-'0');
+      width = (size_t)(width*10+(ch-'0'));
      }
      flags |= PRINTF_FLAG_HASWIDTH;
     } else {
      width = 0;
     }
-    // Precision
+    /* Precision */
     if (ch == '.') {
      ch = readch();
      flags |= PRINTF_FLAG_HASPREC;
-     if (ch == '*') {
-      precision = va_arg(args,unsigned int); // Technically int, but come on...
+#if PRINTF_EXTENSION_DOTQUESTION
+#if __SIZEOF_INT__ != __SIZEOF_SIZE_T__
+     if (ch == '?') {
+      precision = va_arg(args,size_t);
+      goto have_precision;
+     } else
+     if (ch == '*')
+#else
+     if (ch == '*' || ch == '?')
+#endif
+#else
+     if (ch == '*')
+#endif
+     {
+      precision = (size_t)va_arg(args,unsigned int); /* Technically int, but come on... */
+#if PRINTF_EXTENSION_DOTQUESTION && (__SIZEOF_INT__ != __SIZEOF_SIZE_T__)
+have_precision:
+#endif
       ch = readch();
      } else if __likely(ch >= '0' && ch <= '9') {
       precision = ch-'0';
       for (;;) {
        ch = readch();
        if (ch < '0' || ch > '9') break;
-       precision = precision*10+(ch-'0');
+       precision = (size_t)(precision*10+(ch-'0'));
       }
      } else {
-      // Undefined behavior (ignore)
+      /* Undefined behavior (ignore) */
       ch = *--iter;
       flags &= ~(PRINTF_FLAG_HASPREC);
       precision = 0;
@@ -172,7 +207,7 @@ flag_next: // Flags
     } else {
      precision = 0;
     }
-    // Length
+    /* Length */
     switch (ch) {
      case 'h': ch = readch(); if (ch == 'h') length = len_hh,ch = readch(); else length = len_h; break;
      case 'l': ch = readch(); if (ch == 'l') length = len_ll,ch = readch(); else length = len_l; break;
@@ -194,9 +229,6 @@ flag_next: // Flags
     }
 
     switch (ch) {
-     case '$': // TODO: Unimplemented features
-      goto flag_next;
-
      case '\0': goto end;
      case '%': format_begin = iter; goto next;
 
@@ -241,7 +273,7 @@ flag_next: // Flags
        }
       }
       if (precision > bufused) {
-       size_t offset = (size_t)(precision-bufused);
+       size_t offset = precision-bufused;
        memmove(bufbegin+offset,bufbegin,bufused);
        memset(bufbegin,'0',offset);
        bufused = precision;
@@ -249,9 +281,9 @@ flag_next: // Flags
       bufused += (size_t)(bufbegin-buf);
       if (flags&PRINTF_FLAG_LJUST) print(buf,bufused);
       if (width > bufused) {
-       size_t overflow = (size_t)(width-bufused);
+       size_t overflow = width-bufused;
        char spacebuf[16];
-       memset(spacebuf,flags&PRINTF_FLAG_PADZERO
+       memset(spacebuf,(flags&PRINTF_FLAG_PADZERO)
               ? '0' : ' ',min(sizeof(spacebuf),overflow));
        while (overflow > sizeof(spacebuf)) {
         print(spacebuf,sizeof(spacebuf));
@@ -275,9 +307,9 @@ flag_next: // Flags
       arg = va_arg(args,char const *);
       if __unlikely(!arg) arg = "(null)";
       if (ch == 's') {
-       print(arg,(flags&PRINTF_FLAG_HASPREC) ? (size_t)precision : (size_t)-1);
+       print(arg,(flags&PRINTF_FLAG_HASPREC) ? precision : (size_t)-1);
       } else {
-       quote(arg,(flags&PRINTF_FLAG_HASPREC) ? (size_t)precision : (size_t)-1,
+       quote(arg,(flags&PRINTF_FLAG_HASPREC) ? precision : (size_t)-1,
             (flags&PRINTF_FLAG_PREFIX) ? FORMAT_QUOTE_FLAG_PRINTRAW : FORMAT_QUOTE_FLAG_NONE);
       }
       break;
@@ -293,51 +325,11 @@ flag_next: // Flags
      case 'g':
       g = (ch == 'g');
       d = va_arg(args,double);
-#if 1
-      if (width == 0) width = 1;
       if (!(flags&PRINTF_FLAG_HASPREC)) precision = 6;
-      sz = _dtos(buf,sizeof(buf)-1,d,width,precision,g);
+      sz = _dtos(buf,sizeof(buf)-1,d,
+                 width ? width : 1,
+                 precision,g);
       print(buf,sz);
-#else
-      s = buf+1;
-      if (width==0) width = 1;
-      if (!(flags&PRINTF_FLAG_HASPREC)) precision = 6;
-      //if (flags&PRINTF_FLAG_SIGN || d < +0.0) flag_in_sign = 1;
-      sz = _dtos(s,sizeof(buf)-1,d,width,precision,g);
-      if (flags&PRINTF_FLAG_HASPREC) {
-       char *tmp;
-       if ((tmp = strchr(s,'.')) != NULL) {
-        if (precision || flags&PRINTF_FLAG_PREFIX) ++tmp;
-        while (precision > 0 && *++tmp) --precision;
-        *tmp = 0;
-       } else if (flags&PRINTF_FLAG_PREFIX) {
-        s[sz]   = '.';
-        s[++sz] = '\0';
-       }
-      }
-      if (g) {
-       char *tmp,*tmp1;	/* boy, is _this_ ugly! */
-       if ((tmp = strchr(s,'.'))) {
-        tmp1 = strchr(tmp,'e');
-        while (*tmp) ++tmp;
-        if (tmp1) tmp = tmp1;
-        while (*--tmp=='0');
-        if (*tmp!='.') ++tmp;
-        *tmp = 0;
-        if (tmp1) strcpy(tmp,tmp1);
-       }
-      }
-      if ((flags&PRINTF_FLAG_SIGN || flags&PRINTF_FLAG_SPACE) && d >= 0) {
-       *(--s) = (flags&PRINTF_FLAG_SIGN) ? '+' : ' ';
-       ++sz;
-      }
-      sz = strlen(s);
-      if (width < sz) width = sz;
-      precpadwith = '0';
-      flag_dot = 0;
-      flag_hash = 0;
-      goto print_out;
-#endif
       break;
      }
 
@@ -370,7 +362,7 @@ __public int format_vscanf(pformatscanner scanner, pformatreturn returnch,
                            void *closure, char const *__restrict format, va_list args) {
 #define doload()  do{ if __unlikely((error = (*scanner)(&rch,closure)) != 0) goto end; }while(0)
 #define load()    do{ if (!stored) { if __unlikely((error = (*scanner)(&rch,closure)) != 0) goto end; stored = 1; } }while(0)
-#define take()    stored = 0
+#define take()   (stored = 0)
 #define retch(ch) do{ if (returnch) { if __unlikely((error = (*returnch)(ch,closure)) != 0) goto end; } }while(0)
 #if defined(__KERNEL__) && defined(__DEBUG__)
 #define peekch()  (kassertbyte(iter),*iter)
@@ -390,15 +382,15 @@ __public int format_vscanf(pformatscanner scanner, pformatreturn returnch,
 parsefch:
   switch (fch) {
    case '\0': goto done;
-   case '\n': // Skip any kind of linefeed
+   case '\n': /* Skip any kind of linefeed */
     load();
     if (rch == '\n') take();
     else if (rch == '\r') {
      doload();
-     if (rch == '\n') take(); // '\r\n'
+     if (rch == '\n') take(); /* '\r\n' */
     } else goto done;
     break;
-   case ' ': // Skip whitespace
+   case ' ': /* Skip whitespace */
     for (;;) { load(); if (rch < 0 || !isspace(rch)) break; take(); }
     break;
 
@@ -412,10 +404,10 @@ parsefch:
     if (fch == '%') goto def;
     ignore_data = (fch == '*');
     if (ignore_data) fch = readch();
-    // Parse the buffersize modifier
+    /* Parse the buffersize modifier */
     if (fch == '$') fch = readch(),bufsize = va_arg(args,size_t);
     else bufsize = (size_t)-1;
-    // Parse the width modifier
+    /* Parse the width modifier */
     if (fch >= '0' && fch <= '9') {
      width = (size_t)(fch-'0');
      for (;;) {
@@ -424,7 +416,7 @@ parsefch:
       width = width*10+(size_t)(fch-'0');
      }
     } else width = (size_t)-1;
-    // Parse the length modifier
+    /* Parse the length modifier */
     switch (fch) {
      case 'h': fch = readch(); if (fch == 'h') length = len_hh,fch = readch(); else length = len_h; break;
      case 'l': fch = readch(); if (fch == 'l') length = len_ll,fch = readch(); else length = len_l; break;

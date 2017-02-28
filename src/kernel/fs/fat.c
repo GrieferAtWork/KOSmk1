@@ -78,9 +78,9 @@ static kerrno_t kfat_walkcallback(struct kfatfs *__restrict fs, struct kfatfilep
                                   char const *filename, size_t filename_size,
                                   struct kfat_walkdata *data) {
 #if 0
- printf("FAT Directory entry: %.*q (Cluster: %I32u) (Looking for %.*q)\n",
-        (unsigned)filename_size,filename,kfatfileheader_getcluster(file),
-        (unsigned)data->name_len,data->name_str);
+ printf("FAT Directory entry: %.?q (Cluster: %I32u) (Looking for %.?q)\n",
+        filename_size,filename,kfatfileheader_getcluster(file),
+        data->name_len,data->name_str);
 #endif
  if (data->name_len == filename_size &&
     !memcmp(data->name_str,filename,filename_size*sizeof(char))) {

@@ -140,7 +140,7 @@ struct f_owner_ex {
 
 /* For posix fcntl() and `l_type' field of a `struct flock' for lockf(). */
 #define F_RDLCK 0 /* Read lock. */
-#define F_WRLCK 1 /* Write lock.*/
+#define F_WRLCK 1 /* Write lock. */
 #define F_UNLCK 2 /* Remove lock. */
 
 /* Types of directory notifications that may be requested with F_NOTIFY. */

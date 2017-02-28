@@ -30,11 +30,8 @@
 #include <kos/config.h>
 /* v define to quickly disable mall-blocks,
  *   and use dlmalloc directly.
- *   TODO: I just tried uncommenting this and...
- *         WOW! This is where all the cpu cycles disappear to!
- *      >> Somehow make mall faster (like... a lot faster!)
  */
-#undef __LIBC_HAVE_DEBUG_MALLOC
+//#undef __LIBC_HAVE_DEBUG_MALLOC
 
 
 #include <kos/compiler.h>

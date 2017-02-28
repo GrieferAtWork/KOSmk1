@@ -311,8 +311,8 @@ ksecdata_pe32_init(struct ksecdata *__restrict self,
                                 pe_file,filesize,iter->sls_filebase);
    if __unlikely(KE_ISERR(error)) goto err_region;
    k_syslogf_prefixfile(KLOG_INFO,pe_file
-                       ,"[PE] Loading section %.*q from %.8I64u to %.8p+%.8Iu...%.8p (%c%c%c%c)\n"
-                       ,(unsigned)IMAGE_SIZEOF_SHORT_NAME,(char *)head_iter->Name
+                       ,"[PE] Loading section %.?q from %.8I64u to %.8p+%.8Iu...%.8p (%c%c%c%c)\n"
+                       ,(size_t)IMAGE_SIZEOF_SHORT_NAME,(char *)head_iter->Name
                        ,(__u64)iter->sls_filebase
                        ,(uintptr_t)iter->sls_base,(size_t)iter->sls_size
                        ,(uintptr_t)iter->sls_base+(size_t)iter->sls_size

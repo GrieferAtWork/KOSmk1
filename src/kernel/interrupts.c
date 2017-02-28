@@ -266,7 +266,7 @@ void __kirq_default_handler(struct kirq_registers *regs) {
       serial_printf(SERIAL_01,"Module load end:        %p\n",(uintptr_t)iter->pm_base+iter->pm_lib->sh_data.ed_end);
       kfile_kernel_getattr(iter->pm_lib->sh_file,KATTR_FS_PATHNAME,
                            buffer,sizeof(buffer),NULL);
-      serial_printf(SERIAL_01,"Module Path:            %.*q\n",(unsigned)sizeof(buffer),buffer);
+      serial_printf(SERIAL_01,"Module Path:            %.?q\n",sizeof(buffer),buffer);
       symbols[0] = ksymtable_lookupaddr(&iter->pm_lib->sh_privatesym,eip,iter->pm_lib->sh_data.ed_begin);
       symbols[1] = ksymtable_lookupaddr(&iter->pm_lib->sh_publicsym,eip,iter->pm_lib->sh_data.ed_begin);
       symbols[2] = ksymtable_lookupaddr(&iter->pm_lib->sh_weaksym,eip,iter->pm_lib->sh_data.ed_begin);

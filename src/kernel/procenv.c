@@ -441,7 +441,7 @@ kernel_parse_arg(char const *__restrict arg,
  while (len && isspace(arg[0])) ++arg,--len;
  while (len && isspace(arg[len-1])) --len;
  if (!len) return 0;
- k_syslogf(KLOG_TRACE,"[CMD] PARSE(%.*q) (%Iu characters)\n",(unsigned)len,arg,len);
+ k_syslogf(KLOG_TRACE,"[CMD] PARSE(%.?q) (%Iu characters)\n",len,arg,len);
  if ((value = (char const *)strnchr(arg,len,'=')) != NULL) {
   if (len && arg[0] == '-') --len,++arg;
   if (len && arg[0] == '-') --len,++arg;
@@ -457,22 +457,19 @@ kernel_parse_arg(char const *__restrict arg,
   value_size = 1;
  } else {
   if (warn_unknown) {
-   k_syslogf(KLOG_ERROR,"[CMD] Unrecognized argument format: %.*q\n",
-        (unsigned)len,arg);
+   k_syslogf(KLOG_ERROR,"[CMD] Unrecognized argument format: %.?q\n",len,arg);
   }
   return 0;
  }
- k_syslogf(KLOG_INFO,"[CMD] setenv(%.*q,%.*q)\n",
-          (unsigned)name_size,arg,
-          (unsigned)value_size,value);
+ k_syslogf(KLOG_INFO,"[CMD] setenv(%.?q,%.?q)\n",
+           name_size,arg,value_size,value);
  error = kprocenv_setenv(env,arg,name_size,value,value_size,0);
  if (error == KE_EXISTS) {
-  k_syslogf(KLOG_ERROR,"[CMD] Argument %.*q was already defined as '%#.*q=%#q'\n",
-           (unsigned)len,arg,(unsigned)name_size,arg,
-            kprocenv_getenv(env,arg,name_size));
+  k_syslogf(KLOG_ERROR,"[CMD] Argument %.?q was already defined as '%#.?q=%#q'\n",
+            len,arg,name_size,arg,kprocenv_getenv(env,arg,name_size));
  } else if (KE_ISERR(error)) {
-  k_syslogf(KLOG_ERROR,"[CMD] Failed to set argument %.*q (%d)\n",
-           (unsigned)len,arg,error);
+  k_syslogf(KLOG_ERROR,"[CMD] Failed to set argument %.?q (%d)\n",
+            len,arg,error);
  }
  return 1;
 }

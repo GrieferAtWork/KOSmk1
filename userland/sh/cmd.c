@@ -89,9 +89,8 @@ cmd_fork_exec(struct cmd_engine *__unused(engine),
   args.ea_envlenv = NULL;
   kerr = ktask_exec(cmd->c_exe,cmd->c_esz,
                     &args,KTASK_EXEC_FLAG_SEARCHPATH);
-  dprintf(STDERR_FILENO,"exec %.*q: %d: %s\n",
-         (unsigned)cmd->c_esz,cmd->c_exe,
-          -kerr,strerror(-kerr));
+  dprintf(STDERR_FILENO,"exec %.?q: %d: %s\n",
+          cmd->c_esz,cmd->c_exe,-kerr,strerror(-kerr));
   _exit(kerr == KE_NOENT ? 127 : 126);
  }
  if (child_task == -1) return -1;
@@ -109,8 +108,8 @@ int shcmd_exec(struct cmd_engine *engine,
                struct cmd const *cmd,
                uintptr_t *exitcode) {
  struct shcmd const *iter; int error;
- //if (verbose) dprintf(STDERR_FILENO,"exec: %.*q\n",
- //                    (unsigned)cmd->c_esz,cmd->c_exe);
+ //if (verbose) dprintf(STDERR_FILENO,"exec: %.?q\n",
+ //                     cmd->c_esz,cmd->c_exe);
  for (iter = shbuiltin; iter->name; ++iter) {
   if (iter->size == cmd->c_esz &&
      !memcmp(iter->name,cmd->c_exe,cmd->c_esz*sizeof(char))) {
@@ -144,7 +143,7 @@ struct cmd_engine shcmd_engine = CMD_ENGINE_INIT(&shcmd_operations,NULL);
 
 uintptr_t shcmd_system(char const *command, size_t command_size) {
  int error; uintptr_t result;
- if (verbose) dprintf(STDERR_FILENO,"exec: %.*q\n",(unsigned)command_size,command);
+ if (verbose) dprintf(STDERR_FILENO,"exec: %.?q\n",command_size,command);
  error = cmd_engine_push(&shcmd_engine,command,command_size,
                          CMD_ENGINE_PUSH_MODE_ALIAS);
  if (error == 0) error = cmd_engine_exec(&shcmd_engine);

@@ -402,9 +402,9 @@ flush_canon:
     KTASK_CRIT_BEGIN
     krawbuf_capture_begin(&self->ty_canon);
 #if 0
-    printf("FLUSH: %Iu %.*q\n"
+    printf("FLUSH: %Iu %.?q\n"
           ,krawbuf_capture_size(&self->ty_canon)
-          ,(unsigned)krawbuf_capture_size(&self->ty_canon)
+          ,krawbuf_capture_size(&self->ty_canon)
           ,krawbuf_capture_data(&self->ty_canon));
 #endif
     canbuf     = krawbuf_capture_data(&self->ty_canon);
@@ -735,8 +735,8 @@ kfspty_insnod(struct kfspty *__restrict self,
  error = kdirent_insnodat(&env,slave_name,slave_name_size,
                          (struct kinode *)slave_inode,slave_ent);
  if __unlikely(KE_ISERR(error)) goto err_ment;
- k_syslogf(KLOG_INFO,"[PTY] Registered PTY device (num: %I32u; master: %.*q; slave: %.*q)\n",
-           resnum,(unsigned)master_name_size,master_name,(unsigned)slave_name_size,slave_name);
+ k_syslogf(KLOG_INFO,"[PTY] Registered PTY device (num: %I32u; master: %.?q; slave: %.?q)\n",
+           resnum,master_name_size,master_name,slave_name_size,slave_name);
  /* YAY! We've successfully created all the nodes. - Time for some cleanup. */
  kinode_decref((struct kinode *)slave_inode);
  kdirent_decref(env.env_root);
