@@ -62,7 +62,7 @@ __DECL_BEGIN
 #define SYS_kfd_readlink __SYSCALL(SYSCALL_GROUP_FILEDESCR,16) /*< _syscall4(kerrno_t,kfd_readlink,int,fd,char *,buf,__size_t,bufsize,__size_t *,reqsize); */
 #define SYS_kfd_dup      __SYSCALL(SYSCALL_GROUP_FILEDESCR,17) /*< _syscall2(int,kfd_dup,int,fd,int,flags); */
 #define SYS_kfd_dup2     __SYSCALL(SYSCALL_GROUP_FILEDESCR,18) /*< _syscall3(int,kfd_dup2,int,fd,int,resfd,int,flags); */
-#define SYS_kfd_pipe     __SYSCALL(SYSCALL_GROUP_FILEDESCR,19) /*< _syscall2(kerrno_t,kfd_pipe,int *,pipefd,int,flags); */
+#define SYS_kfd_pipe     __SYSCALL(SYSCALL_GROUP_FILEDESCR,19) /*< _syscall3(kerrno_t,kfd_pipe,int *,pipefd,int,flags,__size_t,max_size); */
 #define SYS_kfd_equals   __SYSCALL(SYSCALL_GROUP_FILEDESCR,20) /*< _syscall2(int,kfd_equals,int,fda,int,fdb); */
 #define SYS_kfd_openpty  __SYSCALL(SYSCALL_GROUP_FILEDESCR,21) /*< _syscall5(kerrno_t,kfd_openpty,int *,amaster,int *,aslave,char *,name,struct termios const *,termp,struct winsize const *,winp); */
 
@@ -130,6 +130,7 @@ __DECL_BEGIN
 #define SYS_kproc_delenv      __SYSCALL(SYSCALL_GROUP_PROC,13) /*< _syscall3(kerrno_t,kproc_delenv,int,self,char const *,name,__size_t,namemax); */
 #define SYS_kproc_enumenv     __SYSCALL(SYSCALL_GROUP_PROC,14) /*< _syscall4(kerrno_t,kproc_enumenv,int,self,char *,buf,__size_t,bufsize,__size_t *,reqsize); */
 #define SYS_kproc_getcmd      __SYSCALL(SYSCALL_GROUP_PROC,15) /*< _syscall4(kerrno_t,kproc_getcmd,int,self,char *,buf,__size_t,bufsize,__size_t *,reqsize); */
+#define SYS_kproc_perm        __SYSCALL(SYSCALL_GROUP_PROC,16) /*< _syscall4(kerrno_t,kproc_perm,int,procfd,struct kperm *,buf,__size_t,elem_count,int,mode); */
 
 // The following set of system calls are mere aliases for their task-counterparts.
 // >> On order to function like one would expect from these

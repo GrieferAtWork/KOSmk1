@@ -44,7 +44,7 @@ SYSCALL(sys_k_syslog) {
        char const *,K(s),
        size_t      ,K(maxlen));
  struct kproc *caller = kproc_self();
- int allowed_level = (katomic_load(caller->p_sand.ts_state) >> KPROCSTATE_SHIFT_LOGPRIV);
+ int allowed_level = kprocperm_getlogpriv(kproc_getperm(caller));
  if __unlikely(level < allowed_level) RETURN(KE_ACCES);     /* You're not allowed to log like this! */
  if __unlikely(k_sysloglevel < level) RETURN(KS_UNCHANGED); /* Your log level is currently disabled. */
  if __unlikely(level >= KLOG_COUNT)   RETURN(KE_NOSYS);     /* That's not a valid level. */

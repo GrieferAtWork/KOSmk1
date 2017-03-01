@@ -69,19 +69,22 @@ struct kproc __kproc_kernel = {
  /* p_fdman.fdm_fdv        */NULL,
  /* p_fdman.fdm_root       */KFDENTRY_INIT_FILE((struct kfile *)&__kproc_kernel_root),
  /* p_fdman.fdm_cwd        */KFDENTRY_INIT_FILE((struct kfile *)&__kproc_kernel_root)},
- /* p_sand                 */{
- /* p_sand.ts_gpbarrier    */ktask_zero(),
- /* p_sand.ts_spbarrier    */ktask_zero(),
- /* p_sand.ts_gmbarrier    */ktask_zero(),
- /* p_sand.ts_smbarrier    */ktask_zero(),
- /* p_sand.ts_priomin      */KTASKPRIO_MIN,
- /* p_sand.ts_priomax      */KTASKPRIO_MAX,
+ /* p_perm                 */{KOBJECT_INIT(KOBJECT_MAGIC_PROCPERM){{
+ /* p_perm.pp_gpbarrier    */ktask_zero(),
+ /* p_perm.pp_spbarrier    */ktask_zero(),
+ /* p_perm.pp_gmbarrier    */ktask_zero(),
+ /* p_perm.pp_smbarrier    */ktask_zero()}},
+ /* p_perm.pp_priomin      */KTASKPRIO_MIN,
+ /* p_perm.pp_priomax      */KTASKPRIO_MAX,
 #if KCONFIG_HAVE_TASK_NAMES
- /* p_sand.ts_namemax      */(size_t)-1,
+ /* p_perm.pp_namemax      */(size_t)-1,
 #endif
- /* p_sand.ts_pipemax      */(size_t)-1,
- /* p_sand.ts_flags        */0xffffffff,
- /* p_sand.ts_state        */KPROCSTATE_FLAG_NONE},
+ /* p_perm.pp_pipemax      */(size_t)-1,
+#if KPERM_FLAG_GROUPCOUNT != 4
+#error FIXME: Add more permission masks
+#endif
+ /* p_perm.pp_flags        */{0xffff,0xffff,0xffff,0xffff},
+ /* p_perm.pp_state        */KPROCSTATE_FLAG_NONE},
  /* p_tlsman               */KTLSMAN_INITROOT,
  /* p_threads              */KTASKLIST_INIT,
  /* p_environ              */KPROCENV_INIT_ROOT,

@@ -24,11 +24,12 @@
 #define __KOS_KERNEL_SYSCALL_SYSCALL_KPROC_C_INL__ 1
 
 #include "syscall-common.h"
-#include <kos/kernel/proc.h>
 #include <kos/errno.h>
-#include <kos/syscallno.h>
 #include <kos/fd.h>
+#include <kos/kernel/proc.h>
 #include <kos/kernel/util/string.h>
+#include <kos/syscallno.h>
+#include <stddef.h>
 
 __DECL_BEGIN
 
@@ -110,9 +111,12 @@ end:
 /* _syscall1(kerrno_t,kproc_barrier,ksandbarrier_t,level); */
 SYSCALL(sys_kproc_barrier) {
  LOAD1(ksandbarrier_t,K(mode));
- kerrno_t error; struct ktask *caller = ktask_self();
+ kerrno_t error;
+ struct ktask *caller = ktask_self();
+ struct kproc *caller_proc = ktask_getproc(caller);
  KTASK_CRIT_BEGIN_FIRST
- error = kproc_barrier(ktask_getproc(caller),caller,mode);
+ if (!kproc_hasflag(caller_proc,KPERM_FLAG_SETBARRIER)) error = KE_ACCES;
+ else error = kproc_barrier(caller_proc,caller,mode);
  KTASK_CRIT_END
  RETURN(error);
 }
@@ -124,6 +128,7 @@ SYSCALL(sys_kproc_openbarrier) {
  struct kfdentry fdentry; kerrno_t error; int fd;
  struct kproc *proc,*caller = kproc_self();
  KTASK_CRIT_BEGIN_FIRST
+ if (!kproc_hasflag(caller,KPERM_FLAG_SETBARRIER)) { error = KE_ACCES; goto end; }
  proc = kproc_getfdproc(caller,procfd);
  if __unlikely(!proc) { error = KE_BADF; goto end; }
  fdentry.fd_task = kproc_getbarrier_r(proc,level);
@@ -454,6 +459,80 @@ done:
   if __unlikely(copy_to_user(reqsize,&sz,sizeof(sz))) error = KE_FAULT;
  }
  RETURN(error);
+}
+
+/*< _syscall4(kerrno_t,kproc_perm,int,procfd,struct kperm *,buf,__size_t,elem_count,int,mode); */
+SYSCALL(sys_kproc_perm) {
+ LOAD4(int           ,K(procfd),
+       struct kperm *,K(buf),
+       size_t        ,K(elem_count),
+       int           ,K(mode));
+ char buffer[offsetof(struct kperm,p_data)+KPERM_MAXDATASIZE];
+ __ref struct kproc *proc,*caller = kproc_self();
+ kerrno_t error = KE_OK; int basic_mode = mode&3;
+#define perm  (*(struct kperm *)buffer)
+ KTASK_CRIT_BEGIN_FIRST
+ proc = kproc_getfdproc(caller,procfd);
+ if __unlikely(!proc) { error = KE_BADF; goto end; }
+ if (basic_mode == KPROC_CONF_MODE_SET ||
+     basic_mode == KPROC_CONF_MODE_XCH) {
+  /* Check if write permissions are allowed. */
+  if (proc != caller || !kproc_hasflag(caller,KPERM_FLAG_SETPERM)
+      ) { error = KE_ACCES; goto end_proc; }
+  if (basic_mode == KPROC_CONF_MODE_XCH) goto check_getperm;
+ } else if (basic_mode == KPROC_CONF_MODE_GET) {
+  __STATIC_ASSERT(KPERM_FLAG_GETGROUP(KPERM_FLAG_GETPERM|KPERM_FLAG_GETPERM_OTHER) ==
+                  KPERM_FLAG_GETGROUP(KPERM_FLAG_GETPERM));
+check_getperm:
+  /* Check if read permissions are allowed. */
+  if (!kproc_hasflag(caller,(proc == caller ? KPERM_FLAG_GETPERM :
+                    (KPERM_FLAG_GETPERM|KPERM_FLAG_GETPERM_OTHER))
+      )) { error = KE_ACCES; goto end_proc; }
+ } else {
+  /* Invalid mode. */
+  error = KE_INVAL;
+  goto end_proc;
+ }
+ /* Everything's checking out. - We can start! */
+ while (elem_count--) {
+  size_t partsize;
+  if __unlikely(copy_from_user(&perm,buf,offsetof(struct kperm,p_data))) goto err_fault;
+  partsize = (size_t)perm.p_size;
+  assert(partsize <= KPERM_MAXDATASIZE); /*< There should ~really~ be no way for this to fail... */
+  if (basic_mode != KPROC_CONF_MODE_GET) {
+   /* We need input data. */
+   if __unlikely(copy_from_user(&perm.p_data,&buf->p_data,partsize)) goto err_fault;
+  } else if (perm.p_id == KPERM_GETID(KPERM_NAME_FLAG)) {
+   /* We need to know which flag group we're talking about. */
+   if __unlikely(copy_from_user(&perm.p_data.d_flag_group,
+                                &buf->p_data.d_flag_group,
+                                 sizeof(perm.p_data.d_flag_group)
+                 )) goto err_fault;
+  }
+  partsize += offsetof(struct kperm,p_data);
+  switch (basic_mode) {
+   case KPROC_CONF_MODE_GET:
+    error = kproc_perm_get(proc,&perm);
+    if (error == KE_INVAL) perm.p_id = 0,error = KE_OK;
+    goto normal_handler;
+   case KPROC_CONF_MODE_SET: error = kproc_perm_set(proc,&perm); break;
+   case KPROC_CONF_MODE_XCH: error = kproc_perm_xch(proc,&perm); break;
+   default: __compiler_unreachable();
+  }
+       if (error == KE_INVAL && mode&KPROC_CONF_MODE_UNKNOWN) error = KE_OK;
+  else if (error == KE_ACCES && mode&KPROC_CONF_MODE_IGNORE)  error = KE_OK;
+  else normal_handler: if __unlikely(KE_ISERR(error)) break;
+  if (basic_mode != KPROC_CONF_MODE_SET) {
+   /* Copy our buffer back into userspace. */
+   if __unlikely(copy_to_user(buf,&perm,partsize)) goto err_fault;
+  }
+  *(uintptr_t *)&buf += partsize;
+ }
+end_proc: kproc_decref(proc);
+end: KTASK_CRIT_END
+#undef perm
+ RETURN(error);
+err_fault: error = KE_FAULT; goto end_proc;
 }
 
 

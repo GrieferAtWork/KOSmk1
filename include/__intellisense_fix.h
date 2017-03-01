@@ -381,7 +381,7 @@ template<class T, class C, class ...Args> struct ____INTELLISENE_classify<T(C::*
 #define __builtin_classify_type(...) ____INTELLISENE_classify<__typeof__(__VA_ARGS__)>::__val
 
 __declspec(noreturn) void __builtin_abort(void);
-__declspec(noreturn) void __compiler_unreachable(void);
+__declspec(noreturn) void __builtin_unreachable(void);
 __declspec(noreturn) void __builtin_trap(void);
 __declspec(noreturn) void __builtin_exit(void);
 __declspec(noreturn) void __builtin__exit(void);

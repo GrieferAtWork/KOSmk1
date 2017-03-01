@@ -44,13 +44,6 @@ __STATIC_ASSERT(offsetof(struct kproc,p_shm.s_ldt.ldt_gdtid) ==
                (KPROC_OFFSETOF_SHM+KSHM_OFFSETOF_LDT+KLDT_OFFSETOF_GDTID));
 
 
-__local void kprocsand_quit(struct kprocsand *__restrict self) {
- struct ktask *oldtask;
- oldtask = katomic_xch(self->ts_gpbarrier,NULL); assert(oldtask); ktask_decref(oldtask);
- oldtask = katomic_xch(self->ts_spbarrier,NULL); assert(oldtask); ktask_decref(oldtask);
- oldtask = katomic_xch(self->ts_gmbarrier,NULL); assert(oldtask); ktask_decref(oldtask);
- oldtask = katomic_xch(self->ts_smbarrier,NULL); assert(oldtask); ktask_decref(oldtask);
-}
 extern void kproc_destroy(struct kproc *__restrict self);
 void kproc_destroy(struct kproc *__restrict self) {
  kassert_object(self,KOBJECT_MAGIC_PROC);
@@ -69,33 +62,12 @@ kerrno_t kproc_close(struct kproc *__restrict self) {
  error = kmmutex_close(&self->p_lock);
  if __likely(error != KS_UNCHANGED) {
   kfdman_quit(&self->p_fdman);
-  kprocsand_quit(&self->p_sand);
+  kprocperm_quit(&self->p_perm);
   ktlsman_quit(&self->p_tlsman);
   kprocmodules_quit(&self->p_modules);
   kprocenv_quit(&self->p_environ);
  }
  return error;
-}
-
-__crit kerrno_t kprocsand_initroot(struct kprocsand *self) {
- __u32 refcnt;
- struct ktask *taskgroup;
- KTASK_CRIT_MARK
- taskgroup = ktask_zero(); do {
-  refcnt = katomic_load(taskgroup->t_refcnt);
-  if __unlikely(refcnt > ((__u32)-1)-KSANDBOX_BARRIER_COUNT) return KE_OVERFLOW;
- } while (!katomic_cmpxch(taskgroup->t_refcnt,refcnt,refcnt+KSANDBOX_BARRIER_COUNT));
- self->ts_gpbarrier = taskgroup; /*< Inherit reference. */
- self->ts_spbarrier = taskgroup; /*< Inherit reference. */
- self->ts_gmbarrier = taskgroup; /*< Inherit reference. */
- self->ts_smbarrier = taskgroup; /*< Inherit reference. */
- self->ts_priomin   = KTASKPRIO_MIN;
- self->ts_priomax   = KTASKPRIO_MAX;
- self->ts_namemax   = (size_t)-1;
- self->ts_pipemax   = (size_t)-1;
- self->ts_flags     = 0xffffffff;
- self->ts_state     = KPROCSTATE_FLAG_NONE;
- return KE_OK;
 }
 
 static kerrno_t kproc_initregs(struct kproc *self) {
@@ -113,7 +85,7 @@ __crit __ref struct kproc *kproc_newroot(void) {
  struct kproc *result;
  KTASK_CRIT_MARK
  if __unlikely((result = omalloc(struct kproc)) == NULL) return NULL;
- if __unlikely(KE_ISERR(kprocsand_initroot(&result->p_sand))) goto err_r;
+ if __unlikely(KE_ISERR(kprocperm_initroot(&result->p_perm))) goto err_r;
  if __unlikely(KE_ISERR(kshm_init(&result->p_shm,2))) goto err_sand;
  if __unlikely(KE_ISERR(kproc_initregs(result))) goto err_shm;
  kobject_init(result,KOBJECT_MAGIC_PROC);
@@ -145,41 +117,53 @@ decref_result:
  }
  return result;
 err_shm: kshm_quit(&result->p_shm);
-err_sand: kprocsand_quit(&result->p_sand);
+err_sand: kprocperm_quit(&result->p_perm);
 err_r: free(result);
  return NULL;
 }
 
-__crit kerrno_t kproc_barrier(struct kproc *__restrict self,
-                                 struct ktask *__restrict barrier,
-                                 ksandbarrier_t mode) {
+__crit kerrno_t
+kproc_barrier(struct kproc *__restrict self,
+              struct ktask *__restrict barrier,
+              ksandbarrier_t mode) {
  struct ktask *oldtasks[KSANDBOX_BARRIER_COUNT];
  struct ktask **olditer = oldtasks;
- kerrno_t error; __u32 refcnt; int nrefs = 0;
+ kerrno_t error; __u32 old_refs,max_refs,more_refs = 0;
  KTASK_CRIT_MARK
  kassert_kproc(self);
  kassert_ktask(barrier);
- if __unlikely(KE_ISERR(error = kproc_lock(self,KPROC_LOCK_SAND))) return error;
- if (mode&KSANDBOX_BARRIER_NOGETPROP) ++nrefs;
- if (mode&KSANDBOX_BARRIER_NOSETPROP) ++nrefs;
- if (mode&KSANDBOX_BARRIER_NOGETMEM)  ++nrefs;
- if (mode&KSANDBOX_BARRIER_NOSETMEM)  ++nrefs;
- do { // Increment barrier references
-  refcnt = katomic_load(barrier->t_refcnt);
-  if __unlikely(refcnt > ((__u32)-1)-nrefs) return KE_OVERFLOW;
- } while (!katomic_cmpxch(barrier->t_refcnt,refcnt,refcnt+nrefs));
-#define BARRIER(flag,field) \
- if (mode&flag) *olditer++ = katomic_xch(field,barrier) /* NOTE: Atomic read is unnecessary. */
- BARRIER(KSANDBOX_BARRIER_NOGETPROP,self->p_sand.ts_gpbarrier);
- BARRIER(KSANDBOX_BARRIER_NOSETPROP,self->p_sand.ts_spbarrier);
- BARRIER(KSANDBOX_BARRIER_NOGETMEM, self->p_sand.ts_gmbarrier);
- BARRIER(KSANDBOX_BARRIER_NOSETMEM, self->p_sand.ts_smbarrier);
-#undef BARRIER
- kproc_unlock(self,KPROC_LOCK_SAND);
- // Drop references from all old barriers
+ if __unlikely(KE_ISERR(error = kproc_lock(self,KPROC_LOCK_PERM))) return error;
+ if (mode&KSANDBOX_BARRIER_NOGETPROP) ++more_refs;
+ if (mode&KSANDBOX_BARRIER_NOSETPROP) ++more_refs;
+ if (mode&KSANDBOX_BARRIER_NOGETMEM)  ++more_refs;
+ if (mode&KSANDBOX_BARRIER_NOSETMEM)  ++more_refs;
+ max_refs = ((__u32)-1)-more_refs;
+ do { /* Add the new references to the counter. */
+  old_refs = katomic_load(barrier->t_refcnt);
+  if (old_refs > max_refs) { error = KE_OVERFLOW; goto end; }
+ } while (!katomic_cmpxch(barrier->t_refcnt,old_refs,old_refs+more_refs));
+ if (mode&KSANDBOX_BARRIER_NOSETMEM)  *olditer++ = katomic_xch(self->p_perm.pp_smbarrier,barrier);
+ if (mode&KSANDBOX_BARRIER_NOGETMEM)  *olditer++ = katomic_xch(self->p_perm.pp_gmbarrier,barrier);
+ if (mode&KSANDBOX_BARRIER_NOSETPROP) *olditer++ = katomic_xch(self->p_perm.pp_spbarrier,barrier);
+ if (mode&KSANDBOX_BARRIER_NOGETPROP) *olditer++ = katomic_xch(self->p_perm.pp_gpbarrier,barrier);
+end:
+ kproc_unlock(self,KPROC_LOCK_PERM);
+ /* Drop references from all old barriers */
  while (olditer != oldtasks) ktask_decref(*--olditer);
  return KE_OK;
 }
+
+__crit __ref struct ktask *
+kproc_getbarrier_r(struct kproc const *__restrict self,
+                   ksandbarrier_t mode) {
+ __ref struct ktask *result;
+ if __unlikely(KE_ISERR(kproc_lock((struct kproc *)self,KPROC_LOCK_PERM))) return NULL;
+ result = kprocperm_getbarrier(&self->p_perm,mode);
+ if __unlikely(KE_ISERR(ktask_incref(result))) result = NULL;
+ kproc_unlock((struct kproc *)self,KPROC_LOCK_PERM);
+ return result;
+}
+
 
 __crit __ref struct kshlib *
 kproc_getrootexe(struct kproc const *__restrict self) {
@@ -207,12 +191,6 @@ kproc_getrootmodule_unlocked(struct kproc const *__restrict self) {
 
 
 __DECL_END
-
-#ifndef __INTELLISENSE__
-#define GETREF
-#include "proc-getbarrier.c.inl"
-#include "proc-getbarrier.c.inl"
-#endif
 
 #ifndef __INTELLISENSE__
 #include "proc-attr.c.inl"

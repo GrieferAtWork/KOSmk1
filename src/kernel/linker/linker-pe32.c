@@ -79,7 +79,7 @@ ksecdata_getzerostring(struct ksecdata const *__restrict self,
   addr = (char *)ksecdata_translate_ro(self,symbol_address,&max_size);
   if __unlikely(!addr) break;
   memcpy(resiter,addr,max_size);
-  resiter     += max_size;
+  resiter     += max_size/sizeof(char);
   result_size -= max_size;
  }
  *resiter = '\0';
@@ -236,7 +236,9 @@ kshlib_pe32_parseexports(struct kshlib *__restrict self,
         ksecdata_getmem(&self->sh_data,namp_iter,&nameaddr,sizeof(nameaddr)) ||
        (name = ksecdata_getzerostring(&self->sh_data,image_base+nameaddr,&zero_buffer)) == NULL) break;
     addr += image_base;
-    k_syslogf_prefixfile(KLOG_DEBUG,pe_file,"Exporting symbol %q at %p...\n",name,addr);
+    k_syslogf_prefixfile(KLOG_TRACE,pe_file,
+                         "Exporting symbol %q at %p...\n",
+                         name,addr);
     sym = ksymbol_new(name);
     free(zero_buffer);
     if __unlikely(!sym) return KE_NOMEM;
@@ -384,9 +386,10 @@ ksecdata_pe32_parsereloc(struct ksecdata *__restrict self,
    relocation_entry->rv_relc                = real_block_size/sizeof(__u16);
    relocation_entry->rv_pe32_reloc.rpr_offv = block; /* Inherit vector. */
    relocation_entry->rv_pe32_reloc.rpr_base = image_base+(ksymaddr_t)rel.VirtualAddress;
-   k_syslogf_prefixfile(KLOG_DEBUG,pe_file,"Parsed relocations: %Iu offset of %p\n",
-                        relocation_entry->rv_relc,
-                        relocation_entry->rv_pe32_reloc.rpr_base);
+   k_syslogf_prefixfile(KLOG_DEBUG,pe_file
+                       ,"Parsed relocations: %Iu offset of %p\n"
+                       ,relocation_entry->rv_relc
+                       ,relocation_entry->rv_pe32_reloc.rpr_base);
    /* Continue on with the next block. */
    block_iter += block_size;
   }
@@ -459,8 +462,10 @@ kshlib_pe32_new(struct kshlib **__restrict result,
   lib->sh_callbacks.slc_start = (ksymaddr_t)-1; /* ??? */
  }
  lib->sh_callbacks.slc_start += image_base;
- k_syslogf_prefixfile(KLOG_DEBUG,pe_file,"[PE] Determined entry pointer %p (base %p)\n",
-                      lib->sh_callbacks.slc_start,image_base);
+ k_syslogf_prefixfile(KLOG_DEBUG,pe_file
+                     ,"[PE] Determined entry pointer %p (base %p)\n"
+                     ,lib->sh_callbacks.slc_start
+                     ,image_base);
  lib->sh_callbacks.slc_init            = KSYM_INVALID;
  lib->sh_callbacks.slc_fini            = KSYM_INVALID;
  lib->sh_callbacks.slc_preinit_array_v = KSYM_INVALID;

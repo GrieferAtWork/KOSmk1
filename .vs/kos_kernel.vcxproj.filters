@@ -282,6 +282,9 @@
     <ClInclude Include="..\src\kernel\linker\linker-pe32.h">
       <Filter>src\kernel\linker</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\procperm.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.c">
@@ -404,6 +407,9 @@
     <ClCompile Include="..\src\kernel\linker\linker-DWARF.c">
       <Filter>src\kernel\linker</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\kernel\procperm.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\src\kernel\dev\storage-ata-rwlba.c.inl">
@@ -525,9 +531,6 @@
       <Filter>src\kernel\sched</Filter>
     </None>
     <None Include="..\src\kernel\sched\proc-fork.c.inl">
-      <Filter>src\kernel\sched</Filter>
-    </None>
-    <None Include="..\src\kernel\sched\proc-getbarrier.c.inl">
       <Filter>src\kernel\sched</Filter>
     </None>
     <None Include="..\src\kernel\sched\proc-initkernel.c.inl">
@@ -671,6 +674,9 @@
     </None>
     <None Include="..\src\kernel\linker\linker-cache.c.inl">
       <Filter>src\kernel\linker</Filter>
+    </None>
+    <None Include="..\src\kernel\procperm-getset.c.inl">
+      <Filter>src\kernel</Filter>
     </None>
   </ItemGroup>
 </Project>

@@ -27,6 +27,7 @@
 #ifndef __KERNEL__
 #include <assert.h>
 #include <errno.h>
+#include <alloca.h>
 #include <features.h>
 #include <kos/attr.h>
 #include <kos/compiler.h>
@@ -461,6 +462,73 @@ __public int proc_timoutjoin(proc_t proc, struct timespec const *__restrict time
  __set_errno(-error);
  return -1;
 }
+
+__public int
+proc_getflag(proc_t proc, kperm_flag_t flag) {
+ perm_t perm; kerrno_t error;
+ perm.p_name              = KPERM_NAME_FLAG;
+ perm.p_data.d_flag_group = KPERM_FLAG_GETGROUP(flag);
+ error = kproc_perm(proc,&perm,1,KPROC_CONF_MODE_GET);
+ if __unlikely(KE_ISERR(error)) { __set_errno(-error); return -1; }
+ flag = KPERM_FLAG_GETMASK(flag);
+ return (perm.p_data.d_flag_mask&flag)==flag;
+}
+
+__public int
+proc_delflag(kperm_flag_t flag) {
+ perm_t perm; kerrno_t error;
+ perm.p_name        = KPERM_NAME_FLAG;
+ perm.p_data.d_flag = flag;
+ error = kproc_perm(kproc_self(),&perm,1,KPROC_CONF_MODE_XCH);
+ if __unlikely(KE_ISERR(error)) { __set_errno(-error); return -1; }
+ /* Check if any of the given flags were set before. */
+ return (perm.p_data.d_flag_mask&KPERM_FLAG_GETMASK(flag)) != 0;
+}
+__public int
+proc_delflags(kperm_flag_t const *__restrict flagv,
+              size_t maxflags) {
+ kperm_flag_t const *iter,*end;
+ perm_t *perms,*piter,*pend;
+ if (!flagv) return 0;
+ end = (iter = flagv)+maxflags;
+ for (; iter != end && *iter; ++iter);
+ maxflags = (size_t)(iter-flagv);
+ perms = (perm_t *)alloca(maxflags*sizeof(perm_t));
+ pend = (piter = perms)+maxflags;
+ for (iter = flagv; piter != pend; ++piter,++iter) {
+  piter->p_name = KPERM_NAME_FLAG;
+  piter->p_data.d_flag = *iter;
+ }
+ return proc_setpermex(perms,maxflags) ? 0 : -1;
+}
+
+__public perm_t *
+proc_getperm(proc_t proc, perm_t *__restrict buf,
+             perm_name_t name) {
+ kerrno_t error;
+ buf->p_name = name;
+ error = kproc_perm(proc,buf,1,KPROC_CONF_MODE_GET);
+ if __unlikely(KE_ISERR(error)) {
+  __set_errno(-error);
+  return NULL;
+ }
+ return buf;
+}
+
+__public perm_t *
+proc_permex(proc_t proc, perm_t *__restrict buf,
+            size_t permcount, int mode) {
+ kerrno_t error;
+ error = kproc_perm(proc,buf,permcount,mode);
+ if __unlikely(KE_ISERR(error)) {
+  __set_errno(-error);
+  return NULL;
+ }
+ return buf;
+}
+__public perm_t *proc_getpermex(proc_t proc, perm_t *__restrict buf, size_t permcount) { return proc_permex(proc,buf,permcount,KPROC_CONF_MODE_GET); }
+__public perm_t const *proc_setpermex(perm_t const *__restrict buf, size_t permcount) { return proc_permex(proc_self(),(perm_t *)buf,permcount,KPROC_CONF_MODE_SET); }
+__public perm_t *proc_xchpermex(perm_t *__restrict buf, size_t permcount) { return proc_permex(proc_self(),buf,permcount,KPROC_CONF_MODE_XCH); }
 
 
 __public void *tls_get(tls_t slot) {

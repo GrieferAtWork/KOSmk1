@@ -1450,7 +1450,7 @@ ktask_setnameex(struct ktask *__restrict self,
 #define ktask_setnameex(self,name,maxlen) \
  __xblock({ struct ktask *const __tsncal = ktask_self();\
             __xreturn ktask_accesssp_ex(self,__tsncal)\
-              ? ktask_setnameex_k(self,name,min(maxlen,__tsncal->t_proc->p_sand.ts_namemax))\
+              ? ktask_setnameex_k(self,name,min(maxlen,kprocperm_getnamemax(kproc_getperm(__tsncal->t_proc))))\
               : KE_ACCES;\
  })
 #endif

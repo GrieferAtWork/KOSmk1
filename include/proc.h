@@ -31,6 +31,7 @@
 #include <kos/errno.h>
 #include <kos/compiler.h>
 #include <kos/task.h>
+#include <kos/perm.h>
 #include <kos/types.h>
 
 #ifdef __STDC_PURE__
@@ -61,6 +62,9 @@ typedef __ktaskprio_t    taskprio_t;
 typedef __ksandbarrier_t sandbarrier_t;
 typedef __ktls_t         tls_t;
 typedef __ktid_t         tid_t;
+typedef struct kperm     perm_t;
+typedef kperm_name_t     perm_name_t;
+typedef kperm_flag_t     perm_flag_t;
 
 #ifndef __pid_t_defined
 #define __pid_t_defined 1
@@ -185,6 +189,40 @@ extern                 int proc_join __P((proc_t __proc, __uintptr_t *__exitcode
 extern                 int proc_tryjoin __P((proc_t __proc, __uintptr_t *__exitcode));
 extern __nonnull((2))  int proc_timedjoin __P((proc_t __proc, struct timespec const *__restrict __abstime, __uintptr_t *__restrict __exitcode));
 extern __nonnull((2))  int proc_timeoutjoin __P((proc_t __proc, struct timespec const *__restrict __timeout, __uintptr_t *__restrict __exitcode));
+
+//////////////////////////////////////////////////////////////////////////
+// Return the state of a given permission flag.
+// @return:  0: The flag is not set.
+// @return:  1: The flag is set.
+// @return: -1: An error occurred (see 'errno' and 'kproc_perm')
+extern int proc_getflag __P((proc_t __proc, kperm_flag_t __flag));
+
+//////////////////////////////////////////////////////////////////////////
+// Delete the given permission flag(s) from the calling process.
+// NOTES:
+//   - 'proc_delflags' will ignore unknown flags.
+//   - 'proc_delflags' behaves strnlen-style, terminating the
+//     flag-list at a ZERO(0)-flag or when MAXFLAGS reaches ZERO(0).
+// @return:  0: The operation was successful.
+// @return:  1: [proc_delflag] The flag was already deleted.
+// @return: -1: Failed to delete some flags (see 'errno' and 'kproc_perm')
+extern int proc_delflag __P((kperm_flag_t __flag));
+extern __nonnull((1)) int proc_delflags __P((kperm_flag_t const *__restrict __flagv, __size_t __maxflags));
+
+//////////////////////////////////////////////////////////////////////////
+// Lookup the value of a given permission 'NAME' and fill 'BUF' with its value.
+// @return: BUF:  Lookup was successful.
+// @return: NULL: Lookup failed (see 'errno' and 'kproc_perm').
+extern __nonnull((2)) perm_t *proc_getperm __P((proc_t __proc, perm_t *__restrict __buf, perm_name_t __name));
+
+//////////////////////////////////////////////////////////////////////////
+// Perform extended permission operations.
+// @return: BUF:  Operation was successful.
+// @return: NULL: Operation failed (see 'errno' and 'kproc_perm').
+extern __nonnull((2)) perm_t       *proc_permex __P((proc_t __proc, perm_t *__restrict __buf, __size_t __permcount, int __mode));
+extern __nonnull((2)) perm_t       *proc_getpermex __P((proc_t __proc, perm_t *__restrict __buf, __size_t __permcount));
+extern __nonnull((1)) perm_t const *proc_setpermex __P((perm_t const *__restrict __buf, __size_t __permcount));
+extern __nonnull((1)) perm_t       *proc_xchpermex __P((perm_t *__restrict __buf, __size_t __permcount));
 
 
 #define TLS_ERROR  ((tls_t)-1) /*< returned by 'tls_alloc' on error. */

@@ -33,23 +33,43 @@
 #include <fcntl.h>
 #include <kos/keyboard.h>
 #include <kos/syslog.h>
+#include <kos/perm.h>
 
 extern char **environ;
 
+static perm_t const default_permissions[] = {
+  /* Set up some reasonable limits. */
+  {{KPERM_NAME_PIPE_MAX},  { .d_size = 0x00001000 }},
+  {{KPERM_NAME_MAXMEM_RW}, { .d_size = 0x01000000 }},
+  {{KPERM_NAME_ENV_MEMMAX},{ .d_size = 0x00001000 }},
+  {{KPERM_NAME_MAXTHREADS},{ .d_size = 128 }},
+  {{KPERM_NAME_FDMAX},     { .d_uint = 512 }},
+  {{KPERM_NAME_SYSLOG},    { .d_int  = KLOG_DEBUG }},
+  {{KPERM_NAME_FLAG},      { .d_flag = KPERM_FLAG_CHTIME }},
+//{{KPERM_NAME_FLAG},      { .d_flag = KPERM_FLAG_CHDIR }}, // TEST ONLY (make chdir illegal)
+};
+
+
 int main(int argc, char *argv[]) {
 
- // Set-up some default environment variables
+ /* Set-up some default environment variables */
  setenv("LD_LIBRARY_PATH","/lib:/usr/lib",0);
  setenv("PATH","/bin:/usr/bin:/usr/local/bin",0);
  setenv("USER","root",0);
  setenv("HOME","/",0);
 
- // Launch a proper terminal
+ /* Set initial permission restrictions.
+  * After this, many resources will no longer be unlimited
+  * for this process and everything it will ever spawn.
+  * >> To escape from this, a rootfork() must be performed. */
+ proc_setpermex(default_permissions,__compiler_ARRAYSIZE(default_permissions));
+
+ /* Launch a proper terminal */
  if (open2(STDIN_FILENO,"/dev/kbevent",O_RDONLY) == -1) perror("open2('/dev/kbevent')");
  execl("/bin/terminal-vga","terminal-vga","/bin/sh",(char *)NULL);
  k_syslogf(KLOG_ERROR,"Failed to exec terminal: %d: %s\n",errno,strerror(errno));
 
- // Fallback: Try to start a shell directly (this is bad...)
+ /* Fallback: Try to start a shell directly (this is bad...) */
  if (open2(STDIN_FILENO,"/dev/kbtext",O_RDONLY) == -1) perror("open2('/dev/kbtext')");
  if (open2(STDOUT_FILENO,"/dev/tty",O_WRONLY) == -1) perror("open2('/dev/tty')");
  dup2(STDOUT_FILENO,STDERR_FILENO);

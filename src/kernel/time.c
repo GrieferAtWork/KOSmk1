@@ -52,7 +52,7 @@ kerrno_t ktime_setnow_k(struct timespec const *__restrict tmnow) {
  return cmos_setnow(&cmtime);
 }
 kerrno_t ktime_setnow(struct timespec const *__restrict tmnow) {
- if __unlikely(!kproc_hassandflag(kproc_self(),KPROCSAND_FLAG_CHTIME)) return KE_ACCES;
+ if __unlikely(!kproc_hasflag(kproc_self(),KPERM_FLAG_CHTIME)) return KE_ACCES;
  return ktime_setnow_k(tmnow);
 }
 

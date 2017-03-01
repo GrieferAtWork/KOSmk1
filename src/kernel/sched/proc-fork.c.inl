@@ -42,41 +42,6 @@
 
 __DECL_BEGIN
 
-#define kprocsand_initfork kprocsand_initcopy
-
-__crit __local kerrno_t
-kprocsand_initcopy(struct kprocsand *__restrict self,
-                   struct kprocsand const *__restrict right) {
- kerrno_t error;
- KTASK_CRIT_MARK
- kassertobj(self);
- kassertobj(right);
- kassert_ktask(right->ts_gpbarrier);
- kassert_ktask(right->ts_spbarrier);
- kassert_ktask(right->ts_gmbarrier);
- kassert_ktask(right->ts_smbarrier);
-      if __unlikely(KE_ISERR(error = ktask_incref(self->ts_gpbarrier = right->ts_gpbarrier))) self->ts_gpbarrier    = NULL;
- else if __unlikely(KE_ISERR(error = ktask_incref(self->ts_spbarrier = right->ts_spbarrier))) self->ts_spbarrier      = NULL;
- else if __unlikely(KE_ISERR(error = ktask_incref(self->ts_gmbarrier = right->ts_gmbarrier))) self->ts_gmbarrier = NULL;
- else if __unlikely(KE_ISERR(error = ktask_incref(self->ts_smbarrier = right->ts_smbarrier))) self->ts_smbarrier   = NULL;
- if __unlikely(KE_ISERR(error)) {
-  if (self->ts_gmbarrier) ktask_decref(self->ts_gmbarrier);
-  if (self->ts_spbarrier) ktask_decref(self->ts_spbarrier);
-  if (self->ts_gpbarrier) ktask_decref(self->ts_gpbarrier);
-  return error;
- }
- self->ts_priomin = katomic_load(right->ts_priomin);
- self->ts_priomax = katomic_load(right->ts_priomax);
-#if KCONFIG_HAVE_TASK_NAMES
- self->ts_namemax = katomic_load(right->ts_namemax);
-#endif
- self->ts_pipemax = katomic_load(right->ts_pipemax);
- self->ts_flags   = katomic_load(right->ts_flags);
- self->ts_state   = katomic_load(right->ts_state);
- return KE_OK;
-}
-
-__local void kprocsand_quit(struct kprocsand *self);
 __crit kerrno_t
 kproc_copy4fork(__u32 flags, struct kproc *__restrict proc,
                 __user void *eip, __ref struct kproc **presult) {
@@ -119,11 +84,11 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc,
 
  if (flags&KTASK_NEW_FLAG_ROOTFORK) {
   /* Perform a root-fork (grant all permissions to new process). */
-  error = kprocsand_initroot(&result->p_sand);
+  error = kprocperm_initroot(&result->p_perm);
  } else {
-  if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_SAND))) goto err_fdman;
-  error = kprocsand_initfork(&result->p_sand,&proc->p_sand);
-  kproc_unlock(proc,KPROC_LOCK_SAND);
+  if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_PERM))) goto err_fdman;
+  error = kprocperm_initcopy(&result->p_perm,&proc->p_perm);
+  kproc_unlock(proc,KPROC_LOCK_PERM);
  }
  if __unlikely(KE_ISERR(error)) goto err_fdman;
 
@@ -147,7 +112,7 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc,
  return error;
 err_env:   kprocenv_quit(&result->p_environ);
 err_tls:   ktlsman_quit(&result->p_tlsman);
-err_sand:  kprocsand_quit(&result->p_sand);
+err_sand:  kprocperm_quit(&result->p_perm);
 err_fdman: kfdman_quit(&result->p_fdman);
 err_mod:   kprocmodules_quit(&result->p_modules);
 err_shm:   kshm_quit(&result->p_shm);
@@ -351,13 +316,13 @@ __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *
     
     /* Make sure that the memory wasn't modified. */
     {
-	 /* TODO: Just to be sure, we should check all pages of all RO SHM sections for modifications.
-	  *       While there should really be no way of user-code modifying memory once its been
-	  *       mapped as read-only (in the spirit of the KOS design of permissions only be losable),
-	  *       we can't exclude the possibility that once there are kernel modules, some ~genius~
-	  *       might write a backdoor that allows usercode to write memory using the same utilities
-	  *       relocations use for modifying read-only (aka. text) memory during dynamic library loading.
-	  */
+     /* TODO: Just to be sure, we should check all pages of all RO SHM sections for modifications.
+      *       While there should really be no way of user-code modifying memory once its been
+      *       mapped as read-only (in the spirit of the KOS design of permissions only be losable),
+      *       we can't exclude the possibility that once there are kernel modules, some ~genius~
+      *       might write a backdoor that allows usercode to write memory using the same utilities
+      *       relocations use for modifying read-only (aka. text) memory during dynamic library loading.
+      */
      x86_pde used_pde; x86_pte used_pte;
      kassertobj(self);
      used_pde = kproc_getpagedir(self)->d_entries[X86_VPTR_GET_PDID(eip)];

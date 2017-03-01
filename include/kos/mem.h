@@ -72,9 +72,13 @@ __local _syscall2(kerrno_t,kmem_validate,void const *__restrict,addr,__size_t,by
 // It should be obvious that you can't just map any memory, with this
 // function being meant to map device memory, such as the x86-VGA terminal.
 // - You can never map memory if you're not allowed to.
+// TODO: @return
 __local _syscall5(kerrno_t,kmem_mapdev,void **,hint_and_result,
                   __size_t,length,int,prot,int,flags,void *,physptr);
 
+//////////////////////////////////////////////////////////////////////////
+// TODO: DOC
+// TODO: some way of returning a kerrno_t?
 #ifdef KFD_HAVE_BIARG_POSITIONS
 #if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
 __local _syscall7(void   *,kmem_map,void *,hint,__size_t,length,int,prot,int,flags,int,fd,__u32,offhi,__u32,offlo);

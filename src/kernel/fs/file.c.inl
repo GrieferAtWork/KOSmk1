@@ -44,8 +44,10 @@ __DECL_BEGIN
 // --- KFILE
 
 __crit kerrno_t
-kfile_opennode(struct kdirent *__restrict dent, struct kinode *__restrict node,
-               __ref struct kfile **__restrict result, openmode_t mode) {
+kfile_opennode(struct kdirent *__restrict dent,
+               struct kinode *__restrict node,
+               __ref struct kfile **__restrict result,
+               openmode_t mode) {
  struct kfiletype *resulttype; struct kfile *resultfile; kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kdirent(dent);
@@ -303,31 +305,25 @@ kfile_generic_open(struct kfile *__restrict __unused(self),
 }
 kerrno_t
 kfile_generic_read_isdir(struct kfile *__restrict __unused(self),
-                         __user void *__unused(buf),
-                         size_t __unused(bufsize),
+                         __user void *__unused(buf), size_t __unused(bufsize),
                          __kernel size_t *__restrict __unused(rsize)) {
  return KE_ISDIR;
 }
 kerrno_t
 kfile_generic_write_isdir(struct kfile *__restrict __unused(self),
-                          __user void const *__unused(buf),
-                          size_t __unused(bufsize),
+                          __user void const *__unused(buf), size_t __unused(bufsize),
                           __kernel size_t *__restrict __unused(wsize)) {
  return KE_ISDIR;
 }
 kerrno_t
-kfile_generic_readat_isdir(struct kfile *__restrict __unused(self),
-                           pos_t __unused(pos),
-                           __user void *__unused(buf),
-                           size_t __unused(bufsize),
+kfile_generic_readat_isdir(struct kfile *__restrict __unused(self), pos_t __unused(pos),
+                           __user void *__unused(buf), size_t __unused(bufsize),
                            __kernel size_t *__restrict __unused(rsize)) {
  return KE_ISDIR;
 }
 kerrno_t
-kfile_generic_writeat_isdir(struct kfile *__restrict __unused(self),
-                            pos_t __unused(pos),
-                            __user void const *__unused(buf),
-                            size_t __unused(bufsize),
+kfile_generic_writeat_isdir(struct kfile *__restrict __unused(self), pos_t __unused(pos),
+                            __user void const *__unused(buf), size_t __unused(bufsize),
                             __kernel size_t *__restrict __unused(wsize)) {
  return KE_ISDIR;
 }

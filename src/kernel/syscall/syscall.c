@@ -160,7 +160,7 @@ void ksyscall_trace(struct kirq_registers const *regs) {
   CASE3(kfd_readdir,       ARGS3(X("fd","%d"),X("dent","%p"),X("flags","%I32u")),_d,_p,_I32);
   CASE2(kfd_dup,           ARGS2(X("fd","%d"),X("flags","%x")),_d,_x);
   CASE3(kfd_dup2,          ARGS3(X("fd","%d"),X("dfd","%d"),X("flags","%x")),_d,_d,_x);
-  CASE2(kfd_pipe,          ARGS2(X("fd","%p"),X("flags","%x")),_p,_x);
+  CASE3(kfd_pipe,          ARGS3(X("fd","%p"),X("flags","%x"),X("max_size","%Iu")),_p,_x,_I);
   CASE2(kfd_equals,        ARGS2(X("fda","%d"),X("fdb","%d")),_d,_d);
   CASE4(kfs_mkdir,         ARGS4(X("dirfd","%d"),X("path","%q"),X("pathmax","%Iu"),X("perms","%o")),_d,_s,_I,_o);
   CASE3(kfs_rmdir,         ARGS3(X("dirfd","%d"),X("path","%q"),X("pathmax","%Iu")),_d,_s,_I);
@@ -195,7 +195,7 @@ void ksyscall_trace(struct kirq_registers const *regs) {
   CASE3(ktask_timedjoin,   ARGS3(X("task","%d"),X("abstime","%p"),X("exitcode","%p")),_d,_p,_p);
   CASE3(ktask_newthread,   ARGS3(X("thread_main","%p"),X("buf","%p"),X("flags","%I32u")),_p,_p,_I32);
   CASE4(ktask_newthreadi,  ARGS4(X("thread_main","%p"),X("buf","%p"),X("bufsize","%Iu"),X("flags","%I32u")),_p,_p,_I,_I32);
-  CASE3(ktask_fork,      ARGS3(X("childfd","%p"),X("login","%p"),X("flags","%I32u")),_p,_p,_I32);
+  CASE3(ktask_fork,        ARGS3(X("childfd","%p"),X("login","%p"),X("flags","%I32u")),_p,_p,_I32);
   CASE1(ktask_gettls,      ARGS1(X("slot","%Iu")),_I);
   CASE3(ktask_settls,      ARGS3(X("slot","%Iu"),X("value","%p"),X("oldvalue","%p")),_I,_p,_p);
   CASE2(ktask_gettlsof,    ARGS2(X("task","%d"),X("slot","%Iu")),_d,_I);
@@ -214,7 +214,7 @@ void ksyscall_trace(struct kirq_registers const *regs) {
   CASE4(kmod_open,         ARGS4(X("name","%p"),X("namemax","%Iu"),X("modid","%p"),X("flags","I32u")),_p,_I,_p,_I32);
   CASE1(kmod_close,        ARGS1(X("modid","%Iu")),_I);
   CASE3(kmod_sym,          ARGS3(X("modid","%Iu"),X("name","%p"),X("namemax","%Iu")),_I,_I,_p);
-  CASE6(kmod_info,         ARGS6(X("procfd","%d"),X("modid","%Iu"),X("buf","%p"),X("bufsize","%Iu"),X("reqsize","%p"),X("flags","%I32u")),_I32,_p,_I,_p,_I32);
+  CASE6(kmod_info,         ARGS6(X("procfd","%d"),X("modid","%Iu"),X("buf","%p"),X("bufsize","%Iu"),X("reqsize","%p"),X("flags","%I32u")),_d,_I32,_p,_I,_p,_I32);
 #undef ARGS7
 #undef ARGS6
 #undef ARGS5

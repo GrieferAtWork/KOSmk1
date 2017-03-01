@@ -106,10 +106,11 @@ void k_dosyslog(int level, psyslogprefix print_prefix,
    for (end = (flush_start = iter = s)+maxlen;;) {
     if (iter == end || !*iter || *iter++ == '\n') {
      int haslf = (iter != s && iter[-1] == '\n');
-     new_state = old_state = caller->p_sand.ts_state;
-     if (!haslf) new_state |=  (KPROCSTATE_FLAG_SYSLOGINL);
-     else        new_state &= ~(KPROCSTATE_FLAG_SYSLOGINL);
-     caller->p_sand.ts_state = new_state;
+     do {
+      new_state = old_state = caller->p_perm.pp_state;
+      if (!haslf) new_state |=  (KPROCSTATE_FLAG_SYSLOGINL);
+      else        new_state &= ~(KPROCSTATE_FLAG_SYSLOGINL);
+     } while (!katomic_cmpxch(caller->p_perm.pp_state,old_state,new_state));
      if (!(old_state&KPROCSTATE_FLAG_SYSLOGINL)) {
 #if KLOGFORMAT_PREFIXTIME
       if (!tmbuf)
@@ -162,10 +163,10 @@ err_appname: strcpy(appname,"??" "?");
         goto do_cache_prefix;
        }
        /* Special handling for interleaved logging.
-          When multiple tasks log concurrently,
-          still always prepend their prefix! */
-       if (syslog_last_writer->p_sand.ts_state&KPROCSTATE_FLAG_SYSLOGINL
-           ) k_writesyslog(level,"\n",1);
+        * When multiple tasks log concurrently,
+        * still always prepend their prefix! */
+       if (katomic_load(syslog_last_writer->p_perm.pp_state)&
+           KPROCSTATE_FLAG_SYSLOGINL) k_writesyslog(level,"\n",1);
        syslog_last_writer = caller;
        goto do_print_prefix;
       } else {

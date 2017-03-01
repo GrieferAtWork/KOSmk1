@@ -28,7 +28,7 @@
 #include <kos/compiler.h>
 #ifndef __ASSEMBLY__
 #include <kos/__alloca.h>
-#ifdef __INTELLISENSE__
+#if !defined(__KERNEL__) || defined(__INTELLISENSE__)
 #include <kos/types.h>
 #endif
 

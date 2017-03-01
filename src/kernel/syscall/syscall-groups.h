@@ -48,7 +48,7 @@ GROUPBEGIN(sys_kfd)
   ENTRY(kfd_readlink) /*< _syscall4(kerrno_t,kfd_readlink,int,fd,char *,buf,__size_t,bufsize,__size_t *,reqsize); */
   ENTRY(kfd_dup)      /*< _syscall2(int,kfd_dup,int,fd,int,flags); */
   ENTRY(kfd_dup2)     /*< _syscall3(int,kfd_dup2,int,fd,int,resfd,int,flags); */
-  ENTRY(kfd_pipe)     /*< _syscall2(kerrno_t,kfd_pipe,int *,pipefd,int,flags); */
+  ENTRY(kfd_pipe)     /*< _syscall3(kerrno_t,kfd_pipe,int *,pipefd,int,flags,size_t,max_size); */
   ENTRY(kfd_equals)   /*< _syscall2(kerrno_t,kfd_equals,int,fda,int,fdb); */
   ENTRY(kfd_openpty)  /*< _syscall5(kerrno_t,kfd_openpty,int *,amaster,int *,aslave,char *,name,struct termios const *,termp,struct winsize const *,winp); */
 GROUPEND
@@ -127,6 +127,7 @@ GROUPBEGIN(sys_kproc)
   ENTRY(kproc_delenv)      /*< _syscall3(kerrno_t,kproc_delenv,int,self,char const *,name,__size_t,namemax); */
   ENTRY(kproc_enumenv)     /*< _syscall4(kerrno_t,kproc_enumenv,int,self,char *,buf,__size_t,bufsize,__size_t *,reqsize); */
   ENTRY(kproc_getcmd)      /*< _syscall4(kerrno_t,kproc_getcmd,int,self,char *,buf,__size_t,bufsize,__size_t *,reqsize); */
+  ENTRY(kproc_perm)        /*< _syscall4(kerrno_t,kproc_perm,int,procfd,struct kperm *,buf,__size_t,elem_count,int,mode); */
 GROUPEND
 
 GROUPBEGIN(sys_mod)

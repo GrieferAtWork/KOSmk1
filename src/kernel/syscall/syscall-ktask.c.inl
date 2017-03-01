@@ -114,8 +114,10 @@ SYSCALL(sys_ktask_terminate) {
        void        *,K(exitcode),
        ktaskopflag_t,K(flags));
  struct kfdentry fdentry; kerrno_t error;
+ struct kproc *caller = kproc_self();
  KTASK_CRIT_BEGIN_FIRST
- error = kproc_getfd(kproc_self(),taskfd,&fdentry);
+ if (!kproc_hasflag(caller,KPERM_FLAG_SUSPEND_RESUME)) { error = KE_FAULT; goto end; }
+ error = kproc_getfd(caller,taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_terminate(&fdentry,exitcode,flags);
  kfdentry_quit(&fdentry);
@@ -130,8 +132,10 @@ SYSCALL(sys_ktask_suspend) {
  LOAD2(int          ,K(taskfd),
        ktaskopflag_t,K(flags));
  struct kfdentry fdentry; kerrno_t error;
+ struct kproc *caller = kproc_self();
  KTASK_CRIT_BEGIN_FIRST
- error = kproc_getfd(kproc_self(),taskfd,&fdentry);
+ if (!kproc_hasflag(caller,KPERM_FLAG_SUSPEND_RESUME)) { error = KE_FAULT; goto end; }
+ error = kproc_getfd(caller,taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_suspend(&fdentry,flags);
  kfdentry_quit(&fdentry);
@@ -308,9 +312,11 @@ SYSCALL(sys_ktask_getpriority) {
  LOAD2(int          ,K(taskfd),
        ktaskprio_t *,K(uresult));
  struct kfdentry fdentry; kerrno_t error;
+ struct kproc *caller = kproc_self();
  ktaskprio_t result;
  KTASK_CRIT_BEGIN_FIRST
- error = kproc_getfd(kproc_self(),taskfd,&fdentry);
+ if (!kproc_hasflag(caller,KPERM_FLAG_GETPRIO)) { error = KE_ACCES; goto end; }
+ error = kproc_getfd(caller,taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_getpriority(&fdentry,&result);
  kfdentry_quit(&fdentry);
@@ -327,8 +333,10 @@ SYSCALL(sys_ktask_setpriority) {
  LOAD2(int        ,K(taskfd),
        ktaskprio_t,K(value));
  struct kfdentry fdentry; kerrno_t error;
+ struct kproc *caller = kproc_self();
  KTASK_CRIT_BEGIN_FIRST
- error = kproc_getfd(kproc_self(),taskfd,&fdentry);
+ if (!kproc_hasflag(caller,KPERM_FLAG_SETPRIO)) { error = KE_ACCES; goto end; }
+ error = kproc_getfd(caller,taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
  error = kfdentry_setpriority(&fdentry,value);
  kfdentry_quit(&fdentry);
@@ -656,6 +664,13 @@ SYSCALL(sys_ktask_fork) {
  struct kfdentry entry; kerrno_t error; int fd;
  struct kproc *caller = kproc_self();
  KTASK_CRIT_BEGIN_FIRST
+ __STATIC_ASSERT(KPERM_FLAG_GETGROUP(KPERM_FLAG_CANFORK) ==
+                 KPERM_FLAG_GETGROUP(KPERM_FLAG_CANFORK|KPERM_FLAG_CANROOTFORK));
+ /* Make sure the caller is allowed to fork(). */
+ if (!kproc_hasflag(caller,
+    ((flags&KTASK_NEW_FLAG_ROOTFORK) == KTASK_NEW_FLAG_ROOTFORK)
+   ? (KPERM_FLAG_CANFORK|KPERM_FLAG_CANROOTFORK)
+   : (KPERM_FLAG_CANFORK))) { error = KE_ACCES; goto end; }
  error = ktask_fork(flags,&regs->regs,&entry.fd_task);
  if __unlikely(KE_ISERR(error)) goto end;
  if (!(flags&KTASK_NEW_FLAG_SUSPENDED) || !childfd_or_exitcode) {

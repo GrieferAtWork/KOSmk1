@@ -341,9 +341,9 @@ __public int pipe(int pipefd[2]) {
 }
 __public int pipe2(int pipefd[2], int flags) {
 #ifdef __CONFIG_MIN_BSS__
- return kfd_pipe(pipefd,flags);
+ return kfd_pipe(pipefd,flags,(size_t)-1);
 #else
- kerrno_t error = kfd_pipe(pipefd,flags);
+ kerrno_t error = kfd_pipe(pipefd,flags,(size_t)-1);
  if __likely(KE_ISOK(error)) return 0;
  __set_errno(-error);
  return -1;

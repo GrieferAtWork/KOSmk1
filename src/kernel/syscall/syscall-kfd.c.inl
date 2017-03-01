@@ -96,17 +96,22 @@ SYSCALL(sys_kfd_open2) {
        size_t      ,K(maxpath),
        openmode_t  ,K(mode),
        mode_t      ,K(perms));
- struct kproc *ctx = kproc_self();
+ struct kproc *caller = kproc_self();
  struct kfspathenv env;
  struct kfdentry entry; kerrno_t error;
  KTASK_CRIT_BEGIN_FIRST
- env.env_cwd = kproc_getfddirent(ctx,cwd);
+ if __unlikely(dfd == KFD_ROOT || dfd == KFD_CWD) {
+  if __unlikely(!kproc_hasflag(caller,dfd == KFD_ROOT
+                ? KPERM_FLAG_CHROOT : KPERM_FLAG_CHDIR)
+                ) { error = KE_ACCES; goto end; }
+ }
+ env.env_cwd = kproc_getfddirent(caller,cwd);
  if __unlikely(!env.env_cwd) { error = KE_NOCWD; goto end; }
- env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
+ env.env_root = kproc_getfddirent(caller,KFD_ROOT);
  if __unlikely(!env.env_root) { kdirent_decref(env.env_cwd); error = KE_NOROOT; goto end; }
  env.env_flags = mode;
- env.env_uid   = kproc_getuid(ctx);
- env.env_gid   = kproc_getgid(ctx);
+ env.env_uid   = kproc_getuid(caller);
+ env.env_gid   = kproc_getgid(caller);
  kfspathenv_initcommon(&env);
  if (env.env_flags&O_CREAT) {
   union kinodeattr attr[3];
@@ -126,7 +131,7 @@ SYSCALL(sys_kfd_open2) {
  if __unlikely(KE_ISERR(error)) goto end;
  kassert_kfile(entry.fd_file);
  entry.fd_attr = KFD_ATTR(KFDTYPE_FILE,(mode&O_CLOEXEC) ? KFD_FLAG_CLOEXEC : KFD_FLAG_NONE);
- error = kproc_insfdat_inherited(ctx,dfd,&entry);
+ error = kproc_insfdat_inherited(caller,dfd,&entry);
  if __likely(KE_ISOK(error)) error = dfd;
  else kfile_decref(entry.fd_file);
 end:
@@ -137,14 +142,35 @@ end:
 /*< _syscall1(kerrno_t,kfd_close,int,fd); */
 SYSCALL(sys_kfd_close) {
  LOAD1(int,K(fd));
- RETURN(KTASK_CRIT(kproc_closefd(kproc_self(),fd)));
+ kerrno_t error;
+ struct kproc *caller = kproc_self();
+ KTASK_CRIT_BEGIN_FIRST
+ if __unlikely(fd == KFD_ROOT || fd == KFD_CWD) {
+  if __unlikely(!kproc_hasflag(caller,fd == KFD_ROOT
+                ? KPERM_FLAG_CHROOT : KPERM_FLAG_CHDIR)
+                ) { error = KE_ACCES; goto end; }
+ }
+ error = kproc_closefd(caller,fd);
+end:
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /*< _syscall2(kerrno_t,kfd_close,int,fd); */
 SYSCALL(sys_kfd_closeall) {
  LOAD2(int,K(low),
        int,K(high));
- RETURN(KTASK_CRIT(kproc_closeall(kproc_self(),low,high)));
+ kerrno_t error;
+ struct kproc *caller = kproc_self();
+ KTASK_CRIT_BEGIN_FIRST
+ if __unlikely(low <= KFD_CWD) {
+  __STATIC_ASSERT_M(KFD_ROOT < KFD_CWD,"FIXME: Must swap order");
+  if (low <= KFD_ROOT && !kproc_hasflag(caller,KPERM_FLAG_CHROOT)) low = KFD_ROOT+1;
+  if (low <= KFD_CWD  && !kproc_hasflag(caller,KPERM_FLAG_CHDIR )) low = KFD_CWD+1;
+ }
+ error = kproc_closeall(kproc_self(),low,high);
+ KTASK_CRIT_END
+ RETURN(error);
 }
 
 /*< _syscall{4|5}(kerrno_t,kfd_seek,int,fd,{__s64,off|__s32,offhi,__s32,offlo},int,whence,__u64 *,newpos); */
@@ -337,13 +363,13 @@ SYSCALL(sys_kfd_setattr) {
 /*< _syscall3(kerrno_t,kfd_readdir,int,fd,struct kfddirent *,dent,__u32,flags); */
 SYSCALL(sys_kfd_readdir) {
  LOAD3(int               ,K(fd),
-       struct kfddirent *,U(dent),
+       struct kfddirent *,K(pdent),
         __u32            ,K(flags));
  struct kinode *inode; struct kdirentname *name;
  kerrno_t error; struct kfdentry entry;
- char *userbuffer = TRANSLATE(dent->kd_namev);
- if __unlikely(!userbuffer) dent->kd_namec = 0;
+ struct kfddirent user_ent;
  KTASK_CRIT_BEGIN_FIRST
+ if __unlikely(copy_from_user(&user_ent,pdent,sizeof(struct kfdentry))) { error = KE_FAULT; goto end; }
  error = kproc_getfd(kproc_self(),fd,&entry);
  if __unlikely(KE_ISERR(error)) goto end;
  if (entry.fd_type != KFDTYPE_FILE) error = KE_NOFILE;
@@ -356,29 +382,34 @@ SYSCALL(sys_kfd_readdir) {
   kassert_kinode(inode);
   kassertobj(name);
   reqsize = (name->dn_size+1)*sizeof(char);
-  memcpy(userbuffer,name->dn_name,min(reqsize,dent->kd_namec));
-  if (dent->kd_namec >= reqsize && (flags&KFD_READDIR_FLAG_PERFECT)) {
-   // Advance the directory stream by one if the buffer was sufficient
+  if __unlikely(copy_to_user(user_ent.kd_namev,name->dn_name,
+                             min(reqsize,user_ent.kd_namec))
+                ) { error = KE_FAULT; goto end_inode; }
+  if (user_ent.kd_namec >= reqsize && (flags&KFD_READDIR_FLAG_PERFECT)) {
+   /* Advance the directory stream by one if the buffer was sufficient */
    error = kfile_seek(entry.fd_file,1,SEEK_CUR,NULL);
    if __unlikely(KE_ISERR(error)) goto end_inode;
   }
-  dent->kd_namec = reqsize;
-  // Fill in additional information if requested to
+  user_ent.kd_namec = reqsize;
+  /* Fill in additional information if requested to */
   if (flags&KFD_READDIR_FLAG_INO)   (*iter++).ia_common.a_id = KATTR_FS_INO;
   if (flags&KFD_READDIR_FLAG_PERM)  (*iter++).ia_common.a_id = KATTR_FS_PERM;
   if (iter != attr) {
    error = kinode_kernel_getattr(inode,(size_t)(iter-attr),attr);
    if __likely(KE_ISOK(error)) {
     iter = attr;
-    if (flags&KFD_READDIR_FLAG_INO) dent->kd_ino = (*iter++).ia_ino.i_ino;
+    if (flags&KFD_READDIR_FLAG_INO) user_ent.kd_ino = (*iter++).ia_ino.i_ino;
     if (flags&KFD_READDIR_FLAG_KIND) {
-     dent->kd_mode = inode->i_kind;
-     if (flags&KFD_READDIR_FLAG_PERM) dent->kd_mode |= (*iter++).ia_perm.p_perm;
+     user_ent.kd_mode = inode->i_kind;
+     if (flags&KFD_READDIR_FLAG_PERM) user_ent.kd_mode |= (*iter++).ia_perm.p_perm;
     } else if (flags&KFD_READDIR_FLAG_PERM) {
-     dent->kd_mode = (*iter++).ia_perm.p_perm;
+     user_ent.kd_mode = (*iter++).ia_perm.p_perm;
     }
    }
   }
+  if (  __likely(KE_ISOK(error)) &&
+      __unlikely(copy_to_user(pdent,&user_ent,sizeof(struct kfdentry)))
+      ) error = KE_FAULT;
 end_inode:
   kinode_decref(inode);
  }
@@ -450,15 +481,16 @@ SYSCALL(sys_kfd_dup2) {
  RETURN(error);
 }
 
-/*< _syscall2(kerrno_t,kfd_pipe,int *,pipefd,int,flags); */
+/*< _syscall3(kerrno_t,kfd_pipe,int *,pipefd,int,flags,size_t,max_size); */
 SYSCALL(sys_kfd_pipe) {
- LOAD2(int *,U(pipefd),
-       int  ,K(flags));
+ LOAD3(int  *,K(ppipefd),
+       int   ,K(flags),
+       size_t,K(max_size));
  kerrno_t error; struct kpipe *pipe;
  struct kproc *proc_self = kproc_self();
  struct kfdentry entry; int pipes[2];
  KTASK_CRIT_BEGIN_FIRST
- pipe = kpipe_new(0x1000); // TODO: Don't hard-code this!
+ pipe = kpipe_new(max_size);
  if __unlikely(!pipe) { error = KE_NOMEM; goto end; }
  entry.fd_file = (struct kfile *)kpipefile_newreader(pipe,NULL);
  if __unlikely(!entry.fd_file) { error = KE_NOMEM; goto end_pipe; }
@@ -472,8 +504,13 @@ SYSCALL(sys_kfd_pipe) {
  entry.fd_flag = flags;
  error = kproc_insfd_inherited(proc_self,&pipes[1],&entry);
  if __unlikely(KE_ISERR(error)) { kfdentry_quit(&entry); goto err_pipe0; }
- // File descriptors were created!
- memcpy(pipefd,pipes,sizeof(pipes));
+ /* File descriptors were created! */
+ if __unlikely(copy_to_user(ppipefd,pipes,sizeof(pipes))) {
+  error = KE_FAULT;
+/*err_pipe1:*/
+  kproc_closefd(proc_self,pipes[1]);
+  goto err_pipe0;
+ }
  goto end_pipe;
 err_pipe0: kproc_closefd(proc_self,pipes[0]);
 end_pipe:  kinode_decref((struct kinode *)pipe);

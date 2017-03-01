@@ -32,6 +32,7 @@
 #include <kos/kernel/mutex.h>
 #include <kos/kernel/object.h>
 #include <kos/kernel/procenv.h>
+#include <kos/kernel/procperm.h>
 #include <kos/kernel/procmodules.h>
 #include <kos/kernel/types.h>
 #ifndef __KOS_KERNEL_SHM_H__
@@ -57,43 +58,8 @@ struct kshlib;
 struct kdirentname;
 #endif /* !__ASSEMBLY__ */
 
-#define KOBJECT_MAGIC_PROC  0x960C // PROC
+#define KOBJECT_MAGIC_PROC  0x960C /*< PROC. */
 #define kassert_kproc(self) kassert_refobject(self,p_refcnt,KOBJECT_MAGIC_PROC)
-
-
-#ifndef __ASSEMBLY__
-struct kprocsand {
- /* (expected) ORDER: ts_gpbarrier >= ts_spbarrier >= ts_gmbarrier >= ts_smbarrier
-  *                  (Where >= means ktask_issameorchildof(rhs,lhs)) */
- /* [1..1] Barriers describing privilege levels of a given task. */
- __atomic __ref struct ktask *ts_gpbarrier; /*< GETPROP/VISIBLE. */
- __atomic __ref struct ktask *ts_spbarrier; /*< SETPROP. */
- __atomic __ref struct ktask *ts_gmbarrier; /*< GETMEM. */
- __atomic __ref struct ktask *ts_smbarrier; /*< SETMEM. */
- /* NOTE: Priority limits only affect a task's ability of setting the
-  *       priorities of some tasks, or having set their own priority in some way. */
- __atomic ktaskprio_t ts_priomin; /*< Lowest allowed priority to be set. */
- __atomic ktaskprio_t ts_priomax; /*< Greatest allowed priority to be set. */
-#if KCONFIG_HAVE_TASK_NAMES
- __atomic __size_t    ts_namemax; /*< Max allowed task name length to be set. */
-#endif
- __atomic __size_t    ts_pipemax; /*< Max allowed pipe size to be set. */
- /* NOTE: The [-] means that the flag can only ever be removed, but never (re-)added. */
-#define KPROCSAND_FLAG_NONE          0x00000000
-#define KPROCSAND_FLAG_FORKROOT      0x00000001 /*< [-] Allow forkas without password (required for 'su -l <username>'). */
-#define KPROCSAND_FLAG_PRIOSUSPENDED 0x00000002 /*< [-] Allow 'KTASK_PRIORITY_SUSPENDED'-priority tasks (even if 'st_priomin..st_priomax' would prevent it) */
-#define KPROCSAND_FLAG_PRIOREALTIME  0x00000004 /*< [-] Allow 'KTASK_PRIORITY_REALTIME'-priority tasks (even if 'st_priomin..st_priomax' would prevent it) */
-#define KPROCSAND_FLAG_CHTIME        0x10000000 /*< [-] Process is allowed to change the machine's time. */
- __atomic __u32       ts_flags;   /*< Misc flags specifying enabled features. */
-#define KPROCSTATE_FLAG_NONE      0x00000000
-#define KPROCSTATE_FLAG_SYSLOGINL 0x00000001 /*< The syslog didn't end with a linefeed (continue writing in-line) */
-#define KPROCSTATE_SHIFT_LOGPRIV  28
-#define KPROCSTATE_MASK_LOGPRIV   0xf0000000 /*< Mask specifying the syslog privilege level of this process.
-                                                 NOTE: The process may only log with levels >= this value. */
- __atomic __u32       ts_state;   /*< [atomic] Process-specific state flags. */
-};
-extern __crit kerrno_t kprocsand_initroot(struct kprocsand *self);
-#endif /* !__ASSEMBLY__ */
 
 
 #define KPROCREGS_SIZEOF       (4)
@@ -121,7 +87,7 @@ struct kproc {
 #define KPROC_LOCK_MODS    KMMUTEX_LOCK(0)
 #define KPROC_LOCK_FDMAN   KMMUTEX_LOCK(1)
 #define KPROC_LOCK_SHM     KMMUTEX_LOCK(2)
-#define KPROC_LOCK_SAND    KMMUTEX_LOCK(3)
+#define KPROC_LOCK_PERM    KMMUTEX_LOCK(3)
 #define KPROC_LOCK_TLSMAN  KMMUTEX_LOCK(4)
 #define KPROC_LOCK_THREADS KMMUTEX_LOCK(5)
 #define KPROC_LOCK_ENVIRON KMMUTEX_LOCK(6)
@@ -130,7 +96,7 @@ struct kproc {
  struct kprocregs     p_regs;     /*< [lock(KPROC_LOCK_REGS)] Per-process register-configuration & related. */
  struct kprocmodules  p_modules;  /*< [lock(KPROC_LOCK_MODS)] Shared libraries associated with this process. */
  struct kfdman        p_fdman;    /*< [lock(KPROC_LOCK_FDMAN)] File descriptor manager. */
- struct kprocsand     p_sand;     /*< [lock(KPROC_LOCK_SAND)] Tasking related, sandy limits. */
+ struct kprocperm     p_perm;     /*< [lock(KPROC_LOCK_PERM)] Process related, sandy limits / permissions. */
  struct ktlsman       p_tlsman;   /*< [lock(KPROC_LOCK_TLSMAN)] TLS identifiers. */
  struct ktasklist     p_threads;  /*< [lock(KPROC_LOCK_THREADS)] List of tasks using this context. */
  struct kprocenv      p_environ;  /*< [lock(KPROC_LOCK_ENVIRON)] Process environment variables. */
@@ -149,6 +115,7 @@ struct kproc {
 #define kproc_getuid(self)        0 /*< TODO */
 #define kproc_getgid(self)        0 /*< TODO */
 #define kproc_getshm(self)     (&(self)->p_shm)
+#define kproc_getperm(self)    (&(self)->p_perm)
 #define kproc_getpagedir(self)  ((self)->p_shm.s_pd)
 
 #define __kassert_kproc(self) kassert_object(self,KOBJECT_MAGIC_PROC)
@@ -240,37 +207,28 @@ extern __wunused __nonnull((1)) struct ktask *kproc_getgpbarrier(struct kproc co
 extern __wunused __nonnull((1)) struct ktask *kproc_getspbarrier(struct kproc const *__restrict self);
 extern __wunused __nonnull((1)) struct ktask *kproc_getgmbarrier(struct kproc const *__restrict self);
 extern __wunused __nonnull((1)) struct ktask *kproc_getsmbarrier(struct kproc const *__restrict self);
-extern __wunused __nonnull((1))         __u32 kproc_getsandflags(struct kproc const *__restrict self);
-extern __wunused __nonnull((1))          bool kproc_hassandflag(struct kproc const *__restrict self, __u32 flag);
+extern __wunused __nonnull((1))          bool kproc_hasflag(struct kproc const *__restrict self, kperm_flag_t flag);
 #else
-#define kproc_getgpbarrier(self) katomic_load((self)->p_sand.ts_gpbarrier)
-#define kproc_getspbarrier(self) katomic_load((self)->p_sand.ts_spbarrier)
-#define kproc_getgmbarrier(self) katomic_load((self)->p_sand.ts_gmbarrier)
-#define kproc_getsmbarrier(self) katomic_load((self)->p_sand.ts_smbarrier)
-#define kproc_getsandflags(self) katomic_load((self)->p_sand.ts_flags)
-#define kproc_hassandflag(self,flag) ((kproc_getsandflags(self)&(flag))==(flag))
+#define kproc_getgpbarrier(self)   katomic_load((self)->p_perm.pp_gpbarrier)
+#define kproc_getspbarrier(self)   katomic_load((self)->p_perm.pp_spbarrier)
+#define kproc_getgmbarrier(self)   katomic_load((self)->p_perm.pp_gmbarrier)
+#define kproc_getsmbarrier(self)   katomic_load((self)->p_perm.pp_smbarrier)
+#define kproc_hasflag(self,flag)   kprocperm_hasflag(&(self)->p_perm,flag)
 #endif
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the barrier that is used to restrict access as described by 'mode'.
 // @return: NULL: [*_r] Failed to acquire a new reference.
 // @return: NULL:       The task context was closed.
-extern __wunused __nonnull((1))       struct ktask *kproc_getbarrier_impl(struct kproc const *__restrict self, ksandbarrier_t mode);
-extern __wunused __nonnull((1)) __ref struct ktask *kproc_getbarrier_r_impl(struct kproc const *__restrict self, ksandbarrier_t mode);
 #ifdef __INTELLISENSE__
-extern __wunused __nonnull((1))       struct ktask *kproc_getbarrier(struct kproc const *__restrict self, ksandbarrier_t mode);
-extern __wunused __nonnull((1)) __ref struct ktask *kproc_getbarrier_r(struct kproc const *__restrict self, ksandbarrier_t mode);
+extern        __wunused __retnonnull __nonnull((1))       struct ktask *
+kproc_getbarrier(struct kproc const *__restrict self, ksandbarrier_t mode);
+extern __crit __wunused __retnonnull __nonnull((1)) __ref struct ktask *
+kproc_getbarrier_r(struct kproc const *__restrict self, ksandbarrier_t mode);
 #else
-/* Allow for compiler optimizations of known barrier modes */
-#define kproc_getbarrier(self,mode) \
- (__builtin_constant_p(mode) ? (\
-   (mode) == KSANDBOX_BARRIER_NOGETPROP ? kproc_getgpbarrier(self) :\
-   (mode) == KSANDBOX_BARRIER_NOSETPROP ? kproc_getspbarrier(self) :\
-   (mode) == KSANDBOX_BARRIER_NOGETMEM  ? kproc_getgmbarrier(self) :\
-   (mode) == KSANDBOX_BARRIER_NOSETMEM  ? kproc_getsmbarrier(self) :\
-    kproc_getbarrier_impl(self,mode))\
-  : kproc_getbarrier_impl(self,mode))
-#define kproc_getbarrier_r(self,mode) kproc_getbarrier_r_impl(self,mode)
+#define kproc_getbarrier(self,mode)   kprocperm_getbarrier(&(self)->p_perm,mode)
+extern __crit __wunused __nonnull((1)) __retnonnull __ref struct ktask *
+kproc_getbarrier_r(struct kproc const *__restrict self, ksandbarrier_t mode);
 #endif
 
 

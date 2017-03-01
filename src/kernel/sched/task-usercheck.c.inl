@@ -70,17 +70,17 @@ kerrno_t ktask_resume_r(struct ktask *__restrict self) {
 }
 
 kerrno_t ktask_setpriority(struct ktask *self, ktaskprio_t v) {
- struct kproc *ctx; struct ktask *accessor = ktask_self();
+ struct kproc *proc; struct ktask *accessor = ktask_self();
  if __unlikely(!ktask_accesssp_ex(self,accessor)) return KE_ACCES;
- ctx = accessor->t_proc;
- if (v < ctx->p_sand.ts_priomin) {
-  // Check special case: KTASK_PRIORITY_SUSPENDED
+ proc = ktask_getproc(accessor);
+ if (v < kprocperm_getpriomin(kproc_getperm(proc))) {
+  /* Check special case: KTASK_PRIORITY_SUSPENDED */
   if (v != KTASK_PRIORITY_SUSPENDED) return KE_RANGE;
-  if (!(ctx->p_sand.ts_flags&KPROCSAND_FLAG_PRIOSUSPENDED)) return KE_ACCES;
- } else if (v > ctx->p_sand.ts_priomax) {
-  // Check special case: KTASK_PRIORITY_REALTIME
+  if (!kproc_hasflag(proc,KPERM_FLAG_PRIO_SUSPENDED)) return KE_ACCES;
+ } else if (v > kprocperm_getpriomax(kproc_getperm(proc))) {
+  /* Check special case: KTASK_PRIORITY_REALTIME */
   if (v != KTASK_PRIORITY_REALTIME) return KE_RANGE;
-  if (!(ctx->p_sand.ts_flags&KPROCSAND_FLAG_PRIOREALTIME)) return KE_ACCES;
+  if (!kproc_hasflag(proc,KPERM_FLAG_PRIO_REALTIME)) return KE_ACCES;
  }
  ktask_setpriority_k(self,v);
  return KE_OK;

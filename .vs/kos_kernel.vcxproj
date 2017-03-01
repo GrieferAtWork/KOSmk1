@@ -57,6 +57,7 @@
     <ClInclude Include="..\include\kos\kernel\proc.h" />
     <ClInclude Include="..\include\kos\kernel\procenv.h" />
     <ClInclude Include="..\include\kos\kernel\procmodules.h" />
+    <ClInclude Include="..\include\kos\kernel\procperm.h" />
     <ClInclude Include="..\include\kos\kernel\pty.h" />
     <ClInclude Include="..\include\kos\kernel\rawbuf.h" />
     <ClInclude Include="..\include\kos\kernel\reboot.h" />
@@ -112,6 +113,7 @@
     <ClCompile Include="..\src\kernel\paging.c" />
     <ClCompile Include="..\src\kernel\pipe.c" />
     <ClCompile Include="..\src\kernel\procenv.c" />
+    <ClCompile Include="..\src\kernel\procperm.c" />
     <ClCompile Include="..\src\kernel\pty.c" />
     <ClCompile Include="..\src\kernel\reboot.c" />
     <ClCompile Include="..\src\kernel\sched\proc.c" />
@@ -174,12 +176,12 @@
     <None Include="..\src\kernel\paging-map.c.inl" />
     <None Include="..\src\kernel\paging-transfer.c.inl" />
     <None Include="..\src\kernel\procmodules.c.inl" />
+    <None Include="..\src\kernel\procperm-getset.c.inl" />
     <None Include="..\src\kernel\sched\proc-attr.c.inl" />
     <None Include="..\src\kernel\sched\proc-environ.c.inl" />
     <None Include="..\src\kernel\sched\proc-exec.c.inl" />
     <None Include="..\src\kernel\sched\proc-fdman.c.inl" />
     <None Include="..\src\kernel\sched\proc-fork.c.inl" />
-    <None Include="..\src\kernel\sched\proc-getbarrier.c.inl" />
     <None Include="..\src\kernel\sched\proc-initkernel.c.inl" />
     <None Include="..\src\kernel\sched\proc-insmod.c.inl" />
     <None Include="..\src\kernel\sched\proc-pid.c.inl" />

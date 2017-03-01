@@ -40,7 +40,7 @@ __DECL_BEGIN
 //};
 
 #define FIX_MAXSIZE(size) \
- min(size,katomic_load(kproc_self()->p_sand.ts_pipemax))
+ min(size,kprocperm_getpipemax(kproc_getperm(kproc_self())))
 
 
 #define SELF ((struct kpipe *)self)

@@ -302,7 +302,11 @@ __local __noreturn void kproc_exit(void *exitcode) {
 __local __constcall _syscall1(ktask_t,ktask_openroot,ktask_t,task);
 
 //////////////////////////////////////////////////////////////////////////
-// Returns the parent of a given task
+// Returns the parent of a given task.
+// NOTE: If the caller is lacking the 'KPERM_FLAG_GETPROCPARENT' permission
+//       and the task's parent is part of a different process, or if the
+//       given task has no parent, such as the system root-task, the same
+//       task is opened again and returned.
 // @return: KE_ISERR(*): An error occurred (e.g.: The given task does not have a parent)
 // @return: KE_ISOK(*):  A new file descriptor that must be closed using 'kfd_close'
 // @return: KE_MFILE:    Too many open file descriptors.
@@ -499,6 +503,7 @@ typedef void (*__noreturn ktask_threadfun_t) __P((void *));
 // @return: KE_ISERR(*) : An error occurred.
 // @return: KE_ISOK(*)  : A new file descriptor used to interact with the child task.
 // @return: KE_MFILE:     Too many open file descriptors.
+// @return: KE_ACCES:     The calling process is not allowed to spawn more threads.
 __local _syscall4(kerrno_t,ktask_newthread,ktask_threadfun_t,thread_main,
                   void *,closure,__u32,flags,void **,arg);
 
@@ -525,10 +530,10 @@ __local _syscall4(kerrno_t,ktask_newthread,ktask_threadfun_t,thread_main,
 // >>   // A copy of 'tdata' will be stored on the stack of 'threadmain'
 // >>   return ktask_newthreadi((ktask_threadfun_t)&threadmain,&tdata,sizeof(tdata),flags);
 // >> }
-// @return: KE_ACCES: The caller is not allowed to spawn any more threads.
 // @return: KE_NOMEM: Not enough available memory.
 // @return: KE_MFILE: Too many open file descriptors.
-__local _syscall5(__uintptr_t,ktask_newthreadi,ktask_threadfun_t,thread_main,
+// @return: KE_ACCES: The calling process is not allowed to spawn more threads.
+__local _syscall5(kerrno_t,ktask_newthreadi,ktask_threadfun_t,thread_main,
                   void const *,buf,__size_t,bufsize,__u32,flags,void **,arg);
 
 #endif /* !__NO_PROTOTYPES */
@@ -552,6 +557,8 @@ __local _syscall5(__uintptr_t,ktask_newthreadi,ktask_threadfun_t,thread_main,
 // @return: KE_MFILE:     Too many open file descriptors. (Never returned when 'childfd_or_exitcode' is NULL)
 // @return: KE_NOMEM:     Not enough available kernel memory.
 // @return: KE_TIMEDOUT:  'KTASK_NEW_FLAG_JOIN' was specified and an alarm()-timeout has expired.
+// @return: KE_ACCES:     The caller is not allowed to perform a fork(), or not allowed to rootfork().
+//                        s.a.: 'KPERM_FLAG_CANFORK' / 'KPERM_FLAG_CANROOTFORK'
 // @param: childfd_or_exitcode: A pointer to an integer to store a file descriptor number
 //                              that can be used to access the child task through.
 //                              NOTE: To get the descriptor, cast '(int)*childfd_or_exitcode'
@@ -714,6 +721,9 @@ _syscall4(kerrno_t,kproc_enumthreads,int,self,ktid_t *__restrict,idv,
 //////////////////////////////////////////////////////////////////////////
 // Sets up a task sandbox barrier of the given level (see above)
 // >> The barrier will affect the entirety of the calling (task context).
+// @return: KE_OK:       Successfully set the new barrier.
+// @return: KE_OVERFLOW: The new barrier could not be set due to an internal reference overflow.
+// @return: KE_ACCES:    The calling process if lacking the 'KPERM_FLAG_SETBARRIER' permission.
 __local _syscall1(kerrno_t,kproc_barrier,ksandbarrier_t,level);
 #else
 __local __IDsyscall1(kerrno_t,__system_kproc_barrier,SYS_kproc_barrier,ksandbarrier_t,level);
@@ -733,9 +743,10 @@ __local __IDsyscall1(kerrno_t,__system_kproc_barrier,SYS_kproc_barrier,ksandbarr
 //    >>                                 KSANDBOX_BARRIER_NOVISIBLE);
 //    >> lsproc(proctop);
 //    >> close(proctop);
-// @return: KE_ISOK(*)  : A new file descriptor that must be closed using 'kfd_close'
-// @return: KE_ISERR(*) : An error occurred.
-// @return: KE_MFILE:     Too many open file descriptors.
+// @return: KE_ISOK(*):  A new file descriptor that must be closed using 'kfd_close'
+// @return: KE_ISERR(*): An error occurred.
+// @return: KE_MFILE:    Too many open file descriptors.
+// @return: KE_ACCESS:   The process is lacking the 'KPERM_FLAG_GETBARRIER' permission.
 __local _syscall2(ktask_t,kproc_openbarrier,kproc_t,self,ksandbarrier_t,level);
 
 //////////////////////////////////////////////////////////////////////////

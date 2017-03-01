@@ -46,14 +46,14 @@ __public int sched_yield(void) {
 
 __public int sched_get_priority_max(int __unused(policy)) {
 #ifdef __KERNEL__
- return (int)katomic_load(kproc_self()->p_sand.ts_priomax);
+ return (int)katomic_load(kproc_self()->p_perm.ts_priomax);
 #else
  return 20; // TODO: Lookup value in sandbox
 #endif
 }
 __public int sched_get_priority_min(int __unused(policy)) {
 #ifdef __KERNEL__
- return (int)katomic_load(kproc_self()->p_sand.ts_priomin);
+ return (int)katomic_load(kproc_self()->p_perm.ts_priomin);
 #else
  return -20; // TODO: Lookup value in sandbox
 #endif
