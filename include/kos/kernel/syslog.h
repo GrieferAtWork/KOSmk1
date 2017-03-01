@@ -53,8 +53,8 @@ extern void k_dovsyslogf(int level, psyslogprefix print_prefix, void *closure, c
 //////////////////////////////////////////////////////////////////////////
 // Output strings to the syslog, prefixing each line with "['/foo/bar/foobar.txt']"
 extern void k_dosyslog_prefixfile(int level, struct kfile *file, char const *s, __size_t maxlen);
-extern void k_dosyslogf_prefixfile(int level, struct kfile *file, char const *format, ...);
-extern void k_dovsyslogf_prefixfile(int level, struct kfile *file, char const *format, va_list args);
+extern void k_dosyslogf_prefixfile(int level, struct kfile *file, char const *__restrict format, ...);
+extern void k_dovsyslogf_prefixfile(int level, struct kfile *file, char const *__restrict format, va_list args);
 
 
 /* Currently set syslog level (One of 'KLOG_*').
@@ -74,8 +74,8 @@ extern void k_syslog(int level, char const *s, __size_t maxlen);
 extern void k_syslogf(int level, char const *__restrict fmt, ...);
 extern void k_vsyslogf(int level, char const *__restrict fmt, va_list args);
 extern void k_syslog_prefixfile(int level, struct kfile *file, char const *s, __size_t maxlen);
-extern void k_syslogf_prefixfile(int level, struct kfile *file, char const *format, ...);
-extern void k_vsyslogf_prefixfile(int level, struct kfile *file, char const *format, va_list args);
+extern void k_syslogf_prefixfile(int level, struct kfile *file, char const *__restrict format, ...);
+extern void k_vsyslogf_prefixfile(int level, struct kfile *file, char const *__restrict format, va_list args);
 #else
 #define k_syslog(level,s,maxlen)   (k_sysloglevel>=(level)?k_dosyslog(level,s,maxlen,NULL,NULL):(void)0)
 #define k_syslogf(level,...)       (k_sysloglevel>=(level)?k_dosyslogf(level,NULL,NULL,__VA_ARGS__):(void)0)

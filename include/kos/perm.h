@@ -109,7 +109,7 @@ typedef __u32 kperm_flag_t;
 #define KPERM_FLAG_CHDIR            KPERM_FLAG(3,0x0002) /*< Allow closing/reopening the KFD_CWD special file descriptor (without this, KFD_ROOT is immutable). */
 
 
-#define KPERM_MAXDATASIZE   (1 << 8) /*< Max size that the 'p_data' block of permissions can grow into. */
+#define KPERM_MAXDATASIZE   (1 << 8) /*< Max size that the 'p_data' block of permissions can grow to. */
 
 #ifndef __ASSEMBLY__
 struct __packed kperm {

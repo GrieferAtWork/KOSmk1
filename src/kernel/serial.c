@@ -86,7 +86,7 @@ size_t serial_prints(int device, char const *data, size_t datasize) {
  return datasize;
 }
 
-size_t serial_printf(int device, char const *format, ...) {
+size_t serial_printf(int device, char const *__restrict format, ...) {
  va_list args; size_t result;
  va_start(args,format);
  result = serial_vprintf(device,format,args);
@@ -104,7 +104,7 @@ serial_vprintf_callback(char const *data, size_t maxchars,
  arg->result += serial_printn(arg->device,data,maxchars);
  return 0;
 }
-size_t serial_vprintf(int device, char const *format, va_list args) {
+size_t serial_vprintf(int device, char const *__restrict format, va_list args) {
  struct serial_printf_data closure = {device,0};
  format_vprintf((pformatprinter)&serial_vprintf_callback,
                 &closure,format,args);

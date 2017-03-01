@@ -126,11 +126,11 @@ static int syslog_callback_prefixfile(char const *msg, size_t msg_max, void *buf
                        msg,msg_max);
  return 0;
 }
-void k_dovsyslogf_prefixfile(int level, struct kfile *file, char const *format, va_list args) {
+void k_dovsyslogf_prefixfile(int level, struct kfile *file, char const *__restrict format, va_list args) {
  struct printf_prefixfile_data data = {level,file};
  format_vprintf(&syslog_callback_prefixfile,&data,format,args);
 }
-void k_dosyslogf_prefixfile(int level, struct kfile *file, char const *format, ...) {
+void k_dosyslogf_prefixfile(int level, struct kfile *file, char const *__restrict format, ...) {
  struct printf_prefixfile_data data = {level,file};
  va_list args;
  va_start(args,format);

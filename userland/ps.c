@@ -54,7 +54,7 @@ void psprintfd(int orgid, int fd, int indent) {
  for (i = 0; i < indent; ++i) printf("| ");
  if (KE_ISERR(error = kfd_getattr(fd,KATTR_FS_PATHNAME,namebuf,sizeof(namebuf),NULL)) &&
      KE_ISERR(error = kfd_getattr(fd,KATTR_GENERIC_NAME,namebuf,sizeof(namebuf),NULL))
-     ) sprintf(namebuf,"??" "?");
+     ) strcpy(namebuf,"??" "?");
  else namebuf[63] = '\0';
  printf("\\-FD[%d] -- %s : %s\n",orgid,fdtypename(fcntl(fd,_F_GETYPE)),namebuf);
 }

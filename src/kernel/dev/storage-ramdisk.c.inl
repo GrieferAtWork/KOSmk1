@@ -113,7 +113,7 @@ static kerrno_t krddev_getattr(
  switch (attr) {
   case KATTR_GENERIC_NAME:
   case KATTR_DEV_NAME: {
-   int usedsize; size_t capacity;
+   size_t usedsize; size_t capacity;
    capacity = ksdev_getcapacity((struct ksdev *)self);
    if (capacity > 1024*1024*1024) {
     usedsize = snprintf((char *)buf,bufsize,"%IuGb RamDisk",capacity/(1024*1024*1024));
@@ -124,13 +124,13 @@ static kerrno_t krddev_getattr(
    } else {
     usedsize = snprintf((char *)buf,bufsize,"%Iub RamDisk",capacity);
    }
-   if (reqsize) *reqsize = (size_t)usedsize;
+   if (reqsize) *reqsize = usedsize;
    return KE_OK;
   } break;
 
   case KATTR_DEV_TYPE: {
-   int usedsize = snprintf((char *)buf,bufsize,"RAMDISK");
-   if (reqsize) *reqsize = (size_t)usedsize;
+   size_t usedsize = snprintf((char *)buf,bufsize,"RAMDISK");
+   if (reqsize) *reqsize = usedsize;
    return KE_OK;
   } break;
    

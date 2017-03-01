@@ -80,6 +80,7 @@ struct kproc __kproc_kernel = {
  /* p_perm.pp_namemax      */(size_t)-1,
 #endif
  /* p_perm.pp_pipemax      */(size_t)-1,
+ /* p_perm.pp_thrdmax      */(size_t)-1,
 #if KPERM_FLAG_GROUPCOUNT != 4
 #error FIXME: Add more permission masks
 #endif

@@ -723,8 +723,8 @@ kfspty_insnod(struct kfspty *__restrict self,
  env.env_gid   = kproc_getgid(caller);
  kfspathenv_initcommon(&env);
  /* Generate the file names for the master and slave directory entries. */
- master_name_size = (size_t)sprintf(master_name,"/dev/tty%I32u",resnum);
- slave_name_size  = (size_t)sprintf(slave_name,"/dev/ttyS%I32u",resnum);
+ master_name_size = sprintf(master_name,"/dev/tty%I32u",resnum);
+ slave_name_size  = sprintf(slave_name,"/dev/ttyS%I32u",resnum);
  if (master_name_buf &&
      copy_to_user(master_name_buf,master_name,master_name_size)
      ) { error = KE_FAULT; goto err_root; }

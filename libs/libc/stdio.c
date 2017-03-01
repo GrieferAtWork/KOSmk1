@@ -93,36 +93,42 @@ __public int vprintf(char const *__restrict format, va_list args) {
 }
 
 
-__public int sprintf(char *__restrict buf, char const *__restrict format, ...) {
- va_list args; int result;
+__public size_t
+_sprintf(char *__restrict buf,
+         char const *__restrict format, ...) {
+ va_list args; size_t result;
  va_start(args,format);
- result = vsprintf(buf,format,args);
+ result = _vsprintf(buf,format,args);
  va_end(args);
  return result;
 }
-__public int snprintf(char *__restrict buf, size_t bufsize,
-                      char const *__restrict format, ...) {
- va_list args; int result;
+__public size_t
+_snprintf(char *__restrict buf, size_t bufsize,
+          char const *__restrict format, ...) {
+ va_list args; size_t result;
  va_start(args,format);
- result = vsnprintf(buf,bufsize,format,args);
+ result = _vsnprintf(buf,bufsize,format,args);
  va_end(args);
  return result;
 }
 
 
 struct sprintf_data { char *__restrict buf; };
-static int sprintf_callback(char const *__restrict data, size_t maxchars,
-                            struct sprintf_data *__restrict buffer) {
+static int
+sprintf_callback(char const *__restrict data, size_t maxchars,
+                 struct sprintf_data *__restrict buffer) {
  buffer->buf = strncpy(buffer->buf,data,maxchars);
  return 0;
 }
-__public int vsprintf(char *__restrict buf,
-                      char const *__restrict format,
-                      va_list args) {
- struct sprintf_data data; int result;
- data.buf = buf;
- format_vprintf((pformatprinter)&sprintf_callback,&data,format,args);
- result = (int)(data.buf-buf);
+__public size_t
+_vsprintf(char *__restrict buf,
+          char const *__restrict format,
+          va_list args) {
+ struct sprintf_data data;
+ size_t result; data.buf = buf;
+ format_vprintf((pformatprinter)&sprintf_callback,
+                &data,format,args);
+ result = (size_t)(data.buf-buf);
  kassertbyte(data.buf);
  *data.buf = '\0';
  return result;
@@ -132,39 +138,91 @@ struct snprintf_data {
  char *bufpos;
  char *bufend;
 };
-static int snprintf_callback(char const *__restrict data, size_t maxchars,
-                             struct snprintf_data *__restrict buffer) {
+static int
+snprintf_callback(char const *__restrict data, size_t maxchars,
+                  struct snprintf_data *__restrict buffer) {
  size_t datasize = strnlen(data,maxchars);
- // Don't exceed the buffer end
+ /* Don't exceed the buffer end */
  if (buffer->bufpos < buffer->bufend) {
   size_t maxwrite = (size_t)(buffer->bufend-buffer->bufpos);
   memcpy(buffer->bufpos,data,maxwrite < datasize ? maxwrite : datasize);
  }
- // Still seek past the end, as to calculate the required buffersize
+ /* Still seek past the end, as to
+  * calculate the required buffersize. */
  buffer->bufpos += datasize;
  return 0;
 }
 
-__public int vsnprintf(char *__restrict buf, size_t bufsize,
-                       char const *__restrict format, va_list args) {
+__public size_t
+_vsnprintf(char *__restrict buf, size_t bufsize,
+           char const *__restrict format, va_list args) {
  struct snprintf_data data;
  data.bufend = (data.bufpos = buf)+bufsize;
  format_vprintf((pformatprinter)&snprintf_callback,&data,format,args);
- if (data.bufpos < data.bufend) *data.bufpos = '\0';
- return (int)(data.bufpos-buf);
+ if __likely(data.bufpos < data.bufend) *data.bufpos = '\0';
+ return (size_t)(data.bufpos-buf);
 }
 
 
-__public int sscanf(char const *__restrict data,
-                    char const *format, ...) {
+#if __SIZEOF_INT__ == __SIZEOF_SIZE_T__
+__public __compiler_ALIAS(sprintf,_sprintf);
+__public __compiler_ALIAS(vsprintf,_vsprintf);
+__public __compiler_ALIAS(snprintf,_snprintf);
+__public __compiler_ALIAS(vsnprintf,_vsnprintf);
+#else
+#if 1
+#   define SPRINTF_RETURN_TYPE unsigned int
+#else
+#   define SPRINTF_RETURN_TYPE          int
+#endif
+__public SPRINTF_RETURN_TYPE
+sprintf(char *__restrict buf,
+        char const *__restrict format, ...) {
+ SPRINTF_RETURN_TYPE result;
+ va_list args;
+ va_start(args,format);
+ result = (SPRINTF_RETURN_TYPE)_vsprintf(buf,format,args);
+ va_end(args);
+ return result;
+}
+__public SPRINTF_RETURN_TYPE
+vsprintf(char *__restrict buf,
+         char const *__restrict format, va_list args) {
+ return (SPRINTF_RETURN_TYPE)_vsprintf(buf,format,args);
+}
+__public SPRINTF_RETURN_TYPE
+snprintf(char *__restrict buf, size_t bufsize,
+         char const *__restrict format, ...) {
+ SPRINTF_RETURN_TYPE result;
+ va_list args;
+ va_start(args,format);
+ result = (SPRINTF_RETURN_TYPE)_vsnprintf(buf,bufsize,format,args);
+ va_end(args);
+ return result;
+}
+__public SPRINTF_RETURN_TYPE
+vsnprintf(char *__restrict buf, size_t bufsize,
+          char const *__restrict format, va_list args) {
+ return (SPRINTF_RETURN_TYPE)_vsnprintf(buf,bufsize,format,args);
+}
+#undef SPRINTF_RETURN_TYPE
+#endif
+
+
+
+
+__public int
+sscanf(char const *__restrict data,
+       char const *__restrict format, ...) {
  va_list args; int result;
  va_start(args,format);
  result = vsscanf(data,format,args);
  va_end(args);
  return result;
 }
-__public int snscanf(char const *__restrict data,
-                     size_t maxdata, char const *format, ...) {
+__public int
+_snscanf(char const *__restrict data,
+         size_t maxdata, char const *__restrict format, ...) {
  va_list args; int result;
  va_start(args,format);
  result = vsnscanf(data,maxdata,format,args);
@@ -174,14 +232,16 @@ __public int snscanf(char const *__restrict data,
 
 
 struct sscanf_data { char const *datapos; };
-static int sscanf_scanner(int *__restrict ch,
-                          struct sscanf_data *__restrict data) {
+static int
+sscanf_scanner(int *__restrict ch,
+               struct sscanf_data *__restrict data) {
  if ((*ch = *data->datapos) == 0) *ch = -1;
  return 0;
 }
 
-__public int vsscanf(char const *__restrict data,
-                     char const *__restrict format, va_list args) {
+__public int
+vsscanf(char const *__restrict data,
+        char const *__restrict format, va_list args) {
  struct sscanf_data cdata = {data};
  return format_vscanf((pformatscanner)&sscanf_scanner,
                       NULL,&cdata,format,args);
@@ -195,8 +255,9 @@ static int snscanf_scanner(int *__restrict ch,
  return 0;
 }
 
-__public int vsnscanf(char const *__restrict data, size_t maxdata,
-                      char const *__restrict format, va_list args) {
+__public int
+_vsnscanf(char const *__restrict data, size_t maxdata,
+          char const *__restrict format, va_list args) {
  struct snscanf_data cdata = {data,data+maxdata};
  return format_vscanf((pformatscanner)&snscanf_scanner,
                       NULL,&cdata,format,args);
@@ -232,13 +293,6 @@ __public int dprintf(int fd, char const *__restrict format, ...) {
  return error;
 }
 #endif /* !__CONFIG_MIN_LIBC__ */
-
-#ifndef __KERNEL__
-#undef _snscanf
-#undef _vsnscanf
-__public __compiler_ALIAS(_snscanf,snscanf)
-__public __compiler_ALIAS(_vsnscanf,vsnscanf)
-#endif
 
 __DECL_END
 

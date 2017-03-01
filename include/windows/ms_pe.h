@@ -352,6 +352,32 @@ typedef struct _IMAGE_BASE_RELOCATION {
 #define IMAGE_REL_BASED_DIR64            10
 
 
+/* IMAGE_DIRECTORY_ENTRY_DEBUG (array of this structure) */
+typedef struct _IMAGE_DEBUG_DIRECTORY {
+    DWORD Characteristics;
+    DWORD TimeDateStamp;
+    WORD  MajorVersion;
+    WORD  MinorVersion;
+    DWORD Type;
+    DWORD SizeOfData;
+    DWORD AddressOfRawData; /*< Address when loaded. */
+    DWORD PointerToRawData; /*< Absolute file location. */
+} IMAGE_DEBUG_DIRECTORY, *PIMAGE_DEBUG_DIRECTORY;
+
+/* Known values for IMAGE_DEBUG_DIRECTORY::Type. */
+#define IMAGE_DEBUG_TYPE_UNKNOWN       0
+#define IMAGE_DEBUG_TYPE_COFF          1
+#define IMAGE_DEBUG_TYPE_CODEVIEW      2
+#define IMAGE_DEBUG_TYPE_FPO           3
+#define IMAGE_DEBUG_TYPE_MISC          4
+#define IMAGE_DEBUG_TYPE_EXCEPTION     5
+#define IMAGE_DEBUG_TYPE_FIXUP         6
+#define IMAGE_DEBUG_TYPE_OMAP_TO_SRC   7
+#define IMAGE_DEBUG_TYPE_OMAP_FROM_SRC 8
+#define IMAGE_DEBUG_TYPE_BORLAND       9
+#define IMAGE_DEBUG_TYPE_RESERVED10    10
+#define IMAGE_DEBUG_TYPE_CLSID         11
+
 __COMPILER_PACK_POP
 __NOCLAIM_END
 

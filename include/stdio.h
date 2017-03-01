@@ -175,23 +175,49 @@ extern __nonnull((1)) int puts __P((char const *__restrict __s));
 extern __nonnull((1)) __attribute_vaformat(__printf__,1,2) int printf __P((char const *__restrict __format, ...));
 extern __nonnull((1)) __attribute_vaformat(__printf__,1,0) int vprintf __P((char const *__restrict __format, va_list __args));
 
+extern __nonnull((2)) __attribute_vaformat(__printf__,2,3) __size_t _sprintf __P((char *__restrict __buf, char const *__restrict __format, ...));
+extern __nonnull((2)) __attribute_vaformat(__printf__,2,0) __size_t _vsprintf __P((char *__restrict __buf, char const *__restrict __format, va_list __args));
+extern __nonnull((3)) __attribute_vaformat(__printf__,3,4) __size_t _snprintf __P((char *__restrict __buf, __size_t bufsize, char const *__restrict __format, ...));
+extern __nonnull((3)) __attribute_vaformat(__printf__,3,0) __size_t _vsnprintf __P((char *__restrict __buf, __size_t bufsize, char const *__restrict __format, va_list __args));
+
+#ifndef __STDIO_C__
+#ifdef __STDC_PURE__
+/* Standard-compliant sprintf */
 extern __nonnull((2)) __attribute_vaformat(__printf__,2,3) int sprintf __P((char *__restrict __buf, char const *__restrict __format, ...));
 extern __nonnull((2)) __attribute_vaformat(__printf__,2,0) int vsprintf __P((char *__restrict __buf, char const *__restrict __format, va_list __args));
 extern __nonnull((3)) __attribute_vaformat(__printf__,3,4) int snprintf __P((char *__restrict __buf, __size_t bufsize, char const *__restrict __format, ...));
 extern __nonnull((3)) __attribute_vaformat(__printf__,3,0) int vsnprintf __P((char *__restrict __buf, __size_t bufsize, char const *__restrict __format, va_list __args));
-
-#ifdef __KERNEL__
-#define _snscanf   snscanf
-#define _vsnscanf  vsnscanf
-#elif !defined(__STDC_PURE__)
-extern __nonnull((1,3)) __attribute_vaformat(__scanf__,3,4) int snscanf __P((char const *__restrict __data, __size_t datasize, char const *__restrict __format, ...));
-extern __nonnull((1,3)) __attribute_vaformat(__scanf__,3,0) int vsnscanf __P((char const *__restrict __data, __size_t datasize, char const *__restrict __format, va_list __args));
+#else
+/* sprintf with a return value that makes sense.
+ * NOTE: Unsigned because KOS doesn't have undefined behavior for sprintf. */
+#ifndef __NO_asmname
+extern __nonnull((2)) __attribute_vaformat(__printf__,2,3) __size_t sprintf __P((char *__restrict __buf, char const *__restrict __format, ...)) __asmname("_sprintf");
+extern __nonnull((2)) __attribute_vaformat(__printf__,2,0) __size_t vsprintf __P((char *__restrict __buf, char const *__restrict __format, va_list __args)) __asmname("_vsprintf");
+extern __nonnull((3)) __attribute_vaformat(__printf__,3,4) __size_t snprintf __P((char *__restrict __buf, __size_t bufsize, char const *__restrict __format, ...)) __asmname("_snprintf");
+extern __nonnull((3)) __attribute_vaformat(__printf__,3,0) __size_t vsnprintf __P((char *__restrict __buf, __size_t bufsize, char const *__restrict __format, va_list __args)) __asmname("_vsnprintf");
+#else
+#   define sprintf   _sprintf
+#   define vsprintf  _vsprintf
+#   define snprintf  _snprintf
+#   define vsnprintf _vsnprintf
 #endif
+#endif
+#endif /* !__STDIO_C__ */
 
 extern __nonnull((1,2)) __attribute_vaformat(__scanf__,2,3) int sscanf __P((char const *__restrict __data, char const *__restrict __format, ...));
 extern __nonnull((1,2)) __attribute_vaformat(__scanf__,2,0) int vsscanf __P((char const *__restrict __data, char const *__restrict __format, va_list __args));
 extern __nonnull((1,3)) __attribute_vaformat(__scanf__,3,4) int _snscanf __P((char const *__restrict __data, __size_t __maxdata, char const *__restrict __format, ...));
 extern __nonnull((1,3)) __attribute_vaformat(__scanf__,3,0) int _vsnscanf __P((char const *__restrict __data, __size_t __maxdata, char const *__restrict __format, va_list __args));
+
+#ifndef __STDC_PURE__
+#ifndef __NO_asmname
+extern __nonnull((1,3)) __attribute_vaformat(__scanf__,3,4) int snscanf __P((char const *__restrict __data, __size_t __maxdata, char const *__restrict __format, ...)) __asmname("_snscanf");
+extern __nonnull((1,3)) __attribute_vaformat(__scanf__,3,0) int vsnscanf __P((char const *__restrict __data, __size_t __maxdata, char const *__restrict __format, va_list __args)) __asmname("_vsnscanf");
+#else
+#define snscanf  _snscanf
+#define vsnscanf _vsnscanf
+#endif
+#endif
 
 
 #ifndef __CONFIG_MIN_LIBC__

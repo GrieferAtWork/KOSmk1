@@ -122,7 +122,6 @@ eol:
  switch (ch) {
   case ';': goto eol;
 
-
   case '#':
    /* Line-comment; Skip until true eol */
    while (iter != end && (ch = *iter++,ch != '\n' && ch != '\r'));
@@ -130,6 +129,7 @@ eol:
    goto again;
 
   case '.':
+   if (iter != end && !isspace(*iter)) goto def;
   case '!':
    /* 1-char logical operator. */
    token->ct_kind = ch;

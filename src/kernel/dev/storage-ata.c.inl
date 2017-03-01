@@ -105,8 +105,8 @@ static kerrno_t katadev_getattr(
   case KATTR_DEV_NAME:
    return katadev_getname(self,buf,bufsize,reqsize);
   case KATTR_DEV_TYPE: {
-   int usedsize = snprintf((char *)buf,bufsize,"ATA");
-   if (reqsize) *reqsize = (size_t)usedsize;
+   size_t usedsize = snprintf((char *)buf,bufsize,"ATA");
+   if (reqsize) *reqsize = usedsize;
    return KE_OK;
   } break;
 

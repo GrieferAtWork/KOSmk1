@@ -113,7 +113,7 @@ extern __crit __wunused __nonnull((1)) __attribute_vaformat(__printf__,1,0) __ma
 #endif
 
 #if defined(__i386__) || defined(__x86_64__)
-/* >> char *strdupaf(char const *format, ...);
+/* >> char *strdupaf(char const *__restrict format, ...);
  * Similar to strdupf, but allocates memory of the stack, instead of the heap.
  * While this function is _very_ useful, be warned that due to the way variadic
  * arguments are managed by cdecl (the only calling convention possible to use

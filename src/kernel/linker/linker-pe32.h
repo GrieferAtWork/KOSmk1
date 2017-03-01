@@ -54,11 +54,14 @@ kshlib_pe32_parseexports(struct kshlib *__restrict self,
                          __uintptr_t image_base);
 
 extern __crit __wunused kerrno_t
-ksecdata_pe32_parsereloc(struct ksecdata *__restrict self,
-                         struct kreloc *__restrict reloc,
-                         IMAGE_DATA_DIRECTORY const *dir,
-                         struct kfile *__restrict pe_file,
-                         __uintptr_t image_base);
+kshlib_pe32_parsereloc(struct kshlib *__restrict self,
+                       IMAGE_DATA_DIRECTORY const *dir,
+                       __uintptr_t image_base);
+
+extern __crit __wunused kerrno_t
+kshlib_pe32_parsedebug(struct kshlib *__restrict self,
+                       IMAGE_DATA_DIRECTORY const *dir,
+                       __uintptr_t image_base);
 
 
 //////////////////////////////////////////////////////////////////////////

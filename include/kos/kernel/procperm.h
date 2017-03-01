@@ -58,6 +58,7 @@ union{struct{
  __atomic __size_t            pp_namemax; /*< Max allowed task name length to be set. */
 #endif /* KCONFIG_HAVE_TASK_NAMES */
  __atomic __size_t            pp_pipemax; /*< Max allowed pipe size to be set. */
+ __atomic __size_t            pp_thrdmax; /*< Max amount of threads running in this process (TODO: Not enforced). */
  __atomic __u16               pp_flags[KPERM_FLAG_GROUPCOUNT]; /*< Permission flags of the various permission groups. */
 #define KPROCSTATE_FLAG_NONE      0x00000000
 #define KPROCSTATE_FLAG_SYSLOGINL 0x00000001 /*< The syslog didn't end with a linefeed (continue writing in-line) */
@@ -71,6 +72,7 @@ union{struct{
 #if KCONFIG_HAVE_TASK_NAMES
 #define kprocperm_getnamemax(self)       katomic_load((self)->pp_namemax)
 #endif /* KCONFIG_HAVE_TASK_NAMES */
+#define kprocperm_getthrdmax(self)       katomic_load((self)->pp_pipemax)
 #define kprocperm_getpipemax(self)       katomic_load((self)->pp_pipemax)
 #define kprocperm_getlogpriv(self) (int)(katomic_load((self)->pp_state) >> KPROCSTATE_SHIFT_LOGPRIV)
 

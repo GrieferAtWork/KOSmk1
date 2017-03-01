@@ -578,8 +578,8 @@ SYSCALL(sys_ktask_newthreadi) {
  __COMPILER_PACK_POP
  __user void *useresp,*dataesp; struct kfdentry entry;
  int fd; kerrno_t error; struct stackframe *userstack;
- struct ktask *caller    = ktask_self();
- struct kproc *callerctx = ktask_getproc(caller);
+ struct ktask *caller = ktask_self();
+ struct kproc *proc   = ktask_getproc(caller);
  if (!bufsize) buf = NULL;
  else if __unlikely(!kpagedir_ismappedex(kpagedir_user(),
                                          (void *)alignd((uintptr_t)buf,PAGEALIGN),
@@ -588,26 +588,26 @@ SYSCALL(sys_ktask_newthreadi) {
                                          PAGEDIR_FLAG_USER)) RETURN(KE_FAULT);
  buf = TRANSLATE(buf); kassertmem(buf,bufsize);
  KTASK_CRIT_BEGIN_FIRST
- if __unlikely(KE_ISERR(error = kproc_lock(callerctx,KPROC_LOCK_SHM))) goto end;
- if __unlikely(!kpagedir_ismappedp(kproc_getpagedir(callerctx),
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_SHM))) goto end;
+ if __unlikely(!kpagedir_ismappedp(kproc_getpagedir(proc),
                                   *(void **)&thread_main)
                ) { error = KE_FAULT; goto err_pdlock; }
  if (flags&KTASK_NEW_FLAG_UNREACHABLE) {
-  struct ktask *parent = kproc_getbarrier_r(callerctx,KSANDBOX_BARRIER_NOSETMEM);
+  struct ktask *parent = kproc_getbarrier_r(proc,KSANDBOX_BARRIER_NOSETMEM);
   if __unlikely(!parent) { error = KE_DESTROYED; goto err_pdlock; }
-  entry.fd_task = ktask_newuser(parent,callerctx,&useresp
+  entry.fd_task = ktask_newuser(parent,proc,&useresp
                                 ,KTASK_STACK_SIZE_DEF
                                 ,KTASK_STACK_SIZE_DEF);
   ktask_decref(parent);
  } else {
-  entry.fd_task = ktask_newuser(caller,callerctx,&useresp
+  entry.fd_task = ktask_newuser(caller,proc,&useresp
                                 ,KTASK_STACK_SIZE_DEF
                                 ,KTASK_STACK_SIZE_DEF);
  }
  if __unlikely(!entry.fd_task) {
   error = KE_NOMEM;
 err_pdlock:
-  kproc_unlock(callerctx,KPROC_LOCK_SHM);
+  kproc_unlock(proc,KPROC_LOCK_SHM);
   goto end;
  }
  // TODO: What if 'bufsize' is too big for the thread's stack?
@@ -620,7 +620,7 @@ err_pdlock:
  userstack->returnaddr   = NULL;
  userstack->datap        = dataesp;
  ktask_setupuser(entry.fd_task,useresp,*(void **)&thread_main);
- kproc_unlock(callerctx,KPROC_LOCK_SHM);
+ kproc_unlock(proc,KPROC_LOCK_SHM);
  if (flags&KTASK_NEW_FLAG_JOIN) {
   void *exitcode;
   /* Immediatly join the task */
@@ -638,7 +638,7 @@ err_pdlock:
  entry.fd_type = KFDTYPE_TASK;
  if (!(flags&KTASK_NEW_FLAG_SUSPENDED)) {
   asserte(KE_ISOK(ktask_incref(entry.fd_task)));
-  error = kproc_insfd_inherited(callerctx,&fd,&entry);
+  error = kproc_insfd_inherited(proc,&fd,&entry);
   if __unlikely(KE_ISERR(error)) {
    ktask_decref(entry.fd_task);
 err_task:
@@ -648,7 +648,7 @@ err_task:
   __evalexpr(ktask_resume_k(entry.fd_task)); // Ignore errors in this
   ktask_decref(entry.fd_task);
  } else {
-  error = kproc_insfd_inherited(callerctx,&fd,&entry);
+  error = kproc_insfd_inherited(proc,&fd,&entry);
   if __unlikely(KE_ISERR(error)) { ktask_decref(entry.fd_task); goto end; }
  }
  error = fd;

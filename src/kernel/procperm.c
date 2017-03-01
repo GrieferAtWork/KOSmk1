@@ -58,6 +58,7 @@ kprocperm_initroot(struct kprocperm *__restrict self) {
  self->pp_priomax      = KTASKPRIO_MAX;
  self->pp_namemax      = (size_t)-1;
  self->pp_pipemax      = (size_t)-1;
+ self->pp_thrdmax      = (size_t)-1;
  self->pp_state        = KPROCSTATE_FLAG_NONE;
  memset(self->pp_flags,0xff,sizeof(self->pp_flags)); /*< Set all permissions for root tasks. */
  return KE_OK;
@@ -90,6 +91,7 @@ kprocperm_initcopy(struct kprocperm *__restrict self,
  self->pp_namemax = katomic_load(right->pp_namemax);
 #endif
  self->pp_pipemax = katomic_load(self->pp_pipemax);
+ self->pp_thrdmax = katomic_load(self->pp_thrdmax);
  for (i = 0; i != KPERM_FLAG_GROUPCOUNT; ++i) {
   self->pp_flags[i] = katomic_load(right->pp_flags[i]);
  }

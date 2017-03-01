@@ -326,7 +326,7 @@ ksecdata_pe32_init(struct ksecdata *__restrict self,
    if (head_iter->PointerToRelocations &&
        head_iter->NumberOfRelocations) {
     /* Relocations. */
-    error = ksecdata_pe32_parsereloc(self,reloc,
+    error = kshlib_pe32_parsereloc(self,reloc,
                                      head_iter->Characteristics,
                                      head_iter->PointerToRelocations,
                                      head_iter->NumberOfRelocations,0,
@@ -351,17 +351,19 @@ err_iter:
 }
 
 __crit __wunused kerrno_t
-ksecdata_pe32_parsereloc(struct ksecdata *__restrict self,
-                         struct kreloc *__restrict reloc,
-                         IMAGE_DATA_DIRECTORY const *dir,
-                         struct kfile *__restrict pe_file,
-                         __uintptr_t image_base) {
+kshlib_pe32_parsereloc(struct kshlib *__restrict self,
+                       IMAGE_DATA_DIRECTORY const *dir,
+                       __uintptr_t image_base) {
  IMAGE_BASE_RELOCATION rel;
- ksymaddr_t block_iter = image_base+(ksymaddr_t)dir->VirtualAddress;
- ksymaddr_t block_end = block_iter+dir->Size;
- while (block_iter != block_end) {
+ ksymaddr_t block_iter,block_end;
+ kassert_kshlib(self);
+ kassertobj(dir);
+ assert(dir->Size);
+ block_iter = image_base+(ksymaddr_t)dir->VirtualAddress;
+ block_end = block_iter+dir->Size;
+ do {
   assert(block_iter <= block_end);
-  if __unlikely(ksecdata_getmem(self,block_iter,&rel,sizeof(rel))) break;
+  if __unlikely(ksecdata_getmem(&self->sh_data,block_iter,&rel,sizeof(rel))) break;
   if ((block_iter += sizeof(rel)) >= block_end) break;
   if (rel.SizeOfBlock > sizeof(rel)) {
    /* Extract the relocation vector. */
@@ -371,7 +373,7 @@ ksecdata_pe32_parsereloc(struct ksecdata *__restrict self,
    assert(block_size);
    block = (__u16 *)malloc(block_size);
    if __unlikely(!block) return KE_NOMEM;
-   real_block_size -= ksecdata_getmem(self,block_iter,block,block_size);
+   real_block_size -= ksecdata_getmem(&self->sh_data,block_iter,block,block_size);
    real_block_size &= ~((size_t)(sizeof(__u16)-1)); /*< Align the block size to 2-byte. */
    assert(real_block_size <= block_size);
    if __unlikely(real_block_size != block_size) {
@@ -380,21 +382,58 @@ ksecdata_pe32_parsereloc(struct ksecdata *__restrict self,
     if __likely(newblock) block = newblock;
    }
    /* We've extracted the block. - Now to install it as a relocation. */
-   relocation_entry = kreloc_alloc(reloc);
+   relocation_entry = kreloc_alloc(&self->sh_reloc);
    if __unlikely(!relocation_entry) { free(block); return KE_NOMEM; }
    relocation_entry->rv_type                = KRELOCVEC_TYPE_PE32_RELOC;
    relocation_entry->rv_relc                = real_block_size/sizeof(__u16);
    relocation_entry->rv_pe32_reloc.rpr_offv = block; /* Inherit vector. */
    relocation_entry->rv_pe32_reloc.rpr_base = image_base+(ksymaddr_t)rel.VirtualAddress;
-   k_syslogf_prefixfile(KLOG_DEBUG,pe_file
+   k_syslogf_prefixfile(KLOG_DEBUG,self->sh_file
                        ,"Parsed relocations: %Iu offset of %p\n"
                        ,relocation_entry->rv_relc
                        ,relocation_entry->rv_pe32_reloc.rpr_base);
    /* Continue on with the next block. */
    block_iter += block_size;
   }
- }
+ } while (block_iter != block_end);
  return KE_OK;
+}
+
+__crit kerrno_t
+kshlib_pe32_parsedebug(struct kshlib *__restrict self,
+                       IMAGE_DATA_DIRECTORY const *dir,
+                       uintptr_t image_base) {
+ IMAGE_DEBUG_DIRECTORY entrybuf;
+ PIMAGE_DEBUG_DIRECTORY entry;
+ size_t dir_count,entry_size;
+ ksymaddr_t addr; kerrno_t error = KE_OK;
+ kassert_kshlib(self);
+ kassertobj(dir);
+ assert(dir->Size);
+ dir_count = dir->Size/sizeof(IMAGE_DEBUG_DIRECTORY);
+ if __unlikely(!dir_count) return KE_OK;
+ addr = image_base+dir->VirtualAddress;
+ do {
+  entry_size = sizeof(IMAGE_DEBUG_DIRECTORY);
+  entry = (PIMAGE_DEBUG_DIRECTORY)ksecdata_translate_ro(&self->sh_data,addr,&entry_size);
+  if __unlikely(!entry) break;
+  if __unlikely(entry_size < sizeof(IMAGE_DEBUG_DIRECTORY)) {
+   if __unlikely(ksecdata_getmem(&self->sh_data,addr,&entrybuf,
+                                 sizeof(IMAGE_DEBUG_DIRECTORY))) break;
+   entry = &entrybuf;
+  }
+
+  /* TODO: Add support for 'IMAGE_DEBUG_TYPE_CODEVIEW' (GCC uses that one...) */
+#if 0
+  printf("DEBUG ENTRY: %I32u - %I32x:%I32x:%I32x\n",
+         entry->Type,
+         entry->AddressOfRawData,
+         entry->PointerToRawData,
+         entry->SizeOfData);
+#endif
+  addr += sizeof(IMAGE_DEBUG_DIRECTORY);
+ } while (--dir_count);
+ return error;
 }
 
 
@@ -499,7 +538,7 @@ kshlib_pe32_new(struct kshlib **__restrict result,
  error = ksecdata_pe32_init(&lib->sh_data,&lib->sh_reloc,section_headers,
                             file_header.FileHeader.NumberOfSections,
                             pe_file,image_base);
- free(section_headers); /* Set to NULL to trick cleanup code. */
+ free(section_headers);
  if __unlikely(KE_ISERR(error)) goto err_reloc;
 
  /* Set the canexec-flag if a mapped entry point was given. */
@@ -514,12 +553,11 @@ kshlib_pe32_new(struct kshlib **__restrict result,
   lib->sh_flags |= KMODFLAG_FIXED;
  } else
 #endif
- if (HAS_DATADIR(IMAGE_DIRECTORY_ENTRY_BASERELOC)) {
+ if (HAS_DATADIR(IMAGE_DIRECTORY_ENTRY_BASERELOC) &&
+     DATADIR(IMAGE_DIRECTORY_ENTRY_BASERELOC).Size) {
   /* Parse more relocations... */
-  error = ksecdata_pe32_parsereloc(&lib->sh_data,&lib->sh_reloc,
-                                   &DATADIR(IMAGE_DIRECTORY_ENTRY_BASERELOC),
-                                   pe_file,image_base);
-  if __unlikely(KE_ISERR(error)) goto err_reloc;
+  error = kshlib_pe32_parsereloc(lib,&DATADIR(IMAGE_DIRECTORY_ENTRY_BASERELOC),image_base);
+  if __unlikely(KE_ISERR(error)) goto err_data;
   if (!lib->sh_reloc.r_vecc && lib->sh_data.ed_secc) {
    /* If there are no relocations, but there are sections,
     * we know that this module must be loaded to a fixed address. */
@@ -527,6 +565,13 @@ kshlib_pe32_new(struct kshlib **__restrict result,
   } else {
    lib->sh_flags |= KMODFLAG_PREFFIXED;
   }
+ }
+ if (HAS_DATADIR(IMAGE_DIRECTORY_ENTRY_DEBUG) &&
+     DATADIR(IMAGE_DIRECTORY_ENTRY_DEBUG).Size) {
+  /* Parse debug informations... */
+  error = kshlib_pe32_parsedebug(lib,&DATADIR(IMAGE_DIRECTORY_ENTRY_DEBUG),image_base);
+  /* Only fail if something ~really~ bad happened... */
+  if __unlikely(error == KE_DEVICE || error == KE_INTR) goto err_data;
  }
 
 

@@ -146,8 +146,10 @@ kproc_perm_xch(struct kproc *__restrict self,
   CASE(KPERM_NAME_PIPE_MAX):
    psizefield = &kproc_getperm(self)->pp_pipemax;
    goto atomic_size_field;
+  CASE(KPERM_NAME_MAXTHREADS):
+   psizefield = &kproc_getperm(self)->pp_thrdmax;
+   goto atomic_size_field;
 
-  CASE(KPERM_NAME_MAXTHREADS): /* TODO */
   CASE(KPERM_NAME_MAXMEM):     /* TODO */
   CASE(KPERM_NAME_MAXMEM_RW):  /* TODO */
 #ifdef GET

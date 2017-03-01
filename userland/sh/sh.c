@@ -70,7 +70,7 @@ int exec_fork(char *exe, char *argv[]) {
    * I've gotten around to properly implement posix signals.
    */
   if (tcsetpgrp(STDIN_FILENO,getpid())) perror("tcsetpgrp");
-  /* Force-sanitize descriptors, if wanted to. */
+  /* Force descriptors sanitization, if wanted to. */
   if (sani_descriptors) {
    if (!isafile(0)) close(0);
    if (!isafile(1)) close(1);
