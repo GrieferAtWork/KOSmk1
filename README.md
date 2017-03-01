@@ -10,9 +10,9 @@ KOS:   <b>fork()</b>+[<b>restrict_permissions()</b>...]+<b>exec()</b>
 
 Besides being Posix-oriented, KOS also brings some interesting new things to the table, such as (what I call) signal-based synchronization, and the expansion of file descriptor functionality.
 
-KOS is written with multitasking and the ability of spuriously terminating any process in mind, as well as constant consideration of security weighed against cross-task control meant to allow user application to regulate their own permissions with the end goal of natively running early windows programs side-by-side with POSIX applications without.
+KOS is written with multitasking and the ability of spuriously terminating any process in mind, as well as constant consideration of security weighed against cross-task control meant to allow user application to regulate their own permissions with the end goal of natively running early windows programs side-by-side with POSIX applications without the need of an emulator.
 
-Written from the ground up, KOS has its own version of libc, libdl and others, bringing a lot of new functionality to the table in terms of <i>missing</i> stdc-functions such as 'strdupf' or 'strend', as well as an integrated memory leak detector and its own implementation of curses (NOTE: It's no longer debug_new. - I've learned a lot since then...).
+Written from the ground up, KOS has its own version of libc, libdl and others, offering a lot of new functionality in terms of <i>missing</i> stdc-functions such as 'strdupf' or 'strend', as well as an integrated memory leak detector, its own implementation of curses and the ability to parse and use debug information compiled into binaries natively, allowing you to effortlessly generate both human- and machine-readable tracebacks including file/function names, line numbers and addresses. (NOTE: It's no longer debug_new. - I've learned a lot since then...).
 
 While KOS is not meant to re-invent the wheel, making use of proprietary libraries such as dlmalloc and fdlibm, it is a learning experience that has already tought me a lot about the X86 architecture as well as assembly; the simplest, yet also hardest language there is.
 
@@ -58,15 +58,17 @@ Chaos|KOS - Total anarchy.
      - mmutex (non-standard primitive)
      - signal+vsignal (non-standard primitive)
      - addist+ddist (non-standard primitive)
- - ELF binaries
+ - ELF binaries/libraries (<no extension> / .so)
+   - DWARF .debug_line debug information
+ - PE binaries/libraries (.exe / .dll)
  - dlopen (Shared libraries)
  - Time (time_t/struct timespec)
  - Ring #3
  - Filesystem
    - FAT-12/16/32
    - open/read/write/seek/etc.
-   - OK:      Read/write existing files
-   - MISSING: create/delete/rename files/folders
+   - OK:      Read/write/delete existing files/folders
+   - MISSING: create/rename new files/folders
    - VFS (Virtual filesystem)
      - OK:      /dev, /proc (incomplete)
      - MISSING: /sys
