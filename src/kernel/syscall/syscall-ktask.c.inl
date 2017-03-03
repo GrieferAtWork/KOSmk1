@@ -170,7 +170,7 @@ SYSCALL(sys_ktask_openroot) {
  error = kfdentry_openprocof(&fdentry,&result);
  kfdentry_quit(&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
- fdentry.fd_task = result; // Inherit reference
+ fdentry.fd_task = result; /* Inherit reference. */
  fdentry.fd_attr = KFD_ATTR(KFDTYPE_TASK,KFD_FLAG_NONE);
  error = kproc_insfd_inherited(ctx,&fd,&fdentry);
  if __likely(KE_ISOK(error)) error = fd;
@@ -191,7 +191,7 @@ SYSCALL(sys_ktask_openparent) {
  error = kfdentry_openparent(&fdentry,&result);
  kfdentry_quit(&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
- fdentry.fd_task = result; // Inherit reference
+ fdentry.fd_task = result; /* Inherit reference. */
  fdentry.fd_attr = KFD_ATTR(KFDTYPE_TASK,KFD_FLAG_NONE);
  error = kproc_insfd_inherited(ctx,&fd,&fdentry);
  if __likely(KE_ISOK(error)) error = fd;
@@ -212,7 +212,7 @@ SYSCALL(sys_ktask_openproc) {
  error = kfdentry_openctx(&fdentry,&result);
  kfdentry_quit(&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
- fdentry.fd_proc = result; // Inherit reference
+ fdentry.fd_proc = result; /* Inherit reference. */
  fdentry.fd_attr = KFD_ATTR(KFDTYPE_PROC,KFD_FLAG_NONE);
  error = kproc_insfd_inherited(ctx,&fd,&fdentry);
  if __likely(KE_ISOK(error)) error = fd;
@@ -274,7 +274,7 @@ SYSCALL(sys_ktask_openchild) {
  error = kfdentry_opentask(&fdentry,childid,&result);
  kfdentry_quit(&fdentry);
  if __unlikely(KE_ISERR(error)) goto end;
- fdentry.fd_task = result; // Inherit reference
+ fdentry.fd_task = result; /* Inherit reference. */
  fdentry.fd_attr = KFD_ATTR(KFDTYPE_TASK,KFD_FLAG_NONE);
  error = kproc_insfd_inherited(ctx,&fd,&fdentry);
  if __likely(KE_ISOK(error)) error = fd;

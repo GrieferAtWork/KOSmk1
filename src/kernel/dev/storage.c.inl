@@ -37,36 +37,38 @@
 
 __DECL_BEGIN
 
-kerrno_t ksdev_readallblocks_unlocked(
- struct ksdev const *self, kslba_t addr, void *block, size_t c) {
+kerrno_t
+ksdev_readallblocks_unlocked(struct ksdev const *__restrict self, kslba_t addr,
+                             __kernel void *__restrict blocks, size_t c) {
  size_t rc,nextc; kerrno_t error;
- error = ksdev_readblocks_unlocked(self,addr,block,c,&rc);
- if (KE_ISERR(error)) return error;
+ error = ksdev_readblocks_unlocked(self,addr,blocks,c,&rc);
+ if __unlikely(KE_ISERR(error)) return error;
  assert(rc <= c);
  if (rc != c) {
   nextc = rc;
   while (c) {
-   *(uintptr_t *)&block += nextc*self->sd_blocksize,c -= nextc;
-   error = ksdev_readblocks_unlocked(self,addr,block,c,&nextc);
-   if (KE_ISERR(error)) return error;
+   *(uintptr_t *)&blocks += nextc*self->sd_blocksize,c -= nextc;
+   error = ksdev_readblocks_unlocked(self,addr,blocks,c,&nextc);
+   if __unlikely(KE_ISERR(error)) return error;
    assert(nextc <= c);
    rc += nextc;
   }
  }
  return KE_OK;
 }
-kerrno_t ksdev_writeallblocks_unlocked(
- struct ksdev *self, kslba_t addr, void const *block, size_t c) {
+kerrno_t
+ksdev_writeallblocks_unlocked(struct ksdev *__restrict self, kslba_t addr,
+                              __kernel void const *__restrict blocks, size_t c) {
  size_t rc,nextc; kerrno_t error;
- error = ksdev_writeblocks_unlocked(self,addr,block,c,&rc);
- if (KE_ISERR(error)) return error;
+ error = ksdev_writeblocks_unlocked(self,addr,blocks,c,&rc);
+ if __unlikely(KE_ISERR(error)) return error;
  assert(rc <= c);
  if (rc != c) {
   nextc = rc;
   while (c) {
-   *(uintptr_t *)&block += nextc*self->sd_blocksize,c -= nextc;
-   error = ksdev_writeblocks_unlocked(self,addr,block,c,&nextc);
-   if (KE_ISERR(error)) return error;
+   *(uintptr_t *)&blocks += nextc*self->sd_blocksize,c -= nextc;
+   error = ksdev_writeblocks_unlocked(self,addr,blocks,c,&nextc);
+   if __unlikely(KE_ISERR(error)) return error;
    assert(nextc <= c);
    rc += nextc;
   }
@@ -75,8 +77,9 @@ kerrno_t ksdev_writeallblocks_unlocked(
 }
 
 
-kerrno_t ksdev_generic_readblock(
- struct ksdev const *self, kslba_t addr, void *block) {
+kerrno_t
+ksdev_generic_readblock(struct ksdev const *__restrict self, kslba_t addr,
+                        __kernel void *__restrict block) {
  size_t rc;
  kassertobj(self);
  kassertmem(block,self->sd_blocksize);
@@ -89,8 +92,9 @@ kerrno_t ksdev_generic_readblock(
  kassertbyte(self->sd_readblocks);
  return (*self->sd_readblocks)(self,addr,block,1,&rc);
 }
-kerrno_t ksdev_generic_writeblock(
- struct ksdev *self, kslba_t addr, void const *block) {
+kerrno_t
+ksdev_generic_writeblock(struct ksdev *__restrict self, kslba_t addr,
+                         __kernel void const *__restrict block) {
  size_t wc;
  kassertobj(self);
  kassertmem(block,self->sd_blocksize);
@@ -103,8 +107,10 @@ kerrno_t ksdev_generic_writeblock(
  kassertbyte(self->sd_writeblocks);
  return (*self->sd_writeblocks)(self,addr,block,1,&wc);
 }
-kerrno_t ksdev_generic_readblocks(
- struct ksdev const *self, kslba_t addr, void *blocks, size_t c, size_t *rc) {
+kerrno_t
+ksdev_generic_readblocks(struct ksdev const *__restrict self, kslba_t addr,
+                         __kernel void *__restrict blocks, size_t c,
+                         __kernel size_t *rc) {
  size_t i; kerrno_t error;
  kassertobj(self);
  kassertobj(rc);
@@ -120,13 +126,15 @@ kerrno_t ksdev_generic_readblocks(
          ,addr,c,self->sd_blockcount);
  kassertbyte(self->sd_readblock);
  for (i = 0; i < c; ++i) {
-  if (KE_ISERR(error = (*self->sd_readblock)(self,addr,blocks))) break;
+  if __unlikely(KE_ISERR(error = (*self->sd_readblock)(self,addr,blocks))) break;
  }
  *rc = i;
  return error;
 }
-kerrno_t ksdev_generic_writeblocks(
- struct ksdev *self, kslba_t addr, void const *blocks, size_t c, size_t *wc) {
+kerrno_t
+ksdev_generic_writeblocks(struct ksdev *__restrict self, kslba_t addr,
+                          __kernel void const *__restrict blocks, size_t c,
+                          __kernel size_t *wc) {
  size_t i; kerrno_t error;
  kassertobj(self);
  kassertobj(wc);
@@ -142,57 +150,64 @@ kerrno_t ksdev_generic_writeblocks(
          ,addr,c,self->sd_blockcount);
  kassertbyte(self->sd_writeblock);
  for (i = 0; i < c; ++i) {
-  if (KE_ISERR(error = (*self->sd_writeblock)(self,addr,blocks))) break;
+  if __unlikely(KE_ISERR(error = (*self->sd_writeblock)(self,addr,blocks))) break;
  }
  *wc = i;
  return error;
 }
 
-kerrno_t ksdev_new_ramdisk(struct ksdev **result, size_t blocksize, size_t blockcount) {
- krddev_t *resdisk; kerrno_t error;
+kerrno_t
+ksdev_new_ramdisk(struct ksdev **__restrict result,
+                  size_t blocksize, size_t blockcount) {
+ struct krddev *resdisk; kerrno_t error;
  kassertobj(result);
  assertf(blocksize*blockcount != 0,
          "blocksize = %Iu\n"
          "blockcount = %Iu\n",
          blocksize,blockcount);
- resdisk = (krddev_t *)malloc(sizeof(krddev_t));
+ resdisk = (struct krddev *)malloc(sizeof(struct krddev));
  if __unlikely(!resdisk) return KE_NOMEM;
- error = krddev_create(resdisk,blocksize,blockcount);
- if (KE_ISERR(error)) free(resdisk);
+ error = krddev_init(resdisk,blocksize,blockcount);
+ if __unlikely(KE_ISERR(error)) free(resdisk);
  else *result = (struct ksdev *)resdisk;
  return error;
 }
-kerrno_t ksdev_new_ata(struct ksdev **result, katabus_t bus, katadrive_t drive) {
- katadev_t *resdisk; kerrno_t error;
+kerrno_t
+ksdev_new_ata(struct ksdev **__restrict result,
+              katabus_t bus, katadrive_t drive) {
+ struct katadev *resdisk; kerrno_t error;
  kassertobj(result);
- resdisk = (katadev_t *)malloc(sizeof(katadev_t));
+ resdisk = (struct katadev *)malloc(sizeof(struct katadev));
  if __unlikely(!resdisk) return KE_NOMEM;
- error = katadev_create(resdisk,bus,drive);
- if (KE_ISERR(error)) free(resdisk);
+ error = katadev_init(resdisk,bus,drive);
+ if __unlikely(KE_ISERR(error)) free(resdisk);
  else *result = (struct ksdev *)resdisk;
  return error;
 }
-kerrno_t ksdev_new_findfirstata(struct ksdev **result) {
- katadev_t *resdisk; kerrno_t error;
+kerrno_t
+ksdev_new_findfirstata(struct ksdev **__restrict result) {
+ struct katadev *resdisk; kerrno_t error;
  kassertobj(result);
- resdisk = (katadev_t *)malloc(sizeof(katadev_t));
+ resdisk = (struct katadev *)malloc(sizeof(struct katadev));
  if __unlikely(!resdisk) return KE_NOMEM;
- if (KE_ISERR(error = katadev_create(resdisk,ATA_IOPORT_PRIMARY,ATA_DRIVE_MASTER)))
- if (KE_ISERR(error = katadev_create(resdisk,ATA_IOPORT_PRIMARY,ATA_DRIVE_SLAVE)))
- if (KE_ISERR(error = katadev_create(resdisk,ATA_IOPORT_SECONDARY,ATA_DRIVE_MASTER)))
- if (KE_ISERR(error = katadev_create(resdisk,ATA_IOPORT_SECONDARY,ATA_DRIVE_SLAVE))) free(resdisk);
+ if __unlikely(KE_ISERR(error = katadev_init(resdisk,ATA_IOPORT_PRIMARY,ATA_DRIVE_MASTER)))
+ if __unlikely(KE_ISERR(error = katadev_init(resdisk,ATA_IOPORT_PRIMARY,ATA_DRIVE_SLAVE)))
+ if __unlikely(KE_ISERR(error = katadev_init(resdisk,ATA_IOPORT_SECONDARY,ATA_DRIVE_MASTER)))
+ if __unlikely(KE_ISERR(error = katadev_init(resdisk,ATA_IOPORT_SECONDARY,ATA_DRIVE_SLAVE))) free(resdisk);
  *result = (struct ksdev *)resdisk;
  return error;
 }
-kerrno_t ksdev_new_part(struct ksdev **result, struct ksdev *__restrict dev,
-                        kslba_t start, kslba_t size) {
- kpartdev_t *resdisk;
+kerrno_t
+ksdev_new_part(struct ksdev **__restrict result,
+               struct ksdev *__restrict dev,
+               kslba_t start, kslba_t size) {
+ struct kpartdev *resdisk;
  kassertobj(result); kassertobj(dev);
  assertf(start+size > size,"Empty size, or lba rolls over");
  assertf(start+size <= dev->sd_blockcount
          ,"Overflowing LBA address (%I64u > %I64u)"
          ,start+size,dev->sd_blockcount);
- resdisk = (kpartdev_t *)malloc(sizeof(kpartdev_t));
+ resdisk = (struct kpartdev *)malloc(sizeof(struct kpartdev));
  if __unlikely(!resdisk) return KE_NOMEM;
  kpartdev_create(resdisk,dev,start,size);
  *result = (struct ksdev *)resdisk;

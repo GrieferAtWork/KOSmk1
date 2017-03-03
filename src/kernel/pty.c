@@ -95,7 +95,7 @@ void kpty_init(struct kpty *__restrict self,
  }
 }
 
-__crit void kpty_quit(struct kpty *self) {
+__crit void kpty_quit(struct kpty *__restrict self) {
  KTASK_CRIT_MARK
  kassert_kpty(self);
  kiobuf_quit(&self->ty_s2m);
@@ -109,7 +109,8 @@ __crit void kpty_quit(struct kpty *self) {
 }
 
 
-__local __crit kerrno_t kpty_dumpcanon_c(struct kpty *self) {
+__local __crit kerrno_t
+kpty_dumpcanon_c(struct kpty *__restrict self) {
  kerrno_t error; size_t wsize,canbufsize; void *canbuf;
  KTASK_CRIT_MARK
  KTASK_NOINTR_BEGIN
@@ -131,6 +132,23 @@ kpty_user_ioctl(struct kpty *__restrict self,
  kassert_kpty(self);
  KTASK_CRIT_BEGIN
  switch (cmd) {
+
+  case TCSAFLUSH:
+   switch ((int)arg) {
+    case TCIOFLUSH:
+    case TCIFLUSH:
+     /* Discard data received, but not read (aka. what the driver send) */
+     kiobuf_discard(&self->ty_m2s);
+    case TCOFLUSH:
+     if ((int)arg != TCIFLUSH) {
+      /* Discard data written, but not send (aka. what the slave told to the driver). */
+      kiobuf_discard(&self->ty_s2m);
+     }
+     error = KE_OK;
+     break;
+    default: error = KE_INVAL; break;
+   }
+   break;
 
   case TIOCGWINSZ:
    if __likely(KE_ISOK(error = krwlock_beginread(&self->ty_lock))) {
@@ -699,7 +717,7 @@ kfspty_insnod(struct kfspty *__restrict self,
   kinode_decref((struct kinode *)self);
   return KE_NOMEM;
  }
- slave_inode->s_pty = self; /* Inherit reference */
+ slave_inode->s_pty = self; /* Inherit reference. */
  do {
   resnum = katomic_load(next_pty_num);
   if __unlikely(resnum == (kptynum_t)-1) {
@@ -726,7 +744,7 @@ kfspty_insnod(struct kfspty *__restrict self,
  master_name_size = sprintf(master_name,"/dev/tty%I32u",resnum);
  slave_name_size  = sprintf(slave_name,"/dev/ttyS%I32u",resnum);
  if (master_name_buf &&
-     copy_to_user(master_name_buf,master_name,master_name_size)
+     copy_to_user(master_name_buf,master_name,master_name_size*sizeof(char))
      ) { error = KE_FAULT; goto err_root; }
  /* Actually Insert the nodes! */
  error = kdirent_insnodat(&env,master_name,master_name_size,
@@ -763,8 +781,8 @@ kptyfile_new(struct kfspty *__restrict pty,
  }
  if __unlikely((result = omalloc(__ref struct kptyfile)) == NULL) return NULL;
  kfile_init(&result->pf_file,type);
- result->pf_pty = pty; /* Inherit reference */
- result->pf_dent = dent; /* Inherit reference */
+ result->pf_pty = pty; /* Inherit reference. */
+ result->pf_dent = dent; /* Inherit reference. */
  return result;
 }
 

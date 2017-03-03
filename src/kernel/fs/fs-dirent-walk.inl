@@ -172,13 +172,13 @@ err_resnode:
  kdirent_lock(self,KDIRENT_LOCK_CACHE);
  if (kdirentcache_insert(&self->d_cache,resent,&newresult) == KE_EXISTS &&
      KE_ISOK(kdirent_incref(newresult))) {
-  *result = newresult; // Inherit reference
+  *result = newresult; /* Inherit reference. */
   kdirent_unlock(self,KDIRENT_LOCK_CACHE);
   kdirent_decref(resent); // Drop our old reference
   return KE_OK;
  }
  kdirent_unlock(self,KDIRENT_LOCK_CACHE);
- *result = resent; // Inherit reference
+ *result = resent; /* Inherit reference. */
  return KE_OK;
 #ifdef WALKENV
 err_inode:

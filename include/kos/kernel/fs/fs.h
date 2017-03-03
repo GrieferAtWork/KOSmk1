@@ -531,12 +531,12 @@ kdirent_unlinknode(struct kdirent *__restrict self);
 // Returns the filename/absolute path of a given directory entry
 extern __nonnull((1)) kerrno_t
 kdirent_user_getfilename(struct kdirent const *__restrict self,
-                         __user char *__restrict buf, __size_t bufsize,
+                         __user char *buf, __size_t bufsize,
                          __kernel __size_t *__restrict reqsize);
 extern __nonnull((1,2)) kerrno_t
 kdirent_user_getpathname(struct kdirent const *__restrict self,
                          struct kdirent *__restrict root,
-                         __user char *__restrict buf, __size_t bufsize,
+                         __user char *buf, __size_t bufsize,
                          __kernel __size_t *__restrict reqsize);
 #ifdef __INTELLISENSE__
 extern __nonnull((1)) void

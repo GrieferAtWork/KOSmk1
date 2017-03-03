@@ -27,7 +27,7 @@
 
 __DECL_BEGIN
 
-__crit struct kpageframe *
+__crit struct kpageframe *KPAGEFRAME_CALL
 #ifdef TRYALLOC
 kpageframe_tryalloc(__size_t n_pages, __size_t *did_alloc_pages)
 #else
@@ -46,51 +46,52 @@ kpageframe_alloc(__size_t n_pages)
 #endif
  k_syslogf(KLOG_TRACE,"Allocating %Iu pages\n",n_pages);
 #ifdef TRYALLOC
- winner = KPAGEFRAME_INVPTR;
+ winner = PAGENIL;
 #endif
  kpagealloc_lock();
  iter = first_free_page;
- while (iter != KPAGEFRAME_INVPTR) {
+ while (iter != PAGENIL) {
   assert(iter->pff_size != 0);
-  assertf((iter->pff_prev == KPAGEFRAME_INVPTR) == (iter == first_free_page),
+  assertf((iter->pff_prev == PAGENIL) == (iter == first_free_page),
           "Only the first page may have no predecessor");
   if (iter->pff_size >= n_pages) {
 #ifdef TRYALLOC
    *did_alloc_pages = n_pages;
 take_iter:
 #endif
-   assert((iter->pff_prev == KPAGEFRAME_INVPTR) || iter->pff_prev < iter);
-   assert((iter->pff_next == KPAGEFRAME_INVPTR) || iter->pff_next > iter);
-   // Usable page --> split it
+   assert((iter->pff_prev == PAGENIL) || iter->pff_prev < iter);
+   assert((iter->pff_next == PAGENIL) || iter->pff_next > iter);
+   /* Usable page --> split it */
    if __unlikely(iter->pff_size == n_pages) {
-    // Exception: the free page is an exact fit
-    if (iter->pff_next != KPAGEFRAME_INVPTR) iter->pff_next->pff_prev = iter->pff_prev;
-    if (iter->pff_prev != KPAGEFRAME_INVPTR) iter->pff_prev->pff_next = iter->pff_next;
+    /* Exception: the free page is an exact fit */
+    if (iter->pff_next != PAGENIL) iter->pff_next->pff_prev = iter->pff_prev;
+    if (iter->pff_prev != PAGENIL) iter->pff_prev->pff_next = iter->pff_next;
     else first_free_page = iter->pff_next;
     // And we're already done!
     goto enditer;
    }
-   // Take away from the start of the free page
-   // BEFORE: [P1-][P2------][P3----]
-   // AFTER:  [P1-][P2--][P3][P4----]
-   //               ^^^^ result
+   /* Take away from the start of the free page
+    * BEFORE: [P1-][P2------][P3----]
+    * AFTER:  [P1-][P2--][P3][P4----]
+    *               ^^^^ result
+    */
    assert(iter->pff_size > n_pages);
    split = iter+n_pages;
-   // Transfer page information from 'iter' to 'split'
-   if ((split->pff_next = iter->pff_next) != KPAGEFRAME_INVPTR) split->pff_next->pff_prev = split;
-   if ((split->pff_prev = iter->pff_prev) != KPAGEFRAME_INVPTR) split->pff_prev->pff_next = split;
-   else first_free_page = split; // First free region
+   /* Transfer page information from 'iter' to 'split' */
+   if ((split->pff_next = iter->pff_next) != PAGENIL) split->pff_next->pff_prev = split;
+   if ((split->pff_prev = iter->pff_prev) != PAGENIL) split->pff_prev->pff_next = split;
+   else first_free_page = split; /* First free region */
    split->pff_size = iter->pff_size-n_pages;
 enditer:
 #if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
    total_allocated_pages += n_pages;
 #endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
-   assert(!first_free_page || first_free_page->pff_prev == KPAGEFRAME_INVPTR);
+   assert(!first_free_page || first_free_page->pff_prev == PAGENIL);
    kpagealloc_unlock();
    return iter;
   }
 #ifdef TRYALLOC
-  else if ((winner == KPAGEFRAME_INVPTR) ||
+  else if ((winner == PAGENIL) ||
             winner->pff_size < iter->pff_size) {
    /* First winner, or better match. */
    winner = iter;
@@ -100,7 +101,7 @@ enditer:
  }
  kpagealloc_unlock();
 #ifdef TRYALLOC
- if __likely(winner != KPAGEFRAME_INVPTR) {
+ if __likely(winner != PAGENIL) {
   /* At least something... */
   *did_alloc_pages = winner->pff_size;
   iter = winner;
@@ -112,7 +113,7 @@ enditer:
  /* Not page available with enough memory --> OUT-OF-MEMORY */
  k_syslogf(KLOG_ERROR,"OUT-OF-MEMORY when trying to allocate %Iu pageframes\n_pages",n_pages);
  tb_print();
- return KPAGEFRAME_INVPTR;
+ return PAGENIL;
 }
 
 #ifdef TRYALLOC

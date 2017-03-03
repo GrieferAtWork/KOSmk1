@@ -41,27 +41,21 @@
 
 __DECL_BEGIN
 
-struct kpagedir *kpagedir_new(void) {
- struct kpagedir *result = (struct kpagedir *)
-  kpageframe_alloc(ceildiv(sizeof(struct kpagedir),PAGESIZE));
- if __likely(result) kpagedir_init(result);
+__crit struct kpagedir *kpagedir_new(void) {
+ struct kpagedir *result;
+ KTASK_CRIT_MARK
+ result = (struct kpagedir *)kpageframe_alloc(ceildiv(sizeof(struct kpagedir),PAGESIZE));
+ if __likely(result != (struct kpagedir *)PAGENIL) {
+  memset(result,0,sizeof(struct kpagedir));
+ }
  return result;
 }
-void kpagedir_delete(struct kpagedir *self) {
+__crit void
+kpagedir_delete(struct kpagedir *__restrict self) {
+ x86_pde *iter,*end;
+ KTASK_CRIT_MARK
  kassertobj(self);
  assertf(self != kpagedir_kernel(),"Can't delete the kernel page directory");
- kpagedir_quit(self);
- kpageframe_free((struct kpageframe *)self,
-                ceildiv(sizeof(struct kpagedir),PAGESIZE));
-}
-
-void kpagedir_init(struct kpagedir *self) {
- assertf(self != kpagedir_kernel(),"Can't re-initialize the kernel page directory");
- memset(self,0,X86_PDE4DIC*sizeof(x86_pde));
-}
-void kpagedir_quit(struct kpagedir *self) {
- x86_pde *iter,*end;
- assertf(self != kpagedir_kernel(),"Can't destroy the kernel page directory");
  end = (iter = self->d_entries)+__compiler_ARRAYSIZE(self->d_entries);
  while (iter != end) {
   if (iter->present) {
@@ -70,81 +64,25 @@ void kpagedir_quit(struct kpagedir *self) {
   }
   ++iter;
  }
+ kpageframe_free((struct kpageframe *)self,
+                  ceildiv(sizeof(struct kpagedir),PAGESIZE));
 }
 
-static int kpagedir_fillafterfork(__virtualaddr void *vbegin, __physicaladdr void *pbegin,
-                                  size_t pagecount, kpageflag_t flags, void *closure) {
- struct kpageframe *newframes; kerrno_t error;
- if (flags&PAGEDIR_FLAG_USER) {
-  // TODO: Copy-on-write
-  // TODO: Track allocated pages
-  newframes = (struct kpageframe *)kpageframe_alloc(pagecount);
-  if __unlikely(!newframes) return KE_NOMEM;
-  memcpy(newframes,pbegin,pagecount*PAGESIZE);
-  error = kpagedir_remap((struct kpagedir *)closure,newframes,
-                         vbegin,pagecount,flags);
-  if __unlikely(KE_ISERR(error)) {
-   kpageframe_free(newframes,pagecount);
-   return error;
-  }
- }
- return 0;
-}
-
-
-struct kpagedir *kpagedir_copy(struct kpagedir *self) {
- x86_pte *newentry; struct kpagedir *result;
- x86_pde *iter,*end,*src; kassertobj(self);
- if __unlikely((result = (struct kpagedir *)kpageframe_alloc(
-  ceildiv(sizeof(struct kpagedir),PAGESIZE))) == NULL) return NULL;
- end = (iter = result->d_entries)+__compiler_ARRAYSIZE(result->d_entries);
- src = self->d_entries;
- for (; iter != end; ++iter) {
-  if ((*iter = *src++).present) {
-   // Copy this page table
-   newentry = (x86_pte *)kpageframe_alloc(ceildiv((sizeof(x86_pte)*X86_PTE4PDE),PAGESIZE));
-   if __unlikely(!newentry) {
-    // Out-of-memory
-    while (iter-- != result->d_entries) {
-     if (iter->present) kpageframe_free((struct kpageframe *)x86_pde_getpte(iter),
-                                        ceildiv((sizeof(x86_pte)*X86_PTE4PDE),PAGESIZE));
-    }
-    kpageframe_free((struct kpageframe *)result,
-                   ceildiv(sizeof(struct kpagedir),PAGESIZE));
-    return NULL;
-   }
-   memcpy(newentry,x86_pde_getpte(iter),sizeof(x86_pte)*X86_PTE4PDE);
-   iter->u = (uintptr_t)newentry|(iter->u&X86_PDE_MASK_FLAGS);
-  }
- }
- return result;
-}
-
-#if 1
-struct kpagedir *kpagedir_fork(struct kpagedir *self) {
- struct kpagedir *result = kpagedir_new();
- if __unlikely(!result) return NULL;
- if __unlikely(KE_ISERR(kpagedir_mapkernel(result,PAGEDIR_FLAG_READ_WRITE))) {
-err_r: kpagedir_delete(result); return NULL;
- }
- if (kpagedir_enum(self,&kpagedir_fillafterfork,result) != 0) goto err_r;
- return result;
-}
-#endif
-
-__physicaladdr void *kpagedir_translate(struct kpagedir const *self,
-                                        __virtualaddr void const *virt) {
+__physicaladdr void *KPAGEDIR_TRANSLATE_CALL
+kpagedir_translate(struct kpagedir const *__restrict self,
+                   __virtualaddr void const *virt) {
  x86_pde used_pde; x86_pte used_pte;
  kassertobj(self);
  used_pde = self->d_entries[X86_VPTR_GET_PDID(virt)];
- if __unlikely(!used_pde.present) return NULL; // Page table not present
+ if __unlikely(!used_pde.present) return NULL; /* Page table not present */
  used_pte = x86_pde_getpte(&used_pde)[X86_VPTR_GET_PTID(virt)];
- if __unlikely(!used_pte.present) return NULL; // Page table entry not present
+ if __unlikely(!used_pte.present) return NULL; /* Page table entry not present */
  return (__physicaladdr void *)(x86_pte_getpptr(&used_pte)+X86_VPTR_GET_POFF(virt));
 }
-__physicaladdr void *kpagedir_translate_flags(struct kpagedir const *self,
-                                              __virtualaddr void const *virt,
-                                              kpageflag_t flags) {
+__physicaladdr void *KPAGEDIR_TRANSLATE_CALL
+kpagedir_translate_flags(struct kpagedir const *__restrict self,
+                         __virtualaddr void const *virt,
+                         kpageflag_t flags) {
  x86_pde used_pde; x86_pte used_pte;
  kassertobj(self);
 #ifdef X86_PTE_FLAG_PRESENT
@@ -164,14 +102,16 @@ __physicaladdr void *kpagedir_translate_flags(struct kpagedir const *self,
 #endif
 
 
-kerrno_t kpagedir_mapkernel(struct kpagedir *self, kpageflag_t flags) {
+__crit kerrno_t
+kpagedir_mapkernel(struct kpagedir *__restrict self,
+                   kpageflag_t flags) {
  extern __byte_t __kernel_begin[];
  extern __byte_t __kernel_end[];
  return kpagedir_map(self,
-                    (void *)alignd((uintptr_t)__kernel_begin,PAGEALIGN),
-                    (void *)alignd((uintptr_t)__kernel_begin,PAGEALIGN),
-                    ceildiv(align((uintptr_t)__kernel_end,PAGEALIGN)-
-                         alignd((uintptr_t)__kernel_begin,PAGEALIGN),PAGESIZE),flags);
+                    (void *)alignd ((uintptr_t)__kernel_begin,PAGEALIGN),
+                    (void *)alignd ((uintptr_t)__kernel_begin,PAGEALIGN),
+                     ceildiv(align ((uintptr_t)__kernel_end,  PAGEALIGN)-
+                             alignd((uintptr_t)__kernel_begin,PAGEALIGN),PAGESIZE),flags);
 }
 
 #define KPAGEDIR_FOREACHADDR(self,titer) \
@@ -204,9 +144,10 @@ kerrno_t kpagedir_mapkernel(struct kpagedir *self, kpageflag_t flags) {
    for (; titer != tend; ++titer) {
 #define KPAGEDIR_FOREACHEND }}}
 
-int kpagedir_rangeattr(struct kpagedir const *self,
-                       __virtualaddr void const *virt,
-                       size_t pages) {
+int
+kpagedir_rangeattr(struct kpagedir const *__restrict self,
+                   __virtualaddr void const *virt,
+                   size_t pages) {
  int result = KPAGEDIR_RANGEATTR_NONE;
  KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,
                        result |= KPAGEDIR_RANGEATTR_HASUNMAPPED) {
@@ -217,18 +158,22 @@ int kpagedir_rangeattr(struct kpagedir const *self,
  return result;
 }
 
-int kpagedir_ismapped(struct kpagedir const *self,
-                      __virtualaddr void const *virt,
-                      size_t pages) {
+int
+kpagedir_ismapped(struct kpagedir const *__restrict self,
+                  __virtualaddr void const *virt,
+                  size_t pages) {
  KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,
                        return 0) {
   if (!titer->present) return 0;
  } KPAGEDIR_FOREACHEND;
  return 1;
 }
-int kpagedir_ismappedex(struct kpagedir const *self,
-                        __virtualaddr void const *virt,
-                        size_t pages, kpageflag_t mask, kpageflag_t flags) {
+
+int
+kpagedir_ismappedex(struct kpagedir const *__restrict self,
+                    __virtualaddr void const *virt,
+                    size_t pages, kpageflag_t mask,
+                    kpageflag_t flags) {
 #ifdef X86_PTE_FLAG_PRESENT
  mask  |= X86_PTE_FLAG_PRESENT;
  flags |= X86_PTE_FLAG_PRESENT;
@@ -241,8 +186,10 @@ int kpagedir_ismappedex(struct kpagedir const *self,
 }
 
 size_t
-kpagedir_setflags(struct kpagedir *self, __virtualaddr void const *virt,
-                  size_t pages, kpageflag_t mask, kpageflag_t flags) {
+kpagedir_setflags(struct kpagedir *__restrict self,
+                  __virtualaddr void const *virt,
+                  size_t pages, kpageflag_t mask,
+                  kpageflag_t flags) {
  size_t result = 0;
 #ifdef X86_PTE_FLAG_PRESENT
  mask  |= X86_PTE_FLAG_PRESENT;
@@ -258,25 +205,29 @@ kpagedir_setflags(struct kpagedir *self, __virtualaddr void const *virt,
 }
 
 
-int kpagedir_ismappedex_b(struct kpagedir const *self, __virtualaddr void const *virt,
-                          size_t bytes, kpageflag_t mask, kpageflag_t flags) {
+int
+kpagedir_ismappedex_b(struct kpagedir const *__restrict self,
+                      __virtualaddr void const *virt,
+                      size_t bytes, kpageflag_t mask,
+                      kpageflag_t flags) {
  uintptr_t aligned_virt = alignd((uintptr_t)virt,PAGEALIGN);
  return kpagedir_ismappedex(self,(void *)aligned_virt,
                             ceildiv(bytes+((uintptr_t)virt-aligned_virt),PAGESIZE),
                             mask,flags);
 }
 
-int kpagedir_isunmapped(struct kpagedir const *self,
-                        __virtualaddr void const *virt,
-                        size_t pages) {
+int
+kpagedir_isunmapped(struct kpagedir const *__restrict self,
+                    __virtualaddr void const *virt,
+                    size_t pages) {
  KPAGEDIR_FOREACHBEGIN(self,virt,pages,titer,) {
   if (titer->present) return 0;
  } KPAGEDIR_FOREACHEND;
  return 1;
 }
 
-extern __virtualaddr void *
-kpagedir_findfreerange(struct kpagedir const *self, size_t pages,
+__virtualaddr void *
+kpagedir_findfreerange(struct kpagedir const *__restrict self, size_t pages,
                        __virtualaddr void const *hint) {
  uintptr_t iter; int attr;
  kassertobj(self);
@@ -310,8 +261,8 @@ kpagedir_findfreerange(struct kpagedir const *self, size_t pages,
  return KPAGEDIR_FINDFREERANGE_ERR;
 }
 
-extern __virtualaddr void *
-kpagedir_mapanyex(struct kpagedir *self, __physicaladdr void const *phys,
+__virtualaddr void *
+kpagedir_mapanyex(struct kpagedir *__restrict self, __physicaladdr void const *phys,
                   size_t pages, __virtualaddr void const *hint, kpageflag_t flags) {
  void *result;
  kassertobj(self);
@@ -327,10 +278,12 @@ kpagedir_mapanyex(struct kpagedir *self, __physicaladdr void const *phys,
 
 
 
-void kpagedir_unmap(struct kpagedir *self,
-                    __virtualaddr void const *virt,
-                    size_t pages) {
+__crit void
+kpagedir_unmap(struct kpagedir *__restrict self,
+               __virtualaddr void const *virt,
+               size_t pages) {
  x86_pde *pde; x86_pte *iter,*end,*begin; size_t pdenusing;
+ KTASK_CRIT_MARK
  assertf(self != kpagedir_kernel(),"Can't unmap the kernel page directory");
  kassertobj(self);
  assertf(isaligned((uintptr_t)virt,PAGEALIGN),"Virtual address %p is not page aligned",virt);
@@ -371,13 +324,43 @@ free_pagetable:
 }
 
 
-int kpagedir_enum(struct kpagedir const *self,
-                  int (*callback)(__virtualaddr void *vbegin,
-                                  __physicaladdr void *pbegin,
-                                  size_t size,
-                                  kpageflag_t flags,
-                                  void *closure),
-                  void *closure) {
+__kernel void *
+__kpagedir_translate_u_impl(struct kpagedir const *__restrict self,
+                            __user void const *addr,
+                            __kernel __size_t *__restrict max_bytes,
+                            __u32 flags) {
+ size_t req_max_bytes,avail_max_bytes;
+ uintptr_t result,aligned_addr,found_aligned_addr;
+ kassertobj(max_bytes);
+ req_max_bytes = *max_bytes;
+ result = (uintptr_t)kpagedir_translate_flags(self,addr,flags);
+ if __unlikely(!result) { avail_max_bytes = 0; goto end; }
+ aligned_addr = alignd(result,PAGEALIGN);
+ avail_max_bytes = PAGESIZE-(result-aligned_addr);
+ if (avail_max_bytes >= req_max_bytes) { avail_max_bytes = req_max_bytes; goto end; }
+ req_max_bytes -= avail_max_bytes;
+ for (;;) {
+  *(uintptr_t *)&addr += PAGESIZE,aligned_addr += PAGESIZE;
+  found_aligned_addr = (uintptr_t)kpagedir_translate_flags(self,addr,flags);
+  if (found_aligned_addr != aligned_addr) break;
+  if (req_max_bytes <= PAGESIZE) { avail_max_bytes += req_max_bytes; break; }
+  avail_max_bytes += PAGESIZE;
+  req_max_bytes   -= PAGESIZE;
+ }
+end:
+ *max_bytes = avail_max_bytes;
+ return (__kernel void *)result;
+}
+
+
+
+int
+kpagedir_enum(struct kpagedir const *__restrict self,
+              int (*callback)(__virtualaddr void *vbegin,
+                              __physicaladdr void *pbegin,
+                              size_t size, kpageflag_t flags,
+                              void *closure),
+              void *closure) {
  uintptr_t start_virt,end_virt,start_phys,end_phys;
  x86_pde const *iter,*end,*begin; int error;
  x86_pte const *pte_begin,*pte_iter,*pte_end;
@@ -432,9 +415,10 @@ next_pte:
 }
 
 #ifdef __DEBUG__
-static int kpagedir_print_callback(__virtualaddr void *vbegin,
-                                   __physicaladdr void *pbegin,
-                                   size_t pagecount, kpageflag_t flags, void *closure) {
+static int
+kpagedir_print_callback(__virtualaddr void *vbegin,
+                        __physicaladdr void *pbegin,
+                        size_t pagecount, kpageflag_t flags, void *closure) {
  return printf("MAP %#.8Ix bytes (%#.8Ix pages) (%c%c) V[%.8p ... %.8p] --> P[%.8p ... %.8p]\n"
                ,pagecount*PAGESIZE,pagecount
                ,flags&PAGEDIR_FLAG_USER ? 'U' : '-'
@@ -442,15 +426,13 @@ static int kpagedir_print_callback(__virtualaddr void *vbegin,
                ,vbegin,(uintptr_t)vbegin+pagecount*PAGESIZE
                ,pbegin,(uintptr_t)pbegin+pagecount*PAGESIZE);
 }
-void kpagedir_print(struct kpagedir const *self) {
+void kpagedir_print(struct kpagedir const *__restrict self) {
  printf("PAGEDIR: %p\n",self);
  kpagedir_enum(self,&kpagedir_print_callback,NULL);
 }
 #endif
 
 
-
-#if 1
 
 /* The page directory itself is still statically allocated,
  * just so we already know its final memory address at compile-time. */
@@ -507,81 +489,6 @@ void kernel_initialize_paging(void) {
  cr0 |= WP; __asm_volatile__("movl %0, %%cr0" : : "r" (cr0));
 }
 
-#else
-static x86_pte __attribute__((__aligned__(PAGEALIGN))) __kernel_pagetables[X86_PDE4DIC*X86_PTE4PDE];
-__attribute__((__aligned__(4096))) struct kpagedir __kpagedir_kernel;
-
-void
-kpagedir_kernel_installmemory(__pagealigned __physicaladdr void *addr,
-                              size_t pages, kpageflag_t flags) {
-}
-
-__local void mmu_init_pt(void) {
- x86_pte *iter,*end,entry;
- k_syslogf(KLOG_INFO,"[PAGING] Initializing pt... ");
- // Initialize to map vaddr x to the same paddr
- entry.u = X86_PDE_FLAG_READ_WRITE|X86_PDE_FLAG_PRESENT;
- end = (iter = __kernel_pagetables)+__compiler_ARRAYSIZE(__kernel_pagetables);
- while (iter != end) {
-  *iter++ = entry;
-  entry.u += PAGESIZE;
- }
- k_syslogf(KLOG_INFO,"done\n");
-}
-
-__local void mmu_init_pd(void) {
- x86_pde *iter,*end,entry;
- k_syslogf(KLOG_INFO,"[PAGING] Initializing pd... ");
- end = (iter = __kpagedir_kernel.d_entries)+__compiler_ARRAYSIZE(__kpagedir_kernel.d_entries);
- entry.u = ((__u32)&__kernel_pagetables)|X86_PTE_FLAG_READ_WRITE|X86_PTE_FLAG_PRESENT;
- while (iter != end) { *iter++ = entry; entry.u += (sizeof(x86_pte)*X86_PTE4PDE); }
- k_syslogf(KLOG_INFO,"done\n");
-}
-
-x86_pte *getpte(uintptr_t addr) {
- x86_pde *used_pde;
- used_pde = &__kpagedir_kernel.d_entries[X86_VPTR_GET_PDID(addr)];
- return &x86_pde_getpte(used_pde)[X86_VPTR_GET_PTID(addr)];
-}
-
-void paging_set_flags(uintptr_t start, size_t pages,
-                      __u32 mask, __u32 flags) {
- x86_pte *pte;
- while (pages--) {
-  pte = getpte(start);
-  pte->u = (pte->u&mask)|flags;
-  start += PAGESIZE;
- }
-}
-
-void kernel_make_ro_immutable(void) {
- extern __u8 __kernel_ro_begin[];
- extern __u8 __kernel_ro_end[];
- assert(isaligned((uintptr_t)__kernel_ro_begin,PAGEALIGN));
- assert(isaligned((uintptr_t)__kernel_ro_end,PAGEALIGN));
- paging_set_flags((uintptr_t)__kernel_ro_begin,
-                 ((uintptr_t)__kernel_ro_end-(uintptr_t)__kernel_ro_begin)/PAGESIZE,
-                 ~(X86_PTE_FLAG_READ_WRITE),0);
-}
-
-void kernel_initialize_paging(void) {
- mmu_init_pt();
- mmu_init_pd();
- kernel_make_ro_immutable();
- kpagedir_makecurrent(kpagedir_kernel());
- __arch_enablepaging();
-#define WP (1 << 16)
- // Enable write-protection within kernel-land (ring 0)
- __u32 cr0; __asm_volatile__("movl %%cr0, %0" : "=r" (cr0));
- cr0 |= WP; __asm_volatile__("movl %0, %%cr0" : : "r" (cr0));
-}
-#endif
-
-
 __DECL_END
-
-#ifndef __INTELLISENSE__
-#include "paging-transfer.c.inl"
-#endif
 
 #endif /* !__KOS_KERNEL_PAGING_C__ */

@@ -29,7 +29,9 @@
 
 __DECL_BEGIN
 
-kerrno_t kpartdev_readblock(kpartdev_t const *self, kslba_t addr, void *block) {
+kerrno_t
+kpartdev_readblock(struct kpartdev const *__restrict self, kslba_t addr,
+                   __kernel void *__restrict block) {
  kassertobj(self);
  kassertmem(block,self->sd_blocksize);
  assertf(addr < self->sd_blockcount,
@@ -43,7 +45,9 @@ kerrno_t kpartdev_readblock(kpartdev_t const *self, kslba_t addr, void *block) {
          addr+self->pd_start,addr);
  return ksdev_readblock_unlocked(self->pd_disk,self->pd_start+addr,block);
 }
-kerrno_t kpartdev_writeblock(kpartdev_t *self, kslba_t addr, void const *block) {
+kerrno_t
+kpartdev_writeblock(struct kpartdev *__restrict self, kslba_t addr,
+                    __kernel void const *__restrict block) {
  kassertobj(self);
  kassertmem(block,self->sd_blocksize);
  assertf(addr < self->sd_blockcount,
@@ -57,7 +61,10 @@ kerrno_t kpartdev_writeblock(kpartdev_t *self, kslba_t addr, void const *block) 
          addr+self->pd_start,addr);
  return ksdev_writeblock_unlocked(self->pd_disk,self->pd_start+addr,block);
 }
-kerrno_t kpartdev_readblocks(kpartdev_t const *self, kslba_t addr, void *blocks, __size_t c, __size_t *rc) {
+kerrno_t
+kpartdev_readblocks(struct kpartdev const *__restrict self, kslba_t addr,
+                    __kernel void *__restrict blocks, size_t c,
+                    __kernel size_t *rc) {
  kassertobj(self);
  kassertobj(rc);
  assertf(c,"Must at least specify 1 block");
@@ -75,7 +82,10 @@ kerrno_t kpartdev_readblocks(kpartdev_t const *self, kslba_t addr, void *blocks,
          addr+self->pd_start,addr);
  return ksdev_readblocks_unlocked(self->pd_disk,self->pd_start+addr,blocks,c,rc);
 }
-kerrno_t kpartdev_writeblocks(kpartdev_t *self, kslba_t addr, void const *blocks, __size_t c, __size_t *wc) {
+kerrno_t
+kpartdev_writeblocks(struct kpartdev *__restrict self, kslba_t addr,
+                     __kernel void const *__restrict blocks, size_t c,
+                     __kernel size_t *wc) {
  kassertobj(self);
  kassertobj(wc);
  assertf(c,"Must at least specify 1 block");
@@ -95,16 +105,23 @@ kerrno_t kpartdev_writeblocks(kpartdev_t *self, kslba_t addr, void const *blocks
 }
 
 
-kerrno_t kpartdev_getattr(kpartdev_t const *self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize) {
+kerrno_t
+kpartdev_getattr(struct kpartdev const *__restrict self, kattr_t attr,
+                 __user void *__restrict buf, size_t bufsize,
+                 __kernel size_t *__restrict reqsize) {
  kassertobj(self);
  kassertmem(buf,bufsize);
  kassertobjnull(reqsize);
- return kdev_kernel_getattr_unlocked((struct kdev *)self->pd_disk,attr,buf,bufsize,reqsize);
+ return kdev_user_getattr_unlocked((struct kdev *)self->pd_disk,
+                                    attr,buf,bufsize,reqsize);
 }
-kerrno_t kpartdev_setattr(kpartdev_t *self, kattr_t attr, void const *__restrict buf, __size_t bufsize) {
+kerrno_t
+kpartdev_setattr(struct kpartdev *__restrict self, kattr_t attr,
+                 __user void const *__restrict buf, size_t bufsize) {
  kassertobj(self);
  kassertmem(buf,bufsize);
- return kdev_kernel_setattr_unlocked((struct kdev *)self->pd_disk,attr,buf,bufsize);
+ return kdev_user_setattr_unlocked((struct kdev *)self->pd_disk,
+                                    attr,buf,bufsize);
 }
 
 

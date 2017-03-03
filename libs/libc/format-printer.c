@@ -38,6 +38,9 @@
 #include <stddef.h>
 #include <string.h>
 #include <time.h>
+#include <stdint.h>
+#include <alloca.h>
+#include <sys/types.h>
 #ifdef __KERNEL__
 #include <kos/atomic.h>
 #include <kos/kernel/paging.h>
@@ -913,13 +916,15 @@ format_quote(pformatprinter printer, void *closure,
  size_t encoded_text_size;
  int error; char ch;
  char const *iter,*end,*flush_start;
+ register int force_special = !!(flags&FORMAT_QUOTE_FLAG_NOASCII);
  __printf_assert(kassertbyte(printer));
  end = (iter = flush_start = text)+maxtext;
  encoded_text[0] = '\\';
  if (!(flags&FORMAT_QUOTE_FLAG_PRINTRAW)) print("\"",1);
  while (iter != end) {
   ch = *iter;
-  if (ch < 32 || ch >= 127 || ch == '\'' || ch == '\"' || ch == '\\') {
+  if (ch < 32    || ch >= 127  || ch == '\'' ||
+      ch == '\"' || ch == '\\' || force_special) {
    /* Character requires special encoding. */
    if (!ch && !(flags&FORMAT_QUOTE_FLAG_QUOTEALL)) goto end;
    /* Flush unprinted text. */
@@ -995,8 +1000,110 @@ end:
  return 0;
 }
 
+#define MAX_SPACE_SIZE  64
+#define MAX_ASCII_SIZE  64
 
-__public int stringprinter_init(struct stringprinter *__restrict self, size_t hint) {
+static int
+print_space(pformatprinter printer,
+            void *closure, size_t count) {
+ size_t used_size,bufsize;
+ char *spacebuf; int error;
+ bufsize = min(count,MAX_SPACE_SIZE);
+ spacebuf = (char *)alloca(bufsize);
+ memset(spacebuf,' ',bufsize);
+ for (;;) {
+  used_size = min(count,bufsize);
+  print(spacebuf,used_size);
+  if (used_size == bufsize) break;
+  bufsize -= used_size;
+ }
+ return 0;
+}
+
+__public int
+format_hexdump(pformatprinter printer, void *closure,
+               void const *__restrict data, size_t size,
+               size_t linesize, __u32 flags) {
+ char hex_buf[3],*ascii_line;
+ char const *hex_translate;
+ byte_t const *line,*iter,*end; byte_t b; int error;
+ size_t lineuse,overflow,ascii_size; unsigned int offset_size;
+ if __unlikely(!size) return 0;
+ if __unlikely(!linesize) linesize = 16;
+ if (!(flags&FORMAT_HEXDUMP_FLAG_NOASCII)) {
+  /* Allocate a small buffer we can overwrite for ascii text. */
+  ascii_size = min(MAX_ASCII_SIZE,linesize);
+  ascii_line = (char *)alloca(ascii_size);
+ }
+ if (flags&FORMAT_HEXDUMP_FLAG_OFFSETS) {
+  /* Figure out how wide we should pad the address offset field. */
+  size_t i = (__size_t)1 << (offset_size = __SIZEOF_POINTER__*8-1);
+  while (!(linesize&i)) --offset_size,i >>= 1;
+  offset_size = ceildiv(offset_size,4);
+ }
+ /* The last character of the hex buffer is always a space. */
+ hex_buf[2] = ' ';
+ /* Figure out the hex translation vector that should be used. */
+ hex_translate = __ctype_tohex[flags&FORMAT_HEXDUMP_FLAG_HEXLOWER];
+ for (line = (byte_t const *)data;;) {
+  if (linesize <= size) {
+   lineuse  = linesize;
+   overflow = 0;
+  } else {
+   lineuse  = size;
+   overflow = linesize-size;
+  }
+  if (flags&(FORMAT_HEXDUMP_FLAG_ADDRESS|FORMAT_HEXDUMP_FLAG_OFFSETS)) {
+   /* Must print some sort of prefix. */
+   if (flags&FORMAT_HEXDUMP_FLAG_ADDRESS) printf("%p ",line);
+   if (flags&FORMAT_HEXDUMP_FLAG_OFFSETS) printf("+%.*Ix ",offset_size,(uintptr_t)line-(uintptr_t)data);
+  }
+  end = line+lineuse;
+  if (!(flags&FORMAT_HEXDUMP_FLAG_NOHEX)) {
+   for (iter = line; iter != end; ++iter) {
+    b = *iter;
+    hex_buf[0] = hex_translate[(b&0xf0) >> 4];
+    hex_buf[1] = hex_translate[b&0xf];
+    print(hex_buf,__compiler_ARRAYSIZE(hex_buf));
+   }
+   if (overflow) {
+    error = print_space(printer,closure,overflow*
+                        __compiler_ARRAYSIZE(hex_buf));
+    if __unlikely(error != 0) return error;
+   }
+  }
+  if (!(flags&FORMAT_HEXDUMP_FLAG_NOASCII)) {
+   for (iter = line; iter != end;) {
+    char *aiter,*aend;
+    size_t textcount = min(ascii_size,(size_t)(end-iter));
+    memcpy(ascii_line,iter,textcount);
+    /* Filter out non-printable characters, replacing them with '.' */
+    aend = (aiter = ascii_line)+textcount;
+    for (; aiter != aend; ++aiter) {
+     if (!isprint(*aiter)) *aiter = '.';
+    }
+    /* Print our ascii text portion. */
+    print(ascii_line,textcount);
+    iter += textcount;
+   }
+   if (overflow) {
+    /* Fill any overflow with space. */
+    error = print_space(printer,closure,overflow);
+    if __unlikely(error != 0) return error;
+   }
+  }
+  if (size == lineuse) break;
+  line  = end;
+  size -= lineuse;
+ }
+ return 0;
+}
+
+
+
+__public int
+stringprinter_init(struct stringprinter *__restrict self,
+                   size_t hint) {
  kassertobj(self);
  if (!hint) hint = 4*sizeof(void *);
  self->sp_buffer = (char *)malloc((hint+1)*sizeof(char));
@@ -1006,7 +1113,9 @@ __public int stringprinter_init(struct stringprinter *__restrict self, size_t hi
  self->sp_bufend[0] = '\0';
  return 0;
 }
-__public char *stringprinter_pack(struct stringprinter *__restrict self, size_t *length) {
+__public char *
+stringprinter_pack(struct stringprinter *__restrict self,
+                   size_t *length) {
  char *result; size_t result_size;
  kassertobj(self);
  assert(self->sp_bufpos >= self->sp_buffer);
@@ -1023,12 +1132,14 @@ __public char *stringprinter_pack(struct stringprinter *__restrict self, size_t 
  if (length) *length = result_size;
  return result;
 }
-__public void stringprinter_quit(struct stringprinter *__restrict self) {
+__public void
+stringprinter_quit(struct stringprinter *__restrict self) {
  kassertobj(self);
  free(self->sp_buffer);
 }
-__public int stringprinter_print(char const *__restrict data,
-                                 size_t maxchars, void *closure) {
+__public int
+stringprinter_print(char const *__restrict data,
+                    size_t maxchars, void *closure) {
  struct stringprinter *self = (struct stringprinter *)closure;
  size_t size_avail,newsize,reqsize;
  char *new_buffer;
@@ -1038,10 +1149,13 @@ __public int stringprinter_print(char const *__restrict data,
  maxchars = strnlen(data,maxchars);
  size_avail = (size_t)(self->sp_bufend-self->sp_bufpos);
  if __unlikely(size_avail < maxchars) {
+  /* Must allocate more memory. */
   newsize = (size_t)(self->sp_bufend-self->sp_buffer);
   assert(newsize);
   reqsize = newsize+(maxchars-size_avail);
-  while (newsize < reqsize) newsize *= 2;
+  /* Double the buffer size until it is of sufficient length. */
+  do newsize *= 2; while (newsize < reqsize);
+  /* Reallocate the buffer (But include 1 character for the terminating '\0') */
   new_buffer = (char *)realloc(self->sp_buffer,(newsize+1)*sizeof(char));
   if __unlikely(!new_buffer) return -1;
   self->sp_bufpos = new_buffer+(self->sp_bufpos-self->sp_buffer);

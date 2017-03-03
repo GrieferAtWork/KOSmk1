@@ -26,15 +26,22 @@
 #include <kos/compiler.h>
 #include <kos/kernel/dev/storage-ramdisk.h>
 #include <kos/kernel/mutex.h>
+#include <kos/kernel/util/string.h>
 #include <malloc.h>
 #include <stdint.h>
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
 __DECL_BEGIN
 
-static void krddev_finalize(krddev_t *self) { free(self->rd_begin); }
-static kerrno_t krddev_readblock(krddev_t const *self, kslba_t addr, void *block) {
+static void
+krddev_quit(struct krddev *__restrict self) {
+ free(self->rd_begin);
+}
+
+static kerrno_t
+krddev_readblock(struct krddev const *__restrict self, kslba_t addr,
+                 __kernel void *__restrict block) {
  uintptr_t bufdest;
  kassertobj(self);
  kassertmem(block,self->sd_blocksize);
@@ -42,13 +49,15 @@ static kerrno_t krddev_readblock(krddev_t const *self, kslba_t addr, void *block
          "Invalid block address (range)\n"
          "    addr       = %I64u\n"
          "    c          = 1\n"
-         "    blockcount = %I64u\n"
-         ,addr,self->sd_blockcount);
+         "    blockcount = %I64u\n",
+         addr,self->sd_blockcount);
  bufdest = ((uintptr_t)self->rd_begin+(size_t)addr*self->sd_blocksize);
  memcpy(block,(void *)bufdest,self->sd_blocksize);
  return KE_OK;
 }
-static kerrno_t krddev_writeblock(krddev_t *self, kslba_t addr, void const *block) {
+static kerrno_t
+krddev_writeblock(struct krddev *__restrict self, kslba_t addr,
+                  __kernel void const *__restrict block) {
  uintptr_t bufdest;
  kassertobj(self);
  kassertmem(block,self->sd_blocksize);
@@ -56,14 +65,16 @@ static kerrno_t krddev_writeblock(krddev_t *self, kslba_t addr, void const *bloc
          "Invalid block address (range)\n"
          "    addr       = %I64u\n"
          "    c          = 1\n"
-         "    blockcount = %I64u\n"
-         ,addr,self->sd_blockcount);
+         "    blockcount = %I64u\n",
+         addr,self->sd_blockcount);
  bufdest = ((uintptr_t)self->rd_begin+(size_t)addr*self->sd_blocksize);
  memcpy((void *)bufdest,block,self->sd_blocksize);
  return KE_OK;
 }
-static kerrno_t krddev_readblocks(krddev_t const *self, kslba_t addr,
-                                  void *blocks, size_t c, size_t *rc) {
+static kerrno_t
+krddev_readblocks(struct krddev const *__restrict self, kslba_t addr,
+                  __kernel void *__restrict blocks, size_t c,
+                  __kernel size_t *rc) {
  uintptr_t bufdest;
  kassertobj(self);
  kassertobj(rc);
@@ -75,15 +86,17 @@ static kerrno_t krddev_readblocks(krddev_t const *self, kslba_t addr,
          "Invalid block address (range)\n"
          "    addr       = %I64u\n"
          "    c          = %I64u\n"
-         "    blockcount = %I64u\n"
-         ,addr,c,self->sd_blockcount);
+         "    blockcount = %I64u\n",
+         addr,c,self->sd_blockcount);
  bufdest = ((uintptr_t)self->rd_begin+(size_t)addr*self->sd_blocksize);
  memcpy(blocks,(void *)bufdest,c*self->sd_blocksize);
  *rc = c;
  return KE_OK;
 }
-static kerrno_t krddev_writeblocks(krddev_t *self, kslba_t addr,
-                                   void const *blocks, size_t c, size_t *wc) {
+static kerrno_t
+krddev_writeblocks(struct krddev *__restrict self, kslba_t addr,
+                   __kernel void const *__restrict blocks, size_t c,
+                   __kernel size_t *wc) {
  uintptr_t bufdest;
  kassertobj(self);
  kassertobj(wc);
@@ -104,59 +117,71 @@ static kerrno_t krddev_writeblocks(krddev_t *self, kslba_t addr,
 }
 
 
-static kerrno_t krddev_getattr(
- krddev_t const *self, kattr_t attr,
- void *__restrict buf, size_t bufsize, size_t *__restrict reqsize) {
+static kerrno_t
+krddev_getattr(struct krddev const *__restrict self, kattr_t attr,
+               __user void *__restrict buf, size_t bufsize,
+               __kernel size_t *__restrict reqsize) {
  kassertobj(self);
- kassertmem(buf,bufsize);
  kassertobjnull(reqsize);
  switch (attr) {
   case KATTR_GENERIC_NAME:
   case KATTR_DEV_NAME: {
-   size_t usedsize; size_t capacity;
+   ssize_t error; size_t capacity;
    capacity = ksdev_getcapacity((struct ksdev *)self);
    if (capacity > 1024*1024*1024) {
-    usedsize = snprintf((char *)buf,bufsize,"%IuGb RamDisk",capacity/(1024*1024*1024));
+    error = user_snprintf((__user char *)buf,bufsize,reqsize,
+                          "%IuGb RamDisk",capacity/(1024*1024*1024));
    } else if (capacity > 1024*1024) {
-    usedsize = snprintf((char *)buf,bufsize,"%IuMb RamDisk",capacity/(1024*1024));
+    error = user_snprintf((__user char *)buf,bufsize,reqsize,
+                          "%IuMb RamDisk",capacity/(1024*1024));
    } else if (capacity > 1024) {
-    usedsize = snprintf((char *)buf,bufsize,"%IuKb RamDisk",capacity/1024);
+    error = user_snprintf((__user char *)buf,bufsize,reqsize,
+                          "%IuKb RamDisk",capacity/1024);
    } else {
-    usedsize = snprintf((char *)buf,bufsize,"%Iub RamDisk",capacity);
+    error = user_snprintf((char *)buf,bufsize,reqsize,
+                          "%Iub RamDisk",capacity);
    }
-   if (reqsize) *reqsize = usedsize;
-   return KE_OK;
+   return error < 0 ? KE_FAULT : KE_OK;
   } break;
 
   case KATTR_DEV_TYPE: {
-   size_t usedsize = snprintf((char *)buf,bufsize,"RAMDISK");
-   if (reqsize) *reqsize = usedsize;
-   return KE_OK;
+   return user_snprintf((char *)buf,bufsize,reqsize,"RAMDISK") < 0 ? KE_FAULT : KE_OK;
   } break;
    
   case KATTR_DEV_PARTITIONS:
-   if (self->sd_blocksize == 512)
-    return ksdev_generic_getdiskinfo512((struct ksdev *)self,(struct ksdev_diskinfo *)buf,bufsize,reqsize);
+   if (self->sd_blocksize == 512) {
+    /* TODO: user-pointer translation. */
+    return ksdev_generic_getdiskinfo512((struct ksdev *)self,
+                                        (struct ksdev_diskinfo *)buf,
+                                         bufsize,reqsize);
+   }
    break;
   case KATTR_DEV_MAXDISKNAME:
    if (self->sd_blocksize == 512) {
     if (reqsize) *reqsize = sizeof(size_t);
-    if (bufsize >= sizeof(size_t)) *(size_t *)buf = KSDEV_GENERIC_MAXDISKNAMESIZE512;
+    if (bufsize >= sizeof(size_t)) {
+     size_t val = KSDEV_GENERIC_MAXDISKNAMESIZE512;
+     if __unlikely(copy_to_user(buf,&val,sizeof(size_t))) return KE_FAULT;
+    }
     return KE_OK;
    }
    break;
   case KATTR_DEV_DISKNAME:
-   if (self->sd_blocksize == 512)
-    return ksdev_generic_getdiskname512((struct ksdev *)self,(char *)buf,bufsize,reqsize);
+   if (self->sd_blocksize == 512) {
+    /* TODO: user-pointer translation. */
+    return ksdev_generic_getdiskname512((struct ksdev *)self,
+                                        (char *)buf,bufsize,reqsize);
+   }
    break;
 
   case KATTR_DEV_RAMSIZE: {
+   struct ksdev_ramsize info;
    if (reqsize) *reqsize = sizeof(struct ksdev_ramsize);
-   if (bufsize >= sizeof(struct ksdev_ramsize)) {
-    struct ksdev_ramsize *info = (struct ksdev_ramsize *)buf;
-    info->blockcount = self->sd_blockcount;
-    info->blocksize  = self->sd_blocksize;
-   }
+   info.blockcount = self->sd_blockcount;
+   info.blocksize  = self->sd_blocksize;
+   if __unlikely(copy_to_user(buf,&info,
+                 min(bufsize,sizeof(struct ksdev_ramsize))
+                 )) return KE_FAULT;
    return KE_OK;
   } break;
    
@@ -165,34 +190,42 @@ static kerrno_t krddev_getattr(
  return KE_NOSYS;
 }
 
-static kerrno_t krddev_setattr(
- krddev_t *self, kattr_t attr, void const *__restrict buf, size_t bufsize) {
+static kerrno_t
+krddev_setattr(struct krddev *__restrict self, kattr_t attr,
+               __user void const *__restrict buf, size_t bufsize) {
  kassertobj(self);
  kassertmem(buf,bufsize);
  switch (attr) {
 
   case KATTR_DEV_PARTITIONS:
-   if (self->sd_blocksize == 512)
-    return ksdev_generic_setdiskinfo512((struct ksdev *)self,(struct ksdev_diskinfo *)buf,bufsize);
+   if (self->sd_blocksize == 512) {
+    /* TODO: user-pointer translation. */
+    return ksdev_generic_setdiskinfo512((struct ksdev *)self,
+                                        (struct ksdev_diskinfo *)buf,
+                                         bufsize);
+   }
    break;
   case KATTR_DEV_DISKNAME:
-   if (self->sd_blocksize == 512)
-    return ksdev_generic_setdiskname512((struct ksdev *)self,(char *)buf,bufsize);
+   if (self->sd_blocksize == 512) {
+    /* TODO: user-pointer translation. */
+    return ksdev_generic_setdiskname512((struct ksdev *)self,
+                                        (char *)buf,bufsize);
+   }
    break;
 
   case KATTR_DEV_RAMSIZE: {
+   struct ksdev_ramsize info;
    size_t newcapacity; void *newmem;
-   struct ksdev_ramsize const *info = (struct ksdev_ramsize const *)buf;
    if __unlikely(bufsize < sizeof(struct ksdev_ramsize)) return KE_BUFSIZ;
-   kassertobj(info);
-   newcapacity = (info->blockcount*info->blocksize);
-   if (!newcapacity) return KE_RANGE;
+   if __unlikely(copy_from_user(&info,buf,sizeof(struct ksdev_ramsize))) return KE_FAULT;
+   newcapacity = (info.blockcount*info.blocksize);
+   if __unlikely(!newcapacity) return KE_RANGE;
    newmem = realloc(self->rd_begin,newcapacity);
-   if (!newmem) return KE_NOMEM;
-   self->rd_begin = newmem;
-   self->rd_end = (void *)((uintptr_t)newmem+newcapacity);
-   self->sd_blocksize = info->blocksize;
-   self->sd_blockcount = info->blockcount;
+   if __unlikely(!newmem) return KE_NOMEM;
+   self->rd_begin      = newmem;
+   self->rd_end        = (void *)((uintptr_t)newmem+newcapacity);
+   self->sd_blocksize  = info.blocksize;
+   self->sd_blockcount = info.blockcount;
   } break;
    
   default: break;
@@ -202,9 +235,13 @@ static kerrno_t krddev_setattr(
 
 
 
-kerrno_t krddev_create(krddev_t *self, size_t blocksize, size_t blockcount) {
+kerrno_t
+krddev_init(struct krddev *__restrict self,
+            size_t blocksize,
+            size_t blockcount) {
  size_t memsize;
- kassertobj(self); memsize = blocksize*blockcount;
+ kassertobj(self);
+ memsize = blocksize*blockcount;
  assertf(memsize != 0,"Can't create empty ramdisk");
  self->rd_begin = malloc(memsize);
  if __unlikely(!self->rd_begin) return KE_NOMEM;
@@ -215,7 +252,7 @@ kerrno_t krddev_create(krddev_t *self, size_t blocksize, size_t blockcount) {
  self->sd_writeblock  = (kerrno_t(*)(struct ksdev *,kslba_t,void const *))&krddev_writeblock;
  self->sd_readblocks  = (kerrno_t(*)(struct ksdev const *,kslba_t,void *,size_t,size_t *))&krddev_readblocks;
  self->sd_writeblocks = (kerrno_t(*)(struct ksdev *,kslba_t,void const *,size_t,size_t *))&krddev_writeblocks;
- self->d_quit         = (void(*)(struct kdev *))&krddev_finalize;
+ self->d_quit         = (void(*)(struct kdev *))&krddev_quit;
  self->d_getattr      = (kerrno_t(*)(struct kdev const *,kattr_t,void *,size_t,size_t *))&krddev_getattr;
  self->d_setattr      = (kerrno_t(*)(struct kdev *,kattr_t,const void *,size_t))&krddev_setattr;
  kdev_init(self);

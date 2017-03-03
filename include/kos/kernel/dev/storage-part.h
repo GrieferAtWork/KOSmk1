@@ -34,23 +34,23 @@
 
 __DECL_BEGIN
 
-typedef struct __kpartdev kpartdev_t;
-
-struct __kpartdev { /*< Disk partition device. */
- KSDEV_HEAD
+struct kpartdev {
+ KSDEV_HEAD /* Disk partition device. */
  struct ksdev *pd_disk;  /*< [1..1] Underlying disk (NOTE: Weakly referenced). */
- kslba_t  pd_start; /*< Partition start. */
+ kslba_t       pd_start; /*< Partition start. */
 };
 
-extern __wunused __nonnull((1,3))   kerrno_t kpartdev_readblock(kpartdev_t const *self, kslba_t addr, void *block);
-extern __wunused __nonnull((1,3))   kerrno_t kpartdev_writeblock(kpartdev_t *self, kslba_t addr, void const *block);
-extern __wunused __nonnull((1,3,5)) kerrno_t kpartdev_readblocks(kpartdev_t const *self, kslba_t addr, void *blocks, __size_t c, __size_t *rc);
-extern __wunused __nonnull((1,3,5)) kerrno_t kpartdev_writeblocks(kpartdev_t *self, kslba_t addr, void const *blocks, __size_t c, __size_t *wc);
-extern __wunused __nonnull((1,3))   kerrno_t kpartdev_getattr(kpartdev_t const *self, kattr_t attr, void *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,3))   kerrno_t kpartdev_setattr(kpartdev_t *self, kattr_t attr, void const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,3))   kerrno_t kpartdev_readblock(struct kpartdev const *__restrict self, kslba_t addr, __kernel void *__restrict block);
+extern __wunused __nonnull((1,3))   kerrno_t kpartdev_writeblock(struct kpartdev *__restrict self, kslba_t addr, __kernel void const *__restrict blocks);
+extern __wunused __nonnull((1,3,5)) kerrno_t kpartdev_readblocks(struct kpartdev const *__restrict self, kslba_t addr, __kernel void *__restrict blocks, __size_t c, __kernel __size_t *__restrict rc);
+extern __wunused __nonnull((1,3,5)) kerrno_t kpartdev_writeblocks(struct kpartdev *__restrict self, kslba_t addr, __kernel void const *__restrict blocks, __size_t c, __kernel __size_t *__restrict wc);
+extern __wunused __nonnull((1,3))   kerrno_t kpartdev_getattr(struct kpartdev const *__restrict self, kattr_t attr, __user void *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,3))   kerrno_t kpartdev_setattr(struct kpartdev *__restrict self, kattr_t attr, __user void const *__restrict buf, __size_t bufsize);
 
-__local __nonnull((1,2)) void kpartdev_create(
- kpartdev_t *self, struct ksdev *__restrict dev, kslba_t start, kslba_t size) {
+__local __nonnull((1,2)) void
+kpartdev_create(struct kpartdev *__restrict self,
+                struct ksdev *__restrict dev,
+                kslba_t start, kslba_t size) {
  kassertobj(self); kassertobj(dev);
  assertf(start+size > size,"Empty size, or lba rolls over");
  assertf(start+size <= dev->sd_blockcount
@@ -67,9 +67,9 @@ __local __nonnull((1,2)) void kpartdev_create(
  self->d_getattr      = (kerrno_t(*)(struct kdev const *,kattr_t,void *,__size_t,__size_t *))&kpartdev_getattr;
  self->d_setattr      = (kerrno_t(*)(struct kdev *,kattr_t,void const *,__size_t))&kpartdev_setattr;
  if (dev->sd_readblock == (kerrno_t(*)(struct ksdev const *,kslba_t,void *))&kpartdev_readblock) {
-  // Optimize sub-partitioning of partitions
-  self->pd_disk  = ((kpartdev_t *)dev)->pd_disk;
-  self->pd_start = ((kpartdev_t *)dev)->pd_start+start;
+  /* Optimize sub-partitioning of partitions */
+  self->pd_disk  = ((struct kpartdev *)dev)->pd_disk;
+  self->pd_start = ((struct kpartdev *)dev)->pd_start+start;
  } else {
   self->pd_disk  = dev;
   self->pd_start = start;

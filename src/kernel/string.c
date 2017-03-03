@@ -262,9 +262,10 @@ __user_strndup_c(__user char const *s, size_t maxchars) {
  result[bufsize] = '\0';
 #if 0
  {
-  // It is possible that the user screwed with their memory to truncate the string
-  // >> We can do the same to possibly same memory.
-  // NOTE: This isn't really required
+  /* It is possible that the user screwed with their memory to truncate the string
+   * >> We can do the same to possibly save memory.
+   * NOTE: This isn't really required, and due to the
+   *       additional call to strlen disabled by default... */
   size_t real_size = strlen(result);
   assert(real_size <= bufsize);
   if (real_size != bufsize) {

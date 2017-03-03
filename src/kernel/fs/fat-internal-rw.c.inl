@@ -42,14 +42,14 @@ kerrno_t kfatfs_loadsectors(struct kfatfs const *__restrict self, kfatsec_t sec,
  kassertobj(sdev);
  assert(sdev->sd_blocksize);
  if (self->f_secsize == sdev->sd_blocksize) {
-  // Simple case: Sectors and device blocks are aligned (meaning 'sec' is an LBA)
+  /* Simple case: Sectors and device blocks are aligned (meaning 'sec' is an LBA) */
   if __unlikely(sec >= sdev->sd_blockcount) return KE_RANGE;
   return ksdev_readallblocks(sdev,sec,buf,c);
  } else {
   __u64 secaddr,lbaaddr; kslba_t lba;
   void *lbabuf; kerrno_t error;
   size_t addroff,lbacount,secbytes;
-  // Must align 'sec' to an lba
+  /* Must align 'sec' to an lba. */
   secaddr  = (__u64)sec*self->f_secsize;
   lba      = (kslba_t)(secaddr/sdev->sd_blocksize);
   lbaaddr  = (__u64)lba*sdev->sd_blocksize;
@@ -73,14 +73,14 @@ kerrno_t kfatfs_savesectors(struct kfatfs *__restrict self, kfatsec_t sec, size_
  kassertobj(sdev);
  assert(sdev->sd_blocksize);
  if (self->f_secsize == sdev->sd_blocksize) {
-  // Simple case: Sectors and device blocks are aligned (meaning 'sec' is an LBA)
+  /* Simple case: Sectors and device blocks are aligned (meaning 'sec' is an LBA) */
   if __unlikely(sec >= sdev->sd_blockcount) return KE_RANGE;
   return ksdev_writeallblocks(sdev,sec,buf,c);
  } else {
   __u64 secaddr,lbaaddr; kslba_t lba;
   void *lbabuf; kerrno_t error;
   size_t addroff,lbacount,secbytes,lbabytes,lbaupper,lbaupperbytes;
-  // Must align 'sec' to an lba
+  /* Must align 'sec' to an lba. */
   secaddr  = (__u64)sec*self->f_secsize;
   lba      = (kslba_t)(secaddr/sdev->sd_blocksize);
   lbaaddr  = (__u64)lba*sdev->sd_blocksize;
@@ -92,12 +92,12 @@ kerrno_t kfatfs_savesectors(struct kfatfs *__restrict self, kfatsec_t sec, size_
   addroff  = (size_t)(secaddr-lbaaddr);
   assert(lbabytes-addroff >= secbytes);
   assert((addroff % sdev->sd_blocksize) == 0);
-  // Load blocks below the sector
+  /* Load blocks below the sector. */
   if __unlikely(lba >= sdev->sd_blockcount) return KE_RANGE;
   if __unlikely(addroff && KE_ISERR(error = ksdev_readallblocks(
    sdev,lba,lbabuf,addroff/sdev->sd_blocksize))) return error;
   memcpy((void *)((uintptr_t)lbabuf+addroff),buf,secbytes);
-  // Load blocks above the sector
+  /* Load blocks above the sector. */
   lbaupperbytes = (size_t)(lbabytes-secbytes);
   assert((lbaupperbytes % sdev->sd_blocksize) == 0);
   if __unlikely(lbaupperbytes) {

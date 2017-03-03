@@ -91,7 +91,7 @@ struct kcpu __kcpu_zero = {
 struct ktask __ktask_zero = {
  KOBJECT_INIT(KOBJECT_MAGIC_TASK)
  /* t_esp         */stack_top,
- /* t_userpd      */(struct kpagedir *)kpagedir_kernel(),
+ /* t_userpd      */kpagedir_kernel(),
  /* t_esp0        */NULL,
  /* t_epd         */kpagedir_kernel(),
  /* t_refcnt      */0xffff,
@@ -283,10 +283,10 @@ ktask_newkernel(struct ktask *__restrict parent,
  result->t_ustackvp    = NULL;
  result->t_ustacksz    = 0;
  result->t_epd         =
- result->t_userpd      = (struct kpagedir *)kpagedir_kernel();
+ result->t_userpd      = kpagedir_kernel();
  result->t_kstackend   = (void *)((uintptr_t)result->t_kstack+kstacksize);
  result->t_esp         = result->t_kstackend;
- result->t_proc        = proc; // Inherit reference
+ result->t_proc        = proc; /* Inherit reference. */
  result->t_refcnt      = 1;
  result->t_locks       = 0;
  result->t_state       = KTASK_STATE_SUSPENDED;
@@ -300,7 +300,7 @@ ktask_newkernel(struct ktask *__restrict parent,
  result->t_prev        = NULL;
  result->t_next        = NULL;
 #endif
- result->t_parent      = parent; // Inherit reference
+ result->t_parent      = parent; /* Inherit reference. */
  result->t_sigval      = NULL;
  ktasklist_init(&result->t_children);
  ktlspt_init(&result->t_tls);
@@ -393,7 +393,7 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  result->t_epd         =
  result->t_userpd      = kproc_getpagedir(proc);
  result->t_kstackend   = (void *)((uintptr_t)result->t_kstack+kstacksize);
- result->t_proc        = proc; // Inherit reference
+ result->t_proc        = proc; /* Inherit reference. */
  result->t_refcnt      = 1;
  result->t_locks       = 0;
  result->t_state       = KTASK_STATE_SUSPENDED;
@@ -407,7 +407,7 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  result->t_prev        = NULL;
  result->t_next        = NULL;
 #endif
- result->t_parent      = parent; // Inherit reference
+ result->t_parent      = parent; /* Inherit reference. */
  result->t_sigval      = NULL;
  ktasklist_init(&result->t_children);
  ktlspt_init(&result->t_tls);
@@ -580,7 +580,7 @@ extern void ktask_schedule(struct scheddata *state) {
    }
    assertf(cpuself->c_current == prevtask->t_next,
            "No other CPU should have been allowed to modify this");
-   kcpu_schedulesleep_unlocked(cpuself,prevtask); // Inherit reference
+   kcpu_schedulesleep_unlocked(cpuself,prevtask); /* Inherit reference. */
    katomic_store(prevtask->t_state,prevtask->t_newstate);
    ktask_unlock(prevtask,KTASK_LOCK_STATE);
    kcpu_unlock(cpuself,KCPU_LOCK_SLEEP);
@@ -1304,7 +1304,7 @@ reschedule_running:
    // Schedule the timeout
    self->t_abstime = *(struct timespec *)arg;
    self->t_cpu = cputask;
-   ktask_scheduletimeout(self); // Inherit reference
+   ktask_scheduletimeout(self); /* Inherit reference. */
   case KTASK_STATE_WAITING:
    // Old state can't be 'KTASK_STATE_WAITINGTMO' (Already handled by: waiting --> waiting)
    assert(self->t_state == KTASK_STATE_RUNNING);

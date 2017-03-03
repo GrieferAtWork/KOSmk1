@@ -52,7 +52,7 @@ __crit void ksocket_destroy(struct ksocket *self) {
 #ifdef __DEBUG__
   self->s_refcnt = 1;
 #endif
-  // Make sure that the socket is fully shut down
+  /* Make sure that the socket is fully shut down */
   (*ops->so_shutdown)(self,SHUT_RDWR);
 #ifdef __DEBUG__
   assertf(self->s_refcnt == 1

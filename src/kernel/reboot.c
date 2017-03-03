@@ -39,16 +39,19 @@ void hw_reboot(void) {
   karch_irq_disable();
   karch_irq_idle();
  }
+ __compiler_unreachable();
 }
 
 void hw_shutdown(void) {
  karch_irq_disable();
- outb(0xf4,0x00); // This can be used to shutdown QEMU (potentially...)
+
+ // TODO: ACPI shutdown
+
+ outb(0xf4,0x00); /* This can be used to shutdown QEMU (potentially...) */
  {
   const char *s = "Shutdown";
   for (; *s; ++s) outb(0x8900,*s);
  }
- // TODO: ACPI shutdown
 
 #ifdef __x86__
  tty_x86_setcolors(vga_entry_color(VGA_COLOR_WHITE,VGA_COLOR_LIGHT_GREY));

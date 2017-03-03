@@ -53,7 +53,7 @@ kvinodepiddir_new_inherited(struct kvprocdirent *__restrict files,
                                                        &kdirfile_type,
                                                        S_IFDIR);
  if __unlikely(!result) return NULL;
- result->pd_file.pf_proc = proc; /* Inherit reference */
+ result->pd_file.pf_proc = proc; /* Inherit reference. */
  result->pd_elem         = files;
  return result;
 }
@@ -70,7 +70,7 @@ kvinodepidfile_new_inherited(struct kinodetype *__restrict type,
  result = (__ref struct kvinodepidfile *)__kinode_alloc((struct ksuperblock *)&kvfs_proc,
                                                         type,file_type,mode);
  if __unlikely(!result) return NULL;
- result->pf_proc = proc; /* Inherit reference */
+ result->pf_proc = proc; /* Inherit reference. */
  return result;
 }
 
@@ -88,7 +88,7 @@ kvinodepid_new_inherited(struct kvprocdirent const *__restrict decl,
                                                         decl->pd_type,decl->pd_file,
                                                         decl->pd_mode);
  if __unlikely(!result) return NULL;
- result->pf_proc = proc; /* Inherit reference */
+ result->pf_proc = proc; /* Inherit reference. */
  return result;
 }
 

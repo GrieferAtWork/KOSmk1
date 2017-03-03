@@ -82,7 +82,7 @@ err_self: kdirent_decref(self); goto err_usedresnode;
    goto err_self;
   }
  } else if (resnode) {
-  *resnode = used_resnode; // Inherit reference
+  *resnode = used_resnode; /* Inherit reference. */
  } else {
   kinode_decref(used_resnode);
  }

@@ -182,10 +182,32 @@ format_quote __P((pformatprinter __printer, void *__closure,
 #define FORMAT_QUOTE_FLAG_FORCEHEX 0x00000002 /*< Force hex encoding of all control characters without special strings ('\n', etc.). */
 #define FORMAT_QUOTE_FLAG_FORCEOCT 0x00000004 /*< Force octal encoding of all non-ascii characters. */
 #define FORMAT_QUOTE_FLAG_NOCTRL   0x00000008 /*< Disable special encoding strings such as '\r', '\n' or '\e' */
-#define FORMAT_QUOTE_FLAG_QUOTEALL 0x00000010 /*< MAXTEXT is the exact length of the given TEXT. */
-#define FORMAT_QUOTE_FLAG_UPPERPRE 0x00000020 /*< Use uppercase characters for hex (e.g.: '\Xab'). */
-#define FORMAT_QUOTE_FLAG_UPPERSUF 0x00000040 /*< Use uppercase characters for hex (e.g.: '\xAB'). */
+#define FORMAT_QUOTE_FLAG_NOASCII  0x00000010 /*< Disable regular ascii-characters and print everything using special encodings. */
+#define FORMAT_QUOTE_FLAG_QUOTEALL 0x00000020 /*< MAXTEXT is the exact length of the given TEXT. */
+#define FORMAT_QUOTE_FLAG_UPPERPRE 0x00000040 /*< Use uppercase characters for hex (e.g.: '\Xab'). */
+#define FORMAT_QUOTE_FLAG_UPPERSUF 0x00000080 /*< Use uppercase characters for hex (e.g.: '\xAB'). */
 
+
+//////////////////////////////////////////////////////////////////////////
+// Print a hex dump of the given data using the provided format printer.
+// @param: PRINTER:  A function called for all quoted portions of the text.
+// @param: DATA:     A pointer to the data that should be dumped.
+// @param: SIZE:     The amount of bytes read starting at DATA.
+// @param: LINESIZE: The max amount of bytes to include per-line.
+//                   HINT: Pass ZERO(0) to use a default size (16)
+// @param: FLAGS:    A set of 'FORMAT_HEXDUMP_FLAG_*'.
+// @return: 0: The given data was successfully hex-dumped.
+// @return: *: The first non-ZERO(0) return value of PRINTER.
+extern __nonnull((1,3)) int
+format_hexdump __P((pformatprinter __printer, void *__closure,
+                    void const *__restrict __data, __size_t __size,
+                    __size_t __linesize, __u32 __flags));
+#define FORMAT_HEXDUMP_FLAG_NONE     0x00000000
+#define FORMAT_HEXDUMP_FLAG_ADDRESS  0x00000001 /*< Include the absolute address at the start of every line. */
+#define FORMAT_HEXDUMP_FLAG_OFFSETS  0x00000002 /*< Include offsets from the base address at the start of every line (after the address when also shown). */
+#define FORMAT_HEXDUMP_FLAG_NOHEX    0x00000004 /*< Don't print the actual hex dump (hex data representation). */
+#define FORMAT_HEXDUMP_FLAG_NOASCII  0x00000008 /*< Don't print ascii representation of printable characters at the end of lines. */
+#define FORMAT_HEXDUMP_FLAG_HEXLOWER 0x00000010 /*< Print hex text of the dump in lowercase (does not affect address/offset). */
 
 
 struct stringprinter {
@@ -197,11 +219,11 @@ struct stringprinter {
 //////////////////////////////////////////////////////////////////////////
 // Helper functions for using any pformatprinter-style
 // function to print into a dynamically allocated string.
-// >> struct stringprinter printer; int error; char *text;
-// >> if (stringprinter_init(&printer,0)) handle_error();
+// >> struct stringprinter printer; char *text;
+// >> if (stringprinter_init(&printer,0)) return handle_error();
 // >> if (format_printf(&stringprinter_print,&printer,"Hello %s","dynamic world")) {
 // >>   stringprinter_quit(&printer);
-// >>   handle_error();
+// >>   return handle_error();
 // >> } else {
 // >>   text = stringprinter_pack(&printer,NULL);
 // >>   //stringprinter_quit(&printer); /* No-op after pack has been called */
@@ -210,11 +232,13 @@ struct stringprinter {
 // >> free(text);
 // @param: HINT: A hint as to how big the initial buffer should
 //               be allocated as (Pass ZERO if unknown).
+// @return:  0: Successfully printed to/initialized the given string printer.
+// @return: -1: Failed to initialize/print the given text ('errno' is set to ENOMEM)
 extern              __nonnull((1)) int   stringprinter_init __P((struct stringprinter *__restrict __self, __size_t __hint));
 extern __retnonnull __nonnull((1)) char *stringprinter_pack __P((struct stringprinter *__restrict __self, __size_t *__length));
 extern              __nonnull((1)) void  stringprinter_quit __P((struct stringprinter *__restrict __self));
 extern int stringprinter_print __P((char const *__restrict __data, __size_t __maxchars, void *__closure));
- 
+
 
 
 #ifdef __KERNEL__

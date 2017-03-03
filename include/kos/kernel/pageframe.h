@@ -55,8 +55,8 @@ union __packed {
  __u8 pf_ubytes[PAGESIZE];
  struct __packed {
   /* Data used to track free pages. */
-  struct kpageframe *pff_prev; /*< [0..1][NULL:KPAGEFRAME_INVPTR] Previous free page (with a lower memory address). */
-  struct kpageframe *pff_next; /*< [0..1][NULL:KPAGEFRAME_INVPTR] Next free page (with a greater memory address). */
+  struct kpageframe *pff_prev; /*< [0..1|NULL is PAGEFRAME_NIL] Previous free page (with a lower memory address). */
+  struct kpageframe *pff_next; /*< [0..1|NULL is PAGEFRAME_NIL] Next free page (with a greater memory address). */
   __size_t           pff_size; /*< Amount of consecutively available pages (including this one). */
   /* HINT: The total amount of free memory is 'pff_size*PAGESIZE' */
  };
@@ -69,22 +69,23 @@ union __packed {
 #define KPAGEFRAME_ALLOC_ZERO_RETURN_VALUE NULL
 #endif
 
-#if 1
-#   define KPAGEFRAME_INVPTR NULL
-#else /* TODO: Rewrite existing code to accept the following! */
-#   define KPAGEFRAME_INVPTR ((void *)(__uintptr_t)-1) /*< Impossible memory address. */
+#define PAGEFRAME_NIL (struct kpageframe *)PAGENIL
+
+#if defined(__i386__)
+#   define KPAGEFRAME_CALL __fastcall
+#else
+#   define KPAGEFRAME_CALL /* nothing */
 #endif
 
 //////////////////////////////////////////////////////////////////////////
 // Allocate/Free 'n' consecutive page frames
-// >> The returned pointers are physical and 'KPAGEFRAME_INVPTR' is
+// >> The returned pointers are physical and 'PAGEFRAME_NIL' is
 //    returned if no more memory was available.
-extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *
-kpageframe_alloc(__size_t n_pages);
-extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *
-kpageframe_tryalloc(__size_t n_pages, __size_t *__restrict did_alloc_pages);
-extern __crit __nonnull((1)) void
-kpageframe_free(__kernel __pagealigned struct kpageframe *__restrict start, __size_t n_pages);
+// @return: * :            Successfully allocated more memory.
+// @return: PAGEFRAME_NIL: Not enough available memory.
+extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL kpageframe_alloc(__size_t n_pages);
+extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL kpageframe_tryalloc(__size_t n_pages, __size_t *__restrict did_alloc_pages);
+extern __crit __nonnull((1)) void KPAGEFRAME_CALL kpageframe_free(__kernel __pagealigned struct kpageframe *__restrict start, __size_t n_pages);
 
 //////////////////////////////////////////////////////////////////////////
 // Perform a memcpy of all memory from 'src' to 'dst',
@@ -100,11 +101,11 @@ kpageframe_memcpy(__kernel __pagealigned struct kpageframe *__restrict dst,
 //////////////////////////////////////////////////////////////////////////
 // Try to reallocate memory in-place, that is allocate additional
 // pages of memory directly after 'old_start' using 'kpageframe_allocat'.
-// If memory in question is already in use, or not mapped, return 'KPAGEFRAME_INVPTR'.
+// If memory in question is already in use, or not mapped, return 'PAGEFRAME_NIL'.
 // NOTE: If 'new_pages <= old_pages' free pages near the end of the given old_start.
 // NOTE: Unlike 'kpageframe_alloc'
-// @return: KPAGEFRAME_INVPTR: Failed to reallocate memory in-place.
-extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *
+// @return: PAGEFRAME_NIL: Failed to reallocate memory in-place.
+extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL
 kpageframe_realloc_inplace(__kernel __pagealigned struct kpageframe *old_start,
                            __size_t old_pages, __size_t new_pages);
 
@@ -116,18 +117,18 @@ kpageframe_realloc_inplace(__kernel __pagealigned struct kpageframe *old_start,
 // memcpy/memmove-ing all data contained within to its new location.
 // NOTE: To reduce impact on dynamic memory, this function also checks
 //       if it can potentially expand the given 'old_start' downwards.
-// @return: KPAGEFRAME_INVPTR: Failed to reallocate memory, but not portion
-//                             of the given old_start will have been freed.
-extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *
+// @return: PAGEFRAME_NIL: Failed to reallocate memory, but not portion
+//                         of the given old_start will have been freed.
+extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL
 kpageframe_realloc(__kernel __pagealigned struct kpageframe *old_start,
                    __size_t old_pages, __size_t new_pages);
 
 
 //////////////////////////////////////////////////////////////////////////
 // Allocate consecutive page frames at a pre-defined address.
-// @return: KPAGEFRAME_INVPTR: The given start+n area is already allocated, or not mapped.
-// @return: start:             Successfully allocated 'n_pages' of memory starting at 'start'.
-extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *
+// @return: PAGEFRAME_NIL: The given start+n area is already allocated, or not mapped.
+// @return: start:         Successfully allocated 'n_pages' of memory starting at 'start'.
+extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL
 kpageframe_allocat(__kernel __pagealigned struct kpageframe *__restrict start, __size_t n_pages);
 
 
@@ -150,7 +151,8 @@ struct kpageframeinfo {
 //   - Neither 'pfi_minregion', nor 'pfi_maxregion' are set if 'pfi_freeregions' is 0 upon return
 //   - 'malloc' from <malloc.h> may still have left-over buffers, even
 //     when this function indicates that no more free pages are available.
-extern __nonnull((1)) void kpageframe_getinfo(struct kpageframeinfo *__restrict info);
+extern __nonnull((1)) void KPAGEFRAME_CALL
+kpageframe_getinfo(struct kpageframeinfo *__restrict info);
 
 //////////////////////////////////////////////////////////////////////////
 // >> Returns true(1) if any bytes described by
@@ -158,8 +160,8 @@ extern __nonnull((1)) void kpageframe_getinfo(struct kpageframeinfo *__restrict 
 // >> Returns false(0) otherwise
 // >> Always returns false(0) if 's' is zero
 // WARNING: This function only does that. - no further checks are performed!
-//          e.g.: True is returned for NULL
-extern __wunused __nonnull((1)) int kpageframe_isfreepage(void const *__restrict p, __size_t s);
+extern __wunused __nonnull((1)) int KPAGEFRAME_CALL
+kpageframe_isfreepage(__kernel void const *p, __size_t s);
 
 //////////////////////////////////////////////////////////////////////////
 // Print the layout of the physical memory allocator.
@@ -177,18 +179,6 @@ extern void kernel_initialize_raminfo(void);
 #endif
 
 extern void raminfo_addregion(__u64 start, __u64 size);
-
-
-#ifndef __KOS_KERNEL_KMEM_VALIDATE_DECLARED
-#define __KOS_KERNEL_KMEM_VALIDATE_DECLARED
-//////////////////////////////////////////////////////////////////////////
-// Validates a given memory range to describe valid kernel memory
-// @return: KE_OK:    Everything's fine!
-// @return: KE_INVAL: The given memory describes a portion of memory that is not allocated
-// @return: KE_RANGE: The given memory doesn't map to any valid RAM/Device memory
-extern __wunused kerrno_t kmem_validatebyte(__u8 const *p);
-extern __wunused kerrno_t kmem_validate(void const *p, __size_t s);
-#endif
 
 __DECL_END
 #endif /* __KERNEL__ */

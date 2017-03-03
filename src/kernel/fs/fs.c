@@ -92,7 +92,7 @@ __crit void __kinode_free(struct kinode *__restrict self) {
 
 
 
-void ksuperblock_syslogprefix(int level, struct ksuperblock *self) {
+void ksuperblock_syslogprefix(int level, struct ksuperblock *__restrict self) {
  char fs_type[64],fs_name[64];
  if (KE_ISERR(ksuperblock_getattr(self,KATTR_DEV_TYPE,fs_type,sizeof(fs_type),NULL))) strcpy(fs_type,"??" "?");
  if (KE_ISERR(ksuperblock_getattr(self,KATTR_DEV_NAME,fs_name,sizeof(fs_name),NULL))) strcpy(fs_name,"??" "?");
@@ -103,7 +103,7 @@ kerrno_t kinode_close(struct kinode *__restrict self) {
  kerrno_t error;
  if __likely(KE_ISOK(error = kcloselock_close(&self->i_closelock)) &&
              kinode_issuperblock(self)) {
-  kerrno_t(*closecall)(struct ksuperblock *self);
+  kerrno_t(*closecall)(struct ksuperblock *__restrict self);
   struct ksuperblock *__restrict sblock = __kinode_superblock(self);
   kassert_ksuperblock(sblock);
   if (k_sysloglevel >= KLOG_MSG) {
@@ -130,7 +130,7 @@ void kinode_destroy(struct kinode *__restrict self) {
  void(*quitcall)(struct kinode *);
  kassert_object(self,KOBJECT_MAGIC_INODE);
  if (kinode_issuperblock(self)) {
-  kerrno_t(*closecall)(struct ksuperblock *self);
+  kerrno_t(*closecall)(struct ksuperblock *__restrict self);
   obbase = __kinode_superblock(self);
   kassert_object((struct ksuperblock *)obbase,KOBJECT_MAGIC_SUPERBLOCK);
   assertf(!obbase->s_mount.sm_mntc,
@@ -142,7 +142,7 @@ void kinode_destroy(struct kinode *__restrict self) {
  quitcall = self->i_type->it_quit;
  if (quitcall) { kassertbyte(quitcall); (*quitcall)(self); }
  if (self->i_sblock) ksuperblock_decref(self->i_sblock);
- // Finally, free the memory allocated for the node
+ /* Finally, free the memory allocated for the node. */
  free(obbase);
 }
 
@@ -276,7 +276,7 @@ kinode_walk(struct kinode *__restrict self,
  kassertobj(self->i_type);
  callback = self->i_type->it_walk;
  if (!callback) {
-  // Must differentiate between 'KE_NODIR' and 'KE_NOSYS'
+  /* Must differentiate between 'KE_NODIR' and 'KE_NOSYS'. */
   return S_ISDIR(self->i_kind) ? KE_NOSYS : KE_NODIR;
  }
  error = kcloselock_beginop(&self->i_closelock);
@@ -307,7 +307,7 @@ kinode_unlink(struct kinode *__restrict self,
    if __unlikely(!KE_ISOK(error)) kcloselock_reset(&node->i_closelock);
   }
   kcloselock_endop(&self->i_closelock);
- } else error = KE_OK; // Special file (not handled by the file system)
+ } else error = KE_OK; /* Special file (not handled by the file system). */
  return error;
 }
 kerrno_t
@@ -336,7 +336,7 @@ kinode_remove(struct kinode *__restrict self,
  if (S_ISDIR(node->i_kind)) callback = self->i_type->it_rmdir;
  else if (S_ISLNK(node->i_kind) || S_ISREG(node->i_kind)) {
   callback = self->i_type->it_unlink;
- } else return KE_OK; // Special file (not handled by the file system)
+ } else return KE_OK; /* Special file (not handled by the file system). */
  if __unlikely(!callback) return S_ISDIR(self->i_kind) ? KE_NOSYS : KE_NODIR;
  if __unlikely(KE_ISERR(error = kcloselock_beginop(&self->i_closelock))) return error;
  if __unlikely(KE_ISOK(error = kcloselock_close(&node->i_closelock))) {
@@ -475,7 +475,7 @@ kerrno_t kdirentname_initcopy(struct kdirentname *__restrict self,
  self->dn_hash = right->dn_hash;
  self->dn_size = right->dn_size;
 #ifdef __DEBUG__
- // Create zero-terminated strings in debug mode
+ /* Create zero-terminated strings in debug mode. */
  self->dn_name = (char *)malloc((right->dn_size+1)*sizeof(char));
  if (self->dn_name) {
   memcpy(self->dn_name,right->dn_name,right->dn_size);
@@ -528,7 +528,7 @@ kerrno_t kdirentcache_insert(struct kdirentcache *__restrict self, struct kdiren
   if (elem->d_name.dn_hash == childname->dn_hash &&
       elem->d_name.dn_size == childname->dn_size &&
       memcmp(elem->d_name.dn_name,childname->dn_name,childname->dn_size) == 0) {
-   if (existing_child) *existing_child = elem; // Already exists
+   if (existing_child) *existing_child = elem; /* Already exists. */
    return KE_EXISTS;
   }
  }
@@ -586,7 +586,7 @@ kdirentcache_lookup(struct kdirentcache *__restrict self,
   if (elem->d_name.dn_hash == name->dn_hash &&
       elem->d_name.dn_size == name->dn_size &&
       memcmp(elem->d_name.dn_name,name->dn_name,name->dn_size*sizeof(char)) == 0) {
-   // Found it!
+   /* Found it!. */
    return elem;
   }
  }
@@ -602,7 +602,7 @@ void kdirent_destroy(struct kdirent *__restrict self) {
  kassert_object(self,KOBJECT_MAGIC_DIRENT);
  if __likely((parent = self->d_parent) != NULL) {
   kdirent_lock(parent,KDIRENT_LOCK_CACHE);
-  // Remove ourselves from the cache of our parent
+  /* Remove ourselves from the cache of our parent. */
   __evalexpr(kdirentcache_remove(&parent->d_cache,self));
   kdirent_unlock(parent,KDIRENT_LOCK_CACHE);
   if (self->d_inode && (self->d_flags&(KDIRENT_FLAG_VIRT|KDIRENT_FLAG_INSD)) ==
@@ -646,7 +646,7 @@ err_freer: free(result); return NULL;
    free(result->d_name.dn_name);
    goto err_freer;
   }
-  result->d_parent = parent; // Inherit reference
+  result->d_parent = parent; /* Inherit reference. */
   kdirentcache_init(&result->d_cache);
   result->d_inode  = NULL;
  }
@@ -699,13 +699,13 @@ kdirent_mount(struct kdirent *__restrict self, struct kdirentname const *__restr
  kassert_ksuperblock(sblock);
  kassertobj(name);
  kassertobjnull(resent);
- // Insert the root node and create the associated directory entry.
- // After this call returns, the given superblock  is technically
- // already mounted.
- // >> The remaining code is there for tracking of mounted superblocks,
- //    as well as to ensure that superblocks remain mounted, even
- //    when all (obvious) references to them are lock (such as would
- //    be the case if 'resent' is NULL, which is even something that's allowed).
+ /* Insert the root node and create the associated directory entry.
+  * After this call returns, the given superblock  is technically
+  * already mounted.
+  * >> The remaining code is there for tracking of mounted superblocks,
+  *    as well as to ensure that superblocks remain mounted, even
+  *    when all (obvious) references to them are lock (such as would
+  *    be the case if 'resent' is NULL, which is even something that's allowed). */
  error = kdirent_insnod(self,name,ksuperblock_root(sblock),&used_resent);
  if __unlikely(KE_ISERR(error)) return error;
  if (resent) {
@@ -716,7 +716,8 @@ kdirent_mount(struct kdirent *__restrict self, struct kdirentname const *__restr
  }
  if __unlikely(KE_ISERR(error)) {
   /* Something went wrong.
-   * >> Now we must unlink the newly created dirent, before closing its node. */
+   * >> Now we must unlink the newly created
+   *    dirent, before closing its node. */
   kdirent_unlinknode(used_resent);
  }
  return error;
@@ -753,10 +754,10 @@ __kdirent_newinherited(__ref struct kdirent *__restrict parent,
   result->d_locks = 0;
   result->d_flags = KDIRENT_FLAG_NONE;
   result->d_padding = 0;
-  result->d_name = *name; // Inherit data
-  result->d_parent = parent; // Inherit reference
+  result->d_name = *name; /* Inherit data. */
+  result->d_parent = parent; /* Inherit reference. */
   kdirentcache_init(&result->d_cache);
-  result->d_inode = inode; // Inherit reference
+  result->d_inode = inode; /* Inherit reference. */
  }
  return result;
 }
@@ -792,7 +793,7 @@ void kdirent_unlinknode(struct kdirent *__restrict self) {
  oldnode = self->d_inode,self->d_inode = NULL;
  kdirent_unlock(self,KDIRENT_LOCK_NODE);
  parent = self->d_parent;
- kassert_kdirent(parent); // This function may not be used for the ROOT
+ kassert_kdirent(parent); /* This function may not be used for the true ROOT. */
  kdirent_lock(parent,KDIRENT_LOCK_CACHE);
  __evalexpr(kdirentcache_remove(&parent->d_cache,self));
  kdirent_unlock(parent,KDIRENT_LOCK_CACHE);
@@ -824,7 +825,7 @@ void kdirent_unlinknode(struct kdirent *__restrict self) {
 
 kerrno_t
 kdirent_user_getfilename(struct kdirent const *__restrict self,
-                         __user char *__restrict buf, size_t bufsize,
+                         __user char *buf, size_t bufsize,
                          __kernel size_t *__restrict reqsize) {
  size_t copysize;
  if (reqsize) *reqsize = (self->d_name.dn_size+1)*sizeof(char);
@@ -839,7 +840,7 @@ kdirent_user_getfilename(struct kdirent const *__restrict self,
 static kerrno_t
 kdirent_user_dogetpathname(struct kdirent const *__restrict self,
                            struct kdirent *__restrict root,
-                           __user char *__restrict buf, size_t bufsize,
+                           __user char *buf, size_t bufsize,
                            __kernel size_t *__restrict reqsize) {
  kerrno_t error; size_t temp;
  __user char *iter = buf,*end = buf+bufsize;
@@ -871,7 +872,7 @@ kdirent_user_dogetpathname(struct kdirent const *__restrict self,
 kerrno_t
 kdirent_user_getpathname(struct kdirent const *__restrict self,
                          struct kdirent *__restrict root,
-                         __user char *__restrict buf, size_t bufsize,
+                         __user char *buf, size_t bufsize,
                          __kernel size_t *__restrict reqsize) {
  /* Due to some minor exceptions to the strict chroot()-rules in KOS, it is
   * possible for the given 'root' to not be 'self' or apart of its chain.
@@ -923,7 +924,7 @@ kdirent_walklast(struct kfspathenv const *__restrict env,
  }
  
  if (KFS_ISSEP(*path)) {
-  do ++path,--pathmax; // Re-start at root
+  do ++path,--pathmax; /* Re-start at root. */
   while (pathmax && KFS_ISSEP(*path));
   kfspathenv_initfrom(&newenv,env,env->env_root,env->env_root);
   return kdirent_walklast(&newenv,path,pathmax,lastpart,newroot);
@@ -937,25 +938,25 @@ kdirent_walklast(struct kfspathenv const *__restrict env,
  switch (part.dn_size) {
   case 2: if (part.dn_name[1] != '.') break;
   case 1: if (part.dn_name[0] != '.') break;
-   // Special directory '.' or '..'
+   /* Special directory '.' or '..'. */
    lastpart->dn_hash = 0;
    lastpart->dn_size = 0;
    lastpart->dn_name = NULL;
    if (part.dn_size == 1 || env->env_root == env->env_cwd) {
-    // Reference to own directory / attempt to surpass
-    // the selected filesystem root is denied.
+    /* Reference to own directory / attempt to surpass
+     * the selected filesystem root is denied. */
     return kdirent_incref(*newroot = env->env_cwd);
    }
-   // If this fails, 'env_root' can't be reached from 'env_cwd'
+   /* If this fails, 'env_root' can't be reached from 'env_cwd'. */
    kassert_kdirent(env->env_cwd->d_parent);
-   // Permission to visible parent directory is granted
+   /* Permission to visible parent directory is granted. */
    return kdirent_incref(*newroot = env->env_cwd->d_parent);
   default: break;
  }
 
  kdirentname_refreshhash(&part);
  if (iter == end || !*iter) {
-  // Single-part pathname
+  /* Single-part pathname. */
   error = kdirent_incref(*newroot = env->env_cwd);
  } else {
   struct kdirent *usedroot,*newusedroot;
@@ -976,9 +977,9 @@ kdirent_walklast(struct kfspathenv const *__restrict env,
    kdirent_decref(usedroot);
    if __unlikely(KE_ISERR(error)) return error;
    kassert_kdirent(newusedroot);
-   usedroot = newusedroot; /* Inherit reference */
+   usedroot = newusedroot; /* Inherit reference. */
   }
-  *newroot = usedroot; /* Inherit reference */
+  *newroot = usedroot; /* Inherit reference. */
  }
  *lastpart = part;
  return error;
@@ -996,7 +997,7 @@ kdirent_walkall(struct kfspathenv const *__restrict env,
  error = kdirent_walklast(env,path,pathmax,&last,&finish_root);
  if __unlikely(KE_ISERR(error)) return error;
  if (!last.dn_size) {
-  *finish = finish_root; // Inherit reference
+  *finish = finish_root; /* Inherit reference. */
   return error;
  }
  error = kdirent_walk(finish_root,&last,finish);
@@ -1205,18 +1206,18 @@ kdirent_openlast(struct kfspathenv const *__restrict env, struct kdirent *dir, s
  kassertobj(result);
  kassertobj(env);
  if (mode&O_CREAT) {
-  // Attempt to create missing files
+  /* Attempt to create missing files. */
   error = kdirent_mkreg(dir,name,create_ac,create_av,&fileent,&filenode);
   if (mode&O_EXCL && error == KE_EXISTS) {
-   // O_CREAT|O_EXCL --> Force creation of new files; fail if already exists
-   // NOTE: But since we've already retrieved both the node
-   //       and its dirent, we need to clean those up.
+   /* O_CREAT|O_EXCL --> Force creation of new files; fail if already exists
+    * NOTE: But since we've already retrieved both the node
+    *       and its dirent, we need to clean those up. */
    kdirent_decref(fileent);
    kinode_decref(filenode);
    return KE_EXISTS;
   } else if (!(mode&O_EXCL) && error == KE_NOSYS) {
-   // This can happen if the filesystem is mounted as read-only.
-   // >> Try again by opening existing nodes
+   /* This can happen if the filesystem is mounted as read-only.
+    * >> Try again by opening existing nodes. */
    goto open_existing;
   }
  } else {
@@ -1363,20 +1364,20 @@ _ksuperblock_delmnt(struct ksuperblock *__restrict self,
          "The caller must be holding a reference, and we're also holding one.\n"
          ">> So the dirent should be holding at least 2 references.");
  memmove(iter,iter+1,(((size_t)(end-iter))-1)*sizeof(struct kdirent *));
- // Try to conserve some memory
+ /* Try to conserve some memory. */
  iter = (struct kdirent **)realloc(self->s_mount.sm_mntv,
                                   (self->s_mount.sm_mntc-1)*
                                    sizeof(struct kdirent *));
  if __likely(iter) self->s_mount.sm_mntv = iter;
- // Drop the reference to the mounting point we just removed.
+ /* Drop the reference to the mounting point we just removed. */
  kdirent_decref(ent);
  if (!--self->s_mount.sm_mntc) {
-  // The last mounting point was removed.
-  // >> Now we must remove this superblock from
-  //    the global list of active mounting points.
+  /* The last mounting point was removed.
+   * >> Now we must remove this superblock from
+   *    the global list of active mounting points. */
   kmountman_remove_unlocked_inheritref(self);
-  // We now inherited a reference to ourselves.
-  // >> Destroy it
+  /* We now inherited a reference to ourselves.
+   * >> Destroy it. */
   ksuperblock_decref(self);
  }
  error = KE_OK;
@@ -1406,20 +1407,20 @@ _ksuperblock_addmnt_inherited(struct ksuperblock *__restrict self,
  if __unlikely(KE_ISERR(error = kcloselock_beginop(&self->s_root.i_closelock))) return error;
  kmountman_lock(KMOUNTMAN_LOCK_CHAIN);
  if (!self->s_mount.sm_mntc) {
-  // First mounting point got added
-  // >> Must add this superblock to the list of mounted filesystems
-  // NOTE: For this we also need a new reference to ourselves.
+  /* First mounting point got added.
+   * >> Must add this superblock to the list of mounted filesystems.
+   * NOTE: For this we also need a new reference to ourselves. */
   error = ksuperblock_incref(self);
   if __unlikely(KE_ISERR(error)) goto end;
   kmountman_insert_unlocked_inheritref(self);
  }
- // Re-allocate the list of mounting points to make space for the new one
+ /* Re-allocate the list of mounting points to make space for the new one. */
  mntpoints = (struct kdirent **)realloc(self->s_mount.sm_mntv,
                                        (self->s_mount.sm_mntc+1)*
                                         sizeof(struct kdirent *));
  if __unlikely(!mntpoints) {
-  // Out-of-memory (Must also potentially remove
-  //                the superblock from the mount manager)
+  /* Out-of-memory (Must also potentially remove
+   * the superblock from the mount manager). */
   if (!self->s_mount.sm_mntc) {
    assertf(katomic_load(self->s_root.i_refcnt) >= 2,
            "We were the ones that added this reference...");
@@ -1430,7 +1431,7 @@ _ksuperblock_addmnt_inherited(struct ksuperblock *__restrict self,
   goto end;
  }
  self->s_mount.sm_mntv = mntpoints;
- mntpoints[self->s_mount.sm_mntc++] = ent; // Inherit reference
+ mntpoints[self->s_mount.sm_mntc++] = ent; /* Inherit reference. */
  error = KE_OK;
 end:
  kmountman_unlock(KMOUNTMAN_LOCK_CHAIN);
@@ -1518,10 +1519,10 @@ struct kdirent __kfs_root = KDIRENT_INIT_UNNAMED(NULL,NULL);
 void kernel_initialize_filesystem(void) {
  struct ksuperblock *root_superblock;
  struct ksdev *storage_device; kerrno_t error;
- // Look for a usable storage device for the root filesystem
+ /* Look for a usable storage device for the root filesystem. */
  error = ksdev_new_findfirstata(&storage_device);
  if (error == KE_NOSYS) {
-  // Without a usable storage device, create a new ram disk
+  /* Without a usable storage device, create a new ram disk. */
   error = ksdev_new_ramdisk(&storage_device,512,
                             /*128MB*/(1024*1024*128)/512);
  }
@@ -1529,16 +1530,16 @@ void kernel_initialize_filesystem(void) {
   k_syslogf(KLOG_ERROR,"Failed to initialize the filesystem: %d\n",error);
   return;
  }
- // Initialize a FAT superblock
+ /* Initialize a FAT superblock. */
  error = ksuperblock_newfat(storage_device,&root_superblock);
  ksdev_decref(storage_device);
  if __unlikely(KE_ISERR(error)) {
   k_syslogf(KLOG_ERROR,"Failed to initialize the filesystem: %d\n",error);
   return;
  }
- // Add an additional reference for '__kproc_kernel_root'
+ /* Add an additional reference for '__kproc_kernel_root'. */
  ++root_superblock->s_root.i_refcnt;
- __kfs_root.d_inode = ksuperblock_root(root_superblock); // Inherit reference
+ __kfs_root.d_inode = ksuperblock_root(root_superblock); /* Inherit reference. */
  extern struct kdirfile __kproc_kernel_root;
  __kproc_kernel_root.df_inode = __kfs_root.d_inode;
 }
@@ -1548,19 +1549,19 @@ void kernel_finalize_filesystem(void) {
  extern struct kdirfile __kproc_kernel_root;
  (*kdirfile_type.ft_quit)((struct kfile *)&__kproc_kernel_root);
 
- // Close the kernel ZERO-task context, thus closing
- // all file descriptors opened within the kernel.
- // >> This makes shutting down the filesystem much easier.
+ /* Close the kernel ZERO-task context, thus closing
+  * all file descriptors opened within the kernel.
+  * >> This makes shutting down the filesystem much easier. */
  kproc_close(kproc_kernel());
 
- // Unmount all mounted filesystems
+ /* Unmount all mounted filesystems. */
  kmountman_unmountall();
- // Close the filesystem root node
+ /* Close the filesystem root node. */
  kdirent_lock(&__kfs_root,KDIRENT_LOCK_NODE);
  root_node = __kfs_root.d_inode;
  __kfs_root.d_inode = NULL;
  kdirent_unlock(&__kfs_root,KDIRENT_LOCK_NODE);
- if __unlikely(!root_node) return; // Already closed?
+ if __unlikely(!root_node) return; /* Already closed? */
  __evalexpr(kinode_close(root_node));
  if (root_node->i_refcnt != 1) {
   k_syslogf(KLOG_ERROR

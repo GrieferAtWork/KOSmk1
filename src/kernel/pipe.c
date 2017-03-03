@@ -131,8 +131,8 @@ kpipefile_new(struct kfiletype *__restrict type,
  if __unlikely(dent && KE_ISERR(kdirent_incref(dent))) goto err_pipe;
  if __unlikely((result = omalloc(struct kpipefile)) == NULL) goto err_dent;
  kfile_init(&result->pr_file,type);
- result->pr_pipe = pipe; /* Inherit reference */
- result->pr_dirent = dent; /* Inherit reference */
+ result->pr_pipe = pipe; /* Inherit reference. */
+ result->pr_dirent = dent; /* Inherit reference. */
  return result;
 err_dent: if (dent) kdirent_decref(dent);
 err_pipe: kinode_decref((struct kinode *)pipe);

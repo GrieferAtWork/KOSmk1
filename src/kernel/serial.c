@@ -99,14 +99,14 @@ struct serial_printf_data {
  size_t result;
 };
 static int
-serial_vprintf_callback(char const *data, size_t maxchars,
-                        struct serial_printf_data *arg) {
+serial_printf_callback(char const *data, size_t maxchars,
+                       struct serial_printf_data *arg) {
  arg->result += serial_printn(arg->device,data,maxchars);
  return 0;
 }
 size_t serial_vprintf(int device, char const *__restrict format, va_list args) {
  struct serial_printf_data closure = {device,0};
- format_vprintf((pformatprinter)&serial_vprintf_callback,
+ format_vprintf((pformatprinter)&serial_printf_callback,
                 &closure,format,args);
  return closure.result;
 }

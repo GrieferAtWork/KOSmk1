@@ -43,10 +43,10 @@ typedef __u64 kslba_t; /*< Kernel storage logical block address. */
  /* The following members are constant */\
  __size_t   sd_blocksize;  /*< [const] Size of a single block. */\
  kslba_t    sd_blockcount; /*< [const] Total amount of available blocks (0..sd_blockcount-1) */\
- kerrno_t (*sd_readblock)(struct ksdev const *self, kslba_t addr, void *block);\
- kerrno_t (*sd_writeblock)(struct ksdev *self, kslba_t addr, void const *block);\
- kerrno_t (*sd_readblocks)(struct ksdev const *self, kslba_t addr, void *block, __size_t c, __size_t *rc);\
- kerrno_t (*sd_writeblocks)(struct ksdev *self, kslba_t addr, void const *block, __size_t c, __size_t *wc);
+ kerrno_t (*sd_readblock)(struct ksdev const *__restrict self, kslba_t addr, __kernel void *__restrict block);\
+ kerrno_t (*sd_writeblock)(struct ksdev *__restrict self, kslba_t addr, __kernel void const *__restrict block);\
+ kerrno_t (*sd_readblocks)(struct ksdev const *__restrict self, kslba_t addr, __kernel void *__restrict blocks, __size_t c, __kernel __size_t *__restrict rc);\
+ kerrno_t (*sd_writeblocks)(struct ksdev *__restrict self, kslba_t addr, __kernel void const *__restrict blocks, __size_t c, __kernel __size_t *__restrict wc);
 
 struct ksdev { KSDEV_HEAD };
 
@@ -154,16 +154,16 @@ struct ksdev_ramsize {
 // @return: KE_OK:        Everything's OK.
 // @return: KE_DESTROYED: The given device was closed.
 // @return: KE_DEVICE:    The given device is broken.
-extern __wunused kerrno_t ksdev_readblock(struct ksdev const *self, kslba_t addr, void *block);
-extern __wunused kerrno_t ksdev_writeblock(struct ksdev *self, kslba_t addr, void const *block);
-extern __wunused kerrno_t ksdev_readblocks(struct ksdev const *self, kslba_t addr, void *block, __size_t c, __size_t *rc);
-extern __wunused kerrno_t ksdev_writeblocks(struct ksdev *self, kslba_t addr, void const *block, __size_t c, __size_t *wc);
-extern __wunused kerrno_t ksdev_readblock_unlocked(struct ksdev const *self, kslba_t addr, void *block);
-extern __wunused kerrno_t ksdev_writeblock_unlocked(struct ksdev *self, kslba_t addr, void const *block);
-extern __wunused kerrno_t ksdev_readblocks_unlocked(struct ksdev const *self, kslba_t addr, void *block, __size_t c, __size_t *rc);
-extern __wunused kerrno_t ksdev_writeblocks_unlocked(struct ksdev *self, kslba_t addr, void const *block, __size_t c, __size_t *wc);
-extern __wunused kerrno_t ksdev_readallblocks(struct ksdev const *self, kslba_t addr, void *block, __size_t c);
-extern __wunused kerrno_t ksdev_writeallblocks(struct ksdev *self, kslba_t addr, void const *block, __size_t c);
+extern __wunused kerrno_t ksdev_readblock(struct ksdev const *__restrict self, kslba_t addr, void *__restrict block);
+extern __wunused kerrno_t ksdev_writeblock(struct ksdev *__restrict self, kslba_t addr, void const *__restrict block);
+extern __wunused kerrno_t ksdev_readblocks(struct ksdev const *__restrict self, kslba_t addr, void *__restrict blocks, __size_t c, __size_t *__restrict rc);
+extern __wunused kerrno_t ksdev_writeblocks(struct ksdev *__restrict self, kslba_t addr, void const *__restrict blocks, __size_t c, __size_t *__restrict wc);
+extern __wunused kerrno_t ksdev_readblock_unlocked(struct ksdev const *__restrict self, kslba_t addr, void *__restrict block);
+extern __wunused kerrno_t ksdev_writeblock_unlocked(struct ksdev *__restrict self, kslba_t addr, void const *__restrict block);
+extern __wunused kerrno_t ksdev_readblocks_unlocked(struct ksdev const *__restrict self, kslba_t addr, void *__restrict blocks, __size_t c, __size_t *__restrict rc);
+extern __wunused kerrno_t ksdev_writeblocks_unlocked(struct ksdev *__restrict self, kslba_t addr, void const *__restrict blocks, __size_t c, __size_t *__restrict wc);
+extern __wunused kerrno_t ksdev_readallblocks(struct ksdev const *__restrict self, kslba_t addr, void *__restrict blocks, __size_t c);
+extern __wunused kerrno_t ksdev_writeallblocks(struct ksdev *__restrict self, kslba_t addr, void const *__restrict blocks, __size_t c);
 #else
 #define ksdev_readblock_unlocked(self,addr,block) \
  __xblock({ struct ksdev const *const __ksrbu_self = (self);\
@@ -175,15 +175,15 @@ extern __wunused kerrno_t ksdev_writeallblocks(struct ksdev *self, kslba_t addr,
             kassertbyte(__kswbu_self->sd_writeblock);\
             __xreturn (*__kswbu_self->sd_writeblock)(__kswbu_self,addr,block);\
  })
-#define ksdev_readblocks_unlocked(self,addr,block,c,rc) \
+#define ksdev_readblocks_unlocked(self,addr,blocks,c,rc) \
  __xblock({ struct ksdev const *const __ksrbsu_self = (self);\
             kassertbyte(__ksrbsu_self->sd_readblocks);\
-            __xreturn (*__ksrbsu_self->sd_readblocks)(__ksrbsu_self,addr,block,c,rc);\
+            __xreturn (*__ksrbsu_self->sd_readblocks)(__ksrbsu_self,addr,blocks,c,rc);\
  })
-#define ksdev_writeblocks_unlocked(self,addr,block,c,wc) \
+#define ksdev_writeblocks_unlocked(self,addr,blocks,c,wc) \
  __xblock({ struct ksdev *const __kswbsu_self = (self);\
             kassertbyte(__kswbsu_self->sd_writeblocks);\
-            __xreturn (*__kswbsu_self->sd_writeblocks)(__kswbsu_self,addr,block,c,wc);\
+            __xreturn (*__kswbsu_self->sd_writeblocks)(__kswbsu_self,addr,blocks,c,wc);\
  })
 #define ksdev_readblock(self,addr,block) \
  __xblock({ struct ksdev const *const __ksrb_self = (self); kerrno_t __ksrb_err;\
@@ -203,49 +203,49 @@ extern __wunused kerrno_t ksdev_writeallblocks(struct ksdev *self, kslba_t addr,
             }\
             __xreturn __kswb_err;\
  })
-#define ksdev_readblocks(self,addr,block,c,rc) \
+#define ksdev_readblocks(self,addr,blocks,c,rc) \
  __xblock({ struct ksdev const *const __ksrbs_self = (self); kerrno_t __ksrbs_err;\
             kassertbyte(__ksrbs_self->sd_readblocks);\
             if __likely(KE_ISOK(__ksrbs_err = kdev_lock_r(__ksrbs_self))) {\
-             __ksrbs_err = (*__ksrbs_self->sd_readblocks)(__ksrbs_self,addr,block,c,rc);\
+             __ksrbs_err = (*__ksrbs_self->sd_readblocks)(__ksrbs_self,addr,blocks,c,rc);\
              kdev_unlock_r(__ksrbs_self);\
             }\
             __xreturn __ksrbs_err;\
  })
-#define ksdev_writeblocks(self,addr,block,c,wc) \
+#define ksdev_writeblocks(self,addr,blocks,c,wc) \
  __xblock({ struct ksdev *const __kswbs_self = (self); kerrno_t __kswbs_err;\
             kassertbyte(__kswbs_self->sd_writeblocks);\
             if __likely(KE_ISOK(__kswbs_err = kdev_lock_w(__kswbs_self))) {\
-             __kswbs_err = (*__kswbs_self->sd_writeblocks)(__kswbs_self,addr,block,c,wc);\
+             __kswbs_err = (*__kswbs_self->sd_writeblocks)(__kswbs_self,addr,blocks,c,wc);\
              kdev_unlock_w(__kswbs_self);\
             }\
             __xreturn __kswbs_err;\
  })
-#define ksdev_readallblocks(self,addr,block,c) \
+#define ksdev_readallblocks(self,addr,blocks,c) \
  __xblock({ struct ksdev const *const __ksrabs_self = (self); kerrno_t __ksrabs_err;\
             if __likely(KE_ISOK(__ksrabs_err = kdev_lock_r(__ksrabs_self))) {\
-             __ksrabs_err = ksdev_readallblocks_unlocked(__ksrabs_self,addr,block,c);\
+             __ksrabs_err = ksdev_readallblocks_unlocked(__ksrabs_self,addr,blocks,c);\
              kdev_unlock_r(__ksrabs_self);\
             }\
             __xreturn __ksrabs_err;\
  })
-#define ksdev_writeallblocks(self,addr,block,c) \
+#define ksdev_writeallblocks(self,addr,blocks,c) \
  __xblock({ struct ksdev *const __kswabs_self = (self); kerrno_t __kswabs_err;\
             if __likely(KE_ISOK(__kswabs_err = kdev_lock_w(__kswabs_self))) {\
-             __kswabs_err = ksdev_writeallblocks_unlocked(__kswabs_self,addr,block,c);\
+             __kswabs_err = ksdev_writeallblocks_unlocked(__kswabs_self,addr,blocks,c);\
              kdev_unlock_w(__kswabs_self);\
             }\
             __xreturn __kswabs_err;\
  })
 #endif
 
-extern __wunused kerrno_t ksdev_readallblocks_unlocked(struct ksdev const *self, kslba_t addr, void *block, __size_t c);
-extern __wunused kerrno_t ksdev_writeallblocks_unlocked(struct ksdev *self, kslba_t addr, void const *block, __size_t c);
+extern __wunused kerrno_t ksdev_readallblocks_unlocked(struct ksdev const *__restrict self, kslba_t addr, __kernel void *__restrict blocks, __size_t c);
+extern __wunused kerrno_t ksdev_writeallblocks_unlocked(struct ksdev *__restrict self, kslba_t addr, __kernel void const *__restrict blocks, __size_t c);
 
-extern __wunused kerrno_t ksdev_generic_readblock(struct ksdev const *self, kslba_t addr, void *block);
-extern __wunused kerrno_t ksdev_generic_writeblock(struct ksdev *self, kslba_t addr, void const *block);
-extern __wunused kerrno_t ksdev_generic_readblocks(struct ksdev const *self, kslba_t addr, void *block, __size_t c, __size_t *rc);
-extern __wunused kerrno_t ksdev_generic_writeblocks(struct ksdev *self, kslba_t addr, void const *block, __size_t c, __size_t *wc);
+extern __wunused kerrno_t ksdev_generic_readblock(struct ksdev const *__restrict self, kslba_t addr, __kernel void *__restrict block);
+extern __wunused kerrno_t ksdev_generic_writeblock(struct ksdev *__restrict self, kslba_t addr, __kernel void const *__restrict block);
+extern __wunused kerrno_t ksdev_generic_readblocks(struct ksdev const *__restrict self, kslba_t addr, __kernel void *__restrict blocks, __size_t c, __size_t *__restrict rc);
+extern __wunused kerrno_t ksdev_generic_writeblocks(struct ksdev *__restrict self, kslba_t addr, __kernel void const *__restrict blocks, __size_t c, __size_t *__restrict wc);
 
 
 typedef __u16 katabus_t;
@@ -258,29 +258,36 @@ typedef __u8  katadrive_t;
 // @return: KE_OK:     A valid device was detected
 // @return: KE_NOSYS:  The given device isn't available
 // @return: KE_DEVICE: The given device is errorous
-extern __wunused __nonnull((1)) kerrno_t ksdev_new_ata(struct ksdev **result, katabus_t bus, katadrive_t drive);
-extern __wunused __nonnull((1)) kerrno_t ksdev_new_findfirstata(struct ksdev **result);
+extern __wunused __nonnull((1)) kerrno_t
+ksdev_new_ata(struct ksdev **__restrict result,
+              katabus_t bus, katadrive_t drive);
+extern __wunused __nonnull((1)) kerrno_t
+ksdev_new_findfirstata(struct ksdev **__restrict result);
 
 //////////////////////////////////////////////////////////////////////////
 // Allocate a new ramdisk with a given block size & count
 // NOTE: It is recommended to set 'blocksize' to 512, or at least any other 2**n number
 // @return: KE_NOMEM: Not enough memory for the storage device controller/actual ram
-extern __wunused __nonnull((1)) kerrno_t ksdev_new_ramdisk(struct ksdev **result, __size_t blocksize, __size_t blockcount);
+extern __wunused __nonnull((1)) kerrno_t
+ksdev_new_ramdisk(struct ksdev **__restrict result,
+                  __size_t blocksize, __size_t blockcount);
 
 //////////////////////////////////////////////////////////////////////////
 // Create a new partition-device for a given device.
 // NOTE: The caller is responsible for ensuring the given
 //       start+size are in bounds of the parent device.
 // @return: KE_NOMEM: Not enough memory for the storage device controller
-extern __wunused __nonnull((1,2)) kerrno_t ksdev_new_part(struct ksdev **result, struct ksdev *__restrict dev,
-                                                          kslba_t start, kslba_t size);
+extern __wunused __nonnull((1,2)) kerrno_t
+ksdev_new_part(struct ksdev **__restrict result,
+               struct ksdev *__restrict dev,
+               kslba_t start, kslba_t size);
 
 //////////////////////////////////////////////////////////////////////////
 // Disk formatting attribute callbacks usable by 512b disks.
-extern kerrno_t ksdev_generic_getdiskinfo512(struct ksdev const *self, struct ksdev_diskinfo *buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern kerrno_t ksdev_generic_setdiskinfo512(struct ksdev *self, struct ksdev_diskinfo const *buf, __size_t bufsize);
-extern kerrno_t ksdev_generic_getdiskname512(struct ksdev const *self, char *__restrict buf, __size_t bufsize, __size_t *__restrict reqsize);
-extern kerrno_t ksdev_generic_setdiskname512(struct ksdev *self, char const *buf, __size_t bufsize);
+extern __wunused __nonnull((1,2,4)) kerrno_t ksdev_generic_getdiskinfo512(struct ksdev const *__restrict self, __kernel struct ksdev_diskinfo *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,2))   kerrno_t ksdev_generic_setdiskinfo512(struct ksdev *__restrict self, __kernel struct ksdev_diskinfo const *__restrict buf, __size_t bufsize);
+extern __wunused __nonnull((1,2,4)) kerrno_t ksdev_generic_getdiskname512(struct ksdev const *__restrict self, __kernel char *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,2))   kerrno_t ksdev_generic_setdiskname512(struct ksdev *__restrict self, __kernel char const *__restrict buf, __size_t bufsize);
 #define KSDEV_GENERIC_MAXDISKNAMESIZE512 10
 
 __DECL_END

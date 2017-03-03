@@ -78,7 +78,7 @@ kdirfilelist_append(struct kdirfilelist *__restrict self,
   self->ent_v = newbuf;
  }
  entry = &self->ent_v[self->ent_c++];
- entry->dfe_inode = inode; // Inherit reference
+ entry->dfe_inode = inode; /* Inherit reference. */
  entry->dfe_dirent = NULL;
  error = kdirentname_initcopy(&entry->dfe_name,name);
  if __unlikely(KE_ISERR(error)) --self->ent_c;

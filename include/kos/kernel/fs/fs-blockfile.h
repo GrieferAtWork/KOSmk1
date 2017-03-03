@@ -138,8 +138,8 @@ struct kblockfile {
 extern void     _kblockfile_quit(struct kblockfile *__restrict self);
 extern kerrno_t _kblockfile_open(struct kblockfile *__restrict self, struct kdirent *__restrict dirent, struct kinode *__restrict inode, __openmode_t mode);
 #define _kblockfile_close  _kblockfile_flush
-extern kerrno_t _kblockfile_read(struct kblockfile *__restrict self, void *__restrict buf, __size_t c, __size_t *rc);
-extern kerrno_t _kblockfile_write(struct kblockfile *__restrict self, void const *__restrict buf, __size_t c, __size_t *wc);
+extern kerrno_t _kblockfile_read(struct kblockfile *__restrict self, void *__restrict buf, __size_t c, __size_t *__restrict rc);
+extern kerrno_t _kblockfile_write(struct kblockfile *__restrict self, void const *__restrict buf, __size_t c, __size_t *__restrict wc);
 extern kerrno_t _kblockfile_seek(struct kblockfile *__restrict self, __off_t off, int whence, __pos_t *newpos);
 extern kerrno_t _kblockfile_trunc(struct kblockfile *__restrict self, __pos_t size);
 extern kerrno_t _kblockfile_ioctl(struct kblockfile *__restrict self, kattr_t cmd, __user void *arg);

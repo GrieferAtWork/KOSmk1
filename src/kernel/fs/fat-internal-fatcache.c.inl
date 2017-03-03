@@ -132,7 +132,7 @@ kerrno_t kfatfs_fat_readandalloc(struct kfatfs *__restrict self, kfatcls_t index
  if __unlikely(KE_ISERR(error = krwlock_beginread(&self->f_fatlock))) return error;
  meta_val = self->f_fatmeta[meta_addr];
  if (meta_val&meta_mask) {
-  // Entry is already cached (no need to start writing)
+  /* Entry is already cached (no need to start writing) */
   *target = (*self->f_readfat)(self,index);
   if (!kfatfs_iseofcluster(self,*target)) {
    krwlock_endread(&self->f_fatlock);
@@ -142,18 +142,18 @@ kerrno_t kfatfs_fat_readandalloc(struct kfatfs *__restrict self, kfatcls_t index
  error = krwlock_upgrade(&self->f_fatlock);
  if __unlikely(KE_ISERR(error)) return error;
  meta_val = self->f_fatmeta[meta_addr];
- // Make sure that no other task loaded the
- // FAT while we were switching to write-mode.
+ /* Make sure that no other task loaded the
+  * FAT while we were switching to write-mode. */
  if (meta_val&meta_mask) {
   *target = (*self->f_readfat)(self,index);
   error   = KE_OK;
  } else {
-  // Entry is not cached --> Load the fat's entry.
+  /* Entry is not cached --> Load the fat's entry. */
   error = kfatfs_loadsectors(self,FAT_GETCLUSTERADDR(fat_index),1,
                             (void *)((uintptr_t)self->f_fatv+fat_index*self->f_secsize));
   if __unlikely(KE_ISERR(error)) goto end_write;
   *target = (*self->f_readfat)(self,index);
-  // Mark the FAT cache entry as loaded
+  /* Mark the FAT cache entry as loaded. */
   assert(self->f_fatmeta[meta_addr] == meta_val);
   self->f_fatmeta[meta_addr] = meta_val|meta_mask;
  }
@@ -161,11 +161,11 @@ kerrno_t kfatfs_fat_readandalloc(struct kfatfs *__restrict self, kfatcls_t index
   k_syslogf(KLOG_INFO
            ,"Allocating FAT cluster after EOF %I32u from %I32u (out-of-bounds for %I32u)\n"
            ,*target,index,self->f_clseof);
-  // Search for a free cluster (We prefer to use the nearest chunk to reduce fragmentation)
+  /* Search for a free cluster (We prefer to use the nearest chunk to reduce fragmentation) */
   error = _kfatfs_fat_getfreecluster_unlocked(self,target,index+1);
   if __likely(KE_ISOK(error)) {
-   // If a cluster was found, link the previous one,
-   // and mark the new one as pointing to EOF
+   /* If a cluster was found, link the previous one,
+    * and mark the new one as pointing to EOF. */
    (*self->f_writefat)(self,index,*target);
    (*self->f_writefat)(self,*target,self->f_clseof_marker);
    /* Don't forget to mark the cache as modified */
@@ -205,19 +205,19 @@ kerrno_t _kfatfs_fat_read_unlocked(struct kfatfs *__restrict self, kfatcls_t ind
   return KE_OK;
  }
  meta_val = self->f_fatmeta[meta_addr];
- // Make sure that no other task loaded the
- // FAT while we were switching to write-mode.
+ /* Make sure that no other task loaded the
+  * FAT while we were switching to write-mode. */
  if __unlikely(meta_val&meta_mask) {
   *target = (*self->f_readfat)(self,index);
   LOCK_WRITE_END();
   return KE_OK;
  }
- // Entry is not cached --> Load the fat's entry.
+ /* Entry is not cached --> Load the fat's entry. */
  error = kfatfs_loadsectors(self,FAT_GETCLUSTERADDR(fat_index),1,
                            (void *)((uintptr_t)self->f_fatv+fat_index*self->f_secsize));
  if __likely(KE_ISOK(error)) {
   *target = (*self->f_readfat)(self,index);
-  // Mark the FAT cache entry as loaded
+  /* Mark the FAT cache entry as loaded. */
   assert(self->f_fatmeta[meta_addr] == meta_val);
   self->f_fatmeta[meta_addr] = meta_val|meta_mask;
  }
@@ -238,7 +238,7 @@ kerrno_t kfatfs_fat_read(struct kfatfs *__restrict self, kfatcls_t index, kfatcl
  if __unlikely(KE_ISERR(error = krwlock_beginread(&self->f_fatlock))) return error;
  meta_val = self->f_fatmeta[meta_addr];
  if (meta_val&meta_mask) {
-  // Entry is already cached (no need to start writing)
+  /* Entry is already cached (no need to start writing) */
   *target = (*self->f_readfat)(self,index);
   krwlock_endread(&self->f_fatlock);
   return KE_OK;
@@ -246,19 +246,19 @@ kerrno_t kfatfs_fat_read(struct kfatfs *__restrict self, kfatcls_t index, kfatcl
  error = krwlock_upgrade(&self->f_fatlock);
  if __unlikely(KE_ISERR(error)) return error;
  meta_val = self->f_fatmeta[meta_addr];
- // Make sure that no other task loaded the
- // FAT while we were switching to write-mode.
+ /* Make sure that no other task loaded the
+  * FAT while we were switching to write-mode. */
  if __unlikely(meta_val&meta_mask) {
   *target = (*self->f_readfat)(self,index);
   LOCK_WRITE_END();
   return KE_OK;
  }
- // Entry is not cached --> Load the fat's entry.
+ /* Entry is not cached --> Load the fat's entry. */
  error = kfatfs_loadsectors(self,FAT_GETCLUSTERADDR(fat_index),1,
                            (void *)((uintptr_t)self->f_fatv+fat_index*self->f_secsize));
  if __likely(KE_ISOK(error)) {
   *target = (*self->f_readfat)(self,index);
-  // Mark the FAT cache entry as loaded
+  /* Mark the FAT cache entry as loaded. */
   assert(self->f_fatmeta[meta_addr] == meta_val);
   self->f_fatmeta[meta_addr] = meta_val|meta_mask;
  }
@@ -278,26 +278,26 @@ kerrno_t kfatfs_fat_write(struct kfatfs *__restrict self, kfatcls_t index, kfatc
  meta_addr = FATMETA_ADDR(fat_index);
  meta_mask = FATMETA_MASK(fat_index,FATMETA_LOADED);
 
- // Make sure the FAT cache is loaded
+ /* Make sure the FAT cache is loaded */
  if __unlikely(KE_ISERR(error = LOCK_WRITE_BEGIN())) return error;
  meta_val = self->f_fatmeta[meta_addr];
- if (!(meta_val&meta_mask)) { // Load the fat's entry.
+ if (!(meta_val&meta_mask)) { /* Load the fat's entry. */
   error = kfatfs_loadsectors(self,FAT_GETCLUSTERADDR(fat_index),1,
                             (void *)((uintptr_t)self->f_fatv+fat_index*self->f_secsize));
   if __unlikely(KE_ISERR(error)) { LOCK_WRITE_END(); return error; }
   meta_val |= meta_mask;
  }
- meta_mask >>= 1; // Switch to the associated changed-mask
+ meta_mask >>= 1; /* Switch to the associated changed-mask */
  assert(meta_mask);
- // Actually write the cache
+ /* Actually write the cache */
  (*self->f_writefat)(self,index,target);
  if (!(meta_val&meta_mask)) {
-  // New change --> mark the chunk as such
-  // Also update the changed flag in the FS (which is used to speed up flushing)
+  /* New change --> mark the chunk as such
+   * Also update the changed flag in the FS (which is used to speed up flushing) */
   self->f_flags |= KFATFS_FLAG_FATCHANGED;
   meta_val |= meta_mask;
  }
- // Update the metadata flags
+ /* Update the metadata flags */
  self->f_fatmeta[meta_addr] = meta_val;
  LOCK_WRITE_END();
  return KE_OK;
@@ -311,7 +311,7 @@ kerrno_t kfatfs_fat_flush(struct kfatfs *__restrict self) {
  kassertmem(self->f_fatv,self->f_fatsize);
  if __unlikely(KE_ISERR(error = LOCK_WRITE_BEGIN())) return error;
  if (self->f_flags&KFATFS_FLAG_FATCHANGED) {
-  // Changes were made, so we need to flush them!
+  /* Changes were made, so we need to flush them! */
   error = _kfatfs_fat_doflush_unlocked(self);
   if __likely(KE_ISOK(error)) self->f_flags &= ~(KFATFS_FLAG_FATCHANGED);
  }
@@ -331,10 +331,10 @@ kerrno_t _kfatfs_fat_doflush_unlocked(struct kfatfs *__restrict self) {
   meta_data = (byte_t *)self->f_fatmeta+FATMETA_ADDR(i);
   metamask  = FATMETA_MASK(i,FATMETA_CHANGED);
   if (*meta_data&metamask) {
-   // Modified fat sector (flush it)
+   /* Modified fat sector (flush it) */
    k_syslogf(KLOG_MSG,"Saving modified FAT sector %I32u (%I8x %I8x)\n",i,*meta_data,metamask);
-   // Since there might be multiple FATs, we need to flush the changes to all of them!
-   // todo: We can optimize this by flushing multiple consecutive sectors at once
+   /* Since there might be multiple FATs, we need to flush the changes to all of them!
+    * todo: We can optimize this by flushing multiple consecutive sectors at once. */
    for (j = 0; j < self->f_fatcount; ++j) {
     error = kfatfs_savesectors(self,self->f_firstfatsec+i+j*self->f_sec4fat,1,fat_data);
     if __unlikely(KE_ISERR(error)) return error;

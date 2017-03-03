@@ -58,7 +58,7 @@ kerrno_t ktime_setnow(struct timespec const *__restrict tmnow) {
 
 void ktime_getcpu(struct timespec *__restrict tmcpu) {
  kassertobj(tmcpu);
- // TODO: Required for timeouts used by 'KTASK_STATE_WAITINGTMO'
+ /* TODO: Required for timeouts used by 'KTASK_STATE_WAITINGTMO' */
  tmcpu->tv_nsec = 0;
  tmcpu->tv_sec = 0;
 }
@@ -73,12 +73,19 @@ void ktime_getnoworcpu(struct timespec *__restrict tmval) {
 
 
 
-static int century_register = 0x00; // Set by ACPI table parsing code if possible
-#define cmos_isupdating()       (outb(CMOS_IOPORT_CODE,0x0A),(inb(CMOS_IOPORT_DATA)&0x80)!=0)
-#define cmos_getregister(reg)   (outb(CMOS_IOPORT_CODE,reg),inb(CMOS_IOPORT_DATA))
-#define cmos_setregister(reg,v) (outb(CMOS_IOPORT_CODE,reg),outb(v,CMOS_IOPORT_DATA))
-
+static int century_register = 0x00; /* Set by ACPI table parsing code if possible */
 static __u8 cmos_regb;
+
+#if 0
+#   define cmos_isupdating()        0
+#   define cmos_getregister(reg)    0
+#   define cmos_setregister(reg,v)  0
+#else
+#   define cmos_isupdating()       (outb(CMOS_IOPORT_CODE,0x0A),(inb(CMOS_IOPORT_DATA)&0x80)!=0)
+#   define cmos_getregister(reg)   (outb(CMOS_IOPORT_CODE,reg),inb(CMOS_IOPORT_DATA))
+#   define cmos_setregister(reg,v) (outb(CMOS_IOPORT_CODE,reg),outb(v,CMOS_IOPORT_DATA))
+#endif
+
 
 void kernel_initialize_cmos(void) {
  cmos_regb = cmos_getregister(CMOS_REGISTER_B);
@@ -106,7 +113,7 @@ void time_to_cmostime(time_t t, struct cmostime *__restrict cmtime) {
  cmtime->ct_year = (__u32)__time_days2years(days);
  days -= __time_years2days(cmtime->ct_year);
  monthvec = __time_monthstart_yday[__time_isleapyear(cmtime->ct_year)];
- // Find the appropriate month
+ /* Find the appropriate month */
  for (i = 1; i < 12; ++i) if (monthvec[i] >= days) break;
  cmtime->ct_month = i;
  days -= monthvec[i-1];
@@ -154,15 +161,22 @@ kerrno_t cmos_getnow(struct cmostime *__restrict tmnow) {
   if (century_register != 0) newcent = (newcent&0x0F)+((newcent >> 4)*10);
  }
  if ((cmos_regb&CMOS_REGISTERB_FLAG_24H) == 0 && (tmnow->ct_hour&0x80) != 0) {
-  tmnow->ct_hour = ((tmnow->ct_hour&0x7F)+12)%24; // Fix 12-hour time
+  tmnow->ct_hour = ((tmnow->ct_hour&0x7F)+12)%24; /* Fix 12-hour time */
  }
  if (century_register != 0) tmnow->ct_year += newcent*100;
  else {
-  // NOTE: '__DATE_YEAR__' is technically a tpp extension, but
-  //       using our custom 'magic.dee' script, we can simulate it.
-  //       >> It always expands to an integral constant describing
-  //          the current year (at the time of compilation).
+  /* NOTE: '__DATE_YEAR__' is technically a tpp extension, but
+   *       using our custom 'magic.dee' script, we can simulate it.
+   *       >> It always expands to an integral constant describing
+   *          the current year (at the time of compilation). */
   tmnow->ct_year += (__DATE_YEAR__/100)*100;
+  /* If the year register says you're living more than 10 years
+   * before this code was compiled, I just assume you're simply
+   * from the future and allow you to not recompile this for
+   * up to 90 years.
+   * - Anyone after that is just a sucker,
+   *   'cause I won't be around to blame.
+   *   Hehehehehe... */
   if (tmnow->ct_year < (__DATE_YEAR__-10)) tmnow->ct_year += 100;
  }
  return KE_OK;
@@ -176,10 +190,10 @@ kerrno_t cmos_setnow(struct cmostime const *__restrict tmnow) {
  settm.ct_year %= 100;
  setcent = tmnow->ct_year/100;
  if ((cmos_regb&CMOS_REGISTERB_FLAG_24H) == 0 && settm.ct_hour > 12) {
-  settm.ct_hour = (tmnow->ct_hour%12)|0x80; // Fix 12-hour time
+  settm.ct_hour = (tmnow->ct_hour%12)|0x80; /* Fix 12-hour time */
  }
  if ((cmos_regb&CMOS_REGISTERB_FLAG_NOBCD) == 0) {
-  // Fu%#ing BCD...
+  /* Fu%#ing BCD... */
   settm.ct_second = ((settm.ct_second/10) << 8)+(settm.ct_second%10);
   settm.ct_minute = ((settm.ct_minute/10) << 8)+(settm.ct_minute%10);
   settm.ct_hour   = ((((settm.ct_hour&0x0F)/10) << 8)+((settm.ct_hour&0x70)%10))|(settm.ct_hour&0x80);
@@ -199,7 +213,7 @@ kerrno_t cmos_setnow(struct cmostime const *__restrict tmnow) {
   cmos_setregister(CMOS_REGISTER_YEAR,  settm.ct_year);
   if (century_register) cmos_setregister(century_register,setcent);
   struct cmostime updatedtm; __u8 updatedcent;
-  // Continue setting the time until what we read matches it
+  /* Continue setting the time until what we read matches it */
   while (cmos_isupdating());
   updatedtm.ct_second = cmos_getregister(CMOS_REGISTER_SECOND);
   updatedtm.ct_minute = cmos_getregister(CMOS_REGISTER_MINUTE);

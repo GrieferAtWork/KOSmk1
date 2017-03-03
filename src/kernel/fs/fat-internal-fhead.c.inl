@@ -56,7 +56,7 @@ kfatfile_date_fromtimet(struct kfatfile_date *__restrict self, time_t tmt) {
  monthvec = __time_monthstart_yday[__time_isleapyear(year)];
  tmt -= __time_years2days(year);
  newdate.fd_year = year-1980;
- // Find the appropriate month
+ /* Find the appropriate month. */
  for (i = 1; i < 12; ++i) if (monthvec[i] >= tmt) break;
  newdate.fd_month = i;
  newdate.fd_day = (tmt-monthvec[i-1])+1;
@@ -141,7 +141,7 @@ kfatfs_savefileheader(struct kfatfs *__restrict self, __u64 headpos,
  kassertobj(self); kassertobj(header);
  headsec = (kfatsec_t)(headpos/self->f_secsize);
  secbuf = alloca(self->f_secsize);
- // Load the sector that contains the file's header
+ /* Load the sector that contains the file's header. */
  error = kfatfs_loadsectors(self,headsec,1,secbuf);
  if __unlikely(KE_ISERR(error)) return error;
  headbuf = (struct kfatfileheader *)((uintptr_t)secbuf+(size_t)(headpos % self->f_secsize));
@@ -150,7 +150,7 @@ kfatfs_savefileheader(struct kfatfs *__restrict self, __u64 headpos,
  k_syslogf(KLOG_TRACE,"Updating FAT file header @ %I64u: '%.8s.%.3s'\n",
            headpos,headbuf->f_name,headbuf->f_ext);
  memcpy(headbuf,header,sizeof(struct kfatfileheader));
- // Save the sector again
+ /* Save the sector again. */
  return kfatfs_savesectors(self,headsec,1,secbuf);
 }
 

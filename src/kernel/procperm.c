@@ -101,7 +101,8 @@ kprocperm_initcopy(struct kprocperm *__restrict self,
 
 //////////////////////////////////////////////////////////////////////////
 // Destroy a previously initializes process permissions structure.
-__crit void kprocperm_quit(struct kprocperm *__restrict self) {
+__crit void
+kprocperm_quit(struct kprocperm *__restrict self) {
  int i;
  kassert_kprocperm(self);
  for (i = 0; i != KSANDBOX_BARRIER_COUNT; ++i) {

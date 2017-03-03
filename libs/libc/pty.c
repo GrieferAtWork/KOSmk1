@@ -47,11 +47,9 @@ openpty(int *__restrict amaster, int *__restrict aslave, char *name,
 #endif
 }
 
-__public int
-tcgetattr(int fd, struct termios *termios_p) {
- return ioctl(fd,TCGETA,termios_p);
-}
-
+__public int tcsendbreak(int fd, int duration) { return 0; } /* Not for now... */
+__public int tcflush(int fd, int queue_selector) { return ioctl(fd,TCSAFLUSH,queue_selector); }
+__public int tcgetattr(int fd, struct termios *termios_p) { return ioctl(fd,TCGETA,termios_p); }
 __public int
 tcsetattr(int fd, int optional_actions,
           struct termios const *termios_p) {

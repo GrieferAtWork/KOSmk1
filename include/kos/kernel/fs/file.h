@@ -260,8 +260,8 @@ extern __wunused __nonnull((1,3)) kerrno_t kfile_kernel_fast_pwriteall(struct kf
 //////////////////////////////////////////////////////////////////////////
 // Returns the filename/absolute path of a given directory entry
 // @return: KE_NOSYS: No dirent is associated with the given file.
-extern __wunused __nonnull((1))   kerrno_t __kfile_user_getfilename_fromdirent(struct kfile const *__restrict self, __user char *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
-extern __wunused __nonnull((1,2)) kerrno_t __kfile_user_getpathname_fromdirent(struct kfile const *__restrict self, struct kdirent *__restrict root, __user char *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1))   kerrno_t __kfile_user_getfilename_fromdirent(struct kfile const *__restrict self, __user char *buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
+extern __wunused __nonnull((1,2)) kerrno_t __kfile_user_getpathname_fromdirent(struct kfile const *__restrict self, struct kdirent *__restrict root, __user char *buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
 #ifdef __INTELLISENSE__
 extern __wunused __nonnull((1))   kerrno_t __kfile_kernel_getfilename_fromdirent(struct kfile const *__restrict self, __kernel char *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
 extern __wunused __nonnull((1,2)) kerrno_t __kfile_kernel_getpathname_fromdirent(struct kfile const *__restrict self, struct kdirent *__restrict root, __kernel char *__restrict buf, __size_t bufsize, __kernel __size_t *__restrict reqsize);
@@ -286,7 +286,8 @@ extern __crit __nonnull((1)) __ref struct kdirent *kfile_getdirent(struct kfile 
 #else
 #define kfile_getinode(self) \
  __xblock({ struct kfile *const __kfgiself = (self);\
-            kassert_kfile(__kfgiself); assert(ktask_iscrit());\
+            KTASK_CRIT_MARK\
+            kassert_kfile(__kfgiself);\
             __xreturn       __kfgiself->f_type->ft_getinode\
              ? (kassertbyte(__kfgiself->f_type->ft_getinode),\
                            *__kfgiself->f_type->ft_getinode)(__kfgiself)\
@@ -294,7 +295,8 @@ extern __crit __nonnull((1)) __ref struct kdirent *kfile_getdirent(struct kfile 
  })
 #define kfile_getdirent(self) \
  __xblock({ struct kfile *const __kfgdself = (self);\
-            kassert_kfile(__kfgdself); assert(ktask_iscrit());\
+            KTASK_CRIT_MARK\
+            kassert_kfile(__kfgdself);\
             __xreturn       __kfgdself->f_type->ft_getdirent\
              ? (kassertbyte(__kfgdself->f_type->ft_getdirent),\
                            *__kfgdself->f_type->ft_getdirent)(__kfgdself)\

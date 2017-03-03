@@ -174,7 +174,6 @@
     <None Include="..\src\kernel\linker\linker-slloaders.c.inl" />
     <None Include="..\src\kernel\pageframe-alloc.c.inl" />
     <None Include="..\src\kernel\paging-map.c.inl" />
-    <None Include="..\src\kernel\paging-transfer.c.inl" />
     <None Include="..\src\kernel\procmodules.c.inl" />
     <None Include="..\src\kernel\procperm-getset.c.inl" />
     <None Include="..\src\kernel\sched\proc-attr.c.inl" />

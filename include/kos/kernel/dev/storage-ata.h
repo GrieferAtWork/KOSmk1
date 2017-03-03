@@ -306,9 +306,8 @@ struct __packed ata_identifydata {
 
 __COMPILER_PACK_POP
 
-typedef struct __katadev katadev_t;
-struct __katadev {
- struct ksdev            ad_sdev;  /*< Underlying storage device. */
+struct katadev {
+ KSDEV_HEAD /*< Underlying storage device. */
  katabus_t               ad_bus;   /*< ATA Bus location. */
  katadrive_t             ad_drive; /*< ATA Drive location. */
  struct ata_identifydata ad_info;  /*< ATA device information. */
@@ -319,8 +318,9 @@ struct __katadev {
 // @return: KE_OK:     A valid device was detected
 // @return: KE_NOSYS:  The given device isn't available
 // @return: KE_DEVICE: The given device is errorous
-extern __wunused __nonnull((1)) kerrno_t katadev_create(katadev_t *dev, katabus_t bus,
-                                                        katadrive_t drive);
+extern __wunused __nonnull((1)) kerrno_t
+katadev_init(struct katadev *__restrict dev,
+             katabus_t bus, katadrive_t drive);
 
 //////////////////////////////////////////////////////////////////////////
 // Sleep the proper 400ns on the given bus

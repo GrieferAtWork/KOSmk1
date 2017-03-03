@@ -29,11 +29,14 @@
 #include <kos/kernel/proc.h>
 #include <kos/kernel/task.h>
 #include <kos/kernel/pageframe.h>
+#include <limits.h>
 
 __DECL_BEGIN
 
-static __size_t __get_argmax(void) {
- __size_t result; struct kproc *proc = kproc_self();
+
+static size_t __get_argmax(void) {
+ size_t result; struct kproc *proc = kproc_self();
+ if (!kproc_hasflag(proc,KPERM_FLAG_GETPERM)) return 0;
  NOIRQ_BEGINLOCK(kproc_trylock(proc,KPROC_LOCK_ENVIRON));
  result = proc->p_environ.pe_memmax;
  NOIRQ_ENDUNLOCK(kproc_unlock(proc,KPROC_LOCK_ENVIRON));
@@ -42,13 +45,30 @@ static __size_t __get_argmax(void) {
 
 static unsigned int __get_openmax(void) {
  unsigned int result; struct kproc *proc = kproc_self();
+ if (!kproc_hasflag(proc,KPERM_FLAG_GETPERM)) return 0;
  NOIRQ_BEGINLOCK(kproc_trylock(proc,KPROC_LOCK_FDMAN));
  result = proc->p_fdman.fdm_max;
  NOIRQ_ENDUNLOCK(kproc_unlock(proc,KPROC_LOCK_FDMAN));
  return result;
 }
-static size_t __get_avphyspages(void) {
+static size_t __get_thrdmax(void) {
+ struct kproc *proc = kproc_self();
+ if (!kproc_hasflag(proc,KPERM_FLAG_GETPERM)) return 0;
+ return kprocperm_getthrdmax(kproc_getperm(proc));
+}
+#if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
+static size_t __get_totalphyspages(void) {
  struct kpageframeinfo info;
+ kpageframe_getinfo(&info);
+ /* xxx: Should we include pages reserved for the kernel binary? */
+ return info.pfi_freepages+info.pfi_usedpages;
+}
+#else /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
+#define __get_totalphyspages()  (((size_t)-1)/PAGESIZE)
+#endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
+static size_t __get_availphyspages(void) {
+ struct kpageframeinfo info;
+ /* xxx: What about memory restrictions in the calling process? */
  kpageframe_getinfo(&info);
  return info.pfi_freepages;
 }
@@ -57,12 +77,34 @@ static size_t __get_avphyspages(void) {
 extern long k_sysconf(int name);
 long k_sysconf(int name) {
  switch (name) {
-  case _SC_ARG_MAX         : return __get_argmax();
-  case _SC_OPEN_MAX        : return __get_openmax();
-  case _SC_NPROCESSORS_CONF: return 1; // Not implemented (yet)
-  case _SC_NPROCESSORS_ONLN: return 1; // Not implemented (yet)
-  case _SC_PAGE_SIZE       : return PAGESIZE;
-  case _SC_AVPHYS_PAGES    : return __get_avphyspages();
+  case _SC_ARG_MAX           : return __get_argmax();
+  case _SC_STREAM_MAX        : /* xxx: what exactly is this? */
+  case _SC_OPEN_MAX          : return __get_openmax();
+  case _SC_THREAD_THREADS_MAX: return __get_thrdmax();
+  case _SC_TTY_NAME_MAX      : return 11; /*< Suitable for up to 999 PTYs: "/dev/tty123" */
+  case _SC_NPROCESSORS_CONF  : return 1; /*< Not implemented (yet) */
+  case _SC_NPROCESSORS_ONLN  : return 1; /*< Not implemented (yet) */
+  case _SC_PAGE_SIZE         : return PAGESIZE;
+  case _SC_PHYS_PAGES        : return __get_totalphyspages();
+  case _SC_AVPHYS_PAGES      : return __get_availphyspages();
+  /* ~sigh~ (look away from this nonsense...) */
+  case _SC_CHAR_BIT          : return CHAR_BIT;
+  case _SC_CHAR_MAX          : return CHAR_MAX;
+  case _SC_CHAR_MIN          : return CHAR_MIN;
+  case _SC_INT_MAX           : return INT_MAX;
+  case _SC_INT_MIN           : return INT_MIN;
+  case _SC_LONG_BIT          : return __SIZEOF_LONG__*8;
+  case _SC_WORD_BIT          : return __SIZEOF_SHORT__*8;
+  case _SC_NZERO             : return KTASK_PRIORITY_DEF;
+  case _SC_SSIZE_MAX         : return SSIZE_MAX;
+  case _SC_SCHAR_MAX         : return SCHAR_MAX;
+  case _SC_SCHAR_MIN         : return SCHAR_MIN;
+  case _SC_SHRT_MAX          : return SHRT_MAX;
+  case _SC_SHRT_MIN          : return SHRT_MIN;
+  case _SC_UCHAR_MAX         : return UCHAR_MAX;
+  case _SC_UINT_MAX          : return UINT_MAX;
+  case _SC_ULONG_MAX         : return ULONG_MAX;
+  case _SC_USHRT_MAX         : return USHRT_MAX;
   default: break;
  }
  return KE_INVAL;

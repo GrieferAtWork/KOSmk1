@@ -27,12 +27,20 @@ __DECL_BEGIN
 #endif
 
 #ifdef LBA48
+#define MAX_SECTORS  0xffff
+#else
+#define MAX_SECTORS  0xff
+#endif
+
+
+#ifdef LBA48
 static kerrno_t __katadev_pio48_readlba
 #else
 static kerrno_t __katadev_pio28_readlba
 #endif
-(katadev_t const *dev, kslba_t lba, void *__restrict buf,
- size_t sectors, size_t *readsectors) {
+(struct katadev const *__restrict self, kslba_t lba,
+ __kernel void *__restrict buf, size_t sectors,
+ __kernel size_t *readsectors) {
  kerrno_t error = KE_OK; katabus_t bus;
  __u16 *iter;
 #ifdef LBA48
@@ -41,30 +49,26 @@ static kerrno_t __katadev_pio28_readlba
  typedef __u8 Tseci;
 #endif
  Tseci seci;
- kassertobj(dev);
+ kassertobj(self);
  kassertobj(readsectors);
  kassertmem(buf,(sectors*KATA_SECTORSIZE));
- assertf(lba < dev->ad_sdev.sd_blockcount
+ assertf(lba < self->sd_blockcount
         ,"Invalid block address (range)\n"
          "    addr       = %I64u\n"
          "    c          = 1\n"
          "    blockcount = %I64u\n"
-        ,lba,dev->ad_sdev.sd_blockcount);
-#ifdef LBA48
- if (sectors > 0xffff) sectors = 0xffff;
-#else
- if (sectors > 0xff) sectors = 0xff;
-#endif
- bus = dev->ad_bus;
+        ,lba,self->sd_blockcount);
+ if (sectors > MAX_SECTORS) sectors = MAX_SECTORS;
+ bus = self->ad_bus;
  NOIRQ_BEGIN;
  if __unlikely(KE_ISERR(error = kata_poll(bus,ATA_STATUS_BSY,0))) goto end;
 #ifdef LBA48
  outb(ATA_IOPORT_HDDEVSEL(bus),
-      ((dev->ad_drive == ATA_DRIVE_SLAVE) ? 0x50 : 0x40));
+     ((self->ad_drive == ATA_DRIVE_SLAVE) ? 0x50 : 0x40));
 #else
  outb(ATA_IOPORT_HDDEVSEL(bus),
-      ((dev->ad_drive == ATA_DRIVE_SLAVE) ? 0xF0 : 0xE0) |
-      ((lba >> 24) & 0x0F));
+     ((self->ad_drive == ATA_DRIVE_SLAVE) ? 0xF0 : 0xE0) |
+     ((lba >> 24) & 0x0F));
 #endif
  if __unlikely(KE_ISERR(error = kata_poll(bus,
   ATA_STATUS_BSY|ATA_STATUS_DRDY,ATA_STATUS_DRDY))) goto end;
@@ -103,8 +107,9 @@ static kerrno_t __katadev_pio48_writelba
 #else
 static kerrno_t __katadev_pio28_writelba
 #endif
-(katadev_t *dev, kslba_t lba, void const *__restrict buf,
- size_t sectors, size_t *writesectors) {
+(struct katadev *__restrict self, kslba_t lba,
+ __kernel void const *__restrict buf, size_t sectors,
+ __kernel size_t *writesectors) {
 #if 0
  *writesectors = sectors;
  return KE_OK;
@@ -117,29 +122,25 @@ static kerrno_t __katadev_pio28_writelba
  typedef __u8 Tseci;
 #endif
  Tseci seci;
- kassertobj(dev);
+ kassertobj(self);
  kassertobj(writesectors);
  kassertmem(buf,(sectors*KATA_SECTORSIZE));
- assertf(lba < dev->ad_sdev.sd_blockcount
+ assertf(lba < self->sd_blockcount
         ,"Invalid block address (range)\n"
          "    addr       = %I64u\n"
          "    c          = 1\n"
          "    blockcount = %I64u\n"
-        ,lba,dev->ad_sdev.sd_blockcount);
-#ifdef LBA48
- if (sectors > 0xffff) sectors = 0xffff;
-#else
- if (sectors > 0xff) sectors = 0xff;
-#endif
- bus = dev->ad_bus;
+        ,lba,self->sd_blockcount);
+ if (sectors > MAX_SECTORS) sectors = MAX_SECTORS;
+ bus = self->ad_bus;
  NOIRQ_BEGIN;
  if __unlikely(KE_ISERR(error = kata_poll(bus,ATA_STATUS_BSY,0))) goto end;
 #ifdef LBA48
  outb(ATA_IOPORT_HDDEVSEL(bus),
-      ((dev->ad_drive == ATA_DRIVE_SLAVE) ? 0x50 : 0x40));
+      ((self->ad_drive == ATA_DRIVE_SLAVE) ? 0x50 : 0x40));
 #else
  outb(ATA_IOPORT_HDDEVSEL(bus),
-      ((dev->ad_drive == ATA_DRIVE_SLAVE) ? 0xF0 : 0xE0) |
+      ((self->ad_drive == ATA_DRIVE_SLAVE) ? 0xF0 : 0xE0) |
       ((lba >> 24) & 0x0F));
 #endif
  if __unlikely(KE_ISERR(error = kata_poll(bus,
@@ -179,6 +180,7 @@ end:
 #endif
 }
 
+#undef MAX_SECTORS
 
 #ifdef LBA48
 #undef LBA48

@@ -38,7 +38,7 @@ ksuperblock_user_generic_getattr(struct ksuperblock const *self, kattr_t attr,
                                  __kernel size_t *__restrict reqsize)
 #else
 kerrno_t
-ksuperblock_user_generic_setattr(struct ksuperblock *self, kattr_t attr,
+ksuperblock_user_generic_setattr(struct ksuperblock *__restrict self, kattr_t attr,
                                  __user void const *__restrict buf, __size_t bufsize)
 #endif
 {

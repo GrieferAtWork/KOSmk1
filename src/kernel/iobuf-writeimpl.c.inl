@@ -59,11 +59,11 @@ again:
 buffer_is_full:
   if ((mode&KIO_BLOCKFIRST) && self->ib_size == self->ib_maxsize) {
    /* Don't wait if we've already read something and are
-      only supposed to block for the first chunk of data. */
+    * only supposed to block for the first chunk of data. */
    if (*wsize && (mode&(KIO_BLOCKFIRST|KIO_BLOCKALL)) == KIO_BLOCKFIRST) goto end;
    /* Wait until at there is at least something to read
-      NOTE: The following like essentially performs what a
-            condition variable calls its wait-operation. */
+    * NOTE: The following like essentially performs what a
+    *       condition variable calls its wait-operation. */
    //printf("WAIT ON FULL BUFFER (r:%p w:%p b:%p e:%p)\n",
    //       self->ib_rpos,self->ib_wpos,self->ib_buffer,
    //       self->ib_buffer+self->ib_size);
@@ -100,7 +100,7 @@ buffer_is_full:
  max_write = (size_t)(bufend-self->ib_wpos);
  if (self->ib_rpos > self->ib_wpos) {
   /* Make sure not to overwrite unread buffer space.
-     This check is especially necessary if the reader is slow. */
+   * This check is especially necessary if the reader is slow. */
   max_write = min(max_write,(size_t)(self->ib_rpos-self->ib_wpos));
  }
  max_write = min(max_write,bufsize);
@@ -123,8 +123,8 @@ buffer_is_full:
  /* Copy into the lower portion */
  max_write = (size_t)(self->ib_rpos-self->ib_buffer);
  if (!max_write) {
-  // Special case: We can't wrap the buffer because
-  //               that would indicate an empty ring.
+  /* Special case: We can't wrap the buffer because
+   *               that would indicate an empty ring. */
   goto buffer_is_full;
  }
  max_write = min(max_write,bufsize);
@@ -149,11 +149,11 @@ end:
   if (self->ib_rpos == bufend
 #if 0
       /* Technically, we'd only need to set the r-pointer if
-         the following was true, but since there is no harm in
-         always wrapping it when it is out-of-bounds, we do so anyways.
-         NOTE: The condition would assert the w-ptr at start condition,
-               as defined as part of the empty-buffer state, in the
-               description in 'kiobuf_read'. */
+       * the following was true, but since there is no harm in
+       * always wrapping it when it is out-of-bounds, we do so anyways.
+       * NOTE: The condition would assert the w-ptr at start condition,
+       *       as defined as part of the empty-buffer state, in the
+       *       description in 'kiobuf_read'. */
    && self->ib_wpos == self->ib_buffer
 #endif
    ) {

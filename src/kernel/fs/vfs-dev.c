@@ -219,7 +219,7 @@ static kerrno_t kvdev_fdopen(struct kfile *__restrict self, int fdno) {
  error = kproc_getfd(kproc_self(),fdno,&entry);
  if __unlikely(KE_ISERR(error)) goto end;
  if __likely(entry.fd_type == KFDTYPE_FILE) {
-  ((struct kvproxyfile *)self)->pf_used = entry.fd_file; // Inherit reference
+  ((struct kvproxyfile *)self)->pf_used = entry.fd_file; /* Inherit reference. */
  } else {
   error = KE_NOFILE;
   kfdentry_quit(&entry);

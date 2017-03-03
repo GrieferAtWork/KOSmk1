@@ -31,9 +31,8 @@
 
 __DECL_BEGIN
 
-typedef struct __krddev krddev_t; /*< Kernel Ram Disk Device. */
-struct __krddev {
- KSDEV_HEAD
+struct krddev {
+ KSDEV_HEAD /* Kernel Ram Disk Device. */
  void   *rd_begin; /*< [1..1] Ram disk start. */
  void   *rd_end;   /*< [1..1] Ram disk end. */
 };
@@ -43,7 +42,10 @@ struct __krddev {
 // @param blocksize:  The size of a single block of memory
 // @param blockcount: The total amount of blocks.
 // @return: KE_NOMEM: Not enough memory to create this ramdisk.
-extern __wunused __nonnull((1)) kerrno_t krddev_create(krddev_t *self, __size_t blocksize, __size_t blockcount);
+extern __wunused __nonnull((1)) kerrno_t
+krddev_init(struct krddev *__restrict self,
+            __size_t blocksize,
+            __size_t blockcount);
 
 __DECL_END
 #endif /* __KERNEL__ */

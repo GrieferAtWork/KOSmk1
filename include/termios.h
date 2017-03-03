@@ -149,8 +149,8 @@ typedef unsigned char cc_t;
 #define TCSAFLUSH 0x0004
 
 #define TCIFLUSH  0x0001
-#define TCIOFLUSH 0x0003
 #define TCOFLUSH  0x0002
+#define TCIOFLUSH 0x0003
 
 #define TCIOFF    0x0001
 #define TCION     0x0002
@@ -179,7 +179,8 @@ struct termios {
 #define TCGETAW  TCGETSW
 #define TCGETAF  TCGETSF
 
-#define TCSBRK   0x4004
+#define _TCSBRK  0x4004
+#define TCSBRK   _TCSBRK
 #define TCXONC   0x4005
 #define TCFLSH   0x4006
 
@@ -207,10 +208,9 @@ struct termios {
 //int     cfsetospeed(struct termios *, speed_t);
 //int     tcdrain(int);
 //int     tcflow(int, int);
-//int     tcflush(int, int);
 //pid_t   tcgetsid(int);
-//int     tcsendbreak(int, int);
-//int     ioctl(int, int, void*);
+extern int tcsendbreak(int fd, int duration);
+extern int tcflush(int fd, int queue_selector);
 extern int tcgetattr(int fd, struct termios *termios_p);
 extern int tcsetattr(int fd, int optional_actions, struct termios const *termios_p);
 #endif /* !__CONFIG_MIN_LIBC__ */

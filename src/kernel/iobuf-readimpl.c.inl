@@ -88,8 +88,8 @@ again_locked:
  if (!max_read) {
 buffer_is_empty:
   if (mode&KIO_BLOCKFIRST) {
-   // Don't wait if we've already read something and are
-   // only supposed to block for the first chunk of data.
+   /* Don't wait if we've already read something and are
+    * only supposed to block for the first chunk of data. */
    if ((mode&(KIO_BLOCKFIRST|KIO_BLOCKALL)) == KIO_BLOCKFIRST) {
     if (*rsize) goto end_rpos;
     if (self->ib_flags&KIOBUF_FLAG_INTR_BLOCKFIRST) {
@@ -109,9 +109,9 @@ handle_intr:
      goto again_locked;
     }
    }
-   // Wait until at there is at least something to read
-   // NOTE: The following like essentially performs what a
-   //       condition variable calls its wait-operation.
+   /* Wait until at there is at least something to read
+    * NOTE: The following like essentially performs what a
+    *       condition variable calls its wait-operation. */
    //DEBUG_TRACE(("WAIT FOR DATA\n"));
    error = ksignal_recvc(&self->ib_avail,krwlock_endread(&self->ib_rwlock));
    DEBUG_TRACE(("DATA AVAILABLE %Iu %p %p %p %p\n",
@@ -122,11 +122,11 @@ handle_intr:
    goto again;
   } else goto end_rpos;
  }
- // Check for an I/O interrupt in block-first mode.
+ /* Check for an I/O interrupt in block-first mode. */
  if ((mode&(KIO_BLOCKFIRST|KIO_BLOCKALL)) == KIO_BLOCKFIRST &&
      self->ib_flags&KIOBUF_FLAG_INTR_BLOCKFIRST) goto handle_intr;
  bufend = __kiobuf_bufend(self);
- // Read upper-half memory
+ /* Read upper-half memory */
  max_read_linear = min(max_read,(size_t)(bufend-rpos));
  max_read_linear = min(max_read_linear,destsize);
  MEMCPY(destbuf,rpos,max_read_linear);
@@ -148,13 +148,13 @@ handle_intr:
 #ifndef SKIP_MEMORY
  destbuf += max_read_linear;
 #endif
- // Read lower-half memory
+ /* Read lower-half memory */
  max_read_linear = min((size_t)(self->ib_wpos-rpos),destsize);
  MEMCPY(destbuf,rpos,max_read_linear);
  rpos += max_read_linear;
  *rsize += max_read_linear;
  if (destsize == max_read_linear) goto end_rpos;
- // All available memory was read
+ /* All available memory was read */
  assertf(rpos == self->ib_wpos
         ,"rpos   = %p\n"
          "wpos   = %p\n"
@@ -179,27 +179,28 @@ end_rpos:
                     (start_rpos == self->ib_buffer &&
                      self->ib_wpos == bufend));
   if (rpos == self->ib_wpos) {
-   // Special case: The buffer is now empty, but if we
-   // would simply set the r-pointer like usual, the buffer
-   // would look like it was full.
-   // >> Instead, we must upgrade our lock to get write-access,
-   //    and then continue to setup the buffer as follow:
-   // BEFORE:               v r/w-pos
-   //   ====================|======
-   //
-   // AFTER: r-pos (out-of-bounds) v
-   //   |==========================|
-   //   ^ w-pos
+   /* Special case: The buffer is now empty, but if we
+    * would simply set the r-pointer like usual, the buffer
+    * would look like it was full.
+    * >> Instead, we must upgrade our lock to get write-access,
+    *    and then continue to setup the buffer as follow:
+    * BEFORE:               v r/w-pos
+    *   ====================|======
+    *
+    * AFTER: r-pos (out-of-bounds) v
+    *   |==========================|
+    *   ^ w-pos
+    */
    error = krwlock_upgrade(&self->ib_rwlock);
    if __unlikely(KE_ISERR(error)) goto end_always;
    __compiler_barrier();
-   // Make sure our original start r-pos is still valid.
-   // Also make sure no other was performed a write, thus making this just a regular case.
+   /* Make sure our original start r-pos is still valid.
+    * Also make sure no other was performed a write, thus making this just a regular case. */
    DEBUG_TRACE(("BUFFER BECAME EMPTY\n"));
    /* NOTE: the second check might fail if some other task quickly performed a read/write. */
    if __unlikely(error == KS_UNLOCKED &&
                 (self->ib_rpos != start_rpos || rpos != self->ib_wpos)) {
-    // Some other task already performed a read.
+    /* Some other task already performed a read. */
     krwlock_endwrite(&self->ib_rwlock);
     //printf("Some other task already performed a read.\n");
     goto again_full;
@@ -221,10 +222,10 @@ end_rpos:
    error = KE_OK;
    goto end_always;
   }
-  // Overwrite the read-position, if we're the fastest in doing so.
-  // NOTE: Due to the fact that were only holding a read-lock,
-  //       some other task may have been faster than us and
-  //       already read the same data.
+  /* Overwrite the read-position, if we're the fastest in doing so.
+   * NOTE: Due to the fact that were only holding a read-lock,
+   *       some other task may have been faster than us and
+   *       already read the same data. */
   if (!katomic_cmpxch(self->ib_rpos,start_rpos,rpos) &&
       !(mode&KIO_QUICKMOVE)) goto again_full;
   /* Wake writers if the buffer used to be full */

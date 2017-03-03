@@ -275,7 +275,7 @@ err_depiter:
      kshlib_decref(dep);
      goto err_depiter;
     } else {
-     *dep_iter++ = dep; // Inherit reference
+     *dep_iter++ = dep; /* Inherit reference. */
     }
    } else {
     --self->sh_deps.sl_libc;

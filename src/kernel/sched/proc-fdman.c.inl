@@ -421,14 +421,14 @@ kproc_user_fcntlfd_c(struct kproc *__restrict self, int fd,
 __crit __ref struct kfile *kproc_getfdfile(struct kproc *__restrict self, int fd) {
  struct kfdentry fdentry; KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kproc_getfd(self,fd,&fdentry))) return NULL;
- if (fdentry.fd_type == KFDTYPE_FILE) return fdentry.fd_file; // Inherit reference
+ if (fdentry.fd_type == KFDTYPE_FILE) return fdentry.fd_file; /* Inherit reference. */
  kfdentry_quit(&fdentry);
  return NULL;
 }
 __crit __ref struct ktask *kproc_getfdtask(struct kproc *__restrict self, int fd) {
  struct ktask *result; struct kfdentry fdentry; KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kproc_getfd(self,fd,&fdentry))) return NULL;
- if (fdentry.fd_type == KFDTYPE_TASK) return fdentry.fd_task; // Inherit reference
+ if (fdentry.fd_type == KFDTYPE_TASK) return fdentry.fd_task; /* Inherit reference. */
  if (fdentry.fd_type == KFDTYPE_PROC) {
   result = kproc_getroottask(fdentry.fd_proc);
   kproc_decref(fdentry.fd_proc);
@@ -440,7 +440,7 @@ __crit __ref struct ktask *kproc_getfdtask(struct kproc *__restrict self, int fd
 __crit __ref struct kinode *kproc_getfdinode(struct kproc *__restrict self, int fd) {
  struct kfdentry fdentry; struct kinode *result; KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kproc_getfd(self,fd,&fdentry))) return NULL;
- if (fdentry.fd_type == KFDTYPE_INODE) return fdentry.fd_inode; // Inherit reference
+ if (fdentry.fd_type == KFDTYPE_INODE) return fdentry.fd_inode; /* Inherit reference. */
       if (fdentry.fd_type == KFDTYPE_FILE) result = kfile_getinode(fdentry.fd_file);
  else if (fdentry.fd_type == KFDTYPE_DIRENT) result = kdirent_getnode(fdentry.fd_dirent);
  else result = NULL;
@@ -450,7 +450,7 @@ __crit __ref struct kinode *kproc_getfdinode(struct kproc *__restrict self, int 
 __crit __ref struct kdirent *kproc_getfddirent(struct kproc *__restrict self, int fd) {
  struct kfdentry fdentry; struct kdirent *result; KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kproc_getfd(self,fd,&fdentry))) return NULL;
- if (fdentry.fd_type == KFDTYPE_DIRENT) return fdentry.fd_dirent; // Inherit reference
+ if (fdentry.fd_type == KFDTYPE_DIRENT) return fdentry.fd_dirent; /* Inherit reference. */
  if (fdentry.fd_type == KFDTYPE_FILE) result = kfile_getdirent(fdentry.fd_file);
  else result = NULL;
  kfdentry_quit(&fdentry);
@@ -459,7 +459,7 @@ __crit __ref struct kdirent *kproc_getfddirent(struct kproc *__restrict self, in
 __crit __ref struct kproc *kproc_getfdproc(struct kproc *__restrict self, int fd) {
  struct kfdentry fdentry; struct kproc *result; KTASK_CRIT_MARK
  if __unlikely(KE_ISERR(kproc_getfd(self,fd,&fdentry))) return NULL;
- if (fdentry.fd_type == KFDTYPE_PROC) return fdentry.fd_proc; // Inherit reference
+ if (fdentry.fd_type == KFDTYPE_PROC) return fdentry.fd_proc; /* Inherit reference. */
  if (fdentry.fd_type == KFDTYPE_TASK) {
   result = ktask_getproc(fdentry.fd_task);
   if __unlikely(KE_ISERR(kproc_incref(result))) result = NULL;
@@ -626,7 +626,7 @@ kproc_readdirfd(struct kproc *__restrict self, int fd,
   if (fdentry.fd_type == KFDTYPE_FILE) {
    error = kfile_readdir(fdentry.fd_file,inode,name,flags);
    if __likely(error == KE_OK) {
-    *fp = fdentry.fd_file; // Inherit reference
+    *fp = fdentry.fd_file; /* Inherit reference. */
     return error;
    }
   } else {

@@ -48,7 +48,7 @@ __local kerrno_t longnamebuffer_insertfile(struct longnamebuffer *self, struct k
  self->ln_entryv = newvec;
  insend = (inspos = newvec)+(self->ln_entryc++);
  prio = file->f_marker;
- // Search for where we need to insert this long filename entry
+ /* Search for where we need to insert this long filename entry */
  while (inspos != insend) {
   if (inspos->ne_namepos > prio) {
    memmove(inspos+1,inspos,(size_t)(insend-inspos)*
@@ -59,7 +59,7 @@ __local kerrno_t longnamebuffer_insertfile(struct longnamebuffer *self, struct k
  }
  inspos->ne_namepos = prio;
  namedata = (char *)file;
- // Fill the name data of the long filename
+ /* Fill the name data of the long filename */
 #define charat(base,i) namedata[base+i*2]
  inspos->ne_namedata[0]  = charat(1,0);
  inspos->ne_namedata[1]  = charat(1,1);
@@ -155,11 +155,11 @@ kerrno_t kfatfs_enumdir(struct kfatfs *__restrict self, kfatcls_t dir,
     fpos.fm_namepos = (__u64)(dirsec*self->f_secsize)+((uintptr_t)iter-(uintptr_t)files);
    } else {
     char filename[13]; char *filenameiter;
-    // Short filename
+    /* Short filename */
     filenameiter = filename;
-    // I don't Fu36ing care for special directory entries.
-    // >> KOS doesn't use them, and when if comes to user-level
-    //    APIS that require them, they're simply being emulated!
+    /* I don't Fu36ing care for special directory entries.
+     * >> KOS doesn't use them, and when if comes to user-level
+     *    APIS that require them, they're simply being emulated! */
     if (iter->f_name[0] == '.' && (iter->f_name[1] == ' ' ||
        (iter->f_name[1] == '.' && iter->f_name[2] == ' '))) continue;
     memcpy(filenameiter,iter->f_name,8*sizeof(char)),filenameiter += 8;
@@ -186,14 +186,14 @@ kerrno_t kfatfs_enumdir(struct kfatfs *__restrict self, kfatcls_t dir,
   }
   if (iter != end) goto end;
 #ifndef DIRISSEC
-  // Read the next cluster
-  // >> Used for non-root FAT12/16, or any FAT32 directory
+  /* Read the next cluster
+   * >> Used for non-root FAT12/16, or any FAT32 directory */
   error = kfatfs_fat_read(self,dir,&dir);
   if __unlikely(KE_ISERR(error)) break;
   if (kfatfs_iseofcluster(self,dir)) break;
 #else
-  // Go to the next sector
-  // >> Used for FAT12/16 root directories
+  /* Go to the next sector
+   * >> Used for FAT12/16 root directories */
   ++dirsec;
 #endif
  }

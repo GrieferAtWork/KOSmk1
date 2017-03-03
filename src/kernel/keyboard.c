@@ -139,18 +139,18 @@ void keyboard_sendscan(kbscan_t scan) {
   default: break;
  }
 
- // Broadcast the keyboard event through the data distributer
- // NOTE: This needs to be asynchronous because we can't use
- //       preemption as described in the doc of 'kirq_sethandler'
+ /* Broadcast the keyboard event through the data distributer
+  * NOTE: This needs to be asynchronous because we can't use
+  *       preemption as described in the doc of 'kirq_sethandler' */
  kaddist_vsend(&keyboard_input,&event);
 }
 
 
 static void kb_irq_handler(struct kirq_registers *__restrict regs) {
  kbscan_t scan;
- // Wait for the keyboard to become ready
+ /* Wait for the keyboard to become ready */
  while (!(inb(PS2_STATUS) & PS2_STATUS_OUTFULL));
- // Read the scancode
+ /* Read the scancode */
  scan = inb(PS2_DATA);
  switch (scan) {
   case 0x00: case 0xfa:
@@ -236,7 +236,7 @@ struct kkeymap const *kkeymap_current = &keymaps[0];
 void kernel_initialize_bklayout(void) {
  char const *layout = getenv("layout");
  struct kkeymap const *iter,*end;
- if (!layout) layout = "de_DE"; // Sorry, but I'm german...
+ if (!layout) layout = "de_DE"; /* Sorry, but I'm german... */
  end = (iter = keymaps)+__compiler_ARRAYSIZE(keymaps);
  for (; iter != end; ++iter) {
   if (!strcmp(layout,iter->km_name)) {

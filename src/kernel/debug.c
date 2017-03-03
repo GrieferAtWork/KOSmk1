@@ -154,7 +154,8 @@ void debug_hexdump(void const *p, size_t s) {
 //#define KMEM_DEBUG_CALL_FROM_NON_RING_ZERO
 
 
-kerrno_t kmem_validatebyte(__kernel byte_t const *__restrict p) {
+kerrno_t
+kmem_validatebyte(__kernel byte_t const *__restrict p) {
  if __unlikely(!p) return KS_EMPTY;
 #ifdef KMEM_DEBUG_CALL_FROM_NON_RING_ZERO
  if __unlikely(ksegment_currentring() != 0) return KE_OK;
@@ -165,7 +166,8 @@ kerrno_t kmem_validatebyte(__kernel byte_t const *__restrict p) {
  if __unlikely(kpageframe_isfreepage(p,1)) return KE_INVAL;
  return KE_OK;
 }
-kerrno_t kmem_validate(__kernel void const *__restrict p, size_t s) {
+kerrno_t
+kmem_validate(__kernel void const *__restrict p, size_t s) {
  uintptr_t aligned_p;
  if __unlikely(!s) return KE_OK;
  if __unlikely(!p) return KS_EMPTY;

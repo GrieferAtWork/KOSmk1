@@ -161,8 +161,8 @@ ktask_copy4fork(struct ktask *__restrict self,
  result->t_sigval      = NULL;
  result->t_setpriority = katomic_load(self->t_setpriority);
  result->t_curpriority = result->t_setpriority;
- result->t_proc        = proc; // Inherit reference
- result->t_parent      = parent; // Inherit reference
+ result->t_proc        = proc; /* Inherit reference. */
+ result->t_parent      = parent; /* Inherit reference. */
  // The user-stack was already copied when forking the SHM
  result->t_ustackvp    = self->t_ustackvp;
  result->t_ustacksz    = self->t_ustacksz;

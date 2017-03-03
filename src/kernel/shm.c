@@ -59,7 +59,7 @@ kshmchunk_initlinear(struct kshmchunk *__restrict self,
  self->sc_partv[0].sp_start = 0;
  self->sc_partv[0].sp_pages = pages;
  self->sc_partv[0].sp_frame = kpageframe_alloc(pages);
- if __unlikely(self->sc_partv[0].sp_frame == KPAGEFRAME_INVPTR) goto err_r;
+ if __unlikely(self->sc_partv[0].sp_frame == PAGENIL) goto err_r;
  self->sc_flags = flags&~(KSHMREGION_FLAG_NOFREE);
  self->sc_pages = pages;
  self->sc_partc = 1;
@@ -107,7 +107,7 @@ kshmchunk_initram(struct kshmchunk *__restrict self,
  partvec[0].sp_pages = total_page_count;
  if __unlikely(total_page_count != pages) {
   /* Must allocate more / failed to allocate more. */
-  if __unlikely(self->sc_partv[0].sp_frame == KPAGEFRAME_INVPTR) goto err_partvec;
+  if __unlikely(self->sc_partv[0].sp_frame == PAGENIL) goto err_partvec;
   for (;;) {
    newpartvec = (struct kshmpart *)realloc(partvec,(self->sc_partc+1)*
                                            sizeof(struct kshmpart));
@@ -124,7 +124,7 @@ err_free_got_parts:
    newpartvec += self->sc_partc;
    if __unlikely((newpartvec->sp_frame =
                   kpageframe_tryalloc(pages,&newpartvec->sp_pages)
-                 ) == KPAGEFRAME_INVPTR) goto err_free_got_parts;
+                 ) == PAGENIL) goto err_free_got_parts;
    ++self->sc_partc;
    total_page_count += newpartvec->sp_pages;
    assert(total_page_count <= pages);
@@ -701,10 +701,9 @@ kshmchunk_builder_copy_clusters(struct kshmchunk *self,
   /* todo: Try to undo scattering of pageframes.
    *     - While unlikely to succeed, we should try to merge multiple parts here... */
   framecopy = kpageframe_alloc(max_pages);
-  if __unlikely(framecopy == KPAGEFRAME_INVPTR) return KE_NOMEM;
+  if __unlikely(framecopy == PAGENIL) return KE_NOMEM;
   kpageframe_memcpy(framecopy,iter->sp_frame+cluster_start,max_pages);
   assert(memcmp(framecopy,iter->sp_frame+cluster_start,max_pages*PAGESIZE) == 0);
-  //if (max_pages == 1) debug_hexdump(framecopy,PAGESIZE);
   error = kshmchunk_builder_addpart(self,framecopy,max_pages,1);
   if __unlikely(KE_ISERR(error)) {
    kpageframe_free(framecopy,max_pages);
@@ -1263,16 +1262,20 @@ kshmbrach_putsplit(struct kshmbranch **__restrict pself,
  region = min_branch->sb_region;
  kassert_kshmregion(region);
  assert(min_branch->sb_map_min <= min_branch->sb_map_max);
- assertf(page_offset != min_branch->sb_rstart,
-         "Can't split branch at start %Iu (this would create an empty leaf)",
-         min_branch->sb_rstart);
- assertf(page_offset != (min_branch->sb_rstart+min_branch->sb_rpages)-1,
-         "Can't split branch at index %Iu (this would create an empty leaf)",page_offset);
- assert(page_offset >= min_branch->sb_rstart);
- assert(page_offset < min_branch->sb_rstart+min_branch->sb_rpages);
- assertf(page_offset < region->sre_chunk.sc_pages,
-         "The given page_offset %Iu is ouf-of-bounds of 0..%Iu",
-         page_offset,region->sre_chunk.sc_pages);
+ assertf(page_offset >= min_branch->sb_rstart &&
+         page_offset < min_branch->sb_rstart+min_branch->sb_rpages
+        ,"The given index %Iu is out-of-bounds of the branch %Iu..%Iu"
+        ,page_offset,min_branch->sb_rstart
+        ,min_branch->sb_rstart+min_branch->sb_rpages);
+ assertf(page_offset != min_branch->sb_rstart
+        ,"Can't split branch at start %Iu (this would create an empty leaf)"
+        ,min_branch->sb_rstart);
+ assertf(page_offset != (min_branch->sb_rstart+min_branch->sb_rpages)
+        ,"Can't split branch at index %Iu (this would create an empty leaf at the back)"
+        ,page_offset);
+ assertf(page_offset < region->sre_chunk.sc_pages
+        ,"The given page_offset %Iu is ouf-of-bounds of the region 0..%Iu"
+        ,page_offset,region->sre_chunk.sc_pages);
  /* We can only hope that 'addr_semi' is correct... */
  max_branch = omalloc(struct kshmbranch);
  if __unlikely(!max_branch) return KE_NOMEM;
@@ -1302,9 +1305,9 @@ kshmbrach_putsplit(struct kshmbranch **__restrict pself,
  assert(min_branch->sb_cluster_min <= min_branch->sb_cluster_max);
  assert(max_branch->sb_cluster_min <= max_branch->sb_cluster_max);
  assert(min_branch->sb_cluster_max <= max_branch->sb_cluster_min);
- max_branch->sb_map_max     = min_branch->sb_map_max;
- max_branch->sb_map_min     = split_address;
- min_branch->sb_map_max     = split_address-1;
+ max_branch->sb_map_max = min_branch->sb_map_max;
+ max_branch->sb_map_min = split_address;
+ min_branch->sb_map_max = split_address-1;
  asserte(katomic_fetchinc(region->sre_branches) != 0);
  /* Insert the new branch into the binary tree. */
  /* Now the only question remains if 'max_branch' must override '*pself' */
@@ -1355,7 +1358,7 @@ kshmbrach_merge(struct kshmbranch **__restrict pmin, uintptr_t min_semi,
         ,KSHMBRANCH_SEMILEVEL(max_semi));
 
  /* TODO (Add later; this function is only used for optimizations) */
- k_syslogf(KLOG_DEBUG,"[TODO] Merge branches at %p..%p with %p..%p\n",
+ k_syslogf(KLOG_DEBUG,"[TODO] Merge branch at %p..%p with %p..%p\n",
            min_branch->sb_map_min,min_branch->sb_map_max,
            max_branch->sb_map_min,max_branch->sb_map_max);
 #if 0
@@ -1490,7 +1493,7 @@ kshm_init(struct kshm *__restrict self,
  KTASK_CRIT_MARK
  kassertobj(self);
  kobject_init(self,KOBJECT_MAGIC_SHM);
- if __unlikely((self->s_pd = kpagedir_new()) == NULL) return KE_NOMEM;
+ if __unlikely((self->s_pd = kpagedir_new()) == (struct kpagedir *)PAGENIL) return KE_NOMEM;
  if __unlikely(KE_ISERR(error = kpagedir_mapkernel(self->s_pd,KERNEL_MAP_FLAGS))) goto err_pd;
  if __unlikely(KE_ISERR(error = kshm_initldt(self,ldt_size_hint))) goto err_pd;
  kshmmap_init(&self->s_map);
@@ -1521,7 +1524,7 @@ kshm_initfork(struct kshm *__restrict self,
  KTASK_CRIT_MARK
  kassertobj(self);
  kobject_init(self,KOBJECT_MAGIC_SHM);
- if __unlikely((self->s_pd = kpagedir_new()) == NULL) return KE_NOMEM;
+ if __unlikely((self->s_pd = kpagedir_new()) == (struct kpagedir *)PAGENIL) return KE_NOMEM;
  if __unlikely(KE_ISERR(error = kpagedir_mapkernel(self->s_pd,KERNEL_MAP_FLAGS))) goto err_pd;
  if __unlikely(KE_ISERR(error = kshm_initldtcopy(self,right))) goto err_pd;
  /* Enable copy-on-write semantics for the original process. */
@@ -1876,6 +1879,7 @@ true_shared_access:;
  assert(branch->sb_cluster_max >= region->sre_clusterv &&
         branch->sb_cluster_max <  region->sre_clusterv+
                                   region->sre_clusterc);
+ assert(branch == *pbranch);
  if (max_page == (branch->sb_rstart+branch->sb_rpages)-1) {
   /* The greatest touched page lies within the last cluster.
    * >> No need to create the second split! */

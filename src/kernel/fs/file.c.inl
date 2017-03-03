@@ -54,10 +54,10 @@ kfile_opennode(struct kdirent *__restrict dent,
  kassert_kinode(node);
  kassertobj(result);
  if __unlikely(mode&O_DIRECTORY) {
-  // Make sure that we're opening a directory
+  /* Make sure that we're opening a directory. */
   if (!S_ISDIR(node->i_kind)) return KE_NODIR;
  }
- // Lookup the used file type
+ /* Lookup the used file type. */
  resulttype = node->i_filetype; kassertobj(resulttype);
  if __unlikely(resulttype->ft_size < sizeof(struct kfile)) return KE_NOSYS;
  resultfile = (struct kfile *)malloc(resulttype->ft_size);
@@ -65,7 +65,7 @@ kfile_opennode(struct kdirent *__restrict dent,
  kobject_init(resultfile,KOBJECT_MAGIC_FILE);
  resultfile->f_refcnt = 1;
  resultfile->f_type   = resulttype;
- // Call the file-specific initializer
+ /* Call the file-specific initializer. */
  if __likely(resulttype->ft_open) {
   error = (*resulttype->ft_open)(resultfile,dent,node,mode);
   if __unlikely(KE_ISERR(error)) { free(resultfile); return error; }
@@ -93,18 +93,18 @@ void kfile_destroy(struct kfile *__restrict self) {
  void(*quitcall)(struct kfile *);
  kassert_object(self,KOBJECT_MAGIC_FILE);
  kassertobj(self->f_type);
- // Call the optional quit-callback
+ /* Call the optional quit-callback. */
  if __likely((quitcall = self->f_type->ft_quit) != NULL) {
   kassertbyte(quitcall);
   (*quitcall)(self);
  }
- // Finally, free the memory allocated for the file
+ /* Finally, free the memory allocated for the file. */
  free(self);
 }
 
 kerrno_t
 __kfile_user_getfilename_fromdirent(struct kfile const *__restrict self,
-                                    __user char *__restrict buf, size_t bufsize,
+                                    __user char *buf, size_t bufsize,
                                     __kernel size_t *__restrict reqsize) {
  __ref struct kdirent *__restrict dent; kerrno_t error;
  if __unlikely((dent = kfile_getdirent((struct kfile *)self)) == NULL) return KE_NOSYS;
@@ -115,7 +115,7 @@ __kfile_user_getfilename_fromdirent(struct kfile const *__restrict self,
 kerrno_t
 __kfile_user_getpathname_fromdirent(struct kfile const *__restrict self,
                                     struct kdirent *__restrict root,
-                                    __user char *__restrict buf, size_t bufsize,
+                                    __user char *buf, size_t bufsize,
                                     __kernel size_t *__restrict reqsize) {
  __ref struct kdirent *__restrict dent; kerrno_t error;
  if (root) kassert_kdirent(root);

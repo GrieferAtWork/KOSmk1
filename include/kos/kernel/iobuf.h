@@ -51,7 +51,7 @@ __DECL_BEGIN
 struct kiobuf {
  KOBJECT_HEAD
 #define KIOBUF_FLAG_INTR_BLOCKFIRST 0x01
-#define ib_flags ib_avail.s_useru
+#define ib_flags    ib_avail.s_useru
  struct ksignal     ib_avail;   /*< Signal send when data becomes available (Used as a condition variable). */
  struct ksignal     ib_nfull;   /*< Signal send when memory becomes available in a previously full buffer. */
  struct krwlock     ib_rwlock;  /*< Read-write lock for all members below (Main lock; aka. used for close/reset). */
@@ -98,6 +98,13 @@ extern __crit kerrno_t kiobuf_close(struct kiobuf *__restrict self);
 // @return: KE_OK:        The I/O buffer was successfully reset.
 // @return: KS_UNCHANGED: The I/O buffer was not closed.
 extern __crit kerrno_t kiobuf_reset(struct kiobuf *__restrict self);
+
+//////////////////////////////////////////////////////////////////////////
+// Discards all unread data from the given I/O
+// buffer, returning the amount of bytes unqueued.
+// @return: 0 : No unread data available, or the given buffer was closed.
+// @return: * : Amount of bytes successfully discarded (Written latest)
+extern __size_t kiobuf_discard(struct kiobuf *__restrict self);
 #else
 #define kiobuf_init_ex(self,maxsize) \
  __xblock({ struct kiobuf *const __iobieself = (self);\
@@ -134,6 +141,21 @@ extern __crit kerrno_t kiobuf_reset(struct kiobuf *__restrict self);
              ksignal_reset(&__iobrself->ib_nfull);\
             }\
             __xreturn __iobrerror;\
+ })
+#define kiobuf_discard(self) \
+ __xblock({ struct kiobuf *const __iobdself = (self); \
+            __size_t __iobdresult;\
+            KTASK_CRIT_BEGIN\
+            if __likely(KE_ISOK(krwlock_beginwrite(&__iobdself->ib_rwlock))) {\
+             __iobdresult = __kiobuf_maxread(__iobdself,__iobdself->ib_rpos);\
+             __iobdself->ib_wpos = __iobdself->ib_buffer;\
+             __iobdself->ib_rpos = __iobdself->ib_buffer+__iobdself->ib_size;\
+             krwlock_endwrite(&__iobdself->ib_rwlock);\
+            } else {\
+             __iobdresult = 0;\
+            }\
+            KTASK_CRIT_END\
+            __xreturn __iobdresult;\
  })
 #endif
 

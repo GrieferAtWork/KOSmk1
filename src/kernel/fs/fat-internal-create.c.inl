@@ -63,7 +63,9 @@ char dummy_boot_code[] =
   "This is not a bootable disk.  Please insert a bootable floppy and\r\n"
   "press any key to try again ... \r\n";
 
-kerrno_t kfatfs_create(struct kfatfs *__restrict self, struct ksdev *__restrict dev) {
+__crit kerrno_t
+kfatfs_create(struct kfatfs *__restrict self,
+              struct ksdev *__restrict dev) {
  struct kfatext16 sec0;
  __u32 sector_count,clust16,fatdata;
  kerrno_t error; char *iter,*end;
@@ -116,7 +118,14 @@ kerrno_t kfatfs_create(struct kfatfs *__restrict self, struct ksdev *__restrict 
  return KE_OK;
 }
 #else
-kerrno_t kfatfs_create(struct kfatfs *__restrict self, struct ksdev *__restrict dev) {
+__crit kerrno_t
+kfatfs_create(struct kfatfs *__restrict self,
+              struct ksdev *__restrict dev) {
+ KTASK_CRIT_MARK
+ kassertobj(self);
+ kassert_kdev(dev);
+
+
  return KE_NOSYS;
 }
 #endif

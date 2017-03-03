@@ -37,17 +37,18 @@ __DECL_BEGIN
 
 struct check_short_data {
  char const *short_name;
- char const *__restrict long_name;
- size_t long_name_size;
+ char const *long_name;
+ size_t      long_name_size;
 };
 
 static kerrno_t
-check_short_callback(struct kfatfs *__restrict fs, struct kfatfilepos const *__restrict fpos,
+check_short_callback(struct kfatfs *__restrict fs,
+                     struct kfatfilepos const *__restrict fpos,
                      struct kfatfileheader const *__restrict file,
                      char const *filename, size_t filename_size,
                      struct check_short_data *data) {
- if (!memcmp(data->short_name,file->f_nameext,KFATFILE_NAMEMAX+KFATFILE_EXTMAX))
-  return KE_EXISTS; /* Short name already exists. */
+ if (!memcmp(data->short_name,file->f_nameext,KFATFILE_NAMEMAX+KFATFILE_EXTMAX)
+     ) return KE_EXISTS; /* Short name already exists. */
  if (filename_size == data->long_name_size &&
      !memcmp(data->long_name,filename,filename_size)
      ) return KE_NOENT; /* Long name already exists. */
@@ -63,7 +64,7 @@ kfatfs_checkshort(struct kfatfs *__restrict self, kfatcls_t dir, int dir_is_sect
  data.long_name = long_name;
  data.long_name_size = long_name_size;
  data.short_name = (char const *)name;
- return  dir_is_sector
+ return dir_is_sector
   ? kfatfs_enumdirsec(self,dir,self->f_rootmax,(pkfatfs_enumdir_callback)&check_short_callback,&data)
   : kfatfs_enumdir   (self,dir,(pkfatfs_enumdir_callback)&check_short_callback,&data);
 }

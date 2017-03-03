@@ -53,7 +53,7 @@ struct kfatfile {
 };
 
 
-extern __wunused __nonnull((1,2,3)) __ref struct kfatinode *
+extern __crit __wunused __nonnull((1,2,3)) __ref struct kfatinode *
 kfatinode_new(struct kfatsuperblock *__restrict superblock,
               struct kfatfilepos const *__restrict fpos,
               struct kfatfileheader const *__restrict fheader);
@@ -63,7 +63,7 @@ extern struct kinodetype      kfatinode_file_type;
 extern struct kinodetype      kfatinode_dir_type;
 extern struct kblockfiletype  kfatfile_file_type;
 
-extern __wunused __nonnull((1,2)) kerrno_t
+extern __crit __wunused __nonnull((1,2)) kerrno_t
 kfatsuperblock_init(struct kfatsuperblock *__restrict self,
                     struct ksdev *__restrict dev);
 

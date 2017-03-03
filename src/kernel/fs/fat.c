@@ -42,11 +42,12 @@
 __DECL_BEGIN
 
 
-__ref struct kfatinode *
+__crit __ref struct kfatinode *
 kfatinode_new(struct kfatsuperblock *__restrict superblock,
               struct kfatfilepos const *__restrict fpos,
               struct kfatfileheader const *__restrict fheader) {
  struct kfatinode *result;
+ KTASK_CRIT_MARK
  kassert_ksuperblock((struct ksuperblock *)superblock);
  kassertobj(fheader);
  if (fheader->f_attr&KFATFILE_ATTR_DIRECTORY) {
@@ -73,10 +74,11 @@ struct kfat_walkdata {
  struct kfatinode *resnode;
 };
 
-static kerrno_t kfat_walkcallback(struct kfatfs *__restrict fs, struct kfatfilepos const *__restrict fpos,
-                                  struct kfatfileheader const *__restrict file,
-                                  char const *filename, size_t filename_size,
-                                  struct kfat_walkdata *data) {
+static __crit kerrno_t
+kfat_walkcallback(struct kfatfs *__restrict fs, struct kfatfilepos const *__restrict fpos,
+                  struct kfatfileheader const *__restrict file,
+                  char const *filename, size_t filename_size,
+                  struct kfat_walkdata *data) {
 #if 0
  printf("FAT Directory entry: %.?q (Cluster: %I32u) (Looking for %.?q)\n",
         filename_size,filename,kfatfileheader_getcluster(file),
@@ -92,12 +94,12 @@ static kerrno_t kfat_walkcallback(struct kfatfs *__restrict fs, struct kfatfilep
  return KE_OK;
 }
 
-__local kerrno_t
+__local __crit kerrno_t
 kfatinode_dir_walk_finalize(struct ksuperblock *__restrict sblock,
                             struct kfatinode *resnode) {
  kerrno_t error;
  if __unlikely(KE_ISERR(error = ksuperblock_incref(sblock))) return error;
- // Initialize the found node
+ /* Initialize the found node */
  kobject_init(&resnode->fi_inode,KOBJECT_MAGIC_INODE);
  __kinode_initcommon(&resnode->fi_inode);
  kcloselock_init(&resnode->fi_inode.i_closelock);
@@ -113,10 +115,12 @@ kfatinode_dir_walk_finalize(struct ksuperblock *__restrict sblock,
  }
  return KE_OK;
 }
-static kerrno_t kfatinode_dir_walk(struct kfatinode *__restrict self,
-                                   struct kdirentname const *__restrict name,
-                                   __ref struct kinode **resnod) {
+static __crit kerrno_t
+kfatinode_dir_walk(struct kfatinode *__restrict self,
+                   struct kdirentname const *__restrict name,
+                   __ref struct kinode **resnod) {
  struct kfat_walkdata data; kerrno_t error;
+ KTASK_CRIT_MARK
  kassert_kinode(&self->fi_inode);
  kassertobj(name); kassertobj(resnod);
  kassert_ksuperblock(self->fi_inode.i_sblock);
@@ -135,14 +139,16 @@ err_freenode:
  }
  error = kfatinode_dir_walk_finalize(self->fi_inode.i_sblock,data.resnode);
  if __unlikely(KE_ISERR(error)) goto err_freenode;
- *resnod = (struct kinode *)data.resnode; // Inherit reference
+ *resnod = (struct kinode *)data.resnode; /* Inherit reference. */
  return KE_OK;
 }
-__local kerrno_t kfatinode_root_walk(struct kfatinode *__restrict self,
-                                     struct kdirentname const *__restrict name,
-                                     __ref struct kinode **resnod) {
+__local __crit kerrno_t
+kfatinode_root_walk(struct kfatinode *__restrict self,
+                    struct kdirentname const *__restrict name,
+                    __ref struct kinode **resnod) {
  struct kfat_walkdata data; kerrno_t error;
  struct kfatsuperblock *sb;
+ KTASK_CRIT_MARK
  kassert_kinode(&self->fi_inode);
  kassertobj(name); kassertobj(resnod);
  assert(!self->fi_inode.i_sblock);
@@ -167,7 +173,7 @@ err_freenode:
  }
  error = kfatinode_dir_walk_finalize((struct ksuperblock *)sb,data.resnode);
  if __unlikely(KE_ISERR(error)) goto err_freenode;
- *resnod = (struct kinode *)data.resnode; // Inherit reference
+ *resnod = (struct kinode *)data.resnode; /* Inherit reference. */
  return KE_OK;
 }
 
@@ -177,12 +183,14 @@ struct kfat_enumdirdata {
  void     *closure;
 };
 
-static kerrno_t kfat_enumdir(struct kfatfs *__restrict fs, struct kfatfilepos const *__restrict fpos,
-                             struct kfatfileheader const *__restrict file,
-                             char const *filename, size_t filename_size,
-                             struct kfat_enumdirdata *data) {
+static __crit kerrno_t
+kfat_enumdir(struct kfatfs *__restrict fs, struct kfatfilepos const *__restrict fpos,
+             struct kfatfileheader const *__restrict file,
+             char const *filename, size_t filename_size,
+             struct kfat_enumdirdata *data) {
  struct kfatinode *fatinode; kerrno_t error;
  struct kdirentname name;
+ KTASK_CRIT_MARK
  kassertobj(data);
  fatinode = kfatinode_new(kfatsuperblock_fromfatfs(fs),fpos,file);
  if __unlikely(!fatinode) return KE_NOMEM;
@@ -194,15 +202,17 @@ static kerrno_t kfat_enumdir(struct kfatfs *__restrict fs, struct kfatfilepos co
  return error;
 }
 
-static kerrno_t kfatinode_dir_enumdir(
- struct kfatinode *__restrict self, pkenumdir callback, void *closure) {
+static __crit kerrno_t
+kfatinode_dir_enumdir(struct kfatinode *__restrict self,
+                      pkenumdir callback, void *closure) {
  struct kfat_enumdirdata data = {callback,closure};
  return kfatfs_enumdir(&((struct kfatsuperblock *)self->fi_inode.i_sblock)->f_fs,
                        kfatfileheader_getcluster(&self->fi_file),
                        (pkfatfs_enumdir_callback)&kfat_enumdir,&data);
 }
-static kerrno_t kfatinode_root_enumdir(
- struct kfatinode *__restrict self, pkenumdir callback, void *closure) {
+static __crit kerrno_t
+kfatinode_root_enumdir(struct kfatinode *__restrict self,
+                       pkenumdir callback, void *closure) {
  struct kfat_enumdirdata data = {callback,closure};
  struct kfatsuperblock *sblock = (struct kfatsuperblock *)__kinode_superblock(self);
  if (sblock->f_fs.f_type == KFSTYPE_FAT32) {
@@ -270,7 +280,7 @@ kfatinode_setattr(struct kfatinode *__restrict self,
    default: return KE_NOSYS;
   }
  }
- // If nothing changed, skip saving the header
+ /* If nothing changed, skip saving the header */
  if __unlikely(!changed) return KE_OK;
  return kfatfs_savefileheader(fs,self->fi_pos.fm_headpos,&self->fi_file);
 }
@@ -423,13 +433,13 @@ kfatfile_findchunk(struct kblockfile *__restrict self,
  struct kfatfs *__restrict fs = &((struct kfatsuperblock *)fatnode->fi_inode.i_sblock)->f_fs;
  rescls = kfatfileheader_getcluster(&fatnode->fi_file);
  if __unlikely(kfatfs_iseofcluster(fs,rescls)) {
-  // Allocate the initial chunk
+  /* Allocate the initial chunk */
   if __unlikely(KE_ISERR(error = kfatfs_fat_allocfirst(fs,&rescls))) return error;
   assert(!kfatfs_iseofcluster(fs,rescls));
-  // Link the file header to point to that first chunk
+  /* Link the file header to point to that first chunk */
   fatnode->fi_file.f_clusterlo = leswap_16((__u16)(rescls));
   fatnode->fi_file.f_clusterhi = leswap_16((__u16)(rescls >> 16));
-  // Save the file header to make sure the changes are visible on-disk
+  /* Save the file header to make sure the changes are visible on-disk */
   error = kfatfs_savefileheader(fs,fatnode->fi_pos.fm_headpos,&fatnode->fi_file);
   if __unlikely(KE_ISERR(error)) return error;
  }
@@ -503,10 +513,12 @@ struct kblockfiletype kfatfile_file_type = {
 
 
 
-kerrno_t kfatsuperblock_init(struct kfatsuperblock *__restrict self, struct ksdev *__restrict dev) {
+__crit kerrno_t
+kfatsuperblock_init(struct kfatsuperblock *__restrict self,
+                    struct ksdev *__restrict dev) {
  kerrno_t error;
  if __unlikely(KE_ISERR(error = kfatfs_init(&self->f_fs,dev))) return error;
- // todo: Special node type for root directory
+ /* todo: Special node type for root directory */
  memset(&self->s_root.fi_file.f_name,' ',offsetof(struct kfatfileheader,f_attr));
  memset(&self->s_root.fi_file.f_attr,0,
         sizeof(struct kfatfileheader)-
@@ -514,10 +526,12 @@ kerrno_t kfatsuperblock_init(struct kfatsuperblock *__restrict self, struct ksde
  self->s_root.fi_file.f_attr = KFATFILE_ATTR_DIRECTORY;
  return KE_OK;
 }
-static kerrno_t kfatsuperblock_close(struct ksuperblock *self) {
+static kerrno_t
+kfatsuperblock_close(struct ksuperblock *__restrict self) {
  return kfatfs_fat_close(&((struct kfatsuperblock *)self)->f_fs);
 }
-static kerrno_t kfatsuperblock_flush(struct ksuperblock *self) {
+static kerrno_t
+kfatsuperblock_flush(struct ksuperblock *__restrict self) {
  return kfatfs_fat_flush(&((struct kfatsuperblock *)self)->f_fs);
 }
 static void kfatsuperinode_quit(struct kinode *__restrict self) {
@@ -530,7 +544,8 @@ static void kfatsuperinode_quit(struct kinode *__restrict self) {
 }
 
 
-static __ref struct ksdev *kfatsuperblock_getdev(struct kfatsuperblock *__restrict self) {
+static __ref struct ksdev *
+kfatsuperblock_getdev(struct kfatsuperblock *__restrict self) {
  struct ksdev *result = self->f_fs.f_dev;
  if __unlikely(KE_ISERR(ksdev_incref(result))) result = NULL;
  return result;

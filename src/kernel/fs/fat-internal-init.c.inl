@@ -53,17 +53,17 @@ kfatfs_init(struct kfatfs *__restrict self,
  header = (union kfat_header *)alloca(dev->sd_blocksize);
  error = ksdev_readblock(dev,0,header);
  if __unlikely(KE_ISERR(error)) return error;
- // Check for a valid boot signature
+ /* Check for a valid boot signature. */
  boot_signature = (byte_t *)header+(dev->sd_blocksize-2);
  if __unlikely(boot_signature[0] != 0x55 || boot_signature[1] != 0xAA) return KE_INVAL;
- // Check some other clear identifiers for an invalid FAT header
+ /* Check some other clear identifiers for an invalid FAT header. */
  self->f_secsize = leswap_16(header->com.bpb_bytes_per_sector);
  if __unlikely(self->f_secsize != 512 && self->f_secsize != 1024 &&
                self->f_secsize != 2048 && self->f_secsize != 4096) return KE_INVAL;
  if __unlikely(!header->com.bpb_sectors_per_cluster) return KE_INVAL;
- if __unlikely(!header->com.bpb_reserved_sectors) return KE_INVAL; // What's the first sector, then?
+ if __unlikely(!header->com.bpb_reserved_sectors) return KE_INVAL; /* What's the first sector, then? */
  if __unlikely((self->f_secsize % sizeof(struct kfatfileheader)) != 0) return KE_INVAL;
- // Extract some common information
+ /* Extract some common information. */
  self->f_firstfatsec = (kfatsec_t)leswap_16(header->com.bpb_reserved_sectors);
  self->f_sec4clus = (size_t)header->com.bpb_sectors_per_cluster;
  self->f_fatcount = (__u32)header->com.bpb_fatc;
@@ -78,11 +78,11 @@ kfatfs_init(struct kfatfs *__restrict self,
   root_sectors = ceildiv(leswap_16(header->com.bpb_maxrootsize)*sizeof(struct kfatfileheader),self->f_secsize);
   self->f_firstdatasec = (leswap_16(header->com.bpb_reserved_sectors)+(
    header->com.bpb_fatc*leswap_16(header->com.bpb_sectors_per_fat))+root_sectors);
-  // Calculate the total number of data sectors.
+  /* Calculate the total number of data sectors. */
   data_sectors = kfatcom_totalsectors(&header->com)-
    (leswap_16(header->com.bpb_reserved_sectors)+
    (header->com.bpb_fatc*leswap_16(header->com.bpb_sectors_per_fat))+root_sectors);
-  // Calculate the total number of data clusters.
+  /* Calculate the total number of data clusters. */
   total_clusters = data_sectors/header->com.bpb_sectors_per_cluster;
        if (total_clusters > KFAT16_MAXCLUSTERS) fstype = KFSTYPE_FAT32;
   else if (total_clusters > KFAT12_MAXCLUSTERS) fstype = KFSTYPE_FAT16;
@@ -102,7 +102,7 @@ kfatfs_init(struct kfatfs *__restrict self,
                                 self->f_getfatsec = &kfatfs_getfatsec_16;
                                 self->f_clseof_marker = 0xffff;
    }
-   // Check the FAT12/16 signature
+   /* Check the FAT12/16 signature. */
    if (header->x16.x16_signature != 0x28 &&
        header->x16.x16_signature != 0x29) return KE_INVAL;
    memcpy(self->f_label,header->x16.x16_label,sizeof(header->x16.x16_label));
@@ -116,7 +116,7 @@ kfatfs_init(struct kfatfs *__restrict self,
   }
   {
   case KFSTYPE_FAT32:
-   // Check the FAT32 signature
+   /* Check the FAT32 signature. */
    if (header->x32.x32_signature != 0x28 &&
        header->x32.x32_signature != 0x29) return KE_INVAL;
    memcpy(self->f_label,header->x32.x32_label,sizeof(header->x32.x32_label));
@@ -130,7 +130,7 @@ kfatfs_init(struct kfatfs *__restrict self,
 #endif
    self->f_clseof        = (self->f_sec4fat*self->f_secsize)/4;
    self->f_clseof_marker = 0x0FFFFFFF;
-   // Must lookup the cluster of the root directory
+   /* Must lookup the cluster of the root directory. */
    self->f_rootcls       = leswap_32(header->x32.x32_root_cluster);
    break;
   }
@@ -145,9 +145,9 @@ kfatfs_init(struct kfatfs *__restrict self,
  self->f_sysname[8] = '\0',trimspecstring(self->f_sysname,8);
 
  if __unlikely(KE_ISERR(error = ksdev_incref(dev))) return error;
- self->f_dev = dev; // Inherit reference
+ self->f_dev = dev; /* Inherit reference. */
 
- // Allocate memory for the actual FAT
+ /* Allocate memory for the actual FAT. */
  self->f_fatv = malloc(self->f_fatsize);
  if __unlikely(!self->f_fatv) {
 nomem_dev:
@@ -158,11 +158,11 @@ nomem_dev:
  memset(self->f_fatv,0xAA,self->f_fatsize);
 #endif
 
- // Allocate the cache for loaded FAT entries.
- // >> The FAT can get pretty big, so it's faster to keep
- //    most of it unloaded until we actually need it.
- // PLUS: Unless the volume is completely full,
- //       we will only need a small portion of it.
+ /* Allocate the cache for loaded FAT entries.
+  * >> The FAT can get pretty big, so it's faster to keep
+  *    most of it unloaded until we actually need it.
+  * PLUS: Unless the volume is completely full,
+  *       we will only need a small portion of it. */
  self->f_fatmeta = (byte_t *)calloc(1,ceildiv(self->f_fatsize,self->f_sec4fat*4));
  if __unlikely(!self->f_fatmeta) { free(self->f_fatv); goto nomem_dev; }
 

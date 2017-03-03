@@ -64,7 +64,7 @@ struct kgchead {
 // Run the garbage collector
 // @return: * : Amount of executed callbacks.
 //     WARNING: A non-zero return does not necessarily indicate
-//              that we were actually able to allocate more memory.
+//              that we were actually able to free some memory.
 extern __crit __size_t gc_run(void);
 
 //////////////////////////////////////////////////////////////////////////
@@ -78,15 +78,12 @@ extern __crit __nonnull((1)) void gc_untrack(struct kgchead *__restrict head);
 #define GC_TRACK(self)     gc_track(&(self)->__gc_head)
 #define GC_UNTRACK(self) gc_untrack(&(self)->__gc_head)
 
+/* HINT: When implementing a gc callback, use try-lock in your locking mechanism.
+ *       That way you implicitly handle what should happen when the gc is invoked
+ *       when the calling task is already holding a lock to you, as well as prevent
+ *       freeing the same block of memory you might currently be trying to realloc(). */
 #define GC_HEAD         struct kgchead __gc_head;
 #define GC_SELF(T,head) ((T *)((__uintptr_t)(head)-offsetof(T,__gc_head)))
-
-
-/* TODO */
-// extern void *gmalloc(size_t s);
-// extern void *gcalloc(size_t c, size_t s);
-// extern void *grealloc(void *p, size_t s);
-// extern void  gfree(void *p);
 
 
 __DECL_END

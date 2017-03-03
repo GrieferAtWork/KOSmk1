@@ -6,11 +6,17 @@
 
 #ifdef __KERNEL__
 #include <kos/kernel/task.h>
+#include <kos/kernel/gc.h>
 #define SPIN_LOCK_YIELD   ktask_yield();
+#define GC_COLLECT        gc_run()
 #else
 /* Don't use sched_yield() to prevent a dependency on 'libpthread' in 'libc' */
 #include <proc.h>
 #define SPIN_LOCK_YIELD   task_yield();
+#endif
+
+#ifndef GC_COLLECT
+#define GC_COLLECT        0
 #endif
 
 #ifdef __KERNEL__
@@ -25,7 +31,7 @@
        : kpageframe_realloc_inplace((struct kpageframe *)(p),ceildiv(o,PAGESIZE),ceildiv(n,PAGESIZE)))
 #define DIRECT_MMAP(s)   kpageframe_alloc(ceildiv(s,PAGESIZE))
 #define MUNMAP(a,s)     (kpageframe_free((struct kpageframe *)(a),ceildiv(s,PAGESIZE)),0)
-#define MFAIL            KPAGEFRAME_INVPTR
+#define MFAIL            PAGENIL
 /* Lie about the fact, and tell dlmalloc that we don't have
  * this header, thereby preventing it from attempting to
  * overwrite our malloc-hooks as defined above, or to make wrong
