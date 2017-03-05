@@ -195,6 +195,9 @@ ktask_copy4fork(struct ktask *__restrict self,
 #if KCONFIG_HAVE_TASK_STATS
  ktaskstat_init(&result->t_stats);
 #endif /* KCONFIG_HAVE_TASK_STATS */
+#if !KCONFIG_HAVE_IRQ
+ result->t_preempt = KTASK_PREEMT_COUNTDOWN;
+#endif /* !KCONFIG_HAVE_IRQ */
 
  // Setup the stack pointer to point to the new kernel stack
  result->t_esp = (__user void *)((uintptr_t)result->t_kstackvp+kstacksize);
@@ -217,11 +220,15 @@ ktask_copy4fork(struct ktask *__restrict self,
   regs.base.ebx    = userregs->ebx;
   regs.base.edx    = userregs->edx;
   regs.base.ecx    = userregs->ecx;
-  regs.base.eax    = KE_OK; // Return 0 in EAX for child task
+  regs.base.eax    = KE_OK; /* Return 0 in EAX for child task. */
   regs.base.eip    = userregs->eip;
   regs.base.cs     = userregs->cs;
+#ifdef KARCH_X86_EFLAGS_IF
   regs.base.eflags = userregs->eflags|KARCH_X86_EFLAGS_IF;
-  // Use the same ESP address as originally set when 'fork()' was called.
+#else
+  regs.base.eflags = userregs->eflags;
+#endif
+  /* Use the same ESP address as originally set when 'fork()' was called. */
   regs.useresp     = userregs->useresp;
   regs.ss          = userregs->ss;
   ktask_stackpush_sp_unlocked(result,&regs,sizeof(regs));

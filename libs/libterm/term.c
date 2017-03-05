@@ -527,6 +527,7 @@ enter_escape_mode:
      SET_CURSOR(x,ARGC ? (coord_t)(atoi(ARGV[0])-1) : 0);
      break;
     case ANSI_CUP:
+    case ANSI_CUP2:
      if (ARGC >= 2) {
       SET_CURSOR((coord_t)(atoi(ARGV[0])-1),
                  (coord_t)(atoi(ARGV[1])-1));

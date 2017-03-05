@@ -68,6 +68,7 @@ __DECL_BEGIN
 #define __kpageflag_t_defined 1
 typedef __kpageflag_t kpageflag_t;
 #endif
+typedef x86_pte kpage_t;
 struct __packed kpagedir { x86_pde d_entries[X86_PDE4DIC]; };
 #endif /* !__ASSEMBLY__ */
 #define PAGEDIR_FLAG_USER       X86_PTE_FLAG_USER
@@ -259,6 +260,10 @@ extern __constcall __wunused __nonnull((1)) __physicaladdr void *KPAGEDIR_TRANSL
 kpagedir_translate(struct kpagedir const *__restrict self, __virtualaddr void const *virt);
 extern __constcall __wunused __nonnull((1)) __physicaladdr void *KPAGEDIR_TRANSLATE_CALL
 kpagedir_translate_flags(struct kpagedir const *__restrict self, __virtualaddr void const *virt, kpageflag_t flags);
+
+extern __constcall __wunused __nonnull((1)) kpage_t *KPAGEDIR_TRANSLATE_CALL
+kpagedir_getpage(struct kpagedir *__restrict self,
+                 __virtualaddr void const *virt);
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the page directory used by the kernel

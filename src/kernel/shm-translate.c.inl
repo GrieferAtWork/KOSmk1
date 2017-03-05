@@ -50,7 +50,6 @@ __kshm_translateuser_impl(struct kshm const *self, struct kpagedir const *epd,
    *    and assume a is-a-faulty-pointer-style request. */
   return kpagedir_translate(self->s_pd,addr);
  }
-again:
 #ifdef WRITEABLE
  /* NOTE: Don't set the dirty bit here. - This one's mean
   *       for writing to restricted pages and can't be
@@ -58,6 +57,7 @@ again:
  result = kpagedir_translate_u(epd,addr,rwbytes,1);
  if __likely(result || epd != self->s_pd)
 #else
+again:
  /* TODO: When writing, set the 'dirty' bit on all affected pages.
   *    >> Otherwise we can't use it to track root-fork privileges. */
  result = kpagedir_translate_u(epd,addr,rwbytes,writable);
@@ -84,13 +84,17 @@ again:
   *       the return value for being non-ZERO(0). */
 #ifdef WRITEABLE
  if __unlikely(!kshm_touch((struct kshm *)self,(void *)address_page,page_count,0)) return NULL;
+ /* Translate again, but don't include a write-request.
+  * >> In writable mode, we allow access to otherwise read-only memory. */
+ *rwbytes = rw_request;
+ return kpagedir_translate_u(epd,addr,rwbytes,0);
 #else
  if __unlikely(!kshm_touch((struct kshm *)self,(void *)address_page,page_count,
                            KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE)) return NULL;
-#endif
  /* Something was touched -> Try to translate the pointer again! */
  *rwbytes = rw_request;
  goto again;
+#endif
 }
 
 #ifdef WRITEABLE

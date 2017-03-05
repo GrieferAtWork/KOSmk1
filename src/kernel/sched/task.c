@@ -70,7 +70,9 @@ __STATIC_ASSERT(offsetof(struct ktask,t_kstackend) == KTASK_OFFSETOF_KSTACKEND);
 __STATIC_ASSERT(offsetof(struct ktask,t_tls)       == KTASK_OFFSETOF_TLS);
 #if KCONFIG_HAVE_TASK_STATS
 __STATIC_ASSERT(offsetof(struct ktask,t_stats)     == KTASK_OFFSETOF_STAT);
+__STATIC_ASSERT(sizeof(struct ktaskstat)           == KTASKSTAT_SIZEOF);
 #endif /* KCONFIG_HAVE_TASK_STATS */
+__STATIC_ASSERT(sizeof(struct ktask)               == KTASK_SIZEOF);
 
 
 extern struct kcpu  __kcpu_zero;
@@ -127,6 +129,9 @@ struct ktask __ktask_zero = {
 #if KCONFIG_HAVE_TASK_STATS
  /* t_stats       */KTASKSTAT_INIT,
 #endif /* KCONFIG_HAVE_TASK_STATS */
+#if !KCONFIG_HAVE_IRQ
+ /* t_preempt     */KTASK_PREEMT_COUNTDOWN,
+#endif /* !KCONFIG_HAVE_IRQ */
 };
 
 
@@ -307,6 +312,9 @@ ktask_newkernel(struct ktask *__restrict parent,
 #if KCONFIG_HAVE_TASK_STATS
  ktaskstat_init(&result->t_stats);
 #endif /* KCONFIG_HAVE_TASK_STATS */
+#if !KCONFIG_HAVE_IRQ
+ result->t_preempt = KTASK_PREEMT_COUNTDOWN;
+#endif /* !KCONFIG_HAVE_IRQ */
  ksignal_init(&result->t_joinsig);
  ktasksig_init(&result->t_sigchain,result);
 #if KCONFIG_HAVE_TASK_NAMES
@@ -414,6 +422,9 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
 #if KCONFIG_HAVE_TASK_STATS
  ktaskstat_init(&result->t_stats);
 #endif /* KCONFIG_HAVE_TASK_STATS */
+#if !KCONFIG_HAVE_IRQ
+ result->t_preempt = KTASK_PREEMT_COUNTDOWN;
+#endif /* !KCONFIG_HAVE_IRQ */
  ksignal_init(&result->t_joinsig);
  ktasksig_init(&result->t_sigchain,result);
 #if KCONFIG_HAVE_TASK_NAMES

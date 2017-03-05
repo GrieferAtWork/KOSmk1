@@ -39,7 +39,7 @@
 __DECL_BEGIN
 
 
-static kerrno_t kshm_initldt(struct kshm *__restrict self, __u16 size_hint);
+static kerrno_t kshm_initldt(struct kshm *__restrict self, kseglimit_t size_hint);
 static kerrno_t kshm_initldtcopy(struct kshm *__restrict self, struct kshm *__restrict right);
 static void kshm_quitldt(struct kshm *__restrict self);
 
@@ -59,7 +59,7 @@ kshmchunk_initlinear(struct kshmchunk *__restrict self,
  self->sc_partv[0].sp_start = 0;
  self->sc_partv[0].sp_pages = pages;
  self->sc_partv[0].sp_frame = kpageframe_alloc(pages);
- if __unlikely(self->sc_partv[0].sp_frame == PAGENIL) goto err_r;
+ if __unlikely(self->sc_partv[0].sp_frame == PAGEFRAME_NIL) goto err_r;
  self->sc_flags = flags&~(KSHMREGION_FLAG_NOFREE);
  self->sc_pages = pages;
  self->sc_partc = 1;
@@ -107,7 +107,7 @@ kshmchunk_initram(struct kshmchunk *__restrict self,
  partvec[0].sp_pages = total_page_count;
  if __unlikely(total_page_count != pages) {
   /* Must allocate more / failed to allocate more. */
-  if __unlikely(self->sc_partv[0].sp_frame == PAGENIL) goto err_partvec;
+  if __unlikely(self->sc_partv[0].sp_frame == PAGEFRAME_NIL) goto err_partvec;
   for (;;) {
    newpartvec = (struct kshmpart *)realloc(partvec,(self->sc_partc+1)*
                                            sizeof(struct kshmpart));
@@ -124,7 +124,7 @@ err_free_got_parts:
    newpartvec += self->sc_partc;
    if __unlikely((newpartvec->sp_frame =
                   kpageframe_tryalloc(pages,&newpartvec->sp_pages)
-                 ) == PAGENIL) goto err_free_got_parts;
+                  ) == PAGEFRAME_NIL) goto err_free_got_parts;
    ++self->sc_partc;
    total_page_count += newpartvec->sp_pages;
    assert(total_page_count <= pages);
@@ -233,9 +233,9 @@ kshmchunk_quit(struct kshmchunk *__restrict self) {
 //////////////////////////////////////////////////////////////////////////
 // ===== kshmregion
 __crit kerrno_t
-kshmregion_incref(struct kshmregion *__restrict self,
-                  struct kshmcluster *cls_min,
-                  struct kshmcluster *cls_max) {
+kshmregion_incref_clusters(struct kshmregion *__restrict self,
+                           struct kshmcluster *cls_min,
+                           struct kshmcluster *cls_max) {
  struct kshmcluster *iter;
  kshmrefcnt_t oldrefcnt,newrefcnt;
  KTASK_CRIT_MARK
@@ -257,6 +257,18 @@ kshmregion_incref(struct kshmregion *__restrict self,
 overflow:
  if (iter-- != cls_min) kshmregion_decref(self,cls_min,iter);
  return KE_OVERFLOW;
+}
+__crit kerrno_t
+kshmregion_incref(struct kshmregion *__restrict self,
+                  struct kshmcluster *cls_min,
+                  struct kshmcluster *cls_max) {
+ kerrno_t error;
+ asserte(katomic_fetchinc(self->sre_branches) != 0);
+ error = kshmregion_incref_clusters(self,cls_min,cls_max);
+ if __unlikely(KE_ISERR(error)) {
+  asserte(katomic_decfetch(self->sre_branches) != 0);
+ }
+ return error;
 }
 
 #ifdef __DEBUG__
@@ -291,8 +303,22 @@ kshmregion_freecluster(struct kshmregion *__restrict self,
         cluster <  self->sre_clusterv+self->sre_clusterc);
  cluster_start = (cluster-self->sre_clusterv)*KSHM_CLUSTERSIZE;
  iter = cluster->sc_part;
- assert(cluster_start >= iter->sp_start &&
-        cluster_start < iter->sp_start+iter->sp_pages);
+ kassertobj(iter);
+ assert(iter >= self->sre_chunk.sc_partv &&
+        iter <  self->sre_chunk.sc_partv+self->sre_chunk.sc_partc);
+ assertf(cluster_start >= iter->sp_start &&
+         cluster_start <  iter->sp_start+iter->sp_pages,
+         "Region cluster page %Iu (cluster %Iu) "
+         "is out-of-bounds of associated part %Iu (covers %Iu..%Iu)\n"
+         "self->sre_clusterc       = %Iu\n"
+         "self->sre_chunk.sc_pages = %Iu\n"
+         "self->sre_chunk.sc_partc = %Iu\n",
+         cluster_start,cluster_start/KSHM_CLUSTERSIZE,
+        (size_t)(iter-self->sre_chunk.sc_partv),
+         iter->sp_start,iter->sp_start+iter->sp_pages,
+         self->sre_clusterc,
+         self->sre_chunk.sc_pages,
+         self->sre_chunk.sc_partc);
  cluster_start -= iter->sp_start;
  end = self->sre_chunk.sc_partv+self->sre_chunk.sc_partc;
  /* Delete all frames associated with this cluster. */
@@ -320,28 +346,22 @@ kshmregion_freecluster(struct kshmregion *__restrict self,
   /* The last cluster may not be fully used. - Handled by checking for part end. */
   if (++iter == end) break;
  }
- {
-  /* Drop the reference the cluster had on the region. */
+ /* Drop the reference the cluster had on the region. */
 #ifdef __DEBUG__
-  size_t refcnt = katomic_decfetch(self->sre_clustera);
-  assert(refcnt != (size_t)-1);
-  if (!refcnt)
-#else
-  if (!katomic_decfetch(self->sre_clustera))
-#endif
-  {
-   kshmregion_assert_reallynoclusters(self);
-   free(self->sre_chunk.sc_partv);
-   free(self);
-   return;
-  }
+ {
+  size_t cnt = katomic_fetchdec(self->sre_clustera);
+  assert(cnt != 0);
+  if (cnt == 1) kshmregion_assert_reallynoclusters(self);
  }
+#else
+ asserte(katomic_fetchdec(self->sre_clustera) != 0);
+#endif
 }
 
 __crit void
-kshmregion_decref(struct kshmregion *__restrict self,
-                  struct kshmcluster *cls_min,
-                  struct kshmcluster *cls_max) {
+kshmregion_decref_clusters(struct kshmregion *__restrict self,
+                           struct kshmcluster *cls_min,
+                           struct kshmcluster *cls_max) {
  KTASK_CRIT_MARK
  kassert_kshmregion(self);
  assert(cls_min >= self->sre_clusterv && cls_min < self->sre_clusterv+self->sre_clusterc);
@@ -364,6 +384,28 @@ kshmregion_decref(struct kshmregion *__restrict self,
  } while (cls_min++ != cls_max);
 }
 
+__crit void
+kshmregion_decref(struct kshmregion *__restrict self,
+                  struct kshmcluster *cls_min,
+                  struct kshmcluster *cls_max) {
+ KTASK_CRIT_MARK
+ kassert_kshmregion(self);
+ kshmregion_decref_clusters(self,cls_min,cls_max);
+ { /* Drop a reference counter the branch counter. */
+#ifdef __DEBUG__
+  size_t refcnt = katomic_decfetch(self->sre_branches);
+  assert(refcnt != (size_t)-1);
+  if (!refcnt)
+#else
+  if (!katomic_decfetch(self->sre_branches))
+#endif
+  {
+   free(self->sre_chunk.sc_partv);
+   free(self);
+  }
+ }
+}
+
 
 
 #define SIZEOF_KSHMREGION(cluster_c) \
@@ -382,7 +424,7 @@ kshmregion_raw_alloc(size_t clusters, kshm_flag_t flags) {
  result = (__ref struct kshmregion *)malloc(SIZEOF_KSHMREGION(clusters));
  if __unlikely(!result) return NULL;
  kobject_init(result,KOBJECT_MAGIC_SHMREGION);
- result->sre_branches = 0;
+ result->sre_branches = 1;
  result->sre_clustera = clusters;
  result->sre_clusterc = clusters;
  return result;
@@ -393,12 +435,15 @@ kshmregion_setup_clusters(struct kshmregion *self) {
  struct kshmpart *part;
  kshmregion_page_t part_page = 0;
  kassert_kshmregion(self);
+ assert(self->sre_clusterc);
+ assert(self->sre_chunk.sc_partc);
+ assert(self->sre_clusterc == ceildiv(self->sre_chunk.sc_pages,KSHM_CLUSTERSIZE));
  end = (iter = self->sre_clusterv)+self->sre_clusterc;
  part = self->sre_chunk.sc_partv;
  do {
   while ((assert(part != self->sre_chunk.sc_partv+
                          self->sre_chunk.sc_partc),
-          part_page > part->sp_pages)) {
+          part_page >= part->sp_pages)) {
    part_page -= part->sp_pages;
    ++part;
   }
@@ -475,9 +520,21 @@ kshmregion_merge(__ref struct kshmregion *min_region,
    * and 'sre_branches == 1', we also check all cluster reference counters to
    * equal one as well. */
   cend = (citer = min_region->sre_clusterv)+min_region->sre_clusterc;
-  for (; citer != cend; ++citer) assert(citer->sc_refcnt == 1);
+  for (; citer != cend; ++citer) {
+   assertf(citer->sc_refcnt == 1
+           ,"Min region cluster %Iu/%Iu has refcnt %I32u"
+           ,citer-min_region->sre_clusterv
+           ,min_region->sre_clusterc
+           ,citer->sc_refcnt);
+  }
   cend = (citer = max_region->sre_clusterv)+max_region->sre_clusterc;
-  for (; citer != cend; ++citer) assert(citer->sc_refcnt == 1);
+  for (; citer != cend; ++citer) {
+   assertf(citer->sc_refcnt == 1
+           ,"Max region cluster %Iu/%Iu has refcnt %I32u"
+           ,citer-max_region->sre_clusterv
+           ,max_region->sre_clusterc
+           ,citer->sc_refcnt);
+  }
  }
 #endif
  /* Merge the given regions into one. */
@@ -500,7 +557,8 @@ kshmregion_merge(__ref struct kshmregion *min_region,
                max_region->sre_chunk.sc_partc;
  /* Page start of the max-region. */
  part_start = minpart_max->sp_start+minpart_max->sp_pages;
- if (minpart_max->sp_start+minpart_max->sp_pages == maxpart_min->sp_start) {
+#if 1
+ if (minpart_max->sp_frame+minpart_max->sp_pages == maxpart_min->sp_frame) {
   /* Can combine the last and first parts of the given regions (one less part). */
   --total_parts;
   partvec = (struct kshmpart *)malloc(total_parts*sizeof(struct kshmpart));
@@ -522,7 +580,9 @@ kshmregion_merge(__ref struct kshmregion *min_region,
    iter->sp_start = part_start;
    part_start += iter->sp_pages;
   }
- } else {
+ } else
+#endif
+ {
   /* Regular part merge */
   partvec = (struct kshmpart *)malloc(total_parts*sizeof(struct kshmpart));
   if __unlikely(!partvec) goto err_r;
@@ -534,13 +594,19 @@ kshmregion_merge(__ref struct kshmregion *min_region,
   memcpy(partvec,max_region->sre_chunk.sc_partv,
                  max_region->sre_chunk.sc_partc*
                  sizeof(struct kshmpart));
-  part_start = partvec->sp_start+partvec->sp_pages;
+  part_start = min_region->sre_chunk.sc_pages;
   end = (iter = partvec)+max_region->sre_chunk.sc_partc;
   assert(iter < end);
   assertf(!iter->sp_start,"First part of max-region must start at ZERO(0)");
   do iter->sp_start += part_start;
   while (++iter != end);
  }
+ /* Now that we've extracted all data from the given regions, free() them. */
+ free(min_region->sre_chunk.sc_partv);
+ free(max_region->sre_chunk.sc_partv);
+ free(min_region);
+ free(max_region);
+
  result->sre_chunk.sc_partc = total_parts;
  /* The chunk and all of its parts are now fully initialized.
   * Since part of this function's contract is both regions
@@ -604,7 +670,7 @@ __local void kshmchunk_builder_finish(struct kshmchunk *self) {
  assert(self->sc_partc != 0);
  if __likely(self->sc_parta != self->sc_partc) {
   iter = (struct kshmpart *)realloc(self->sc_partv,self->sc_partc*
-                                      sizeof(struct kshmpart));
+                                    sizeof(struct kshmpart));
   if __likely(iter) self->sc_partv = iter;
  } else iter = self->sc_partv;
 #ifdef __DEBUG__
@@ -615,6 +681,7 @@ __local void kshmchunk_builder_finish(struct kshmchunk *self) {
   iter->sp_start  = start;
   start          += iter->sp_pages;
  } while (++iter != end);
+ self->sc_pages = start;
 }
 __local int
 kshmchunk_builder_inheritscluster(struct kshmchunk *self,
@@ -701,7 +768,7 @@ kshmchunk_builder_copy_clusters(struct kshmchunk *self,
   /* todo: Try to undo scattering of pageframes.
    *     - While unlikely to succeed, we should try to merge multiple parts here... */
   framecopy = kpageframe_alloc(max_pages);
-  if __unlikely(framecopy == PAGENIL) return KE_NOMEM;
+  if __unlikely(framecopy == PAGEFRAME_NIL) return KE_NOMEM;
   kpageframe_memcpy(framecopy,iter->sp_frame+cluster_start,max_pages);
   assert(memcmp(framecopy,iter->sp_frame+cluster_start,max_pages*PAGESIZE) == 0);
   error = kshmchunk_builder_addpart(self,framecopy,max_pages,1);
@@ -794,7 +861,7 @@ kshmregion_extractpart(struct kshmregion *self,
  result = (__ref struct kshmregion *)malloc(SIZEOF_KSHMREGION(cluster_count));
  if __unlikely(!result) return NULL;
  kobject_init(result,KOBJECT_MAGIC_SHMREGION);
- result->sre_branches = 0;
+ result->sre_branches = 1;
  result->sre_clustera = cluster_count;
  result->sre_clusterc = cluster_count;
  /* NOTE: We don't rely on the fact that clusters may have a reference
@@ -890,7 +957,6 @@ flush_inheritable_clusters:
   kshmrefcnt_t refcnt = katomic_decfetch(iter->sc_refcnt);
   assert(refcnt != (kshmrefcnt_t)-1);
   if (!refcnt) {
-   size_t new_alloc;
    /* Some other process may have dropped his reference
     * to some cluster, reducing it to ONE(1) after we've
     * decided not to inherit it.
@@ -900,15 +966,19 @@ flush_inheritable_clusters:
    if __unlikely(!kshmchunk_builder_inheritscluster(&result->sre_chunk,iter)) {
     kshmregion_freecluster(self,iter);
    }
-   new_alloc = katomic_decfetch(self->sre_clustera);
-   assert(new_alloc != (size_t)-1);
-   if (!new_alloc) {
-    /* Last cluster has been decref'ed -> Must free the region controller. */
+#ifdef __DEBUG__
+   size_t cnt = katomic_decfetch(self->sre_clustera);
+   assert(cnt != (size_t)-1);
+   if (!cnt) {
+    /* Last cluster has been decref'ed. */
     assert(iter == cls_max);
     kshmregion_assert_reallynoclusters(self);
-    free(self->sre_chunk.sc_partv);
-    free(self);
    }
+#else
+   asserte(katomic_fetchdec(self->sre_clustera) != 0);
+#endif
+   free(self->sre_chunk.sc_partv);
+   free(self);
   }
   if (iter == cls_max) break;
   ++iter;
@@ -916,9 +986,20 @@ flush_inheritable_clusters:
  /* Try to clean up vector memory not used by the builder. */
  kshmchunk_builder_finish(&result->sre_chunk);
  result->sre_chunk.sc_flags = self->sre_chunk.sc_flags;
- result->sre_chunk.sc_pages = self->sre_clusterc*KSHM_CLUSTERSIZE;
  /* Generate the cluster-start cache. */
  kshmregion_setup_clusters(result);
+ 
+ /* Do some sanity checks on the newly created region. */
+ assert(result->sre_branches == 1);
+ assert(result->sre_clusterc == cluster_count);
+ assert(result->sre_clusterc == cluster_count);
+ assert(result->sre_chunk.sc_pages <= cluster_count*KSHM_CLUSTERSIZE);
+#ifdef __DEBUG__
+ cls_end = (iter = result->sre_clusterv)+cluster_count;
+ do assert(iter->sc_refcnt == 1);
+ while (++iter != cls_end);
+#endif
+
  return result;
 err_r:
  kshmchunk_builder_quit(&result->sre_chunk);
@@ -1000,25 +1081,19 @@ kshmregion_getphysaddr_s(struct kshmregion *__restrict self,
 __crit __nomp kerrno_t
 kshmbranch_remap(struct kshmbranch const *__restrict self,
                  struct kpagedir *__restrict pd) {
- kerrno_t error; struct kshmpart *part;
- size_t part_offset = self->sb_rstart % KSHM_CLUSTERSIZE;
- size_t remaning_pages = self->sb_rpages;
- size_t map_pages; kshm_flag_t region_flags;
- kpageflag_t page_flags;
+ kerrno_t error; struct kshmregion *region;
+ size_t part_offset,remaning_pages,map_pages;
+ kshm_flag_t region_flags; kpageflag_t page_flags;
  __pagealigned __user void *virtual_address;
- part = self->sb_cluster_min->sc_part;
+ kassertobj(self);
+ region = self->sb_region;
+ kassert_kshmregion(region);
+ part_offset = self->sb_rstart % KSHM_CLUSTERSIZE;
+ remaning_pages = self->sb_rpages;
  virtual_address = self->sb_map;
- region_flags = self->sb_region->sre_chunk.sc_flags;
- /* Find the first mapped part. */
- while (part_offset >= part->sp_pages) {
-  part_offset -= part->sp_pages;
-  ++part;
-  assert(part != self->sb_region->sre_chunk.sc_partv+
-                 self->sb_region->sre_chunk.sc_partc);
- }
+ region_flags = region->sre_chunk.sc_flags;
  if (KSHMREGION_FLAG_USECOW(region_flags)) {
   struct kshmcluster *iter,*clusters_start;
-  struct kshmregion *region = self->sb_region;
   struct kpageframe *phys_addr;
   size_t map_pages;
   kpageflag_t used_page_flags;
@@ -1046,6 +1121,8 @@ kshmbranch_remap(struct kshmbranch const *__restrict self,
    map_pages = min(map_pages,KSHM_CLUSTERSIZE-part_offset);
    /* Determine the exact set of flags we're going to use. */
    used_page_flags = page_flags;
+   assert(katomic_load(region->sre_branches) >=
+          katomic_load(iter->sc_refcnt));
    if (iter->sc_refcnt > 1) {
     /* Map the cluster as read-only (COW-style) if its
      * reference counter indicates more than one user. */
@@ -1059,10 +1136,20 @@ kshmbranch_remap(struct kshmbranch const *__restrict self,
    part_offset += map_pages;
    if (part_offset >= KSHM_CLUSTERSIZE) {
     part_offset -= KSHM_CLUSTERSIZE;
+    assert(part_offset < KSHM_CLUSTERSIZE);
     ++iter;
    }
   }
  } else {
+  struct kshmpart *part;
+  part = self->sb_cluster_min->sc_part;
+  /* Find the first mapped part. */
+  while (part_offset >= part->sp_pages) {
+   part_offset -= part->sp_pages;
+   ++part;
+   assert(part != region->sre_chunk.sc_partv+
+                  region->sre_chunk.sc_partc);
+  }
   page_flags = 0;
   if (region_flags&KSHMREGION_FLAG_WRITE) page_flags |= PAGEDIR_FLAG_READ_WRITE;
   if (region_flags&KSHMREGION_FLAG_READ)  page_flags |= PAGEDIR_FLAG_USER;
@@ -1119,7 +1206,7 @@ trim_front:
   if (branch->sb_cluster_min != new_cluster) {
    /* Must drop reference to all clusters between
     * 'branch->sb_cluster_min' and 'new_cluster-1' */
-   kshmregion_decref(region,branch->sb_cluster_min,new_cluster-1);
+   kshmregion_decref_clusters(region,branch->sb_cluster_min,new_cluster-1);
    branch->sb_cluster_min = new_cluster;
   }
   branch->sb_map_min += page_count*PAGESIZE;
@@ -1135,7 +1222,7 @@ trim_front:
   if (branch->sb_cluster_max != new_cluster) {
    /* Must drop reference to all clusters between
     * 'new_cluster+1' and 'branch->sb_cluster_max' */
-   kshmregion_decref(region,new_cluster+1,branch->sb_cluster_max);
+   kshmregion_decref_clusters(region,new_cluster+1,branch->sb_cluster_max);
    branch->sb_cluster_max = new_cluster;
   }
   branch->sb_map_min -= page_count*PAGESIZE;
@@ -1291,7 +1378,21 @@ kshmbrach_putsplit(struct kshmbranch **__restrict pself,
  max_branch->sb_cluster_max = min_branch->sb_cluster_max;
  assert(max_branch->sb_rpages);
  assert(min_branch->sb_rpages);
- min_branch->sb_cluster_max = kshmregion_getcluster(region,(min_branch->sb_rstart+min_branch->sb_rpages)-1);
+ min_branch->sb_cluster_max = kshmregion_getcluster(region,min_branch->sb_rstart+(min_branch->sb_rpages-1));
+ max_branch->sb_map_max = min_branch->sb_map_max;
+ max_branch->sb_map_min = split_address;
+ min_branch->sb_map_max = split_address-1;
+ /* Incref the branch counter for the region to mirror the new region part. */
+ asserte(katomic_fetchinc(region->sre_branches) != 0);
+ /* Special case: We've inherited all upper clusters from the min-branch, but
+  *               the the min cluster of the max-branch may be equal to the
+  *               new max-cluster if the min-branch if the page-offset isn't
+  *               cluster-aligned, meaning we'll have to incref it. */
+ if (min_branch->sb_cluster_max == max_branch->sb_cluster_min) {
+  /* Acquire a min-cluster reference for the max-branch. */
+  asserte(katomic_fetchinc(max_branch->sb_cluster_min->sc_refcnt) >= 1);
+ }
+
 #define ASSERT_CLUSTER(p) \
  assertf((p) >= region->sre_clusterv && \
          (p) <  region->sre_clusterv+region->sre_clusterc\
@@ -1305,23 +1406,31 @@ kshmbrach_putsplit(struct kshmbranch **__restrict pself,
  assert(min_branch->sb_cluster_min <= min_branch->sb_cluster_max);
  assert(max_branch->sb_cluster_min <= max_branch->sb_cluster_max);
  assert(min_branch->sb_cluster_max <= max_branch->sb_cluster_min);
- max_branch->sb_map_max = min_branch->sb_map_max;
- max_branch->sb_map_min = split_address;
- min_branch->sb_map_max = split_address-1;
- asserte(katomic_fetchinc(region->sre_branches) != 0);
+
  /* Insert the new branch into the binary tree. */
  /* Now the only question remains if 'max_branch' must override '*pself' */
  asserte(kshmbranch_insert(pself,max_branch,addr_semi,KSHMBRANCH_SEMILEVEL(addr_semi)) == KE_OK);
+#if defined(__DEBUG__) && 0
+ new_semi = addr_semi,new_level = KSHMBRANCH_SEMILEVEL(addr_semi);
+ assert(min_branch == *kshmbranch_plocateat(pself,min_branch->sb_map_min,&new_semi,&new_level));
+ new_semi = addr_semi,new_level = KSHMBRANCH_SEMILEVEL(addr_semi);
+ assert(min_branch == *kshmbranch_plocateat(pself,min_branch->sb_map_max,&new_semi,&new_level));
+ new_semi = addr_semi,new_level = KSHMBRANCH_SEMILEVEL(addr_semi);
+ assert(max_branch == *kshmbranch_plocateat(pself,max_branch->sb_map_min,&new_semi,&new_level));
+ new_semi = addr_semi,new_level = KSHMBRANCH_SEMILEVEL(addr_semi);
+ assert(max_branch == *kshmbranch_plocateat(pself,max_branch->sb_map_max,&new_semi,&new_level));
+#endif
+
  if (pmin || pmin_semi) {
   new_semi = addr_semi,new_level = KSHMBRANCH_SEMILEVEL(addr_semi);
-  branch_address = kshmbranch_plocateat(pself,min_branch->sb_map_max,&addr_semi,&new_level);
+  branch_address = kshmbranch_plocateat(pself,min_branch->sb_map_max,&new_semi,&new_level);
   assert(branch_address);
   if (pmin) *pmin = branch_address;
   if (pmin_semi) *pmin_semi = new_semi;
  }
  if (pmax || pmax_semi) {
   new_semi = addr_semi,new_level = KSHMBRANCH_SEMILEVEL(addr_semi);
-  branch_address = kshmbranch_plocateat(pself,max_branch->sb_map_min,&addr_semi,&new_level);
+  branch_address = kshmbranch_plocateat(pself,max_branch->sb_map_min,&new_semi,&new_level);
   assert(branch_address);
   if (pmax) *pmax = branch_address;
   if (pmax_semi) *pmax_semi = new_semi;
@@ -1334,6 +1443,12 @@ kshmbrach_merge(struct kshmbranch **__restrict pmin, uintptr_t min_semi,
                 struct kshmbranch **__restrict pmax, uintptr_t max_semi,
                 struct kshmbranch ***presult, uintptr_t *presult_semi) {
  struct kshmbranch *min_branch,*max_branch;
+#if 1
+ struct kshmbranch **proot;
+ struct kshmregion *merged_region;
+ uintptr_t root_semi;
+ unsigned int min_level,max_level,root_level;
+#endif
  kassertobj(pmin);
  kassertobj(pmax);
  kassertobjnull(presult);
@@ -1344,6 +1459,11 @@ kshmbrach_merge(struct kshmbranch **__restrict pmin, uintptr_t min_semi,
  kassertobj(max_branch);
  kassert_kshmregion(min_branch->sb_region);
  kassert_kshmregion(max_branch->sb_region);
+ assert(min_branch->sb_map_min >= KSHMBRANCH_MAPMIN(min_semi,KSHMBRANCH_SEMILEVEL(min_semi)));
+ assert(min_branch->sb_map_max <= KSHMBRANCH_MAPMAX(min_semi,KSHMBRANCH_SEMILEVEL(min_semi)));
+ assert(max_branch->sb_map_min >= KSHMBRANCH_MAPMIN(max_semi,KSHMBRANCH_SEMILEVEL(max_semi)));
+ assert(max_branch->sb_map_max <= KSHMBRANCH_MAPMAX(max_semi,KSHMBRANCH_SEMILEVEL(max_semi)));
+
  /* Make sure that both branches reference unique regions. */
  assert(min_branch->sb_region->sre_branches == 1);
  assert(max_branch->sb_region->sre_branches == 1);
@@ -1351,16 +1471,62 @@ kshmbrach_merge(struct kshmbranch **__restrict pmin, uintptr_t min_semi,
  assert(kshmbranch_canexpand_min(max_branch));
  /* Make sure that both branches lie directly next to each other. */
  assert(min_branch->sb_map_max+1 == max_branch->sb_map_min);
- assertf(KSHMBRANCH_SEMILEVEL(min_semi) != KSHMBRANCH_SEMILEVEL(max_semi)
+
+ k_syslogf(KLOG_TRACE,"[SHM] Merge branch at %p..%p with %p..%p\n",
+           min_branch->sb_map_min,min_branch->sb_map_max,
+           max_branch->sb_map_min,max_branch->sb_map_max);
+ /* kshmbranch_print(min_branch,min_semi,KSHMBRANCH_SEMILEVEL(min_semi)); */
+ /* kshmbranch_print(max_branch,max_semi,KSHMBRANCH_SEMILEVEL(max_semi)); */
+#if 1
+ /* Create the merged region.
+  * This might seem an odd choice for the first step, but
+  * in fact by re-using one of the branches, this is the
+  * only this in this entire function that isn't noexcept. */
+ merged_region = kshmregion_merge(min_branch->sb_region,
+                                  max_branch->sb_region);
+ if __unlikely(!merged_region) return KE_NOMEM;
+ min_level = KSHMBRANCH_SEMILEVEL(min_semi);
+ max_level = KSHMBRANCH_SEMILEVEL(max_semi);
+ assertf(min_level != max_level
         ,"The min and max address-levels %u cannot be equal, as that would "
          "imply some other branch lying in between. Instead, one must be "
          "greater than the other to create a dependency ordering."
-        ,KSHMBRANCH_SEMILEVEL(max_semi));
-
- /* TODO (Add later; this function is only used for optimizations) */
- k_syslogf(KLOG_DEBUG,"[TODO] Merge branch at %p..%p with %p..%p\n",
-           min_branch->sb_map_min,min_branch->sb_map_max,
-           max_branch->sb_map_min,max_branch->sb_map_max);
+        ,min_level);
+ /* The branch with the greater level lies further up the tree,
+  * meaning that it will be the root branch to insert the merged leaf into.
+  * NOTE: The remove order is important to not invalidate our root pointers. */
+ if (min_level > max_level) {
+  /* Remove the two branches from the tree. */
+  asserte(kshmbranch_popone(pmax,max_semi,max_level) == max_branch);
+  asserte(kshmbranch_popone(pmin,min_semi,min_level) == min_branch);
+  proot      = pmin;
+  root_semi  = min_semi;
+  root_level = min_level;
+ } else {
+  /* Remove the two branches from the tree. */
+  asserte(kshmbranch_popone(pmin,min_semi,min_level) == min_branch);
+  asserte(kshmbranch_popone(pmax,max_semi,max_level) == max_branch);
+  proot      = pmax;
+  root_semi  = max_semi;
+  root_level = max_level;
+ }
+ /* At this point we've inherited both the min and max branches.
+  * >> We'll reuse one (min) and free the other (max). */
+#define merged_branch  min_branch
+ merged_branch->sb_region      = merged_region;
+ merged_branch->sb_map_max     = max_branch->sb_map_max;
+ merged_branch->sb_rpages     += max_branch->sb_rpages;
+ merged_branch->sb_cluster_min = kshmregion_getcluster(merged_region,merged_branch->sb_rstart);
+ merged_branch->sb_cluster_max = kshmregion_getcluster(merged_region,merged_branch->sb_rstart+(merged_branch->sb_rpages-1));
+ /* Free the other region. */
+ free(max_branch);
+ asserte(KE_ISOK(kshmbranch_insert(proot,merged_branch,
+                                   root_semi,root_level)));
+ /* Re-locate the now inserted branch. */
+ *presult_semi = root_semi;
+ *presult = kshmbranch_plocateat(proot,(uintptr_t)merged_branch->sb_map,
+                                 presult_semi,&root_level);
+ assert(*presult != NULL);
 #if 0
  if (KSHMBRANCH_SEMILEVEL(min_semi) > KSHMBRANCH_SEMILEVEL(max_semi)) {
   kshmbranch_print(*pmin,min_semi,KSHMBRANCH_SEMILEVEL(min_semi));
@@ -1368,8 +1534,12 @@ kshmbrach_merge(struct kshmbranch **__restrict pmin, uintptr_t min_semi,
   kshmbranch_print(*pmax,max_semi,KSHMBRANCH_SEMILEVEL(max_semi));
  }
 #endif
-
+#undef merged_branch
+ return KE_OK;
+#else
+ /* TODO (Add later; this function is only used for optimizations) */
  return KE_NOSYS;
+#endif
 }
 
 void kshmbranch_deltree(struct kshmbranch *__restrict start) {
@@ -1488,7 +1658,7 @@ ok:
 // ===== kshm
 __crit __nomp kerrno_t
 kshm_init(struct kshm *__restrict self,
-          __u16 ldt_size_hint) {
+          kseglimit_t ldt_size_hint) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassertobj(self);
@@ -1588,10 +1758,7 @@ kshm_mapregion_inherited(struct kshm *__restrict self,
 
  /* (Re-)map the paging memory of the branch. */
  error = kshmbranch_remap(branch,self->s_pd);
- if __unlikely(KE_ISERR(error)) goto err_delbranch;
- else katomic_incfetch(region->sre_branches);
- return error;
-err_delbranch:
+ if __likely(KE_ISOK(error)) return error;
 #ifdef __DEBUG__
  {
   struct kshmbranch *oldbranch;
@@ -1658,6 +1825,9 @@ kshm_touch(struct kshm *__restrict self,
  /* Fail if no branch is mapped to the specified base address. */
  if __unlikely(!pbranch) {
   k_syslogf(KLOG_DEBUG,"[SHM] Failed to locate SHM branch at: %p\n",address);
+  kshmbranch_print(self->s_map.m_root,
+                   KSHMBRANCH_ADDRSEMI_INIT,
+                   KSHMBRANCH_ADDRLEVEL_INIT);
   return 0;
  }
  branch = *pbranch;
@@ -1776,22 +1946,45 @@ kshm_touchex(struct kshm *__restrict self,
  kassertobj(branch);
  region = branch->sb_region;
  kassert_kshmregion(region);
+ assert(branch->sb_rpages);
+
  /* In order to prevent entire clusters being copied more than once
   * because only a page at a time is being accessed from them, align
   * the page numbers we just figured out by cluster-borders. */
- min_page = alignd(min_page,KSHM_CLUSTERSIZE);
- max_page = align (max_page,KSHM_CLUSTERSIZE);
- max_page = min(max_page,branch->sb_rstart+branch->sb_rpages); /*< Make sure we don't exceed the maximum! */
- --max_page;
+ if (KSHM_CLUSTERSIZE > 1) {
+  min_page = alignd(min_page,KSHM_CLUSTERSIZE);
+  max_page = align (max_page+1,KSHM_CLUSTERSIZE);
+  /* Make sure we don't exceed the maximum! */
+  max_page = min(max_page,branch->sb_rstart+branch->sb_rpages);
+  --max_page;
+ } else {
+  /* Make sure we don't exceed the maximum! */
+  max_page = min(max_page,branch->sb_rstart+(branch->sb_rpages-1));
+ }
  assert(max_page >= min_page);
  assert(min_page >= branch->sb_rstart);
  assert(max_page <  branch->sb_rstart+branch->sb_rpages);
  assert(branch->sb_rstart+branch->sb_rpages > branch->sb_rstart);
  assert(branch->sb_rstart+branch->sb_rpages <= region->sre_chunk.sc_pages);
 
+#if 1
+ if (katomic_load(region->sre_branches) == 1) {
+#ifdef __DEBUG__
+  struct kshmcluster *iter,*end;
+  iter = kshmregion_getcluster(region,min_page);
+  end  = kshmregion_getcluster(region,max_page)+1;
+  do assert(katomic_load(iter->sc_refcnt) == 1);
+  while (++iter != end);
+#endif
+  goto true_unique_access;
+ }
+#endif
+
  {
   struct kshmcluster *iter,*end;
-  size_t affected_pages;
+  size_t update_pages,affected_pages;
+  __user void *effective_address_start;
+  kpageflag_t pageflags;
   /* Special optimization:
    * Due to latency and the fact that we can only
    * modify more than one directory during fork(),
@@ -1811,16 +2004,27 @@ kshm_touchex(struct kshm *__restrict self,
   end  = kshmregion_getcluster(region,max_page)+1;
   do if (katomic_load(iter->sc_refcnt) != 1) goto true_shared_access;
   while (++iter != end);
-  /* We really are the sole owner of this area of memory. */
-  affected_pages = kpagedir_setflags(self->s_pd,(void *)((uintptr_t)branch->sb_map+min_page*PAGESIZE),
-                                    (max_page-min_page)+1,(kpageflag_t)-1,
-                                     PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE);
-  assertf(affected_pages == (max_page-min_page)+1,
-          "Unexpected amount of pages affected during R/W-remapping (Expected %Iu; got %Iu)",
-         (max_page-min_page)+1,affected_pages);
-  assert(kpagedir_ismappedex(self->s_pd,(void *)((uintptr_t)branch->sb_map+min_page*PAGESIZE),
-                            (max_page-min_page)+1,PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE,
-                             PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE));
+true_unique_access:
+  if ((region->sre_chunk.sc_flags&(KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE)) ==
+                                  (KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE)) {
+   /* We really are the sole owner of this area of memory.
+    * This can happen if we inherited the region after a fork(). */
+   effective_address_start = (__user void *)((uintptr_t)branch->sb_map+(min_page-branch->sb_rstart)*PAGESIZE);
+   update_pages = (size_t)(max_page-min_page)+1;
+   k_syslogf(KLOG_INSANE,"[SHM] Mapping user R/W access to uniquely owned region at %p..%p (effective range %p..%p)\n",
+             branch->sb_map_min,branch->sb_map_max,effective_address_start,
+            (__user void *)((uintptr_t)effective_address_start+(update_pages*PAGESIZE)-1));
+   pageflags = PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE;
+   affected_pages = kpagedir_setflags(self->s_pd,effective_address_start,
+                                      update_pages,(kpageflag_t)-1,pageflags);
+   assertf(affected_pages == update_pages,
+           "Unexpected amount of pages affected during R/W-remapping (Expected %Iu; got %Iu)",
+          update_pages,affected_pages);
+   assertf(kpagedir_ismappedex(self->s_pd,effective_address_start,
+                               update_pages,pageflags,pageflags),
+           "Invalid paging flags in range %p..%p",effective_address_start,
+          (__user void *)(((uintptr_t)effective_address_start+update_pages*PAGESIZE)-1));
+  }
   goto end_success;
 true_shared_access:;
  }
@@ -1862,25 +2066,21 @@ true_shared_access:;
 #endif /* AUTOMERGE_BRANCHES */
   /* The branch we're now working with has been modified
    * to basically strip away the first 'min_page' pages of
-   * memory associated with the branch.
-   * >> Due to that change, our 'max_page' not must be adjusted. */
-  max_page -= min_page;
-#ifdef __DEBUG__
-  min_page  = 0;
-#endif
+   * memory associated with the branch. */
  }
  /* At this point we know which branch we're going to copy
   * clusters from, as well as how many clusters it's going to be.
   * But we still must check for the potential of
   * a second split near the end of 'pbranch'. */
- assert(max_page < region->sre_chunk.sc_pages);
- assert(max_page < branch->sb_rstart+branch->sb_rpages);
+ assert(max_page <  region->sre_chunk.sc_pages);
+ assert(max_page <  branch->sb_rstart+branch->sb_rpages);
+ assert(max_page >= branch->sb_rstart);
  assert(branch->sb_cluster_min <= branch->sb_cluster_max);
  assert(branch->sb_cluster_max >= region->sre_clusterv &&
         branch->sb_cluster_max <  region->sre_clusterv+
                                   region->sre_clusterc);
  assert(branch == *pbranch);
- if (max_page == (branch->sb_rstart+branch->sb_rpages)-1) {
+ if (max_page == branch->sb_rstart+(branch->sb_rpages-1)) {
   /* The greatest touched page lies within the last cluster.
    * >> No need to create the second split! */
 #if AUTOMERGE_BRANCHES
@@ -1924,15 +2124,31 @@ true_shared_access:;
  assert(subregion->sre_chunk.sc_partc != 0);
  assert(subregion->sre_chunk.sc_pages != 0);
  assert(subregion->sre_clusterc       != 0);
+ assert(subregion->sre_branches       == 1);
  assert(subregion->sre_chunk.sc_pages >= branch->sb_rpages);
+ assert(branch->sb_region == region);
+ /* The branch still holds a reference to the branch counter of the old region.
+  * We must drop that reference, noting that it can actually fall to ZERO(0) here. */
+ {
+#ifdef __DEBUG__
+  size_t branchc = katomic_decfetch(region->sre_branches);
+  assert(branchc != (size_t)-1);
+  if (!branchc)
+#else
+  if (!katomic_decfetch(region->sre_branches))
+#endif
+  {
+   free(region->sre_chunk.sc_partv);
+   free(region);
+  }
+ }
 
  /* Overwrite the existing region within the branch with the new sub-region.
   * >> Since the new sub-region describes the exact sub-range previously covered
   *    by the branch, the branch now simply describes the entirety of its region. */
- subregion->sre_branches = 1;
- branch->sb_region  = subregion;
+ branch->sb_region  = subregion; /*< Inherit reference. */
  branch->sb_rstart %= KSHM_CLUSTERSIZE; /*< Within the new sub-region, the start points into the first cluster. */
- /*branch->sb_rpages = ...; This didn't change. */
+ /*branch->sb_KSHMREGION_FLAG_NOCOPYrpages = ...; This didn't change. */
  branch->sb_cluster_min = subregion->sre_clusterv;
  branch->sb_cluster_max = subregion->sre_clusterv+(subregion->sre_clusterc-1);
  assert(branch->sb_cluster_min == kshmregion_getcluster(subregion,branch->sb_rstart));
@@ -1951,6 +2167,21 @@ true_shared_access:;
   *       existing ones (which cannot fail). */
  error = kshmbranch_remap(branch,self->s_pd);
  assertf(KE_ISOK(error),"%d",error);
+#ifdef __DEBUG__
+ { /* Make sure the region is still mapped correctly (and with full access). */
+  kpageflag_t flags = 0;
+  if (region->sre_chunk.sc_flags&KSHMREGION_FLAG_READ) {
+   flags |= PAGEDIR_FLAG_USER;
+   if (region->sre_chunk.sc_flags&KSHMREGION_FLAG_WRITE)
+    flags |= PAGEDIR_FLAG_READ_WRITE;
+  }
+  assertf(kpagedir_ismappedex_b(self->s_pd,branch->sb_map,branch->sb_rpages,flags,flags),
+          "Region (%c%c) at %p..%p is not mapped correctly",
+         (region->sre_chunk.sc_flags&KSHMREGION_FLAG_READ) ? 'R' : '-',
+         (region->sre_chunk.sc_flags&KSHMREGION_FLAG_WRITE) ? 'W' : '-',
+          branch->sb_map_min,branch->sb_map_max);
+ }
+#endif
 
 #if AUTOMERGE_BRANCHES
  /* The branch we're supposed to copy doesn't map the start of its associated
@@ -1984,7 +2215,7 @@ true_shared_access:;
   * #3 [....][...........big_memory....] (Layout after #3 with auto-merging)
   */
 #define CHECK_MIN_NEIGHBOR   (!did_min_split && branch->sb_rstart == 0)
-#define CHECK_MAX_NEIGHBOR   (!did_max_split && (branch->sb_rstart+branch->sb_rpages) == region->sre_chunk.sc_pages-1)
+#define CHECK_MAX_NEIGHBOR   (!did_max_split && (branch->sb_rstart+branch->sb_rpages) == region->sre_chunk.sc_pages)
  assertf(branch->sb_rstart+branch->sb_rpages <= region->sre_chunk.sc_pages
         ,"Branch is mapping an out-of-bounds region of pages %Iu..%Iu not in 0..%Iu"
         ,branch->sb_rstart,branch->sb_rstart+branch->sb_rpages
@@ -2003,7 +2234,11 @@ true_shared_access:;
    error = kshmbrach_merge(pneighbor,neighbor_semi,
                            pbranch,addr_semi,
                           &new_branch,&new_addr_semi);
-   if __likely(KE_ISOK(error)) pbranch = new_branch,addr_semi = new_addr_semi;
+   if __likely(KE_ISOK(error)) {
+    pbranch   = new_branch;
+    addr_semi = new_addr_semi;
+    branch    = *pbranch;
+   }
   }
  }
  if (CHECK_MAX_NEIGHBOR) {
@@ -2017,7 +2252,11 @@ true_shared_access:;
    error = kshmbrach_merge(pbranch,addr_semi,
                            pneighbor,neighbor_semi,
                           &new_branch,&new_addr_semi);
-   if __likely(KE_ISOK(error)) pbranch = new_branch,addr_semi = new_addr_semi;
+   if __likely(KE_ISOK(error)) {
+    pbranch   = new_branch;
+    addr_semi = new_addr_semi;
+    branch    = *pbranch;
+   }
   }
  }
 #endif /* AUTOMERGE_BRANCHES */
@@ -2026,9 +2265,10 @@ true_shared_access:;
 #undef CHECK_MIN_NEIGHBOR
 
 end_success:
- k_syslogf(KLOG_TRACE,"[COW] Touched %Iu SHM pages at address %p\n",
+ k_syslogf(KLOG_TRACE,"[COW] Touched %Iu SHM pages at address %p (%p..%p)\n",
           (max_page-min_page)+1,
-          (uintptr_t)branch->sb_map+min_page*PAGESIZE);
+          (uintptr_t)branch->sb_map+(min_page-branch->sb_rstart)*PAGESIZE,
+           branch->sb_map_min,branch->sb_map_max);
  /* Tell the caller how many pages we actually touched. */
  return (max_page-min_page)+1;
 }
@@ -2084,10 +2324,10 @@ kshm_unmapregion(struct kshm *self,
 
 
 __crit __nomp kerrno_t
-kshm_mapautomatic(struct kshm *__restrict self,
-                  /*out*/__pagealigned __user void **__restrict user_address,
-                  struct kshmregion *__restrict region, __pagealigned __user void *hint,
-                  kshmregion_page_t in_region_page_start, size_t in_region_page_count) {
+kshm_mapautomatic_inherited(struct kshm *__restrict self,
+                            /*out*/__pagealigned __user void **__restrict user_address,
+                            struct kshmregion *__restrict region, __pagealigned __user void *hint,
+                            kshmregion_page_t in_region_page_start, size_t in_region_page_count) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kshm(self);
@@ -2103,6 +2343,26 @@ kshm_mapautomatic(struct kshm *__restrict self,
  return error;
 }
 __crit __nomp kerrno_t
+kshm_mapautomatic(struct kshm *__restrict self,
+                  /*out*/__pagealigned __user void **__restrict user_address,
+                  struct kshmregion *__restrict region, __pagealigned __user void *hint,
+                  kshmregion_page_t in_region_page_start, size_t in_region_page_count) {
+ kerrno_t error;
+ struct kshmcluster *cls_min;
+ struct kshmcluster *cls_max;
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ assert(in_region_page_count);
+ cls_min = kshmregion_getcluster(region,in_region_page_start);
+ cls_max = kshmregion_getcluster(region,in_region_page_start+(in_region_page_count-1));
+ error = kshmregion_incref(region,cls_min,cls_max);
+ if __unlikely(KE_ISERR(error)) return error;
+ error = kshm_mapautomatic_inherited(self,user_address,region,hint,
+                                     in_region_page_start,in_region_page_count);
+ if __unlikely(KE_ISERR(error)) kshmregion_decref(region,cls_min,cls_max);
+ return error;
+}
+__crit __nomp kerrno_t
 kshm_mapram(struct kshm *__restrict self,
             /*out*/__pagealigned __user void **__restrict user_address,
             size_t pages, __pagealigned __user void *hint, kshm_flag_t flags) {
@@ -2113,8 +2373,8 @@ kshm_mapram(struct kshm *__restrict self,
  assert(pages != 0);
  region = kshmregion_newram(pages,flags);
  if __unlikely(!region) return KE_NOMEM;
- error = kshm_mapautomatic(self,user_address,region,hint,
-                           0,region->sre_chunk.sc_pages);
+ error = kshm_mapautomatic_inherited(self,user_address,region,hint,
+                                     0,region->sre_chunk.sc_pages);
  if __unlikely(KE_ISERR(error)) kshmregion_decref_full(region);
  return error;
 }
@@ -2133,8 +2393,8 @@ kshm_mapram_linear(struct kshm *__restrict self,
  if __unlikely(!region) return KE_NOMEM;
  assert(region->sre_chunk.sc_partc == 1);
  *kernel_address = region->sre_chunk.sc_partv[0].sp_frame;
- error = kshm_mapautomatic(self,user_address,region,hint,
-                           0,region->sre_chunk.sc_pages);
+ error = kshm_mapautomatic_inherited(self,user_address,region,hint,
+                                     0,region->sre_chunk.sc_pages);
  if __unlikely(KE_ISERR(error)) kshmregion_decref_full(region);
  return error;
 }
@@ -2154,8 +2414,8 @@ kshm_mapphys(struct kshm *__restrict self,
  if __unlikely(!region) return KE_NOMEM;
  assert(region->sre_chunk.sc_partc             == 1);
  assert(region->sre_chunk.sc_partv[0].sp_frame == phys_address);
- error = kshm_mapautomatic(self,user_address,region,hint,
-                           0,region->sre_chunk.sc_pages);
+ error = kshm_mapautomatic_inherited(self,user_address,region,hint,
+                                     0,region->sre_chunk.sc_pages);
  if __unlikely(KE_ISERR(error)) kshmregion_decref_full(region);
  return error;
 }
@@ -2280,15 +2540,22 @@ void kshm_pf_handler(struct kirq_registers *__restrict regs) {
  assertf(caller_process != kproc_kernel(),
          "Should have been detected by kernel-task detection");
  /* Acquire the SHM-lock to ensure that nothing gets in our way... */
+ NOIRQ_BEGIN
  if __unlikely(KE_ISERR(kproc_lock(caller_process,KPROC_LOCK_SHM))) goto def_handler;
  touched_pages = kshm_touch(kproc_getshm(caller_process),
                            (__user void *)alignd((uintptr_t)address_in_question,PAGEALIGN),1,
                             KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE);
- assert(!touched_pages || kpagedir_ismappedex_b(kproc_getpagedir(caller_process),address_in_question,1,
-                                                PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE,
-                                                PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE
-        ));
+ /* kshmbranch_print(kproc_getshm(caller_process)->s_map.m_root,
+  *                  KSHMBRANCH_ADDRSEMI_INIT,KSHMBRANCH_ADDRLEVEL_INIT); */
+ assertf(!touched_pages || kpagedir_ismappedex_b(kproc_getpagedir(caller_process),address_in_question,1,
+                                                 PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE,
+                                                 PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE
+         ),"Failed to remap COW pages at %p (%p) (touched %Iu pages)"
+          ,address_in_question
+          ,(__user void *)alignd((uintptr_t)address_in_question,PAGEALIGN)
+          ,touched_pages);
  kproc_unlock(caller_process,KPROC_LOCK_SHM);
+ NOIRQ_END
 
  /* If nothing was touched, call the default handler. */
  if __unlikely(!touched_pages) goto def_handler;

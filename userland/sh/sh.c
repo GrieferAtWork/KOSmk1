@@ -218,6 +218,18 @@ static struct option const longopts[] = {
 __attribute_thread int foo = 42;
 __attribute_thread int bar = 84;
 
+#define X "_/"
+#define _ "  "
+
+static char const welcome[] = 
+"\033[30;102m"
+"\033[2K    " _ X _ X _ _ X _ _ X _ _ X X X _ _ _ X X X "\n"
+"\033[2K   "  X X X X X _ X _ X _ _ X _ _ _ X _ X X _ _ "\n"
+"\033[2K  "   _ X _ X _ _ X X _ _ _ X _ _ _ X _ _ X X _ "\n"
+"\033[2K "    X X X X X _ X _ X _ _ X _ _ _ X _ _ _ X X "\n"
+"\033[2K"     _ X _ X _ _ X _ _ X _ _ X X X _ _ X X X _ "\n"
+"\033[m";
+
 int main(int argc, char *argv[]) {
  int error; struct rline *r; int optc;
  // movl	%gs:0, %eax
@@ -249,6 +261,9 @@ int main(int argc, char *argv[]) {
 
  interactive = 1;
  update_prompt();
+ write(STDOUT_FILENO,welcome,sizeof(welcome)-sizeof(char));
+
+ // do_system("ls -lar");
 
  /* Do the interactive loop thingy! */
  for (;;) {

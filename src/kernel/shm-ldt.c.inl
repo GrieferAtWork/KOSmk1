@@ -51,7 +51,7 @@ __DECL_BEGIN
 
 static kerrno_t
 kshm_alloc_and_map_ldt_vector(struct kshm *__restrict self,
-                              __u16 limit) {
+                              kseglimit_t limit) {
  kassert_kshm(self);
  assert(!(limit%sizeof(struct ksegment)));
  /* Initialize the LDT table with the given hint. */
@@ -76,7 +76,7 @@ err_ldtvec:
 
 static kerrno_t
 kshm_initldt(struct kshm *__restrict self,
-             __u16 size_hint) {
+             kseglimit_t size_hint) {
  struct ksegment ldt_segment;
  kassert_kshm(self);
  /* Initialize the LDT table with the given hint. */
@@ -133,7 +133,7 @@ kshm_quitldt(struct kshm *__restrict self) {
 
 
 static kerrno_t
-kshm_ldtsetlimit(struct kshm *__restrict self, __u16 newlimit) {
+kshm_ldtsetlimit(struct kshm *__restrict self, kseglimit_t newlimit) {
  __kernel struct ksegment *new_kernel_vector,*old_kernel_vector;
  __user struct ksegment *new_kernel_mapping,*old_kernel_mapping;
  size_t usage_table_size,old_limit; struct ksegment ldt_segment;
@@ -255,7 +255,7 @@ kshm_ldtfree(struct kshm *__restrict self, ksegid_t id) {
  begin = VEC_BEGIN,iter = end = VEC_END;
  while (iter != begin && !iter[-1].present) --iter;
  if (iter != end) {
-  __u16 new_limit = align((uintptr_t)iter-(uintptr_t)begin,BUFSIZE);
+  kseglimit_t new_limit = align((uintptr_t)iter-(uintptr_t)begin,BUFSIZE);
   assert(new_limit <= self->s_ldt.ldt_limit);
   /* Try to reduce memory usage by releasing unused LDT entires. */
   if ((self->s_ldt.ldt_limit-new_limit) >= (BUFSIZE*2)

@@ -94,6 +94,17 @@ kpagedir_translate_flags(struct kpagedir const *__restrict self,
  if __unlikely((used_pte.u&flags) != flags) return NULL;
  return (__physicaladdr void *)(x86_pte_getpptr(&used_pte)+X86_VPTR_GET_POFF(virt));
 }
+kpage_t *KPAGEDIR_TRANSLATE_CALL
+kpagedir_getpage(struct kpagedir *__restrict self,
+                 __virtualaddr void const *virt) {
+ x86_pde used_pde;
+ kassertobj(self);
+ used_pde = self->d_entries[X86_VPTR_GET_PDID(virt)];
+ return __likely(used_pde.u&X86_PDE_FLAG_PRESENT)
+  ? x86_pde_getpte(&used_pde)+X86_VPTR_GET_PTID(virt)
+  : NULL;
+}
+
 
 #ifndef __INTELLISENSE__
 #define REMAP

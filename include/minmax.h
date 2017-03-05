@@ -35,8 +35,8 @@ __DECL_BEGIN
 #   define _min       min
 #   define _max       max
 #else
-#   define min       _min
-#   define max       _max
+#   define min(x,y)  _min(x,y)
+#   define max(x,y)  _max(x,y)
 #endif
 #endif
 

@@ -297,11 +297,11 @@ template<> struct static_if<true> { bool __is_true__(); };
  { enum{__REGION_IN_NESTED(name) = __REGION_IN_NORMAL(name)+1\
        ,__REGION_IN_NORMAL(name) = __REGION_NORMAL_YES};\
  { __attribute_unused bool __REGION_IN_RUNTIM(name);\
+   (ob) = (readvolatile);\
    COMPILER_STATIC_IF (__REGION_IN_NESTED(name) != __REGION_NESTED_ONE) {\
     while (!(trylock));\
    } COMPILER_STATIC_ELSE (__REGION_IN_NESTED(name) != __REGION_NESTED_ONE) {\
     __REGION_IN_RUNTIM(name) = is_inside();\
-    (ob) = (readvolatile);\
     if (!__REGION_IN_RUNTIM(name)) for (;;) {\
      {do_enter();}\
      while (!(trylock)) {\

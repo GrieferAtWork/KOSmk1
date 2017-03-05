@@ -51,8 +51,8 @@ __DECL_BEGIN
 #ifndef __KERNEL__
 #ifdef __INTELLISENSE__
 extern __nonnull((2)) void k_syslog(int level, char const *msg, size_t msg_max);
-extern __attribute_vaformat(__printf__,2,3) void k_syslogf(int level, char const *__restrict fmt, ...);
-extern __attribute_vaformat(__printf__,2,0) void k_vsyslogf(int level, char const *__restrict fmt, va_list args);
+extern __attribute_vaformat(__printf__,2,3) int k_syslogf(int level, char const *__restrict fmt, ...);
+extern __attribute_vaformat(__printf__,2,0) int k_vsyslogf(int level, char const *__restrict fmt, va_list args);
 #else
 __local _syscall3(kerrno_t,k_syslog,int,level,char const *,s,__size_t,maxlen);
 static __attribute_unused int __ksyslog_callback(char const *s, __size_t maxlen, void *level) { return k_syslog((int)(__uintptr_t)level,s,maxlen); }

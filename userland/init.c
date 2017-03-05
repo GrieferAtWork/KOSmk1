@@ -44,7 +44,7 @@ static perm_t const default_permissions[] = {
   {{KPERM_NAME_ENV_MEMMAX},{ .d_size = 0x00001000 }},
   {{KPERM_NAME_MAXTHREADS},{ .d_size = 128 }},
   {{KPERM_NAME_FDMAX},     { .d_uint = 512 }},
-  {{KPERM_NAME_SYSLOG},    { .d_int  = KLOG_DEBUG }},
+  {{KPERM_NAME_SYSLOG},    { .d_int  = KLOG_ERROR }},
   {{KPERM_NAME_FLAG},      { .d_flag = KPERM_FLAG_CHTIME }},
 //{{KPERM_NAME_FLAG},      { .d_flag = KPERM_FLAG_CHDIR }}, // TEST ONLY (make chdir illegal)
 };

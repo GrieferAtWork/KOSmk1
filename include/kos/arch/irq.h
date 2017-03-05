@@ -26,25 +26,23 @@
 #include <kos/compiler.h>
 #include <kos/kernel/features.h>
 
+#include <kos/arch.h>
+#ifdef KOS_ARCH_HAVE_IRQ_H
+#include KOS_ARCH_INCLUDE(irq.h)
+#endif
+
 #if !KCONFIG_HAVE_IRQ
 #undef karch_irq_enable
 #undef karch_irq_disable
 #undef karch_irq_idle
 #undef karch_irq_enabled
-#else
-#include <kos/arch.h>
-#ifdef KOS_ARCH_HAVE_IRQ_H
-#include KOS_ARCH_INCLUDE(irq.h)
-#endif
 #endif
 
 #ifndef karch_irq_enable
-#undef KOS_ARCH_HAVE_IRQ_H
 #define karch_irq_enable()  (void)0
 #define karch_irq_disable() (void)0
 #define karch_irq_idle()    (void)0
 #define karch_irq_enabled() 0
 #endif
-
 
 #endif /* !__KOS_ARCH_IRQ_H__ */

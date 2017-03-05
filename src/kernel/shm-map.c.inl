@@ -28,9 +28,11 @@
 #include <kos/kernel/features.h>
 #include <kos/kernel/interrupts.h>
 #include <kos/kernel/shm.h>
-#include <stdio.h>
+#include <kos/kernel/serial.h>
 
 __DECL_BEGIN
+
+#define LOGF(...) serial_printf(SERIAL_01,__VA_ARGS__)
 
 void
 kshmbranch_print(struct kshmbranch *__restrict branch,
@@ -40,28 +42,30 @@ kshmbranch_print(struct kshmbranch *__restrict branch,
 again:
  kassertobj(branch);
  kassert_kshmregion(branch->sb_region);
- for (i = 31; i > level; --i) printf("%s",(addr_semi&(1 << i)) ? "+" : "-");
- for (i = 0; i < level; ++i) printf(" ");
- printf("leaf (%c%c%c%c%c%c) %Iu pages %p .. %p at %p .. %p semi %p, level %u\n",
-       (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_EXEC) ? 'X' : '-',
-       (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_WRITE) ? 'W' : '-',
-       (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_READ) ? 'R' : '-',
-       (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_SHARED) ? 'S' : '-',
-       (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_LOSEONFORK) ? 'F' : '-',
-       (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_RESTRICTED) ? 'R' : '-',
-        branch->sb_rpages,
-        branch->sb_map_min,branch->sb_map_max,
-        KSHMBRANCH_MAPMIN(addr_semi,level),
-        KSHMBRANCH_MAPMAX(addr_semi,level),
-        addr_semi,level);
+ for (i = 31; i > level; --i) LOGF("%s",(addr_semi&(1 << i)) ? "+" : "-");
+ for (i = 0; i < level; ++i) LOGF(" ");
+ LOGF("leaf (%c%c%c%c%c%c) %Iu pages %p .. %p at %p .. %p semi %p, level %u\n",
+     (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_EXEC) ? 'X' : '-',
+     (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_WRITE) ? 'W' : '-',
+     (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_READ) ? 'R' : '-',
+     (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_SHARED) ? 'S' : '-',
+     (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_LOSEONFORK) ? 'F' : '-',
+     (branch->sb_region->sre_chunk.sc_flags&KSHMREGION_FLAG_RESTRICTED) ? 'C' : '-',
+      branch->sb_rpages,
+      branch->sb_map_min,branch->sb_map_max,
+      KSHMBRANCH_MAPMIN(addr_semi,level),
+      KSHMBRANCH_MAPMAX(addr_semi,level),
+      addr_semi,level);
  assert(branch->sb_rpages != 0);
  assert(branch->sb_rstart+branch->sb_rpages <=
         branch->sb_region->sre_chunk.sc_pages);
  assert(branch->sb_cluster_min == kshmregion_getcluster(branch->sb_region,branch->sb_rstart));
  assert(branch->sb_cluster_max == kshmregion_getcluster(branch->sb_region,branch->sb_rstart+(branch->sb_rpages-1)));
  assert(branch->sb_map_min <= branch->sb_map_max);
- assert(branch->sb_map_min >= KSHMBRANCH_MAPMIN(addr_semi,level));
- assert(branch->sb_map_max <= KSHMBRANCH_MAPMAX(addr_semi,level));
+ assertf(branch->sb_map_min >= KSHMBRANCH_MAPMIN(addr_semi,level),
+         "%p < %p",branch->sb_map_min,KSHMBRANCH_MAPMIN(addr_semi,level));
+ assertf(branch->sb_map_max <= KSHMBRANCH_MAPMAX(addr_semi,level),
+         "%p > %p",branch->sb_map_max,KSHMBRANCH_MAPMAX(addr_semi,level));
  if (branch->sb_max) {
   if (branch->sb_min) {
    new_semi = addr_semi,new_level = level;
@@ -161,11 +165,11 @@ kshmbranch_reinsertall(struct kshmbranch **__restrict proot,
                        struct kshmbranch *__restrict insert_root,
                        uintptr_t addr_semi, unsigned int addr_level) {
 #if 0
- printf("recursive_insert leaf %p .. %p at %p .. %p semi %p, level %u\n",
-        newleaf->sb_map_min,newleaf->sb_map_max,
-        KSHMBRANCH_MAPMIN(addr_semi,level),
-        KSHMBRANCH_MAPMAX(addr_semi,level),
-        addr_semi,level);
+ LOGF("recursive_insert leaf %p .. %p at %p .. %p semi %p, level %u\n",
+      newleaf->sb_map_min,newleaf->sb_map_max,
+      KSHMBRANCH_MAPMIN(addr_semi,level),
+      KSHMBRANCH_MAPMAX(addr_semi,level),
+      addr_semi,level);
 #endif
  kassertobj(insert_root);
  kassert_kshmregion(insert_root->sb_region);

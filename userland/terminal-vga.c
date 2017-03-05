@@ -488,11 +488,12 @@ static void *relay_slave_out_threadmain(void *__unused(closure)) {
  return NULL;
 }
 
-// Parse and relay keyboard-style inputs from the terminal driver's STDIN
+/* Parse and relay keyboard-style inputs from the terminal driver's STDIN */
 static void *relay_incoming_threadmain(void *__unused(closure)) {
  char text[8]; char *iter;
  struct kbevent event; ssize_t s;
  while ((s = read(STDIN_FILENO,&event,sizeof(event))) >= 0) {
+  //k_syslogf(KLOG_DEBUG,"KEY EVENT: %I16d %I16d\n",event.e_key,event.e_scan);
   if (s < sizeof(struct kbevent)) { errno = EBUFSIZ; break; }
   if (KEY_ISDOWN(event.e_key)) {
    iter = text;

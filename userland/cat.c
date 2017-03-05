@@ -23,6 +23,7 @@
 #ifndef __CAT_C__
 #define __CAT_C__ 1
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -40,6 +41,7 @@ static int catfd(int fd) {
  ssize_t size;
  char buffer[CAT_BUFSIZE];
  while ((size = read(fd,buffer,CAT_BUFSIZE)) > 0) {
+  assert(size <= CAT_BUFSIZE);
   write(STDOUT_FILENO,buffer,size);
  }
  return (int)size;
@@ -54,7 +56,7 @@ error:
  }
  if (fstat(fd,&st) == -1) goto error;
  if (S_ISDIR(st.st_mode)) { errno = EISDIR; goto error; }
- if (catfd(fd) == -1) goto error;
+ if (catfd(fd) < 0) goto error;
 end:
  close(fd);
 }

@@ -84,7 +84,8 @@ extern char const __ctype_tohex[2][16];
 #define __F_IS_UPPER 0x80
 #endif
 
-// Delcare everything as a function to allow for their addresses to be taken
+#ifndef __CTYPE_C__
+/* Declare everything as a function to allow for their addresses to be taken */
 __local __wunused __constcall int isalnum(int __ch)  { return (__ctype_map[__ch&0xff]&(__F_IS_DIGIT|__F_IS_LOWER|__F_IS_UPPER))!=0; }
 __local __wunused __constcall int isalpha(int __ch)  { return (__ctype_map[__ch&0xff]&(__F_IS_LOWER|__F_IS_UPPER))!=0; }
 __local __wunused __constcall int isblank(int __ch)  { return __ch == '\t' || __ch == ' '; }
@@ -120,11 +121,13 @@ __local __wunused __constcall char _tohex2(int __uppercase, int __x) { return __
 __local __wunused __constcall char _tohex(int __uppercase, int __x) { __assertf(__x < 16,"%d is not a hex",x); return __x >= 10 ? ((__uppercase ? 'A' : 'a')+(__x-10)) : '0'+__x; }
 __local __wunused __constcall char _tohex2(int __uppercase, int __x) { return __x >= 10 ? ((__uppercase ? 'A' : 'a')+(__x-10)) : '0'+__x; }
 #endif
+#endif /* !__CTYPE_C__ */
 
+#ifndef __CTYPE_C__
 #ifdef __DEBUG__
-__local __wunused __constcall int _tolower(int __ch) { __assertf(isupper(__ch),"'%c' is not __uppercase",__ch); return __ch+('a'-'A'); }
+__local __wunused __constcall int _tolower(int __ch) { __assertf(isupper(__ch),"'%c' is not uppercase",__ch); return __ch+('a'-'A'); }
 __local __wunused __constcall int _toupper(int __ch) { __assertf(islower(__ch),"'%c' is not lowercase",__ch); return __ch+('A'-'a'); }
-__forcelocal __wunused __constcall int __tolower_d(int __ch __LIBC_DEBUG__PARAMS) { __assert_atf("_tolower(...)",0,isupper(__ch),"'%c' is not __uppercase",__ch); return __ch+('a'-'A'); }
+__forcelocal __wunused __constcall int __tolower_d(int __ch __LIBC_DEBUG__PARAMS) { __assert_atf("_tolower(...)",0,isupper(__ch),"'%c' is not uppercase",__ch); return __ch+('a'-'A'); }
 __forcelocal __wunused __constcall int __toupper_d(int __ch __LIBC_DEBUG__PARAMS) { __assert_atf("_toupper(...)",0,islower(__ch),"'%c' is not lowercase",__ch); return __ch+('A'-'a'); }
 #define _tolower(ch) __tolower_d(ch __LIBC_DEBUG__ARGS)
 #define _toupper(ch) __toupper_d(ch __LIBC_DEBUG__ARGS)
@@ -136,6 +139,7 @@ __local int _toupper(int __ch) { return __ch+('A'-'a'); }
 #define _toupper(__ch) ((__ch)+('A'-'a'))
 #endif /* !__CCTYPE__ */
 #endif
+#endif /* !__CTYPE_C__ */
 
 #ifndef __INTELLISENSE__
 #ifdef ____ctype_tohex_defined

@@ -237,6 +237,7 @@ __STATIC_ASSERT(sizeof(struct ksegment) == 8);
 
 #ifndef __ASSEMBLY__
 typedef __u16 ksegid_t;
+typedef __u16 kseglimit_t;
 
 //////////////////////////////////////////////////////////////////////////
 // Allocate/Free/Update a (new) descriptor index within global descriptor table.

@@ -175,7 +175,7 @@ kproc_perm_xch(struct kproc *__restrict self,
      oldstate = katomic_load(kproc_getperm(self)->pp_state);
      if (perm->p_data.d_int < (int)(oldstate >> KPROCSTATE_SHIFT_LOGPRIV)) return KE_ACCES;
      newstate = (oldstate&~(KPROCSTATE_MASK_LOGPRIV))|
-                (perm->p_data.d_int << KPROCSTATE_SHIFT_LOGPRIV);
+                ((__u32)perm->p_data.d_int << KPROCSTATE_SHIFT_LOGPRIV);
     } while (!katomic_cmpxch(kproc_getperm(self)->pp_state,oldstate,newstate));
 #ifdef XCH
     perm->p_data.d_int = (int)(oldstate >> KPROCSTATE_SHIFT_LOGPRIV);

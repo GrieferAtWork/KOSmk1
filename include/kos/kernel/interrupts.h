@@ -329,8 +329,11 @@ RUNTIME_REGION_DEFINE(NOIRQ);
 
 #else
 #define NOIRQ_BEGIN                 {
-#define NOIRQ_END                   }
+#define NOIRQ_END                   ;}
 #define NOIRQ_BREAK                 ;
+#define NOIRQ_BEGINLOCK_VOLATILE(ob,readvolatile,trylock,unlock) \
+ NOIRQ_BEGIN (ob) = (readvolatile); while (!(trylock));
+
 #define NOIRQ_BEGINLOCK(trylock)  { { while(!(trylock)) ktask_yield(); }
 #define NOIRQ_BREAKUNLOCK(unlock)   (unlock)
 #define NOIRQ_ENDUNLOCK(unlock)     (unlock); }

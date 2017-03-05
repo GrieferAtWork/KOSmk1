@@ -25,6 +25,7 @@
 
 #include <kos/compiler.h>
 #include <kos/types.h>
+#include <kos/kernel/features.h>
 
 __DECL_BEGIN
 
@@ -34,7 +35,9 @@ __DECL_BEGIN
 #define KARCH_X86_EFLAGS_ZF           0x00000040 /*< [bit(6)]     Zero Flag Status. */
 #define KARCH_X86_EFLAGS_SF           0x00000080 /*< [bit(7)]     Sign Flag Status. */
 #define KARCH_X86_EFLAGS_TF           0x00000100 /*< [bit(8)]     Trap Flag (System). */
+#if !defined(__KERNEL__) || KCONFIG_HAVE_IRQ
 #define KARCH_X86_EFLAGS_IF           0x00000200 /*< [bit(9)]     Interrupt Enable Flag (System). */
+#endif /* KCONFIG_HAVE_IRQ */
 #define KARCH_X86_EFLAGS_DF           0x00000400 /*< [bit(10)]    Direction Flag (Control). */
 #define KARCH_X86_EFLAGS_OF           0x00000800 /*< [bit(11)]    Overflow Flag Status. */
 #define KARCH_X86_EFLAGS_IOPL(n) (((n)&3) << 12) /*< [bit(12,13)] I/O Privilege Level (System). */

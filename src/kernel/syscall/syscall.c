@@ -261,6 +261,15 @@ void ksyscall_handler(struct kirq_registers *regs) {
         ,"User-task still critical after syscall return (syscall = %I32x)"
         ,original_id);
 #endif
+#if !KCONFIG_HAVE_IRQ
+ {/* Allow for preemption on systems without IRQ interrupts. */
+  struct ktask *caller = ktask_self();
+  if (!caller->t_preempt--) {
+   caller->t_preempt = KTASK_PREEMT_COUNTDOWN;
+   ktask_yield();
+  }
+ }
+#endif /* !KCONFIG_HAVE_IRQ */
 #if HAVE_SYSCALL_TRACE
  if (k_sysloglevel >= KLOG_INSANE) ksyscall_trace(regs);
 #endif /* HAVE_SYSCALL_TRACE */

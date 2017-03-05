@@ -77,7 +77,11 @@ __COMPILER_PACK_POP
  stack.regs.fs       = KSEG_KERNEL_DATA;
  stack.regs.gs       = KSEG_KERNEL_DATA;
 #endif
+#ifdef KARCH_X86_EFLAGS_IF
  stack.regs.eflags   = KARCH_X86_EFLAGS_IF;
+#else
+ stack.regs.eflags   = 0;
+#endif
  stack.regs.callback = main;
 #ifdef __DEBUG__
  stack.return_address = (void(*)(void))((uintptr_t)&ktask_exitnormal+1);
@@ -477,7 +481,11 @@ void ktask_setupuser(struct ktask *self, __user void *useresp, __user void *eip)
 #endif
  regs.base.eip    = (uintptr_t)eip;
  regs.useresp     = (uintptr_t)useresp;
+#ifdef KARCH_X86_EFLAGS_IF
  regs.base.eflags = KARCH_X86_EFLAGS_IF;
+#else
+ regs.base.eflags = 0;
+#endif
  ktask_stackpush_sp_unlocked(self,&regs,sizeof(regs));
 }
 

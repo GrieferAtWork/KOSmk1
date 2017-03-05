@@ -232,7 +232,7 @@ void kernel_main(void) {
  kernel_initialize_vfs();
  kernel_initialize_syscall();
  assert(!karch_irq_enabled());
- karch_irq_enable();
+ //karch_irq_enable();
 
  //k_sysloglevel = KLOG_TRACE;
  //ktask_suspend(ktask_self());

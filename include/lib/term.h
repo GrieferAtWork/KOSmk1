@@ -218,6 +218,7 @@ extern __nonnull((1)) void term_voutf(struct term *self, char const *__restrict 
 #define ANSI_CPL       'F' /*< Cursor Previous Line. */
 #define ANSI_CHA       'G' /*< Cursor Horizontal Absolute. */
 #define ANSI_CUP       'H' /*< Cursor Position. */
+#define ANSI_CUP2      'f' /*< Cursor Position. */
 #define ANSI_ED        'J' /*< Erase Data. */
 #define ANSI_EL        'K' /*< Erase in Line. */
 #define ANSI_SU        'S' /*< Scroll Up. */

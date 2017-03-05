@@ -136,7 +136,7 @@ typedef __u32 kshmrefcnt_t;
 #define KSHMREGION_FLAG_RESTRICTED 0x0020 /*< This region of memory is restricted, meaning that the user cannot use 'munmap()' to delete it. (NOTE: Superceided by 'KSHMREGION_FLAG_LOSEONFORK'). */
 #define KSHMREGION_FLAG_NOFREE     0x0040 /*< Don't free memory from this chunk when the reference counter hits ZERO(0). - Used for 1-1 physical/device memory mappings. */
 #define KSHMREGION_FLAG_NOCOPY     0x0080 /*< Don't hard-copy memory from this chunk, but alias it when set in 'right->sre_chunk.sc_flags' in 'kshmchunk_hardcopy'. */
-//#define KSHMREGION_FLAG_ZERO     0x0100 /*< TODO: Symbolic region of potentially infinite size; fill-on-read; filled only with zeros (useful for bss sections). */
+//#define KSHMREGION_FLAG_ZERO     0x0400 /*< TODO: Symbolic region of potentially infinite size; fill-on-read; filled only with zeros (useful for bss sections). */
 
 #define KSHM_FLAG_SIZEOF  2
 #ifndef __ASSEMBLY__
@@ -224,7 +224,7 @@ extern void kshmchunk_copypages(struct kshmchunk const *self,
 #define KSHMCLUSTER_OFFSETOF_PART   (KSHMREFCNT_SIZEOF)
 #ifndef __ASSEMBLY__
 struct kshmcluster {
- __atomic kshmrefcnt_t sc_refcnt; /*< Reference counters for cluster memory. */
+ __atomic kshmrefcnt_t sc_refcnt; /*< Reference counters for cluster memory (always controls 1..KSHM_CLUSTERSIZE (inclusive) pages of memory). */
  struct kshmpart      *sc_part;   /*< [1..1] The first part that includes pages from this cluster. */
 };
 #endif /* !__ASSEMBLY__ */
@@ -241,7 +241,7 @@ struct kshmregion {
  /* NOTE: This structure is synchronized because it is fully atomic/singleton. */
  KOBJECT_HEAD
  struct kshmchunk   sre_chunk;       /*< Associated chunks of data. */
- __atomic __size_t  sre_branches;    /*< Amount of branches that this region is associated with (Used to ensure uniqueness of a region). */
+ __atomic __size_t  sre_branches;    /*< Amount of different reference holders that this region is associated with (Used to ensure uniqueness of a region). */
  __atomic __size_t  sre_clustera;    /*< [!0] Allocated amount of clusters (When this hits ZERO(0), free the region controller structure). */
  __size_t           sre_clusterc;    /*< [!0][const][== ceildiv(sre_chunk.sc_pages,KSHM_CLUSTERSIZE)] Amount of tracked clusters. */
  struct kshmcluster sre_clusterv[1]; /*< [sre_clusterc] Inlined vector of available clusters. */
@@ -339,7 +339,7 @@ extern __crit __wunused __malloccall __ref struct kshmregion *kshmregion_newphys
 //       addressable memory space of 'min_region', directly
 //      (that is page-aligned) followed by that of 'max_region'.
 //    >> Like all other region-allocators the returned region
-//       will be initialized with 'sre_branches' set to ZERO(1),
+//       will be initialized with 'sre_branches' set to ONE(1),
 //       as well as all associated clusters initialized to ONE(1).
 //  - Both regions must be fully allocated, as easily deducible
 //    by asserting 'sre_clustera == sre_clusterc' on both of them.
@@ -479,7 +479,7 @@ union{
  __uintptr_t                sb_map_max;     /*< [1..1][const][==sb_map_min+(sb_rpages*PAGESIZE)-1] Highest mapped address. */
  kshmregion_page_t          sb_rstart;      /*< Index of the first page within the associated region that is mapped by this branch. */
  __size_t                   sb_rpages;      /*< Amount of pages used from the associated region, starting at 'sb_rstart'. */
- struct kshmregion         *sb_region;      /*< [1..1][const] Reference to the associated region of memory. */
+ __ref struct kshmregion   *sb_region;      /*< [1..1][const] Reference (sre_branches) to the associated region of memory. */
  /* NOTE: The following two pointers describe a range of clusters to which this branch owns references. */
  __ref struct kshmcluster  *sb_cluster_min; /*< [1..1][in(sb_region->sre_clusterv)][<= sb_cluster_max] Lowest cluster to which this branch owns references. */
  __ref struct kshmcluster  *sb_cluster_max; /*< [1..1][in(sb_region->sre_clusterv)][>= sb_cluster_min] Highest cluster to which this branch owns references. */
@@ -487,11 +487,11 @@ union{
 
 /* Returns TRUE(1) if the given branch can be expanded up-, or downwards. */
 #define kshmbranch_canexpand_min(self) \
- ((self)->sb_region->sre_branches == 1 && (self)->sb_rstart == 0)
+ ((self)->sb_rstart == 0 && katomic_load((self)->sb_region->sre_branches) == 1)
 #define kshmbranch_canexpand_max(self) \
- ((self)->sb_region->sre_branches == 1 && \
-  (self)->sb_rstart+(self)->sb_rpages == \
-  (self)->sb_region->sre_chunk.sc_pages)
+ ((self)->sb_rstart+(self)->sb_rpages == \
+  (self)->sb_region->sre_chunk.sc_pages && \
+   katomic_load((self)->sb_region->sre_branches) == 1)
 
 #define KSHMBRANCH_ADDRSEMI_INIT       ((((__uintptr_t)-1)/2)+1)
 #define KSHMBRANCH_ADDRLEVEL_INIT      ((__SIZEOF_POINTER__*8)-1)
@@ -601,6 +601,7 @@ kshmbrach_putsplit(struct kshmbranch **__restrict pself,
 // @param: pmin:    [in] Pointer to the min-branch that should be merged.
 // @param: pmax:    [in] Pointer to the max-branch that should be merged.
 // @param: presult: [out+opt] The final, merged branch.
+// @return: KE_OK:    Successfully merged the given branches.
 // @return: KE_NOMEM: Not enough available memory to merge the branches.
 extern __crit __nomp __wunused __nonnull((1,3)) kerrno_t
 kshmbrach_merge(struct kshmbranch **__restrict pmin, __uintptr_t min_semi,
@@ -743,8 +744,8 @@ kshmmap_locate(struct kshmmap const *__restrict self,
 __COMPILER_PACK_PUSH(1)
 struct __packed kldt {
  /* Local descriptor table (One for each process). */
- __u16                                   ldt_gdtid;  /*< [const] Associated GDT offset/index. */
- __u16                                   ldt_limit;  /*< LDT vector limit. */
+ ksegid_t                                ldt_gdtid;  /*< [const] Associated GDT offset/index. */
+ kseglimit_t                             ldt_limit;  /*< LDT vector limit. */
  __user struct ksegment                 *ldt_base;   /*< [0..1] User-mapped base address of the LDT vector. */
  __pagealigned __kernel struct ksegment *ldt_vector; /*< [0..1][owned] Physical address of the LDT vector. */
 };
@@ -765,9 +766,9 @@ struct kshm {
   * NOTE: Access to this structure is not thread-safe and therefor
   *       protected by the 'KPROC_LOCK_SHM' lock in kproc. */
  KOBJECT_HEAD
- struct kpagedir       *s_pd;  /*< [1..1][owned] Per-process page directory (NOTE: May contain more mappings than those of 's_map', though not less!). */
- struct kshmmap         s_map; /*< Map used for mapping a given user-space pointer to a mapped region of memory. */
- struct kldt            s_ldt; /*< The per-process local descriptor table. */
+ struct kpagedir *s_pd;  /*< [1..1][owned] Per-process page directory (NOTE: May contain more mappings than those of 's_map', though not less!). */
+ struct kshmmap   s_map; /*< Map used for mapping a given user-space pointer to a mapped region of memory. */
+ struct kldt      s_ldt; /*< The per-process local descriptor table. */
 };
 #define KSHM_INIT(pagedir,gdtid) \
  {KOBJECT_INIT(KOBJECT_MAGIC_SHM) pagedir,KSHMMAP_INIT,KLDT_INIT(gdtid)}
@@ -779,7 +780,7 @@ struct kshm {
 // @return: KE_NOMEM: Not enough available memory (Such as when allocating the page directory).
 extern __crit __nomp __wunused __nonnull((1)) kerrno_t
 kshm_init(struct kshm *__restrict self,
-          __u16 ldt_size_hint);
+          kseglimit_t ldt_size_hint);
 extern __crit __nomp __nonnull((1)) void
 kshm_quit(struct kshm *__restrict self);
 
@@ -858,6 +859,11 @@ kshm_mapfullregion_inherited(struct kshm *__restrict self,
 // @return: KE_NOMEM: Not enough kernel memory to allocate the
 //                    necessary control entries and structures.
 // @return: KE_NOSPC: Failed to find an unused region of sufficient size.
+extern __crit __nomp __wunused __nonnull((1,2,3)) kerrno_t
+kshm_mapautomatic_inherited(struct kshm *__restrict self,
+                            /*out*/__pagealigned __user void **__restrict user_address,
+                            __ref struct kshmregion *__restrict region, __pagealigned __user void *hint,
+                            kshmregion_page_t in_region_page_start, __size_t in_region_page_count);
 extern __crit __nomp __wunused __nonnull((1,2,3)) kerrno_t
 kshm_mapautomatic(struct kshm *__restrict self,
                   /*out*/__pagealigned __user void **__restrict user_address,
