@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
 
  /* Do some testing for copy-on-write. */
  task_t t;
- size_t memsize = 1024*1024;
+ size_t memsize = 1024*1024*16;
  char *memory = (char *)malloc(memsize);
  if ((t = task_fork()) == 0) {
   k_syslogf(KLOG_INFO,"Begin memset() in child task...\n");

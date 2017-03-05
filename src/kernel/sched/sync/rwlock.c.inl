@@ -42,6 +42,15 @@
 
 __DECL_BEGIN
 
+/* Quickly disable tracked R/W locks without
+ * having to recompile the entire kernel. */
+//#define KCONFIG_QUICKDISABLE_DEBUG_TRACKEDRWLOCK 1
+
+#ifndef KCONFIG_QUICKDISABLE_DEBUG_TRACKEDRWLOCK
+#define KCONFIG_QUICKDISABLE_DEBUG_TRACKEDRWLOCK 0
+#endif
+
+
 #if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
 #define RWLOCK_DEBUG_NOINLINE __noinline
 #else
@@ -49,9 +58,43 @@ __DECL_BEGIN
 #endif
 
 
-#if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
+#if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK && \
+   !KCONFIG_QUICKDISABLE_DEBUG_TRACKEDRWLOCK
+//////////////////////////////////////////////////////////////////////////
+// Add/Remove/Set the calling thread as a/the read/write lock holder of the given R/W lock.
+// NOTE: Recursively adding the same reader is allowed.
+static void krwlock_debug_addreader(struct krwlock *__restrict self, size_t skip);
+static void krwlock_debug_delreader(struct krwlock *__restrict self, size_t skip);
+static void krwlock_debug_notwriter(struct krwlock *__restrict self, size_t skip);
+static void krwlock_debug_setwriter(struct krwlock *__restrict self, size_t skip);
+static void krwlock_debug_delwriter(struct krwlock *__restrict self, size_t skip);
+#else /* KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK */
+#define krwlock_debug_addreader(self,skip) (void)(++(self)->rw_readc)
+#define krwlock_debug_delreader(self,skip) (void)(--(self)->rw_readc)
+#define krwlock_debug_notwriter(self,skip) (void)0
+#if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK && \
+    KCONFIG_QUICKDISABLE_DEBUG_TRACKEDRWLOCK
+#define krwlock_debug_setwriter(self,skip) \
+ (void)((self)->rw_debug.d_write.de_holder = ktask_self(),\
+        (self)->rw_sig.s_flags |= KRWLOCK_FLAG_WRITEMODE)
+#else
+#define krwlock_debug_setwriter(self,skip) (void)((self)->rw_sig.s_flags |=   KRWLOCK_FLAG_WRITEMODE)
+#endif
+#define krwlock_debug_delwriter(self,skip) (void)((self)->rw_sig.s_flags &= ~(KRWLOCK_FLAG_WRITEMODE))
+#endif /* !KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK */
+#if 1
+#define krwlock_debug_notwriter_upgrade  krwlock_debug_notwriter
+#else
+#define krwlock_debug_notwriter_upgrade(self,skip) (void)0
+#endif
+
+
+
+
+#if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK && \
+   !KCONFIG_QUICKDISABLE_DEBUG_TRACKEDRWLOCK
 RWLOCK_DEBUG_NOINLINE void
-krwlock_debug_addreader(struct krwlock *__restrict self, __size_t skip) {
+krwlock_debug_addreader(struct krwlock *__restrict self, size_t skip) {
  struct krwlock_debugentry *entry;
  kassert_krwlock(self);
  assertf(!krwlock_iswritelocked(self),
@@ -81,7 +124,7 @@ done:
 }
 
 RWLOCK_DEBUG_NOINLINE void
-krwlock_debug_delreader(struct krwlock *__restrict self, __size_t skip) {
+krwlock_debug_delreader(struct krwlock *__restrict self, size_t skip) {
  struct ktask *caller;
  struct krwlock_debugentry *iter,*end;
  kassert_krwlock(self);
@@ -137,7 +180,31 @@ found:
  }
 }
 RWLOCK_DEBUG_NOINLINE void
-krwlock_debug_setwriter(struct krwlock *__restrict self, __size_t skip) {
+krwlock_debug_notwriter(struct krwlock *__restrict self, size_t skip) {
+ kassert_krwlock(self);
+ if ((self->rw_sig.s_flags&(KSIGNAL_FLAG_DEAD|KRWLOCK_FLAG_WRITEMODE)) ==
+                           (                  KRWLOCK_FLAG_WRITEMODE)) {
+  struct ktask *caller = ktask_self();
+  assertf(self->rw_readc == 0,"There are readers while in write-mode?");
+  if (self->rw_debug.d_write.de_holder == caller) {
+   serial_printf(SERIAL_01,
+                 "Write ticket to R/W lock at %p is already held by caller (recursion is not supported)\n"
+                 "thread: %I32d:%Iu:%q (%p)\n"
+                 "See reference to original write ticket acquisition:\n",self,
+                (caller && caller->t_proc) ? caller->t_proc->p_pid : 0,
+                (caller) ? caller->t_tid : 0,
+                (caller) ? ktask_getname(caller) : NULL,
+                (caller));
+   tbtrace_print(self->rw_debug.d_write.de_locktb);
+   serial_printf(SERIAL_01,
+                 "See reference to attempted second acquisition:\n");
+   tb_printex(skip);
+   PANIC("R/W lock recursive write ticket");
+  }
+ }
+}
+RWLOCK_DEBUG_NOINLINE void
+krwlock_debug_setwriter(struct krwlock *__restrict self, size_t skip) {
  kassert_krwlock(self);
  assertf(!krwlock_iswritelocked(self),
          "The lock is already in write-mode (Can't add write ticket)");
@@ -147,7 +214,7 @@ krwlock_debug_setwriter(struct krwlock *__restrict self, __size_t skip) {
  self->rw_debug.d_write.de_locktb = tbtrace_captureex(skip+1);
 }
 RWLOCK_DEBUG_NOINLINE void
-krwlock_debug_delwriter(struct krwlock *__restrict self, __size_t skip) {
+krwlock_debug_delwriter(struct krwlock *__restrict self, size_t skip) {
  struct ktask *holder,*caller;
  kassert_krwlock(self);
  assertf(krwlock_iswritelocked(self),
@@ -162,14 +229,14 @@ krwlock_debug_delwriter(struct krwlock *__restrict self, __size_t skip) {
                 "caller: %I32d:%Iu:%q (%p)\n"
                 "holder: %I32d:%Iu:%q (%p)\n"
                 "See reference to write ticket acquisition:\n",self,
-                (caller && caller->t_proc) ? caller->t_proc->p_pid : 0,
-                (caller) ? caller->t_tid : 0,
-                (caller) ? ktask_getname(caller) : NULL,
-                (caller),
-                (holder && holder->t_proc) ? holder->t_proc->p_pid : 0,
-                (holder) ? holder->t_tid : 0,
-                (holder) ? ktask_getname(holder) : NULL,
-                (holder));
+               (caller && caller->t_proc) ? caller->t_proc->p_pid : 0,
+               (caller) ? caller->t_tid : 0,
+               (caller) ? ktask_getname(caller) : NULL,
+               (caller),
+               (holder && holder->t_proc) ? holder->t_proc->p_pid : 0,
+               (holder) ? holder->t_tid : 0,
+               (holder) ? ktask_getname(holder) : NULL,
+               (holder));
   tbtrace_print(self->rw_debug.d_write.de_locktb);
   PANIC("R/W lock write ticket holder violation");
  }
@@ -225,7 +292,6 @@ krwlock_deadlock_help(struct krwlock *__restrict self) {
 #define KRWLOCK_DEADLOCK_HELP_END         \
  KTASK_DEADLOCK_HELP_END
 #endif /* KCONFIG_HAVE_TASK_DEADLOCK_CHECK */
-
 #endif /* KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK */
 
 #ifndef KRWLOCK_DEADLOCK_HELP_BEGIN
@@ -359,6 +425,7 @@ krwlock_beginwrite(struct krwlock *__restrict self)
  kassert_krwlock(self);
 again:
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
+ krwlock_debug_notwriter(self,skip+1);
  if (krwlock_iswritelocked(self) || self->rw_readc != 0) {
   /* Lock is already in write-mode, or other tasks are reading.
    * >> Wait for the other tasks to finish. */
@@ -379,6 +446,7 @@ krwlock_trybeginwrite(struct krwlock *__restrict self) {
  KTASK_CRIT_MARK
  kassert_krwlock(self);
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
+ krwlock_debug_notwriter(self,1);
  if (krwlock_iswritelocked(self) || self->rw_readc != 0) {
   /* Lock is already in write-mode, or other tasks are reading.
    * >> Wait for the other tasks to finish.
@@ -411,6 +479,7 @@ krwlock_timedbeginwrite(struct krwlock *__restrict self,
  kassert_krwlock(self);
 again:
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
+ krwlock_debug_notwriter(self,skip+1);
  if (krwlock_iswritelocked(self) || self->rw_readc != 0) {
   /* Lock is already in write-mode, or other tasks are reading.
    * >> Wait for the other tasks to finish. */
@@ -507,6 +576,7 @@ krwlock_atomic_upgrade(struct krwlock *__restrict self)
  kassert_krwlock(self);
  assert(krwlock_isreadlocked(self));
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
+ krwlock_debug_notwriter_upgrade(self,skip+1);
  if (self->rw_readc == 1) {
   /* Simple case: One reader (the caller), so we can just switch to write-mode. */
 #if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
@@ -574,6 +644,7 @@ krwlock_atomic_timedupgrade(struct krwlock *__restrict self,
  kassert_krwlock(self);
  assert(krwlock_isreadlocked(self));
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
+ krwlock_debug_notwriter_upgrade(self,skip+1);
  if (self->rw_readc == 1) {
   /* Simple case: One reader (the caller), so we can just switch to write-mode. */
 #if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
@@ -649,6 +720,7 @@ krwlock_tryupgrade(struct krwlock *__restrict self) {
  kassert_krwlock(self);
  assert(krwlock_isreadlocked(self));
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
+ krwlock_debug_notwriter_upgrade(self,1);
  if (self->rw_readc == 1) {
   /* The caller is the only reader (the caller). -> Simply enter write-mode. */
 #if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK

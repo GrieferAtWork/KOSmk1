@@ -92,21 +92,9 @@ union krwlock_debug {
 
 #define __KRWLOCK_DEBUG_INIT       ,{{0,NULL}}
 #define __krwlock_debug_init(self) memset(self,0,sizeof(union krwlock_debug))
-
-//////////////////////////////////////////////////////////////////////////
-// Add/Remove/Set the calling thread as a/the read/write lock holder of the given R/W lock.
-// NOTE: Recursively adding a reader is allowed.
-extern void krwlock_debug_addreader(struct krwlock *__restrict self, __size_t skip);
-extern void krwlock_debug_delreader(struct krwlock *__restrict self, __size_t skip);
-extern void krwlock_debug_setwriter(struct krwlock *__restrict self, __size_t skip);
-extern void krwlock_debug_delwriter(struct krwlock *__restrict self, __size_t skip);
 #else /* KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK */
 #define __KRWLOCK_DEBUG_INIT       /* nothing */
 #define __krwlock_debug_init(self) /* nothing */
-#define krwlock_debug_addreader(self,skip) (void)(++(self)->rw_readc)
-#define krwlock_debug_delreader(self,skip) (void)(--(self)->rw_readc)
-#define krwlock_debug_setwriter(self,skip) (void)((self)->rw_sig.s_flags |=   KRWLOCK_FLAG_WRITEMODE)
-#define krwlock_debug_delwriter(self,skip) (void)((self)->rw_sig.s_flags &= ~(KRWLOCK_FLAG_WRITEMODE))
 #endif /* !KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK */
 #endif /* !__ASSEMBLY__ */
 

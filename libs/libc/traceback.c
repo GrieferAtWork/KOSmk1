@@ -243,7 +243,7 @@ __public struct tbtrace *tbtrace_captureebpex(void const *ebp, size_t skip) {
  struct tbtrace *result; size_t entrycount = 0;
  tb_walkebpex(ebp,(ptbwalker)&tbcapture_walkcount,NULL,&entrycount,skip);
  result = (struct tbtrace *)malloc(offsetof(struct tbtrace,tb_entryv)+
-                                      entrycount*sizeof(struct dtracebackentry));
+                                   entrycount*sizeof(struct dtracebackentry));
  if __unlikely(!result) return NULL;
  result->tb_entryc = entrycount;
  tb_walkebpex(ebp,(ptbwalker)&tbcapture_walkcollect,NULL,result,skip);

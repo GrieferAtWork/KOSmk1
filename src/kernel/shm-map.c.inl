@@ -188,7 +188,11 @@ kshmbranch_popone(struct kshmbranch **proot,
  kassertobj(proot);
  root = *proot;
  kassertobj(root);
- kassert_kshmregion(root->sb_region);
+ /* >> kassert_kshmregion(root->sb_region);
+  * We can't assert this, because the caller may have already feed this region,
+  * only calling us afterwards to clean up the branch, seeing as though we're
+  * even a noexcept function call...
+  */
  *proot = NULL;
  if (root->sb_min) kshmbranch_reinsertall(proot,root->sb_min,addr_semi,addr_level);
  if (root->sb_max) kshmbranch_reinsertall(proot,root->sb_max,addr_semi,addr_level);

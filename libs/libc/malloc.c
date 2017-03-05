@@ -28,9 +28,7 @@
 #define _mallblock_d  mallhead
 
 #include <kos/config.h>
-/* v define to quickly disable mall-blocks,
- *   and use dlmalloc directly.
- */
+/* v define to quickly disable mall-blocks, and use dlmalloc directly. */
 //#undef __LIBC_HAVE_DEBUG_MALLOC
 
 

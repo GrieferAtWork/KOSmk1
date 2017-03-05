@@ -44,6 +44,8 @@ __DECL_BEGIN
  *    AUTOMERGE_BRANCHES block near the end of kshm_touch. */
 #define AUTOMERGE_BRANCHES 1
 
+/* Define the log_level for touch+merge syslog entries. */
+#define COW_LOGLEVEL  KLOG_TRACE
 
 
 static kerrno_t kshm_initldt(struct kshm *__restrict self, kseglimit_t size_hint);
@@ -1479,7 +1481,7 @@ kshmbrach_merge(struct kshmbranch **__restrict pmin, uintptr_t min_semi,
   struct kshmregion *merged_region;
   uintptr_t root_semi;
   unsigned int min_level,max_level,root_level;
-  k_syslogf(KLOG_TRACE,"[SHM] Merge branch at %p..%p with %p..%p\n",
+  k_syslogf(COW_LOGLEVEL,"[SHM] Merge branch at %p..%p with %p..%p\n",
             min_branch->sb_map_min,min_branch->sb_map_max,
             max_branch->sb_map_min,max_branch->sb_map_max);
   /* kshmbranch_print(min_branch,min_semi,KSHMBRANCH_SEMILEVEL(min_semi)); */
@@ -2432,11 +2434,11 @@ true_shared_access:;
 #undef CHECK_MAX_NEIGHBOR
 #undef CHECK_MIN_NEIGHBOR
 
-end_success:
- k_syslogf(KLOG_TRACE,"[COW] Touched %Iu SHM pages at address %p (%p..%p)\n",
+ k_syslogf(COW_LOGLEVEL,"[SHM] Touched %Iu SHM pages at address %p (%p..%p)\n",
           (max_page-min_page)+1,
           (uintptr_t)branch->sb_map+(min_page-branch->sb_rstart)*PAGESIZE,
            branch->sb_map_min,branch->sb_map_max);
+end_success:
  /* Tell the caller how many pages we actually touched. */
  return (max_page-min_page)+1;
 }
