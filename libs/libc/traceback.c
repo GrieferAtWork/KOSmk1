@@ -132,13 +132,13 @@ tbdef_error(int error, void const *arg, void *closure) {
 
 
 
-// Derived from documentation found here:
-// >> http://unixwiz.net/techtips/win32-callconv-asm.html
+/* Derived from documentation found here:
+ * >> http://unixwiz.net/techtips/win32-callconv-asm.html */
 struct stackframe {
- // Local vars...
+ /* Local vars... */
  struct stackframe *caller;
  void              *eip;
- // Parameters...
+ /* Parameters... */
 };
 
 #define SAFE_USERSPACE_TRACEBACKS 1

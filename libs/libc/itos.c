@@ -45,7 +45,7 @@ __public __size_t _dtos(char *__restrict buf, __size_t bufsize, double d,
  unsigned int i;
  double tmp,backup = d;
  char *oldbuf = buf;
- //if ((i = isinf(d))) return strncpy(buf,i>0 ? "inf" : "-inf",bufsize);
+ /*if ((i = isinf(d))) return strncpy(buf,i>0 ? "inf" : "-inf",bufsize)-buf;*/
  if (isnan(d)) { strncpy(buf,"nan",bufsize); return 3; }
  e10 = 1+(__s32)(e*0.30102999566398119802); /* log10(2) */
  if (d == 0.0) {

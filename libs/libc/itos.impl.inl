@@ -54,7 +54,7 @@ __public size_t __PP_CAT_3(_itos,BITS,_ns)(char *__restrict buf,
                                            int numsys) {
  __s used_i; size_t result;
 #ifdef __KERNEL__
- //kassertmem(buf,bufsize);
+ /*kassertmem(buf,bufsize);*/
 #else
  assert(!bufsize || buf);
 #endif
@@ -69,7 +69,7 @@ __public size_t __PP_CAT_3(_itos,BITS,_ns)(char *__restrict buf,
 size_t __PP_CAT_3(_utos,BITS,_ns)(char *__restrict buf, size_t bufsize, __u i, int numsys) {
  __u used_i; char *buf_dst,*buf_end; size_t result;
 #ifdef __KERNEL__
- //kassertmem(buf,bufsize);
+ /*kassertmem(buf,bufsize);*/
 #else
  assert(!bufsize || buf);
 #endif

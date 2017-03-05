@@ -559,7 +559,7 @@ parsefch:
     switch (fch) {
 
      case 'd':
-      (void)length; // TODO
+      (void)length; /* TODO */
       break;
 
      {
@@ -760,7 +760,7 @@ next:
 
 
     switch ((ch = *iter++)) {
-//TODO: @begin locale_dependent
+/* TODO: @begin locale_dependent */
      case 'a': print(safe_elem(abbr_wday_names,tm->tm_wday),(size_t)-1); break;
      case 'A': print(safe_elem(full_wday_names,tm->tm_wday),(size_t)-1); break;
      case 'h':
@@ -781,9 +781,9 @@ next:
                      ,tm->tm_hour,tm->tm_min
                      ,tm->tm_sec);
                break;
-     case 'z': break; // TODO: ISO 8601 offset from UTC in timezone (1 minute=1, 1 hour=100) | If timezone cannot be determined, no characters	+100
-     case 'Z': break; // TODO: Timezone name or abbreviation * | If timezone cannot be determined, no characters	CDT
-//TODO: @end locale_dependent
+     case 'z': break; /* TODO: ISO 8601 offset from UTC in timezone (1 minute=1, 1 hour=100) | If timezone cannot be determined, no characters	+100 */
+     case 'Z': break; /* TODO: Timezone name or abbreviation * | If timezone cannot be determined, no characters	CDT */
+/* TODO: @end locale_dependent */
      case 'C': printf("%0.2u",((tm->tm_year+1900)/100)%100); break;
      case 'd': printf("%0.2u",tm->tm_mday); break;
      case 'D': printf("%0.2u/%0.2u/%0.2u",tm->tm_mon+1,tm->tm_mday,(tm->tm_year+1900)%100); break;
@@ -807,14 +807,14 @@ next:
      case 'y': printf("%0.2u",(tm->tm_year+1900)%100); break;
      case 'Y': printf("%u",tm->tm_year+1900); break;
 
-     // I don't understand this week-based stuff.
-     // I read the wikipedia article, but I still don't really get it.
-     // >> So this might be supported in the future when I understand it...
-     // %g	Week-based year, last two digits (00-99)	01
-     // %G	Week-based year	2001
-     // %U	Week number with the first Sunday as the first day of week one (00-53)	33
-     // %V	ISO 8601 week number (00-53)	34
-     // %W	Week number with the first Monday as the first day of week one (00-53)	34
+     /* I don't understand this week-based stuff.
+      * I read the wikipedia article, but I still don't really get it.
+      * >> So this might be supported in the future when I understand it...
+      * %g	Week-based year, last two digits (00-99)	01
+      * %G	Week-based year	2001
+      * %U	Week number with the first Sunday as the first day of week one (00-53)	33
+      * %V	ISO 8601 week number (00-53)	34
+      * %W	Week number with the first Monday as the first day of week one (00-53)	34 */
 
      case 'n': print("\n",1); break;
      case 't': print("\t",1); break;

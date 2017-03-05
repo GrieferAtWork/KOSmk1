@@ -34,23 +34,23 @@
 
 __DECL_BEGIN
 
-// TODO: When a directory is longer than a set amount of entries
-//      (say 64), a different form of enumeration should be
-//       performed using a specially allocated kernel-stack for
-//       enumerating the directory, only ever reading as far
-//       ahead as required for the current seek()+readdir() position.
-//    >> This way, enumerating ~really~ big folders won't cause
-//       the kernel to hang momentarily on the first entry, instead
-//       evenly spreading the load over all entries while allowing
-//       us to simply stop enumerating by returned non-zero from
-//       what is the current implementation of 'kdirfile_enum'.
-// NOTE: The hard part will be differentiating between short and
-//       long directories, as there is no API for figuring out
-//       the length of one without enumerating it as well.
-//       We can't simply copy the kernel-stack, once we reach a
-//       certain limit, as that would break any stack-based pointers.
-//       Instead, we have to decide if long enumeration makes sense
-//       before even staring, or knowing anything about the folder...
+/* TODO: When a directory is longer than a set amount of entries
+ *      (say 64), a different form of enumeration should be
+ *       performed using a specially allocated kernel-stack for
+ *       enumerating the directory, only ever reading as far
+ *       ahead as required for the current seek()+readdir() position.
+ *    >> This way, enumerating ~really~ big folders won't cause
+ *       the kernel to hang momentarily on the first entry, instead
+ *       evenly spreading the load over all entries while allowing
+ *       us to simply stop enumerating by returned non-zero from
+ *       what is the current implementation of 'kdirfile_enum'.
+ * NOTE: The hard part will be differentiating between short and
+ *       long directories, as there is no API for figuring out
+ *       the length of one without enumerating it as well.
+ *       We can't simply copy the kernel-stack, once we reach a
+ *       certain limit, as that would break any stack-based pointers.
+ *       Instead, we have to decide if long enumeration makes sense
+ *       before even staring, or knowing anything about the folder... */
 
 struct kdirfilelist {
  size_t                ent_c;

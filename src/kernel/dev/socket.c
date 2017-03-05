@@ -90,11 +90,11 @@ ksockdev_getddist(struct ksockdev *__restrict self,
                   __be16 etherframe_type) {
  kassert_ksockdev(self);
  (void)etherframe_type;
- // TODO: Type-specific frame distributors
+ /* TODO: Type-specific frame distributors. */
  return NULL;
 }
 
-// TODO: Use type-specific data distributors for these
+/* TODO: Use type-specific data distributors for these. */
 kerrno_t ksockdev_pollframe_t(struct ksockdev *__restrict self, __be16 ether_type,
                               struct ketherframe **__restrict frame) {
  kerrno_t error;

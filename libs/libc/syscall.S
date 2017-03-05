@@ -43,14 +43,14 @@ GLOBAL_FUNCTION(__kos_syscall):
 	 *     just wants you to use the macros from <kos/syscall.h> ...
 	 *  >> With inlining and what not, those are just so much faster! */
 	pushI %ebp
-	movI (PS*2)(%esp), %eax // sysno
-	leaI (PS*6)(%esp), %ebp // Pointer to additional arguments (#3 + ...)
+	movI (PS*2)(%esp), %eax /*< sysno. */
+	leaI (PS*6)(%esp), %ebp /*< Pointer to additional arguments (#3 + ...) */
 	pushI %ebx
 	pushI %ecx
 	pushI %edx
-	movI (-PS*3)(%ebp), %ebx // ARG #0
-	movI (-PS*2)(%ebp), %ecx // ARG #1
-	movI (-PS*1)(%ebp), %edx // ARG #2
+	movI (-PS*3)(%ebp), %ebx /*< ARG #0. */
+	movI (-PS*2)(%ebp), %ecx /*< ARG #1. */
+	movI (-PS*1)(%ebp), %edx /*< ARG #2. */
 
 	int $__SYSCALL_INTNO
 
@@ -68,9 +68,9 @@ SYMBOLEND(syscall)
  * >> extern long __nt_syscall(long sysno, ...); */
 GLOBAL_FUNCTION(__nt_syscall):
 	pushI %edx
-	movI (PS*1)(%esp), %eax // sysno
-	leaI (PS*2)(%esp), %edx // argument vector
-	int $__NTSYSCALL_INTNO	// NT System Call
+	movI (PS*1)(%esp), %eax /*< sysno. */
+	leaI (PS*2)(%esp), %edx /*< argument vector. */
+	int $__NTSYSCALL_INTNO	/*< NT System Call. */
 	popI %edx
 	ret
 SYMBOLEND(__nt_syscall)

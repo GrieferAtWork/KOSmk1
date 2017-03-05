@@ -96,30 +96,30 @@ again:
  result = dirp->__d_longent;
  kdent.kd_namev = result->d_name;
  kdent.kd_namec = bufsize;
- // Read in perfect peeking mode:
- //  - Only advance the directory if the given buffer had sufficient size
- // >> In any buffer-related case, the kernel will store the required
- //    size within the 'kdent.kd_namec' field, allowing us to allocate
- //    a bigger buffer when our current was too small.
- //    If it wasn't we don't need to do a second system-call, as
- //    the kernel has already auto-magically advanced the directory.
+ /* Read in perfect peeking mode:
+  *  - Only advance the directory if the given buffer had sufficient size
+  * >> In any buffer-related case, the kernel will store the required
+  *    size within the 'kdent.kd_namec' field, allowing us to allocate
+  *    a bigger buffer when our current was too small.
+  *    If it wasn't we don't need to do a second system-call, as
+  *    the kernel has already auto-magically advanced the directory. */
  error = kfd_readdir(dirp->__d_fd,&kdent,
                      KFD_READDIR_FLAG_INO|KFD_READDIR_FLAG_KIND|
                      KFD_READDIR_FLAG_PEEK|KFD_READDIR_FLAG_PERFECT);
- if __unlikely(error == KS_EMPTY) return NULL; // End of directory (NOTE: This doesn't set errno)
+ if __unlikely(error == KS_EMPTY) return NULL; /* End of directory (NOTE: This doesn't set errno) */
  if __unlikely(KE_ISERR(error)) {end_err: __set_errno(-error); return NULL; }
  if (kdent.kd_namec > bufsize) {
   struct dirent *new_long_ent;
-  // Must (re-)allocate a bigger long directory entry
+  /* Must (re-)allocate a bigger long directory entry. */
   bufsize = offsetafter(struct dirent,d_namlen)+kdent.kd_namec;
   dirp->__d_longsz = bufsize;
-  // Use the required buffersize, as indicated by the kernel
+  /* Use the required buffersize, as indicated by the kernel. */
   new_long_ent = (result == &dirp->__d_ent)
    ? (struct dirent *)malloc(bufsize)
    : (struct dirent *)realloc(result,bufsize);
   if __unlikely(!new_long_ent) { error = KE_NOMEM; goto end_err; }
   dirp->__d_longent = new_long_ent;
-  // Try again with the bigger buffer
+  /* Try again with the bigger buffer. */
   goto again;
  }
  result->d_ino    = kdent.kd_ino;
@@ -141,7 +141,7 @@ __public struct dirent *readdir(DIR *dirp)
   return NULL;
  }
 #endif
- // Read a short directory entry (truncating long filenames)
+ /* Read a short directory entry (truncating long filenames). */
  error = readdir_r(dirp,&dirp->__d_ent,&result);
  if __unlikely(error != 0) {
   __set_errno(error);
@@ -166,11 +166,11 @@ __public int readdir_r(DIR *dirp, struct dirent *entry,
  kdent.kd_namev = entry->d_name;
  kdent.kd_namec = sizeof(entry->d_name);
  error = kfd_readdir(dirp->__d_fd,&kdent,KFD_READDIR_FLAG_INO|KFD_READDIR_FLAG_KIND);
- if __unlikely(error == KS_EMPTY) { *result = NULL; return 0; } // End of directory
+ if __unlikely(error == KS_EMPTY) { *result = NULL; return 0; } /* End of directory. */
  if __unlikely(KE_ISERR(error)) return -error;
  entry->d_ino = kdent.kd_ino;
  entry->d_type = IFTODT(kdent.kd_mode);
- // Make sure it's always zero-terminated (possibly truncating the filename...)
+ /* Make sure it's always zero-terminated (possibly truncating the filename...). */
  entry->d_name[NAME_MAX] = '\0';
  entry->d_namlen = (kdent.kd_namec/sizeof(char))-1;
  *result = entry;

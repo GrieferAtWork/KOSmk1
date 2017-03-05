@@ -45,11 +45,11 @@ __DECL_BEGIN
 
 __public float strtof(char const *string, char **endptr) {
  (void)string,(void)endptr;
- return -1.0f; // TODO
+ return -1.0f; /* TODO. */
 }
 __public double strtod(char const *string, char **endptr) {
  (void)string,(void)endptr;
- return -1.0f; // TODO
+ return -1.0f; /* TODO. */
 }
 __public long double strtold(char const *string, char **endptr) {
  (void)string,(void)endptr;

@@ -240,10 +240,10 @@ struct taskmain_data {
  void           *real_closure;
 };
 
-// Use ktask_newthreadi to prevent memory leaks
-// resulting from not resuming suspended tasks, or
-// terminating a task before it was able to free
-// its closure data.
+/* Use ktask_newthreadi to prevent memory leaks
+ * resulting from not resuming suspended tasks, or
+ * terminating a task before it was able to free
+ * its closure data. */
 #define USE_NEWTHREADI
 
 
@@ -267,7 +267,8 @@ __public task_t task_newthread(task_threadfunc thread_main,
  struct taskmain_data closuredata; task_t result;
  closuredata.thread_main = thread_main;
  closuredata.real_closure = closure;
- // Use a wrapper function that allows the user-specified task to return normally
+ /* Use a wrapper function that allows the
+  * user-specified task to return normally. */
  result = ktask_newthreadi((ktask_threadfun_t)&taskmain,
                             &closuredata,sizeof(closuredata),
                             flags,NULL);
@@ -280,7 +281,8 @@ __public task_t task_newthread(task_threadfunc thread_main,
  if __unlikely(!proxy_closure) return -1;
  proxy_closure->thread_main = thread_main;
  proxy_closure->real_closure = closure;
- // Use a wrapper function that allows the user-specified task to return normally
+ /* Use a wrapper function that allows the
+  * user-specified task to return normally. */
  result = ktask_newthread((ktask_threadfun_t)&taskmain,proxy_closure,flags);
  if __likely(KE_ISOK(result)) return result;
  free(proxy_closure);
@@ -298,7 +300,7 @@ __public task_t task_forkex(__u32 flags) {
  kerrno_t error;
  error = ktask_fork(&result.u,KTASK_NEW_FLAG_SUSPENDED);
  if (error == KS_UNCHANGED) {
-  // Parent process on success
+  /* Parent process on success. */
   if __unlikely(result.u == 0) {
    /* Rare case: We must get a new descriptor.
     * >> We can't return '0' to the caller,
@@ -428,7 +430,8 @@ __public int proc_terminate(proc_t proc, uintptr_t exitcode) {
 }
 
 
-// Single join the root thread of a processes, assuming recursive termination
+/* Single join the root thread of a processes,
+ * assuming recursive termination. */
 __public int proc_join(proc_t proc, uintptr_t *exitcode) {
  kerrno_t error = ktask_join(proc,(void **)exitcode,
                              KTASKOPFLAG_RECURSIVE);
@@ -543,7 +546,8 @@ __public int tls_set(tls_t slot, void *value) {
 __public tls_t tls_alloc(void) {
  kerrno_t error; tls_t result;
  error = kproc_alloctls(&result);
- // We assume that no process allowed to will ever allocate 2**32 tls handles...
+ /* We assume that no process allowed to will
+  * ever allocate 2**32 tls handles... */
  if __likely(KE_ISOK(error)) return result;
  __set_errno(-error);
  return TLS_ERROR;

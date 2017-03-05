@@ -89,24 +89,25 @@ __dlsym(struct kproc *__restrict proc,
         struct kprocmodule *__restrict start_module,
         char const *name, size_t name_size, ksymhash_t name_hash,
         struct kprocmodule *__restrict exclude_module) {
- // Must prefer symbols from modules that are already relocated
- // in order to prevent symbols from being defined multiple
- // times, while originating from different modules.
- // e.g.:
- // $ gcc -o main main.c -ldl -lc
- // 
- // main.c:
- // >> int main(int argc, char *argv[]) {
- // >>   // libc is already loaded, meaning that an existing
- // >>   // definition of 'errno' must be preferred over
- // >>   // a definition that would otherwise be loaded
- // >>   // as a result of the insertion of 'libcurses.so'
- // >>   // WARNING: 'errno' isn't really the name of an exported symbol,
- // >>   //          but my point should be clear none-the-less.
- // >>   void *d = dlopen("libcurses.so",RTLD_NOW);
- // >>   int *peno = (int *)dlsym(d,"errno");
- // >>   assert(peno == &errno); // This would otherwise fail
- // >> }
+ /* Must prefer symbols from modules that are already relocated
+  * in order to prevent symbols from being defined multiple
+  * times when originating from different modules.
+  * e.g.:
+  * $ gcc -o main main.c -ldl -lc
+  * 
+  * main.c:
+  * >> int main(int argc, char *argv[]) {
+  * >>   // libc is already loaded, meaning that an existing
+  * >>   // definition of 'errno' must be preferred over
+  * >>   // a definition that would otherwise be loaded
+  * >>   // as a result of the insertion of 'libcurses.so'
+  * >>   // WARNING: 'errno' isn't really the name of an exported symbol,
+  * >>   //          but my point should be clear none-the-less.
+  * >>   void *d = dlopen("libcurses.so",RTLD_NOW);
+  * >>   int *peno = (int *)dlsym(d,"errno");
+  * >>   assert(peno == &errno); // This would otherwise fail
+  * >> }
+  */
 #if 0
  return __new_dlsym(proc,start_module,name,name_size,name_hash,exclude_module);
 #else
@@ -164,16 +165,16 @@ kreloc_elf32_rel_exec(Elf32_Rel const *relv, size_t relc,
    case R_386_COPY:
    case R_386_GLOB_DAT:
    case R_386_JMP_SLOT:
-    // http://www.skyfree.org/linux/references/ELF_Format.pdf (page #29):
-    // During execution, the dynamic linker copies data associated with the
-    // shared object's symbol to the location specified by the offset.
-    // >> Meaning we must not search for the symbol within the current module for R_386_COPY
+    /* http://www.skyfree.org/linux/references/ELF_Format.pdf (page #29):
+     * During execution, the dynamic linker copies data associated with the
+     * shared object's symbol to the location specified by the offset.
+     * >> Meaning we must not search for the symbol within the current module for R_386_COPY */
     new_address = (uintptr_t)__dlsym(proc,start_module,sym->s_name,
                                      sym->s_nmsz,sym->s_hash,
                                      type == R_386_COPY ? reloc_module : NULL);
     LOG(KLOG_INSANE,"[CMD %Iu] Lookup symbol: %I32u:%s %p -> %p\n",
         iter-relv,symbol,sym->s_name,iter->r_offset,new_address);
-    // TODO: Weak symbols may be initialized to NULL
+    /* TODO: Weak symbols may be initialized to NULL. */
     if (new_address != 0) break;
     LOG(KLOG_ERROR,"[CMD %Iu] Failed to find symbol: %s\n",iter-relv,sym->s_name);
    default: new_address = sym->s_addr+base;
@@ -193,11 +194,6 @@ kreloc_elf32_rel_exec(Elf32_Rel const *relv, size_t relc,
     SETMEM(ADDR(iter->r_offset),&new_address,sizeof(uintptr_t));
     break;
    case R_386_COPY:
-    //if (sym && sym->s_size == 4) {
-    // uintptr_t symval = GETMEM(uintptr_t,(void *)new_address);
-    // printf("Copy %s: *%p := *%p (%Ix)\n",sym->s_name,
-    //        ADDR(iter->r_offset),new_address,symval);
-    //}
     if (sym &&
         kshm_copyinuser_w(memspace,ADDR(iter->r_offset),
                          (void *)new_address,sym->s_size)) {

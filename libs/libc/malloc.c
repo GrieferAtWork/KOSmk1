@@ -290,8 +290,9 @@ void user_initialize_dlmalloc(void)
  *       by a tracked allocator (e.g.: '_malloc_d').
  *    >> The returned memory can still be freed as usual, with it
  *       not mattering if '_free_d' or 'free' is used:
+ * >> void *intentional_leak = (malloc)(42); // This leak will not be tracked...
  * >> #undef malloc
- * >> void *intentional_leak = malloc(42); // This leak will not be tracked
+ * >> void *intentional_leak = malloc(42); // ... and neither will this one.
  */
 
 #define MALL_MAGIC 0xE77A61C3 /* <MAGIC> */

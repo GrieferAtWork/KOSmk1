@@ -80,10 +80,10 @@ kfatfs_create(struct kfatfs *__restrict self,
  sec0.ebr_epb.bpb_jmp[2] = 0x90;
  memcpy(sec0.ebr_epb.bpb_oem,"MSWIN4.1",8);
  sec0.ebr_epb.bpb_bytes_per_sector    = 512;
- sec0.ebr_epb.bpb_sectors_per_cluster = 2; // TODO?
- sec0.ebr_epb.bpb_reserved_sectors    = 2; // TODO?
- sec0.ebr_epb.bpb_fatc                = 1; // TODO?
- sec0.ebr_epb.bpb_dirsize             = 2; // TODO?
+ sec0.ebr_epb.bpb_sectors_per_cluster = 2; /* TODO? */
+ sec0.ebr_epb.bpb_reserved_sectors    = 2; /* TODO? */
+ sec0.ebr_epb.bpb_fatc                = 1; /* TODO? */
+ sec0.ebr_epb.bpb_dirsize             = 2; /* TODO? */
  sector_count = (dev->sd_blockcount/dev->sd_blocksize)*sec0.ebr_epb.bpb_bytes_per_sector;
  if (sector_count <= (__u16)-1) {
   sec0.ebr_epb.bpb_shortsectorc = (__u16)sector_count;
@@ -92,7 +92,7 @@ kfatfs_create(struct kfatfs *__restrict self,
   sec0.ebr_epb.bpb_shortsectorc = 0;
   sec0.ebr_epb.bpb_longsectorc = sector_count;
  }
- sec0.ebr_epb.bpb_mediatype = 0xf8; // TODO?
+ sec0.ebr_epb.bpb_mediatype = 0xf8; /* TODO? */
  fatdata = sector_count-cdiv(root_dir_entries*32,sec0.ebr_epb.bpb_bytes_per_sector)-
            sec0.ebr_epb.bpb_reserved_sectors;
  clust16 = ((fatdata*sec0.ebr_epb.bpb_bytes_per_sector)

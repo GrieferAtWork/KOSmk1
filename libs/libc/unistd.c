@@ -75,7 +75,7 @@ __DECL_BEGIN
 #ifndef __CONFIG_MIN_BSS__
 
 __public errno_t *__geterrno(void) {
- // TODO: Thread-local
+ /* TODO: Thread-local */
  static errno_t eno = 0;
  return &eno;
 }
@@ -444,7 +444,7 @@ static int __linkat_impl(char const *target_name, int link_dirfd,
                          char const *link_name, int flags) {
  kerrno_t error;
  if (flags&AT_SYMLINK_FOLLOW) {
-  // TODO: Dereference 'target'
+  /* TODO: Dereference 'target' */
  }
  error = kfs_symlink(link_dirfd,target_name,(size_t)-1,link_name,(size_t)-1);
 #ifdef __CONFIG_MIN_BSS__
@@ -581,7 +581,7 @@ __public int removeat(int dirfd, char const *path) {
 }
 
 __public void sync(void) {
- // TODO: Call fsync on all open file descriptors
+ /* TODO: Call fsync on all open file descriptors */
 }
 
 __public int chdir(char const *path) {
@@ -771,12 +771,12 @@ __public pid_t getpid(void) {
 #undef __getpgid
 
 
-// In KOS, process security is somewhat different:
-// >> While not 100% posix conforming, KOS defines:
-//    - process groups as level-2 (restricted memory read/write)
-//    - process sessions as level-3 (restricted memory read/write/setprop)
-// When neither a group or session has been set, a level-0 barrier
-// is in place, meaning that no restrictions are being performed.
+/* In KOS, process security is somewhat different:
+ * >> While not 100% posix conforming, KOS defines:
+ *    - process groups as level-2 (restricted memory read/write)
+ *    - process sessions as level-3 (restricted memory read/write/setprop)
+ * When neither a group nor session has been set, a level-0 barrier
+ * is in place, meaning that no restrictions are being performed. */
 #define __KOS_PGID_BARRIER  KSANDBOX_BARRIERLEVEL(2)
 #define __KOS_SID_BARRIER   KSANDBOX_BARRIERLEVEL(3)
 
@@ -898,8 +898,8 @@ __public pid_t getppid(void) {
  return kproc_getpid(ktask_getproc(ktask_parent_k(ktask_proc())));
 #else
  ktask_t parfd; pid_t result;
- // Try to open a descriptor for the parent of
- // the current process's root thread (task)
+ /* Try to open a descriptor for the parent of
+  * the current process's root thread (task) */
  parfd = ktask_openparent(ktask_proc());
  if __unlikely(KE_ISERR(parfd)) {
   /* May not be 100% correct, but the best we can do... */
@@ -910,14 +910,14 @@ __public pid_t getppid(void) {
   return -1;
 #endif
  }
- // For comply with getppid()'s semansics, KOS defines
- // PID namespaces as what barriers are here.
- // (If we can't see the parent, we return '0')
- // NOTE: KOS doesn't have PID namespaces (PIDs are actually not really
- //       used for anything but compatibility with other platforms and
- //       implementing a way of preventing new processes from spawning).
+ /* For comply with getppid()'s semansics, KOS defines
+  * PID namespaces as what barriers are here.
+  * (If we can't see the parent, we return '0')
+  * NOTE: KOS doesn't have PID namespaces (PIDs are actually not really
+  *       used for anything but compatibility with other platforms and
+  *       implementing a way of preventing new processes from spawning). */
  if (kfd_equals(parfd,ktask_proc())) {
-  // We are the origin of a barrier
+  /* We are the origin of a barrier. */
   result = 0;
  } else {
   result = kproc_getpid(parfd);
@@ -1034,7 +1034,7 @@ __public pid_t fork(void) {
  pid_t result; task_t child;
  if ((child = task_fork()) == 0) return 0; /*< Returns ZERO for child. */
  if __unlikely(child == -1) return -1;
- // Parent task: Figure out child PID and close child descriptor
+ /* Parent task: Figure out child PID and close child descriptor */
  result = proc_getpid(child);
  kfd_close(child);
  return result;
@@ -1087,11 +1087,11 @@ __public int brk(void *addr)
  __u8 *real_oldbrk = (__u8 *)align((uintptr_t)__brk_end,4096);
  __u8 *real_newbrk = (__u8 *)align((uintptr_t)addr,4096);
  if (real_newbrk < real_oldbrk) {
-  // Release memory
+  /* Release memory */
   if __unlikely(munmap(real_newbrk,real_oldbrk-real_newbrk) == -1) return -1;
  } else if (real_newbrk > real_oldbrk) {
   void *map_result;
-  // Allocate more memory
+  /* Allocate more memory */
   map_result = mmap(real_oldbrk,real_newbrk-real_oldbrk,
                     PROT_READ|PROT_WRITE,MAP_FIXED|MAP_ANONYMOUS,0,0);
   if (map_result == (void *)(uintptr_t)-1) return -1;

@@ -60,19 +60,18 @@ __public int clearenv(void) {
  return 0;
 }
 __public char *getenv(char const *__restrict name) {
- // WARNING: This isn't ~technically~ thread-safe, but it is
- //          still fine as long as the entire kernel is aware
- //          of this, and doesn't go modifying its own environment,
- //          which it shouldn't do to being with, considering that
- //          the kernel env is meant to house the grub commandline.
+ /* WARNING: This isn't ~technically~ thread-safe, but it is
+  *          still fine as long as the entire kernel is aware
+  *          of this, and doesn't go modifying its own environment,
+  *          which it shouldn't do to being with, considering that
+  *          the kernel env is meant to house the grub commandline. */
  return (char *)kprocenv_getenv(&kproc_kernel()->p_environ,name,(size_t)-1);
 }
 #else
 
-//////////////////////////////////////////////////////////////////////////
-// Allocates (and returns) a fresh copy of the
-// process's environment, as known to the kernel.
-// The format is: "foo=bar\0bar=42\0\0" (Terminated with two '\0'-es)
+/* Allocates (and returns) a fresh copy of the
+ * process's environment, as known to the kernel.
+ * The format is: "foo=bar\0bar=42\0\0" (Terminated with two '\0'-es) */
 __local char *kos_allocenvtext(void) {
  char *result,*newresult; size_t bufsize,reqsize;
  kerrno_t error;
@@ -109,17 +108,17 @@ extern char **environ;
 __public char **environ = __env_default;
 __public __atomic int __env_spinlock = 0;
 
-// [0..1][owned_if(!in __envtext_begin:__envtext_end)]
-// [0..1][owned_if(!= __env_empty)]
+/* [0..1][owned_if(!in __envtext_begin:__envtext_end)]
+ * [0..1][owned_if(!= __env_empty)]. */
 static char **__environ_v = __env_default;
 static size_t __environ_c = 0;
 static size_t __environ_a = 0;
 #define SET_ENVIRON(v) (__environ_v = environ = (v))
 
-// Our copy of the kernel environment text.
-// NOTE: Entires within 'environ' that point within this region of
-//       memory must not be free'd through use of free(), but instead
-//       should be left alone.
+/* Our copy of the kernel environment text.
+ * NOTE: Entires within 'environ' that point within this region of
+ *       memory must not be free'd through use of free(), but instead
+ *       should be left alone. */
 static char *__envtext_begin = NULL; /*< [0..1][owned]. */
 static char *__envtext_end   = NULL; /*< [0..1] End of '__envtext_begin'. */
 
@@ -131,13 +130,13 @@ static void atexit_freeenv(void) { __clearenv(0); }
 __private void user_initialize_environ(void) {
  size_t envc = 1; /*< Always have one for padding! */
  char *iter,**proc_environ,**dest;
- // The following check might seem redundant, but this
- // assertion is done to ensure that the linker has properly
- // initialized global (as in exported) variables.
- // >> If the following assertion fails, libc was either
- //    initialized more than once, or the linker is broken (again?)
- // TODO: This should be removed at some point, as this
- //       doesn't apply if a user overwrites 'environ'.
+ /* The following check might seem redundant, but this
+  * assertion is done to ensure that the linker has properly
+  * initialized global (as in exported) variables.
+  * >> If the following assertion fails, libc was either
+  *    initialized more than once, or the linker is broken (again?)
+  * TODO: This should be removed at some point, as this
+  *       doesn't hold up if a user overwrites 'environ'. */
  assertf(environ == __env_default
         ,"environ = %p at %p (expected: %p)"
         ,environ,&environ,&__env_default[0]);
@@ -152,11 +151,11 @@ __private void user_initialize_environ(void) {
  iter = __envtext_begin; dest = proc_environ;
  for (iter = __envtext_begin; *iter; iter = strend(iter)+1) *dest++ = iter;
  assert(dest == proc_environ+(envc-1));
- *dest = NULL; // Terminate with NULL-character
+ *dest = NULL; /* Terminate with NULL-entry. */
  SET_ENVIRON(proc_environ);
  __environ_a = __environ_c = envc-1;
 #ifdef __LIBC_HAVE_DEBUG_MALLOC
- // Prevent environ memory from producing leaks during exit
+ /* Prevent environ memory from producing leaks during exit. */
  atexit(&atexit_freeenv);
 #endif
  return;
@@ -180,11 +179,11 @@ static int __clearenv(int update_kos) {
  free(old_text_begin);
  assert((env != __env_default) == (old_environ_c != 0));
  if (old_environ_c) {
-  // Free all environment table entries.
+  /* Free all environment table entries. */
   end = (iter = env)+old_environ_c;
   for (; iter != end; ++iter) if ((line = *iter) != NULL) {
    if (update_kos && (equals = strchr(line,'=')) != NULL) {
-    // Hint the kernel to delete this variable as well...
+    /* Hint the kernel to delete this variable as well... */
     kproc_delenv(kproc_self(),line,(size_t)(equals-line));
    }
    if (line < old_text_begin || line >= old_text_end) free(line);
@@ -200,8 +199,8 @@ __public int clearenv(void) {
 static int __setenv(char const *__restrict name, size_t name_size,
                     char const *value, size_t value_size, int overwrite) {
  char *existing_line,*line,**newenv; size_t newenva;
- // Inform the kernel of the change environment variable.
- // NOTE: We ignore errors in this call, because this kind-of is just a hint.
+ /* Inform the kernel of the change environment variable.
+  * NOTE: We ignore errors in this call, because this kind-of is just a hint. */
  kproc_setenv(kproc_self(),name,name_size,value,value_size,overwrite);
  line = (char *)malloc((name_size+value_size+2)*sizeof(char));
  if __unlikely(!line) goto no_mem;
@@ -210,7 +209,7 @@ static int __setenv(char const *__restrict name, size_t name_size,
  memcpy(line+name_size+1,value,value_size*sizeof(char));
  line[name_size+value_size+1] = '\0';
  ENV_LOCK;
- // Search for an existing line
+ /* Search for an existing line. */
  newenv = __environ_v+__environ_c;
  while (newenv-- != __environ_v) {
   existing_line = *newenv;
@@ -218,7 +217,7 @@ static int __setenv(char const *__restrict name, size_t name_size,
       memcmp(existing_line,name,name_size) == 0 &&
       existing_line[name_size] == '=') {
    if (!overwrite) { free(line); goto end; }
-   // Entry already exists
+   /* Entry already exists. */
    if (existing_line < __envtext_begin ||
        existing_line >= __envtext_end
        ) free(existing_line);
@@ -226,7 +225,9 @@ static int __setenv(char const *__restrict name, size_t name_size,
    goto end;
   }
  }
+ /* Append a new line. */
  if (__environ_a == __environ_c) {
+  /* Must override an existing line. */
   newenva = __environ_a ? __environ_a*2 : 2;
   newenv = (char **)realloc(__environ_v,(newenva+1)*sizeof(char *));
   if __unlikely(!newenv) { ENV_UNLOCK; goto no_mem; }
@@ -255,7 +256,7 @@ static int unsetenvl(char const *__restrict name,
   if (strlen(line) > name_size &&
       memcmp(line,name,name_size) == 0 &&
       line[name_size] == '=') {
-   // Found it!
+   /* Found it! */
    if (line < __envtext_begin || line >= __envtext_end) free(line);
    --__environ_c;
    memmove(iter,iter+1,(__environ_c-(iter-__environ_v))*sizeof(char *));

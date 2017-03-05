@@ -37,7 +37,7 @@
 #include <math.h>
 #include <strings.h>
 
-// TODO: Make SHM branches use <kos/addrtree.h>
+/* TODO: Make SHM branches use <kos/addrtree.h>. */
 
 /* Shared memory management. */
 

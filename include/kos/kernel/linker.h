@@ -550,8 +550,8 @@ extern __crit __wunused __nonnull((1,2)) kerrno_t
 kshlib_fopenfile(struct kfile *__restrict fp,
                  __ref struct kshlib **__restrict result);
 
-// TODO: These compiler-settings should be turned
-//       into process-local debug flags.
+/* TODO: These compiler-settings should be turned
+ *       into process-local debug flags. */
 #define KSHLIB_IGNORE_MISSING_DEPENDENCIES 1
 
 

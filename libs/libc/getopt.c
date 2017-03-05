@@ -94,7 +94,7 @@ getopt_internal(int argc, char *argv[], const char *shortopts,
  if (!argc || !argv || (!shortopts && !longopts) ||
      optind >= argc || !argv[optind]) return EOF;
  if (!strcmp(argv[optind],"--")) { ++optind; return EOF; }
- if (!optind) optind = optwhere = 1; // First pass
+ if (!optind) optind = optwhere = 1; /* First pass. */
  if (shortopts && (*shortopts == '-' || *shortopts == '+')) {
   ordering = (*shortopts == '-') ? RETURN_IN_ORDER : REQUIRE_ORDER;
   shortopts++;

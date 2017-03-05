@@ -66,7 +66,7 @@ static void __runatexit(int exitcode);
 
 __public void __Exit(__uintptr_t exitcode) { ABORT((void *)exitcode); }
 __public void _exit(int exitcode) { ABORT((void *)exitcode); }
-__public void exit(int exitcode) { __runatexit(exitcode); ABORT((void *)exitcode); } // TODO: Run atexit
+__public void exit(int exitcode) { __runatexit(exitcode); ABORT((void *)exitcode); }
 
 #ifndef __CONFIG_MIN_LIBC__
 #undef abs
@@ -112,9 +112,9 @@ static void __runatexit(int exitcode) {
    (*iter->eh_hook)(exitcode,iter->eh_closure);
   }
  }
- // NOTE: We purposely leak 'atexit_funv',
- //       because we don't have to care! ;)
- //free(begin);
+ /* NOTE: We purposely leak 'atexit_funv',
+  *       because we don't have to care! ;) */
+ /*free(begin);*/
 }
 __public int
 on_exit(void (*func)(int   exitcode,
@@ -143,7 +143,7 @@ __public int atexit(void (*func)(void)) {
 
 __public int system(char const *command) {
 #ifdef __KERNEL__
- (void)command; // TOOD
+ (void)command; /* TODO */
  return 0;
 #else
  typedef int (*pcmd_system)(char const *text, size_t size, uintptr_t *errorcode);
@@ -179,7 +179,7 @@ __public int system(char const *command) {
   return error;
  }
  if ((childfd = task_fork()) == 0) {
-  // Child task
+  /* Child task */
   char *argv[] = {
    (char *)"sh",
    (char *)"-c",
@@ -187,7 +187,7 @@ __public int system(char const *command) {
    (char *)NULL,
   };
   execv("/bin/sh",argv);
-  _exit(127); // STD wants it this way...
+  _exit(127); /* STD wants it this way... */
  }
  if __unlikely(childfd == -1) return -1;
  error = proc_join(childfd,&exitcode);
@@ -270,7 +270,7 @@ __public lldiv_t lldiv(long long numer, long long denom) {
 
 
 #ifndef __KERNEL__
-// Make these public
+/* Make these public */
 __public long syscall(long sysno, ...);
 #ifdef __KOS_HAVE_NTSYSCALL
 __public long __nt_syscall(long sysno, ...);
@@ -279,7 +279,6 @@ __public long __nt_syscall(long sysno, ...);
 __public long __unix_syscall(long sysno, ...);
 #endif /* __KOS_HAVE_UNIXSYSCALL */
 
-// Undef malloc+realloc because of intentional leaks below...
 __local char *kos_alloccmdtext(void) {
  char *result,*newresult; size_t bufsize,reqsize;
  kerrno_t error;

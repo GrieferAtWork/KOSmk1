@@ -95,11 +95,11 @@ __public FILE *freopen(char const *__restrict filename,
                        char const *__restrict mode,
                        FILE *__restrict fp) {
  kassertobj(fp);
- // Not ~really~ possible in kernel mode
- // >> Though the only reason why this function even
- //    exists (which is to reopen the std streams),
- //    doesn't hold up as the kernel itself
- //    doesn't utilize those either.
+ /* Not ~really~ possible in kernel mode
+  * >> Though the only reason why this function even
+  *    exists (which is to reopen the std streams),
+  *    doesn't hold up as the kernel itself, as
+  *    the kernel doesn't have STD streams. */
  kfile_decref(fp);
  return fopen(filename,mode);
 }
@@ -259,8 +259,8 @@ __public FILE *fopen(char const *filename,
 __public FILE *freopen(char const *__restrict filename,
                        char const *__restrict mode,
                        FILE *__restrict fp) {
- if __unlikely(!fp) return fopen(filename,mode); // yes, no, maybe ???
- // Easy: Just re-open the file descriptor
+ if __unlikely(!fp) return fopen(filename,mode); /* yes, no, maybe ??? */
+ /* Easy: Just re-open the file descriptor. */
  if __unlikely(open2(fp->f_fd,filename,
   f_getopenmode(mode),0644) == -1) return NULL;
  return fp;
@@ -324,7 +324,7 @@ __public void rewind(FILE *fp) {
 }
 __public int fpurge(FILE *__restrict fp) {
  if __unlikely(!fp) { __set_errno(EBADF); return -1; }
- // TODO: Implement when stdio is buffered
+ /* TODO: Implement when stdio is buffered. */
  return 0;
 }
 __public int getchar(void) { return getc(stdin); }
@@ -333,27 +333,27 @@ __public size_t fread(void *__restrict buf, size_t size,
  ssize_t error;
  if __unlikely(!fp) return 0;
  error = read(fp->f_fd,buf,size*count);
- return error < 0 ? 0 : (size_t)error; // TODO: ferror/feof
+ return error < 0 ? 0 : (size_t)error; /* TODO: ferror/feof. */
 }
 __public size_t fwrite(const void *__restrict buf, size_t size,
                        size_t count, FILE *fp) {
  ssize_t error;
  if __unlikely(!fp) return 0;
  error = write(fp->f_fd,buf,size*count);
- return error < 0 ? 0 : (size_t)error; // TODO: ferror/feof
+ return error < 0 ? 0 : (size_t)error; /* TODO: ferror/feof. */
 }
 __public int fgetc(FILE *fp) {
  char ch; ssize_t error;
  if __unlikely(!fp) return EOF;
  error = read(fp->f_fd,&ch,sizeof(char));
- // TODO: Error
+ /* TODO: Error. */
  return error < 0 ? EOF : (int)ch;
 }
 __public int fputc(int c, FILE *fp) {
  ssize_t error; char ch = (char)c;
  if __unlikely(!fp) return EOF;
  error = write(fp->f_fd,&ch,sizeof(char));
- // TODO: Error
+ /* TODO: Error. */
  return error < 0 ? EOF : (int)ch;
 }
 __public char *fgets(char *__restrict buf, int bufsize, FILE *fp) {
@@ -380,14 +380,14 @@ __public int getw(FILE *fp) {
  int w; ssize_t error;
  if __unlikely(!fp) return EOF;
  error = read(fp->f_fd,&w,sizeof(w));
- // TODO: Error
+ /* TODO: Error. */
  return error < 0 ? EOF : w;
 }
 __public int putw(int w, FILE *fp) {
  ssize_t error;
  if __unlikely(!fp) return -1;
  error = write(fp->f_fd,&w,sizeof(w));
- // TODO: Error
+ /* TODO: Error. */
  return error < 0 ? EOF : (int)w;
 }
 

@@ -1531,14 +1531,14 @@ __public char *basename(char *__restrict path) {
  if (!path || !*path) return ".";
  do if ((ch = *iter++) == '/') result = iter;
  while (ch);
- if __unlikely(!result) return path; // Path doesn't contain '/'
- if (*result) return result; // Last character isn't a '/'
+ if __unlikely(!result) return path; /* Path doesn't contain '/'. */
+ if (*result) return result; /* Last character isn't a '/'. */
  iter = result;
  while (iter != path && iter[-1] == '/') --iter;
- if (iter == path) return result-1; // Only '/'-characters
- *iter = '\0'; // Trim all ending '/'-characters
- while (iter != path && iter[-1] != '/') --iter; // Scan until the previous '/'
- return iter; // Returns string after previous '/'
+ if (iter == path) return result-1; /* Only '/'-characters. */
+ *iter = '\0'; /* Trim all ending '/'-characters. */
+ while (iter != path && iter[-1] != '/') --iter; /* Scan until the previous '/'. */
+ return iter; /* Returns string after previous '/'. */
 }
 #endif
 

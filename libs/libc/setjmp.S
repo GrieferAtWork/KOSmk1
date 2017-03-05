@@ -38,8 +38,6 @@ GLOBAL_FUNCTION(setjmp):
 	mov32 $0, %eax
 	ret
 SYMBOLEND(setjmp)
-// __uintptr_t __jb_ecx,__jb_edx,__jb_ebx,__jb_esp;
-// __uintptr_t __jb_ebp,__jb_esi,__jb_edi,__jb_eip;
 
 /* extern void longjmp(jmp_buf buf, int sig); */
 GLOBAL_FUNCTION(longjmp):
