@@ -37,6 +37,9 @@
 #include <stdlib.h>
 #include <traceback.h>
 #endif
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+#include <kos/kernel/serial.h>
+#endif
 
 __DECL_BEGIN
 
@@ -119,6 +122,43 @@ do{\
 #define KMMUTEX_ONRELEASES(self,locks)   (void)0
 #define KMMUTEX_ONLOCKINUSES(self,locks) (void)0
 #endif
+
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+struct kmmutex_deadlock_help_data {
+ struct kmmutex *self;
+ kmmutex_lock_t  lock;
+};
+#define DEADLOCKHELP_BEGIN(self,locks) \
+do{ struct kmmutex_deadlock_help_data __dlh_data = {self,locks};\
+    KTASK_DEADLOCK_HELP_BEGIN((void(*)(void *))&kmmutex_deadlock_help_callback,&__dlh_data)
+#define DEADLOCKHELP_END \
+    KTASK_DEADLOCK_HELP_END;\
+}while(0)
+
+static void
+kmmutex_deadlock_help_callback(struct kmmutex_deadlock_help_data *data) {
+ serial_printf(SERIAL_01
+              ,"mmutex = %p\n"
+               "lock   = %I" __PP_STR(KMMUTEX_LOCKC) "x\n"
+              ,data->self,data->lock);
+#if KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
+ { /* Dump tracebacks for acquisitions tracebacks for all locks in question. */
+  int i;
+  for (i = 0; i < KMMUTEX_LOCKC; ++i) {
+   kmmutex_lock_t l = KMMUTEX_LOCK(i);
+   if ((data->lock&l) && (data->self->mmx_locks&l)) {
+    serial_printf(SERIAL_01,"See reference to acquisition of lock %I" __PP_STR(KMMUTEX_LOCKC) "x:\n",l);
+    tbtrace_print(DBGSLOT(data->self,i).md_locktb);
+   }
+  }
+ }
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDMUTEX */
+}
+#else
+#define DEADLOCKHELP_BEGIN(self,locks) do
+#define DEADLOCKHELP_END               while(0)
+#endif
+
 
 #ifndef __INTELLISENSE__
 #define LOCKALL

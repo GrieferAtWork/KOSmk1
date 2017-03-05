@@ -44,7 +44,7 @@ __DECL_BEGIN
 #define KMMUTEX_DEBUG_OFFSETOF_LOCKTB  (__SIZEOF_POINTER__)
 #ifndef __ASSEMBLY__
 struct kmmutex_debug {
- struct ktask      *md_holder; /*< [0..1][lock(this)] Current holder of the mutex lock. */
+ struct ktask   *md_holder; /*< [0..1][lock(this)] Current holder of the mutex lock. */
  struct tbtrace *md_locktb; /*< [0..1][lock(this)] Traceback of where the lock was acquired. */
 };
 #endif /* !__ASSEMBLY__ */

@@ -634,16 +634,29 @@ extern struct timespec __kernel_boot_time;
 #endif /* KCONFIG_HAVE_TASK_STATS */
 #if !KCONFIG_HAVE_IRQ
 #if KCONFIG_HAVE_TASK_STATS
-#define KTASK_OFFSETOF_PREEMPT     (KTASK_OFFSETOF_TLS+KTLSPT_SIZEOF+KTASKSTAT_SIZEOF)
+#define KTASK_OFFSETOF_PREEMPT     (KTASK_OFFSETOF_STAT+KTASKSTAT_SIZEOF)
 #else
 #define KTASK_OFFSETOF_PREEMPT     (KTASK_OFFSETOF_TLS+KTLSPT_SIZEOF)
 #endif
 #endif /* !KCONFIG_HAVE_IRQ */
 
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
 #if !KCONFIG_HAVE_IRQ
+#define KTASK_OFFSETOF_DEADLOCK_HELP    (KTASK_OFFSETOF_PREEMPT+4)
+#elif KCONFIG_HAVE_TASK_STATS
+#define KTASK_OFFSETOF_DEADLOCK_HELP    (KTASK_OFFSETOF_STAT+KTASKSTAT_SIZEOF)
+#else
+#define KTASK_OFFSETOF_DEADLOCK_HELP    (KTASK_OFFSETOF_TLS+KTLSPT_SIZEOF)
+#endif
+#define KTASK_OFFSETOF_DEADLOCK_CLOSURE (KTASK_OFFSETOF_DEADLOCK_HELP+__SIZEOF_POINTER__)
+#endif
+
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+#define KTASK_SIZEOF    (KTASK_OFFSETOF_DEADLOCK_CLOSURE+__SIZEOF_POINTER__)
+#elif !KCONFIG_HAVE_IRQ
 #define KTASK_SIZEOF    (KTASK_OFFSETOF_PREEMPT+4)
 #elif KCONFIG_HAVE_TASK_STATS
-#define KTASK_SIZEOF    (KTASK_OFFSETOF_TLS+KTLSPT_SIZEOF+KTASKSTAT_SIZEOF)
+#define KTASK_SIZEOF    (KTASK_OFFSETOF_STAT+KTASKSTAT_SIZEOF)
 #else
 #define KTASK_SIZEOF    (KTASK_OFFSETOF_TLS+KTLSPT_SIZEOF)
 #endif
@@ -738,6 +751,10 @@ struct ktask {
 #define KTASK_PREEMT_COUNTDOWN 4
  __u32                        t_preempt;  /*< Counter until preemption on syscall. */
 #endif /* !KCONFIG_HAVE_IRQ */
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+ void                       (*t_deadlock_help)(void *); /*< [0..1] Deadlock help callback executed when a deadlock occurs. */
+ void                        *t_deadlock_closure;       /*< [?..?] Closure for the given deadlock help callback. */
+#endif
 };
 
 #ifdef __INTELLISENSE__
@@ -1591,6 +1608,43 @@ ktask_settls(struct ktask *__restrict self, __ktls_t tlsid,
              void *value, void **oldvalue);
 #else
 #define ktask_settls(self,tlsid,value,oldvalue) KTASK_CRIT(ktask_settls_c(self,tlsid,value,oldvalue))
+#endif
+
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+//////////////////////////////////////////////////////////////////////////
+// Recursively disable deadlock checks.
+// When enabled, a traceback is printed when the scheduler enters IDLE mode.
+// NOTE: Remember that IDLE mode is often intended, such as when waiting for user input!
+// NOTE: Tracebacks are only printed once per deadlock.
+extern __crit void ktask_deadlock_intended_begin(void);
+extern __crit void ktask_deadlock_intended_end(void);
+#define KTASK_DEADLOCK_INTENDED(expr) \
+ __xblock({ __typeof__(expr) __idres;\
+            ktask_deadlock_intended_begin();\
+            __idres = (expr);\
+            ktask_deadlock_intended_end();\
+            __xreturn __idres;\
+ })
+#define KTASK_DEADLOCK_HELP_BEGIN(help,closure) \
+ do{ struct ktask *const __dl_task = ktask_self();\
+     void (*__dl_oldhelp)(void *); void *__dl_oldclosure;\
+     if (__dl_task) __dl_oldhelp                  = __dl_task->t_deadlock_help,\
+                    __dl_oldclosure               = __dl_task->t_deadlock_closure,\
+                    __dl_task->t_deadlock_help    = (help),\
+                    __dl_task->t_deadlock_closure = (closure);\
+     do 
+#define KTASK_DEADLOCK_HELP_END \
+     while(0);\
+     if (__dl_task) __dl_task->t_deadlock_help    = __dl_oldhelp,\
+                    __dl_task->t_deadlock_closure = __dl_oldclosure;\
+}while(0)
+#else
+#define ktask_deadlock_intended_begin()         (void)0
+#define ktask_deadlock_intended_end()           (void)0
+#define ktask_deadlock_help(callback,closure)   (void)0
+#define KTASK_DEADLOCK_INTENDED                 /* nothing */
+#define KTASK_DEADLOCK_HELP_BEGIN(help,closure) do
+#define KTASK_DEADLOCK_HELP_END                 while(0)
 #endif
 
 

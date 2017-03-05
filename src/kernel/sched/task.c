@@ -38,6 +38,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <kos/kernel/pageframe.h>
+#include <kos/kernel/serial.h>
 #include <stddef.h>
 
 __DECL_BEGIN
@@ -132,6 +133,10 @@ struct ktask __ktask_zero = {
 #if !KCONFIG_HAVE_IRQ
  /* t_preempt     */KTASK_PREEMT_COUNTDOWN,
 #endif /* !KCONFIG_HAVE_IRQ */
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+ /* t_deadlock_help     */NULL,
+ /* t_deadlock_closure  */NULL,
+#endif
 };
 
 
@@ -315,6 +320,10 @@ ktask_newkernel(struct ktask *__restrict parent,
 #if !KCONFIG_HAVE_IRQ
  result->t_preempt = KTASK_PREEMT_COUNTDOWN;
 #endif /* !KCONFIG_HAVE_IRQ */
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+ result->t_deadlock_help     = NULL;
+ result->t_deadlock_closure  = NULL;
+#endif
  ksignal_init(&result->t_joinsig);
  ktasksig_init(&result->t_sigchain,result);
 #if KCONFIG_HAVE_TASK_NAMES
@@ -425,6 +434,10 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
 #if !KCONFIG_HAVE_IRQ
  result->t_preempt = KTASK_PREEMT_COUNTDOWN;
 #endif /* !KCONFIG_HAVE_IRQ */
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+ result->t_deadlock_help     = NULL;
+ result->t_deadlock_closure  = NULL;
+#endif
  ksignal_init(&result->t_joinsig);
  ktasksig_init(&result->t_sigchain,result);
 #if KCONFIG_HAVE_TASK_NAMES
@@ -977,10 +990,22 @@ __noinline void ktask_switchdecref(struct ktask *__restrict newtask,
 #define ktask_switchdecref ktask_switchimpl
 #endif
 
+
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+static __atomic int _ktask_deadlock_intended = 0;
+__crit void ktask_deadlock_intended_begin(void) { katomic_incfetch(_ktask_deadlock_intended); }
+__crit void ktask_deadlock_intended_end(void) { katomic_decfetch(_ktask_deadlock_intended); }
+#endif
+
+
 // Idly wait for tasks to show up, occasionally spinning the tick timer
 // >> Upon return, at least one valid task is stored in 'cpuself->c_current'
-__local void kcpu_idlewaitfortasks_unlocked(struct kcpu *cpuself,
-                                            struct ktask *oldtask) {
+__local void
+kcpu_idlewaitfortasks_unlocked(struct kcpu *cpuself,
+                               struct ktask *oldtask) {
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+ int deadlock_printed = 0;
+#endif
  kassert_kcpu(cpuself);
  assert(!karch_irq_enabled());
  assert(kcpu_islocked(cpuself,KCPU_LOCK_TASKS));
@@ -991,11 +1016,23 @@ __local void kcpu_idlewaitfortasks_unlocked(struct kcpu *cpuself,
   }
   if (!ktask_isterminated(oldtask) ||
       KE_ISERR(ksignal_close(&oldtask->t_joinsig))) {
-   // We can't allow the IRQ to perform the switch,
-   // so we can later decref the old task.
+   /* We can't allow the IRQ to perform the switch,
+    * so we can later decref the old task. */
    cpuself->c_flags |= KCPU_FLAG_NOIRQ;
    kcpu_unlock(cpuself,KCPU_LOCK_TASKS);
    karch_irq_enable();
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+   if (!deadlock_printed) {
+    deadlock_printed = 1;
+    if (!katomic_load(_ktask_deadlock_intended)) {
+     serial_printf(SERIAL_01,":::ERROR::: Deadlock:\n");
+     tb_print();
+     if (oldtask->t_deadlock_help) {
+      (*oldtask->t_deadlock_help)(oldtask->t_deadlock_closure);
+     }
+    }
+   }
+#endif
    karch_irq_idle();
    karch_irq_disable();
    kcpu_lock(cpuself,KCPU_LOCK_TASKS);

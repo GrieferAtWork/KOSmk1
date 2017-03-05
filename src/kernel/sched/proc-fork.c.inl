@@ -198,6 +198,10 @@ ktask_copy4fork(struct ktask *__restrict self,
 #if !KCONFIG_HAVE_IRQ
  result->t_preempt = KTASK_PREEMT_COUNTDOWN;
 #endif /* !KCONFIG_HAVE_IRQ */
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+ result->t_deadlock_help     = NULL;
+ result->t_deadlock_closure  = NULL;
+#endif
 
  // Setup the stack pointer to point to the new kernel stack
  result->t_esp = (__user void *)((uintptr_t)result->t_kstackvp+kstacksize);

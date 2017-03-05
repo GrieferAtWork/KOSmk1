@@ -35,8 +35,20 @@ __DECL_BEGIN
 
 extern void kernel_initialize_keyboard(void);
 
-/* Data distributer for keyboard input */
-extern struct kaddist keyboard_input; /* Values send are of type 'struct kbevent'. */
+//////////////////////////////////////////////////////////////////////////
+// Data distributer for keyboard input.
+// WARNING: Receiving a signal from the keyboard will put the kernel
+//          into a state appearing as though it was a deadlock.
+//          Therefor, you must wrap calls to recv() within a
+//          'ktask_deadlock_intended_begin()..ktask_deadlock_intended_end()'
+//          block.
+// @value_type: struct kbevent.
+extern struct kaddist keyboard_input;
+
+#define KEYBOARD_GENTICKET(ticket)  kaddist_genticket(&keyboard_input,ticket)
+#define KEYBOARD_DELTICKET(ticket)  kaddist_delticket(&keyboard_input,ticket)
+#define KEYBOARD_RECV(ticket,event) KTASK_DEADLOCK_INTENDED(kaddist_vrecv(&keyboard_input,ticket,event))
+
 extern struct kkeymap const *kkeymap_current;
 
 extern void keyboard_sendscan(kbscan_t scan);

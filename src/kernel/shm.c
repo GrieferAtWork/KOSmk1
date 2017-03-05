@@ -281,7 +281,8 @@ kshmregion_incref(struct kshmregion *__restrict self,
 #ifdef __DEBUG__
 /* Called when 'self->sre_clustera' reaches ZERO(0) to assert that
  * all cluster reference counters have really dropped to ZERO(0). */
-static void kshmregion_assert_reallynoclusters(struct kshmregion *self) {
+static void
+kshmregion_assert_reallynoclusters(struct kshmregion *__restrict self) {
  struct kshmcluster *citer,*cend;
  cend = (citer = self->sre_clusterv)+self->sre_clusterc;
  for (; citer != cend; ++citer) {
@@ -299,7 +300,7 @@ static void kshmregion_assert_reallynoclusters(struct kshmregion *self) {
 // Free all parts associated with the given cluster.
 static __crit void
 kshmregion_freecluster(struct kshmregion *__restrict self,
-                       struct kshmcluster *cluster) {
+                       struct kshmcluster *__restrict cluster) {
  struct kshmpart *iter,*end;
  kshmregion_page_t cluster_start;
  kshmregion_page_t cluster_delete = KSHM_CLUSTERSIZE;
@@ -437,7 +438,7 @@ kshmregion_raw_alloc(size_t clusters, kshm_flag_t flags) {
  return result;
 }
 static __crit void 
-kshmregion_setup_clusters(struct kshmregion *self) {
+kshmregion_setup_clusters(struct kshmregion *__restrict self) {
  struct kshmcluster *iter,*end;
  struct kshmpart *part;
  kshmregion_page_t part_page = 0;
@@ -501,8 +502,8 @@ kshmregion_newphys(__pagealigned __kernel void *addr,
 
 
 __crit __ref struct kshmregion *
-kshmregion_merge(__ref struct kshmregion *min_region,
-                 __ref struct kshmregion *max_region) {
+kshmregion_merge(__ref struct kshmregion *__restrict min_region,
+                 __ref struct kshmregion *__restrict max_region) {
  __ref struct kshmregion *result;
  size_t total_pages,total_clusters,total_parts;
  struct kshmpart *minpart_max,*maxpart_min;
@@ -628,7 +629,7 @@ err_r: free(result);
 }
 
 __crit __ref struct kshmregion *
-kshmregion_hardcopy(struct kshmregion const *self,
+kshmregion_hardcopy(struct kshmregion const *__restrict self,
                     kshmregion_page_t page_offset,
                     size_t pages) {
  kassert_kshmregion(self);
@@ -844,7 +845,7 @@ kshmchunk_builder_inherit_clusters(struct kshmchunk *self,
 
 
 __crit __ref struct kshmregion *
-kshmregion_extractpart(struct kshmregion *self,
+kshmregion_extractpart(struct kshmregion *__restrict self,
                        struct kshmcluster *cls_min,
                        struct kshmcluster *cls_max) {
  __ref struct kshmregion *result;
@@ -984,8 +985,6 @@ flush_inheritable_clusters:
 #else
    asserte(katomic_fetchdec(self->sre_clustera) != 0);
 #endif
-   free(self->sre_chunk.sc_partv);
-   free(self);
   }
   if (iter == cls_max) break;
   ++iter;
@@ -1238,9 +1237,9 @@ trim_front:
   return KE_OK;
  }
  /* Must split the region, then trim at the front. */
- error = kshmbrach_putsplit(pself,NULL,NULL,
+ error = kshmbrach_putsplit(pself,addr_semi,NULL,NULL,
                            (struct kshmbranch ***)&pself,NULL,
-                            first_page,addr_semi);
+                            first_page);
  if __unlikely(KE_ISERR(error)) return error;
  kassertobj(pself);
  branch = *pself;
@@ -1336,11 +1335,10 @@ done:
 }
 
 __crit __nomp kerrno_t
-kshmbrach_putsplit(struct kshmbranch **__restrict pself,
+kshmbrach_putsplit(struct kshmbranch **__restrict pself, uintptr_t addr_semi,
                    struct kshmbranch ***pmin, uintptr_t *pmin_semi,
                    struct kshmbranch ***pmax, uintptr_t *pmax_semi,
-                   kshmregion_page_t page_offset,
-                   uintptr_t addr_semi) {
+                   kshmregion_page_t page_offset) {
  struct kshmbranch *min_branch,*max_branch;
  struct kshmregion *region;
  __user uintptr_t split_address;
@@ -1450,12 +1448,6 @@ kshmbrach_merge(struct kshmbranch **__restrict pmin, uintptr_t min_semi,
                 struct kshmbranch **__restrict pmax, uintptr_t max_semi,
                 struct kshmbranch ***presult, uintptr_t *presult_semi) {
  struct kshmbranch *min_branch,*max_branch;
-#if 1
- struct kshmbranch **proot;
- struct kshmregion *merged_region;
- uintptr_t root_semi;
- unsigned int min_level,max_level,root_level;
-#endif
  kassertobj(pmin);
  kassertobj(pmax);
  kassertobjnull(presult);
@@ -1479,72 +1471,74 @@ kshmbrach_merge(struct kshmbranch **__restrict pmin, uintptr_t min_semi,
  /* Make sure that both branches lie directly next to each other. */
  assert(min_branch->sb_map_max+1 == max_branch->sb_map_min);
 
- k_syslogf(KLOG_TRACE,"[SHM] Merge branch at %p..%p with %p..%p\n",
-           min_branch->sb_map_min,min_branch->sb_map_max,
-           max_branch->sb_map_min,max_branch->sb_map_max);
- /* kshmbranch_print(min_branch,min_semi,KSHMBRANCH_SEMILEVEL(min_semi)); */
- /* kshmbranch_print(max_branch,max_semi,KSHMBRANCH_SEMILEVEL(max_semi)); */
+ /* NOTE: this function is only used for optimizations and disabling
+  *       this doesn't cause the system to become unstable. */
 #if 1
- /* Create the merged region.
-  * This might seem an odd choice for the first step, but
-  * in fact by re-using one of the branches, this is the
-  * only this in this entire function that isn't noexcept. */
- merged_region = kshmregion_merge(min_branch->sb_region,
-                                  max_branch->sb_region);
- if __unlikely(!merged_region) return KE_NOMEM;
- min_level = KSHMBRANCH_SEMILEVEL(min_semi);
- max_level = KSHMBRANCH_SEMILEVEL(max_semi);
- assertf(min_level != max_level
-        ,"The min and max address-levels %u cannot be equal, as that would "
-         "imply some other branch lying in between. Instead, one must be "
-         "greater than the other to create a dependency ordering."
-        ,min_level);
- /* The branch with the greater level lies further up the tree,
-  * meaning that it will be the root branch to insert the merged leaf into.
-  * NOTE: The remove order is important to not invalidate our root pointers. */
- if (min_level > max_level) {
-  /* Remove the two branches from the tree. */
-  asserte(kshmbranch_popone(pmax,max_semi,max_level) == max_branch);
-  asserte(kshmbranch_popone(pmin,min_semi,min_level) == min_branch);
-  proot      = pmin;
-  root_semi  = min_semi;
-  root_level = min_level;
- } else {
-  /* Remove the two branches from the tree. */
-  asserte(kshmbranch_popone(pmin,min_semi,min_level) == min_branch);
-  asserte(kshmbranch_popone(pmax,max_semi,max_level) == max_branch);
-  proot      = pmax;
-  root_semi  = max_semi;
-  root_level = max_level;
- }
- /* At this point we've inherited both the min and max branches.
-  * >> We'll reuse one (min) and free the other (max). */
+ {
+  struct kshmbranch **proot;
+  struct kshmregion *merged_region;
+  uintptr_t root_semi;
+  unsigned int min_level,max_level,root_level;
+  k_syslogf(KLOG_TRACE,"[SHM] Merge branch at %p..%p with %p..%p\n",
+            min_branch->sb_map_min,min_branch->sb_map_max,
+            max_branch->sb_map_min,max_branch->sb_map_max);
+  /* kshmbranch_print(min_branch,min_semi,KSHMBRANCH_SEMILEVEL(min_semi)); */
+  /* kshmbranch_print(max_branch,max_semi,KSHMBRANCH_SEMILEVEL(max_semi)); */
+
+  /* Create the merged region.
+   * This might seem an odd choice for the first step, but
+   * in fact by re-using one of the branches, this is the
+   * only this in this entire function that isn't noexcept. */
+  merged_region = kshmregion_merge(min_branch->sb_region,
+                                   max_branch->sb_region);
+  if __unlikely(!merged_region) return KE_NOMEM;
+  min_level = KSHMBRANCH_SEMILEVEL(min_semi);
+  max_level = KSHMBRANCH_SEMILEVEL(max_semi);
+  assertf(min_level != max_level
+         ,"The min and max address-levels %u cannot be equal, as that would "
+          "imply some other branch lying in between. Instead, one must be "
+          "greater than the other to create a dependency ordering."
+         ,min_level);
+  /* The branch with the greater level lies further up the tree,
+   * meaning that it will be the root branch to insert the merged leaf into.
+   * NOTE: The remove order is important to not invalidate our root pointers. */
+  if (min_level > max_level) {
+   /* Remove the two branches from the tree. */
+   asserte(kshmbranch_popone(pmax,max_semi,max_level) == max_branch);
+   asserte(kshmbranch_popone(pmin,min_semi,min_level) == min_branch);
+   proot      = pmin;
+   root_semi  = min_semi;
+   root_level = min_level;
+  } else {
+   /* Remove the two branches from the tree. */
+   asserte(kshmbranch_popone(pmin,min_semi,min_level) == min_branch);
+   asserte(kshmbranch_popone(pmax,max_semi,max_level) == max_branch);
+   proot      = pmax;
+   root_semi  = max_semi;
+   root_level = max_level;
+  }
+  /* At this point we've inherited both the min and max branches.
+   * >> We'll reuse one (min) and free the other (max). */
 #define merged_branch  min_branch
- merged_branch->sb_region      = merged_region;
- merged_branch->sb_map_max     = max_branch->sb_map_max;
- merged_branch->sb_rpages     += max_branch->sb_rpages;
- merged_branch->sb_cluster_min = kshmregion_getcluster(merged_region,merged_branch->sb_rstart);
- merged_branch->sb_cluster_max = kshmregion_getcluster(merged_region,merged_branch->sb_rstart+(merged_branch->sb_rpages-1));
- /* Free the other region. */
- free(max_branch);
- asserte(KE_ISOK(kshmbranch_insert(proot,merged_branch,
-                                   root_semi,root_level)));
- /* Re-locate the now inserted branch. */
- *presult_semi = root_semi;
- *presult = kshmbranch_plocateat(proot,(uintptr_t)merged_branch->sb_map,
-                                 presult_semi,&root_level);
- assert(*presult != NULL);
-#if 0
- if (KSHMBRANCH_SEMILEVEL(min_semi) > KSHMBRANCH_SEMILEVEL(max_semi)) {
-  kshmbranch_print(*pmin,min_semi,KSHMBRANCH_SEMILEVEL(min_semi));
- } else {
-  kshmbranch_print(*pmax,max_semi,KSHMBRANCH_SEMILEVEL(max_semi));
- }
-#endif
+  merged_branch->sb_region      = merged_region;
+  merged_branch->sb_map_max     = max_branch->sb_map_max;
+  merged_branch->sb_rpages     += max_branch->sb_rpages;
+  merged_branch->sb_cluster_min = kshmregion_getcluster(merged_region,merged_branch->sb_rstart);
+  merged_branch->sb_cluster_max = kshmregion_getcluster(merged_region,merged_branch->sb_rstart+(merged_branch->sb_rpages-1));
+  /* Free the other region. */
+  free(max_branch);
+  asserte(KE_ISOK(kshmbranch_insert(proot,merged_branch,
+                                    root_semi,root_level)));
+  /* Re-locate the now inserted branch. */
+  proot = kshmbranch_plocateat(proot,(uintptr_t)merged_branch->sb_map,
+                               &root_semi,&root_level);
+  assert(proot != NULL);
+  if (presult)      *presult      = proot;
+  if (presult_semi) *presult_semi = root_semi;
 #undef merged_branch
- return KE_OK;
+  return KE_OK;
+ }
 #else
- /* TODO (Add later; this function is only used for optimizations) */
  return KE_NOSYS;
 #endif
 }
@@ -1663,7 +1657,7 @@ ok:
 
 //////////////////////////////////////////////////////////////////////////
 // ===== kshm
-__crit __nomp kerrno_t
+__crit kerrno_t
 kshm_init(struct kshm *__restrict self,
           kseglimit_t ldt_size_hint) {
  kerrno_t error;
@@ -1680,7 +1674,7 @@ err_pd:
  return error;
 }
 
-__crit __nomp void
+__crit void
 kshm_quit(struct kshm *__restrict self) {
  KTASK_CRIT_MARK
  kassert_kshm(self);
@@ -2102,9 +2096,9 @@ true_shared_access:;
 #endif /* AUTOMERGE_BRANCHES */
  } else {
   /* Must split the branch at 'min_page'! */
-  error = kshmbrach_putsplit(pbranch,NULL,NULL,
+  error = kshmbrach_putsplit(pbranch,addr_semi,NULL,NULL,
                             (struct kshmbranch ***)&pbranch,
-                             &addr_semi,min_page,addr_semi);
+                             &addr_semi,min_page);
   if __unlikely(KE_ISERR(error)) {
    k_syslogf(KLOG_ERROR,"[SHM] Failed to split min-branch: %d\n",error);
    return 0;
@@ -2141,10 +2135,10 @@ true_shared_access:;
   did_max_split = 0;
 #endif /* AUTOMERGE_BRANCHES */
  } else {
-  error = kshmbrach_putsplit(pbranch,
+  error = kshmbrach_putsplit(pbranch,addr_semi,
                             (struct kshmbranch ***)&pbranch,
                              &addr_semi,NULL,NULL,
-                             max_page+1,addr_semi);
+                             max_page+1);
   if __unlikely(KE_ISERR(error)) {
    /* todo: We should probably clean up the first split, although
     *       the system still remains stable if we don't... */

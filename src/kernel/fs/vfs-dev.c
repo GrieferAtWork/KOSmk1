@@ -46,9 +46,10 @@ struct kbfile {
  struct kvfile        b_file;  /*< Underlying virtual file. */
  struct kaddistticket b_kbtic; /*< Keyboard ticket. */
 };
-#define SELF ((struct kbfile *)self)
+#define SELF   ((struct kbfile *)self)
+#define TICKET  (&SELF->b_kbtic)
 static void vfsfile_dev_kb_quit(struct kfile *__restrict self) {
- kaddist_delticket(&keyboard_input,&SELF->b_kbtic);
+ KEYBOARD_DELTICKET(TICKET);
  kvfile_quit(self);
 }
 static kerrno_t
@@ -56,7 +57,7 @@ vfsfile_dev_kb_open(struct kfile *__restrict self, struct kdirent *__restrict di
                     struct kinode *__restrict inode, __openmode_t mode) {
  kerrno_t error = kvfile_open(self,dirent,inode,mode);
  if __likely(KE_ISOK(error)) {
-  error = kaddist_genticket(&keyboard_input,&SELF->b_kbtic);
+  error = KEYBOARD_GENTICKET(TICKET);
   if __unlikely(KE_ISERR(error)) kvfile_quit(self);
  }
  return error;
@@ -69,7 +70,7 @@ vfsfile_dev_kbevent_read(struct kfile *__restrict self,
                          __kernel size_t *__restrict rsize) {
  struct kbevent evt; kerrno_t error;
  if (bufsize < sizeof(struct kbevent)) { *rsize = 0; return KE_OK; }
- error = kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,&evt);
+ error = KEYBOARD_RECV(TICKET,&evt);
  *rsize = sizeof(struct kbevent);
  if (__likely  (KE_ISOK(error)) &&
      __unlikely(copy_to_user(buf,&evt,sizeof(struct kbevent)))
@@ -82,7 +83,7 @@ vfsfile_dev_kbkey_read(struct kfile *__restrict self,
                        __kernel size_t *__restrict rsize) {
  struct kbevent event; kerrno_t error;
  if (bufsize < sizeof(kbkey_t)) { *rsize = 0; return KE_OK; }
- error = kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,&event);
+ error = KEYBOARD_RECV(TICKET,&event);
  if (__likely  (KE_ISOK(error)) &&
      __unlikely(copy_to_user(buf,&event.e_key,sizeof(kbkey_t)))
      ) error = KE_FAULT;;
@@ -95,7 +96,7 @@ vfsfile_dev_kbscan_read(struct kfile *__restrict self,
                         __kernel size_t *__restrict rsize) {
  struct kbevent event; kerrno_t error;
  if (bufsize < sizeof(kbscan_t)) { *rsize = 0; return KE_OK; }
- error = kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,&event);
+ error = KEYBOARD_RECV(TICKET,&event);
  if (__likely  (KE_ISOK(error)) &&
      __unlikely(copy_to_user(buf,&event.e_scan,sizeof(kbscan_t)))
      ) error = KE_FAULT;;
@@ -110,12 +111,14 @@ vfsfile_dev_kbtext_read(struct kfile *__restrict self,
  if (bufsize < sizeof(char)) { *rsize = 0; return KE_OK; }
  *rsize = sizeof(char);
  do {
-  error = kaddist_vrecv(&keyboard_input,&SELF->b_kbtic,&event);
+  error = KEYBOARD_RECV(TICKET,&event);
   if __unlikely(KE_ISERR(error)) return error;
  } while (!KEY_ISUTF8(event.e_key) || !KEY_ISDOWN(event.e_key));
  ch = KEY_TOUTF8(event.e_key);
  return copy_to_user(buf,&ch,sizeof(char)) ? KE_FAULT : KE_OK;
 }
+#undef TICKET
+#undef SELF
 
 struct kfiletype kvfiletype_dev_kbevent = {
  .ft_size      = sizeof(struct kbfile),

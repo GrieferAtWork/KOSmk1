@@ -33,9 +33,10 @@
 __DECL_BEGIN
 
 #define KOBJECT_MAGIC_RWLOCK 0x5770C4 /*< RWLOCK */
+#define kassert_krwlock(self) kassert_object(self,KOBJECT_MAGIC_RWLOCK)
 
-struct timespec;
-struct krwlock;
+__struct_fwd(timespec);
+__struct_fwd(krwlock);
 
 //////////////////////////////////////////////////////////////////////////
 // A R/W lock (long: Read-write lock) is a special kind of lock
@@ -63,7 +64,17 @@ struct krwlock;
 // TODO: Add a second r/w lock that does the opposite (doesn't allow new
 //       tasks to start reading when yet another attempts to start writing).
 
-#define kassert_krwlock(self) kassert_object(self,KOBJECT_MAGIC_RWLOCK)
+
+#define KRWLOCK_OFFSETOF_SIG    (KOBJECT_SIZEOFHEAD)
+#if KCONFIG_RWLOCK_READERBITS <= KSIGNAL_USERBITS
+#define KRWLOCK_OFFSETOF_READC  (KOBJECT_SIZEOFHEAD+KSIGNAL_OFFSETOF_USER)
+#define KRWLOCK_SIZEOF          (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
+#else
+#define KRWLOCK_OFFSETOF_READC  (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
+#define KRWLOCK_SIZEOF          (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+(KCONFIG_RWLOCK_READERBITS/8))
+#endif
+
+#ifndef __ASSEMBLY__
 struct krwlock {
  KOBJECT_HEAD
  /* v [lock(KSIGNAL_LOCK_WAIT)] Set when the lock is in write-mode. */
@@ -293,6 +304,7 @@ krwlock_timeoutclose(struct krwlock *__restrict self,
  return KE_OK;
 }
 #endif
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 #endif /* __KERNEL__ */

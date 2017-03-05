@@ -64,7 +64,9 @@ __crit kerrno_t F(kmmutex_lock)(struct kmmutex *self,
  do {
   TRYLOCK; ONLOCKINUSE;
   // Wait for the next signal
-  error = ksignal_recv(&self->mmx_sig);
+  DEADLOCKHELP_BEGIN(self,F(lock)) {
+   error = ksignal_recv(&self->mmx_sig);
+  } DEADLOCKHELP_END;
  } while (KE_ISOK(error));
  return error;
 }
@@ -94,7 +96,9 @@ __crit kerrno_t F(kmmutex_timedlock)(struct kmmutex *__restrict self,
  do {
   TRYLOCK; ONLOCKINUSE;
   // Wait for the next signal
-  error = ksignal_timedrecv(&self->mmx_sig,abstime);
+  DEADLOCKHELP_BEGIN(self,F(lock)) {
+   error = ksignal_timedrecv(&self->mmx_sig,abstime);
+  } DEADLOCKHELP_END;
  } while (KE_ISOK(error));
  return error;
 }
