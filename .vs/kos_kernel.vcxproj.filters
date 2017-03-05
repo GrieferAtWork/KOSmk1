@@ -675,5 +675,8 @@
     <None Include="..\src\kernel\procperm-getset.c.inl">
       <Filter>src\kernel</Filter>
     </None>
+    <None Include="..\src\kernel\shm-mmap-impl.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
   </ItemGroup>
 </Project>

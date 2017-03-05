@@ -127,19 +127,14 @@ while(0)
 #ifdef __KERNEL__
 int format_userprint(pformatprinter printer, void *closure,
                      __user char const *userstring, size_t maxchars) {
- struct ktask *caller = ktask_self();
- struct kproc *proc = ktask_getproc(caller);
- int error; size_t partmaxsize,partsize; char *addr;
+ struct ktranslator trans; char *addr;
+ int error; size_t partmaxsize,partsize;
  KTASK_CRIT_MARK
- if __unlikely(caller->t_epd == kpagedir_kernel()) {
-  /* Don't acquire the SHM lock if the
-   * page directory is overwritten. */
-  return (*printer)(userstring,maxchars,closure);
- }
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) return KE_DESTROYED;
+ error = ktranslator_init(&trans,ktask_self());
+ if __unlikely(KE_ISERR(error)) return error;
  for (;;) {
-  addr = (char *)kshm_translateuser(kproc_getshm(proc),caller->t_epd,
-                                    userstring,maxchars,&partmaxsize,0);
+  addr = (char *)ktranslator_exec(&trans,userstring,maxchars,
+                                  &partmaxsize,0);
   if __unlikely(!addr) { error = KE_FAULT; break; }
   partmaxsize /= sizeof(char);
   partsize = strnlen(addr,min(maxchars,partmaxsize))*sizeof(char);
@@ -150,7 +145,7 @@ int format_userprint(pformatprinter printer, void *closure,
   *(uintptr_t *)&userstring += partmaxsize;
   maxchars                  -= partsize;
  }
- kproc_unlock(proc,KPROC_LOCK_SHM);
+ ktranslator_quit(&trans);
  return error;
 }
 

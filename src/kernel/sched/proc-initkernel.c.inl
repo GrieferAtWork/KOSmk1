@@ -47,6 +47,7 @@ struct kproc __kproc_kernel = {
  /* p_pid                  */0,
  /* p_lock                 */KMMUTEX_INIT,
  /* p_shm                  */{KOBJECT_INIT(KOBJECT_MAGIC_SHM)
+ /* p_shm.s_lock           */KRWLOCK_INIT,
  /* p_shm.s_pd             */kpagedir_kernel(),
  /* p_shm.s_map            */{
  /* p_shm.s_map.m_root     */NULL},

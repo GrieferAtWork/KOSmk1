@@ -1271,7 +1271,9 @@ ktask_getstat(struct ktask const *__restrict self,
 #ifdef __DEBUG__
 #define __ktask_region_nointr_enter() \
  do{ struct ktask *const __ktself = ktask_self();\
-     assertf(__ktself->t_flags&KTASK_FLAG_CRITICAL,\
+     assertf(NOIRQ_P || !karch_irq_enabled() ||\
+            (__ktself->t_flags&KTASK_FLAG_CRITICAL) || \
+             kcpu_global_onetask(),\
              "Only a critical task may enter a no-intr region.");\
      __ktself->t_flags|=KTASK_FLAG_NOINTR;\
      (void)0;\

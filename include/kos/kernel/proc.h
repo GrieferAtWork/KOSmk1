@@ -80,19 +80,19 @@ struct kprocregs {
 #define KPROC_OFFSETOF_REGS    (KOBJECT_SIZEOFHEAD+8+KMMUTEX_SIZEOF+KSHM_SIZEOF)
 #define KPROC_OFFSETOF_MODULES (KOBJECT_SIZEOFHEAD+8+KMMUTEX_SIZEOF+KSHM_SIZEOF+KPROCREGS_SIZEOF)
 #ifndef __ASSEMBLY__
+#define __kproc_defined
 struct kproc {
  KOBJECT_HEAD
  __atomic __u32       p_refcnt;   /*< Reference counter. */
  __u32                p_pid;      /*< Process ID (unsigned to prevent negative numbers). */
 #define KPROC_LOCK_MODS    KMMUTEX_LOCK(0)
 #define KPROC_LOCK_FDMAN   KMMUTEX_LOCK(1)
-#define KPROC_LOCK_SHM     KMMUTEX_LOCK(2)
-#define KPROC_LOCK_PERM    KMMUTEX_LOCK(3)
-#define KPROC_LOCK_TLSMAN  KMMUTEX_LOCK(4)
-#define KPROC_LOCK_THREADS KMMUTEX_LOCK(5)
-#define KPROC_LOCK_ENVIRON KMMUTEX_LOCK(6)
+#define KPROC_LOCK_PERM    KMMUTEX_LOCK(2)
+#define KPROC_LOCK_TLSMAN  KMMUTEX_LOCK(3)
+#define KPROC_LOCK_THREADS KMMUTEX_LOCK(4)
+#define KPROC_LOCK_ENVIRON KMMUTEX_LOCK(5)
  struct kmmutex       p_lock;     /*< Lock for the task context. */
- struct kshm          p_shm;      /*< [lock(KPROC_LOCK_SHM)] Shared memory management & page directory. */
+ struct kshm          p_shm;      /*< Shared memory management & page directory. */
  struct kprocregs     p_regs;     /*< [lock(KPROC_LOCK_REGS)] Per-process register-configuration & related. */
  struct kprocmodules  p_modules;  /*< [lock(KPROC_LOCK_MODS)] Shared libraries associated with this process. */
  struct kfdman        p_fdman;    /*< [lock(KPROC_LOCK_FDMAN)] File descriptor manager. */
@@ -616,7 +616,8 @@ extern __wunused __nonnull((1,3)) kerrno_t kproc_kernel_setattr(struct kproc *__
 //  - If possible, the module will be relocated to a free memory
 //    location, unless it must be linked statically, in which case the load
 //    process may fail when the requested area of memory is already in use.
-//  - [*_unlocked] The caller must be holding the 'KPROC_LOCK_SHM' and 'KPROC_LOCK_MODS' locks.
+//  - [*_unlocked] The caller must be holding a write-lock to
+//                'self->p_shm.s_lock' and the 'KPROC_LOCK_MODS' lock.
 //  - Modules not unloaded when the a process is closed
 //    (aka. turns into a zombie) are unloaded automatically.
 //  - kproc_insmod_single_unlocked: Upon success, the caller must not free() 'depids'
@@ -819,7 +820,52 @@ kproc_dlsym_c(struct kproc *__restrict self,
  return kproc_dlsymex_c(self,module_id,name,name_size,
                         ksymhash_of(name,name_size));
 }
-#endif
+#ifdef __KOS_KERNEL_SHM_H__
+__local __crit kerrno_t
+__ktranslator_init_intr(struct ktranslator *__restrict self,
+                        struct ktask *__restrict caller) {
+ kerrno_t error = KE_OK;
+ KTASK_CRIT_MARK
+ kassertobj(self);
+ kassert_ktask(caller);
+ self->t_shm  = kproc_getshm(ktask_getproc(caller));
+ kassert_kshm(self->t_shm);
+ self->t_epd  = caller->t_epd;
+ if (self->t_epd == kpagedir_kernel()) {
+  self->t_flags = KTRANSLATOR_FLAG_KEPD;
+ } else if (self->t_epd != self->t_shm->s_pd) {
+  self->t_flags = KTRANSLATOR_FLAG_NONE;
+ } else {
+  self->t_flags = KTRANSLATOR_FLAG_LOCK|KTRANSLATOR_FLAG_SEPD;
+  KTASK_NOINTR_BEGIN
+  error = krwlock_beginread(&self->t_shm->s_lock);
+  KTASK_NOINTR_END
+ }
+ return error;
+}
+__local __crit /*__nointr*/ kerrno_t
+__ktranslator_init_nointr(struct ktranslator *__restrict self,
+                          struct ktask *__restrict caller) {
+ kerrno_t error = KE_OK;
+ KTASK_CRIT_MARK
+ KTASK_NOINTR_MARK
+ kassertobj(self);
+ kassert_ktask(caller);
+ self->t_shm  = kproc_getshm(ktask_getproc(caller));
+ kassert_kshm(self->t_shm);
+ self->t_epd  = caller->t_epd;
+ if (self->t_epd == kpagedir_kernel()) {
+  self->t_flags = KTRANSLATOR_FLAG_KEPD;
+ } else if (self->t_epd != self->t_shm->s_pd) {
+  self->t_flags = KTRANSLATOR_FLAG_NONE;
+ } else {
+  self->t_flags = KTRANSLATOR_FLAG_LOCK|KTRANSLATOR_FLAG_SEPD;
+  error = krwlock_beginread(&self->t_shm->s_lock);
+ }
+ return error;
+}
+#endif /* __KOS_KERNEL_SHM_H__ */
+#endif /* !__INTELLISENSE__ */
 #endif /* !__ASSEMBLY__ */
 
 __DECL_END

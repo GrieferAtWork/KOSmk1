@@ -64,21 +64,20 @@ __crit size_t
 __copy_in_user_c(__user void *dst,
                  __user void const *src,
                  size_t bytes) {
- size_t max_dst,max_src; __kernel void *kdst,*ksrc;
- struct ktask *caller = ktask_self();
- struct kproc *proc = ktask_getproc(caller);
+ size_t max_dst,max_src;
+ __kernel void *kdst,*ksrc;
+ struct ktranslator trans;
  KTASK_CRIT_MARK
- if (caller->t_epd == kpagedir_kernel()) { memcpy(dst,src,bytes); return 0; }
- if __likely(KE_ISOK(kproc_lock(proc,KPROC_LOCK_SHM))) {
+ if __likely(KE_ISOK(ktranslator_init(&trans,ktask_self()))) {
   while (bytes &&
-        (kdst = kshm_translateuser(kproc_getshm(proc),caller->t_epd,dst,bytes,&max_dst,1)) != NULL &&
-        (ksrc = kshm_translateuser(kproc_getshm(proc),caller->t_epd,src,max_dst,&max_src,0)) != NULL) {
+        (kdst = ktranslator_exec(&trans,dst,bytes,&max_dst,1)) != NULL &&
+        (ksrc = ktranslator_exec(&trans,src,max_dst,&max_src,0)) != NULL) {
    memcpy(kdst,ksrc,max_src);
    bytes -= max_src;
    *(uintptr_t *)&dst += max_src;
    *(uintptr_t *)&src += max_src;
   }
-  kproc_unlock(proc,KPROC_LOCK_SHM);
+  ktranslator_quit(&trans);
  }
  return bytes;
 }
@@ -131,12 +130,11 @@ __user_snprintf_c(__user char *buf, size_t bufsize,
 }
 
 struct user_vsnprintf_data {
- struct kshm           *shm;      /*< [1..1] SHM address translator. */
- struct kpagedir const *epd;      /*< [1..1] Effective page directory. */
- __user   char         *u_bufpos; /*< [?..1] Start of the next user-buffer part. */
- __user   char         *u_bufend; /*< [?..1] End of the user-buffer. */
- __kernel char         *k_bufpos; /*< [?..1] Start of the current kernel-buffer part. */
- size_t                 k_bufsiz; /*< Amount of available bytes starting at 'k_bufpos'. */
+ struct ktranslator trans;    /*< Used address translator. */
+ __user   char     *u_bufpos; /*< [?..1] Start of the next user-buffer part. */
+ __user   char     *u_bufend; /*< [?..1] End of the user-buffer. */
+ __kernel char     *k_bufpos; /*< [?..1] Start of the current kernel-buffer part. */
+ size_t             k_bufsiz; /*< Amount of available bytes starting at 'k_bufpos'. */
 };
 static int
 user_vsnprintf_callback(__kernel char const *s, size_t maxlen,
@@ -157,9 +155,9 @@ user_vsnprintf_callback(__kernel char const *s, size_t maxlen,
    return 0;
   }
   /* Must translate another part. */
-  data->k_bufpos = (__kernel char *)kshm_translateuser(data->shm,data->epd,data->u_bufpos,
-                                                      (size_t)(data->u_bufend-data->u_bufpos),
-                                                       &data->k_bufsiz,1);
+  data->k_bufpos = (__kernel char *)ktranslator_exec(&data->trans,data->u_bufpos,
+                                                    (size_t)(data->u_bufend-data->u_bufpos),
+                                                     &data->k_bufsiz,1);
   if (!data->k_bufpos) {
    /* Faulty pointer (mark as out-of-bounds for now). */
    data->u_bufend = data->k_bufpos;
@@ -180,14 +178,10 @@ __user_vsnprintf_c(__user char *buf, size_t bufsize,
                    __kernel char const *__restrict fmt, va_list args) {
  struct user_vsnprintf_data data;
  ssize_t result; __user char *real_bufend;
- struct ktask *caller = ktask_self();
- struct kproc *proc = ktask_getproc(caller);
  KTASK_CRIT_MARK
- data.shm = kproc_getshm(proc);
- data.epd = caller->t_epd;
  data.u_bufend = real_bufend = (data.u_bufpos = buf)+bufsize;
  data.k_bufpos = NULL,data.k_bufsiz = 0;
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) {
+ if __unlikely(KE_ISERR(ktranslator_init(&data.trans,ktask_self()))) {
   /* Still need to evaluate the format string. */
   result = (ssize_t)vsnprintf(NULL,0,fmt,args);
   if (reqsize) *reqsize = result;
@@ -201,13 +195,13 @@ __user_vsnprintf_c(__user char *buf, size_t bufsize,
   --data.k_bufsiz;
  } else if (data.u_bufpos < data.u_bufend) {
   size_t avail_bytes;
-  data.k_bufpos = (__kernel char *)kshm_translateuser(data.shm,data.epd,data.u_bufpos,
-                                                      sizeof(char),&avail_bytes,1);
+  data.k_bufpos = (__kernel char *)ktranslator_exec(&data.trans,data.u_bufpos,
+                                                    sizeof(char),&avail_bytes,1);
   if (data.k_bufpos) *data.k_bufpos = '\0';
   else data.u_bufend = data.u_bufpos;
   ++data.u_bufpos;
  }
- kproc_unlock(proc,KPROC_LOCK_SHM);
+ ktranslator_quit(&data.trans);
  /* Subtract memory not used by the translated kernel buffer. */
  data.u_bufpos -= data.k_bufsiz;
  /* When requested to, store the required size. */
@@ -230,24 +224,18 @@ __user_vsnprintf_c(__user char *buf, size_t bufsize,
 
 __crit __user void *
 __user_memchr_c(__user void const *p, int needle, size_t bytes) {
- size_t bytes_max; __kernel void *kp;
- __user void *result = NULL,*iter = (void *)p;
- struct ktask *caller = ktask_self();
- struct kproc *proc = ktask_getproc(caller);
+ size_t partsize; __kernel void *partp;
+ __user void *result = NULL;
  KTASK_CRIT_MARK
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) return NULL;
- while ((kp = kshm_translateuser(kproc_getshm(proc),caller->t_epd,
-                                 iter,bytes,&bytes_max,0)) != NULL) {
-  assert(bytes_max <= bytes);
-  if ((result = memchr(kp,needle,bytes_max)) != NULL) {
+ USER_FOREACH_BEGIN(p,bytes,partp,partsize,0) {
+  if ((result = memchr(partp,needle,partsize)) != NULL) {
    /* Convert the kernel-pointer into a user-pointer. */
-   result = (__user void *)((uintptr_t)p+((uintptr_t)result-(uintptr_t)kp));
-   break;
+   result = (__user void *)((uintptr_t)p+((uintptr_t)result-(uintptr_t)partp));
+   USER_FOREACH_BREAK;
   }
-  if ((bytes -= bytes_max) == 0) break;
-  *(uintptr_t *)&iter += bytes_max;
- }
- kproc_unlock(proc,KPROC_LOCK_SHM);
+ } USER_FOREACH_END({
+  result = NULL;
+ });
  return result;
 }
 
@@ -281,14 +269,12 @@ __user_strndup_c(__user char const *s, size_t maxchars) {
 
 
 __crit size_t __user_strlen_c(__user char const *s) {
- struct ktask *caller = ktask_self();
- struct kproc *proc = ktask_getproc(caller);
  size_t result = 0,partmaxsize,partsize; char *addr;
+ struct ktranslator trans;
  KTASK_CRIT_MARK
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) return 0;
+ if __unlikely(KE_ISERR(ktranslator_init(&trans,ktask_self()))) return 0;
  for (;;) {
-  addr = (char *)kshm_translateuser(kproc_getshm(proc),caller->t_epd,
-                                    s,PAGESIZE,&partmaxsize,0);
+  addr = (char *)ktranslator_exec(&trans,s,PAGESIZE,&partmaxsize,0);
   if __unlikely(!addr) break; /* FAULT */
   partmaxsize /= sizeof(char);
   partsize = strnlen(addr,partmaxsize);
@@ -296,18 +282,16 @@ __crit size_t __user_strlen_c(__user char const *s) {
   if (partmaxsize != partsize) break;
   *(uintptr_t *)&s += partmaxsize;
  }
- kproc_unlock(proc,KPROC_LOCK_SHM);
+ ktranslator_quit(&trans);
  return result;
 }
 __crit size_t __user_strnlen_c(__user char const *s, size_t maxchars) {
- struct ktask *caller = ktask_self();
- struct kproc *proc = ktask_getproc(caller);
  size_t result = 0,partmaxsize,partsize; char *addr;
+ struct ktranslator trans;
  KTASK_CRIT_MARK
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) return 0;
+ if __unlikely(KE_ISERR(ktranslator_init(&trans,ktask_self()))) return 0;
  for (;;) {
-  addr = (char *)kshm_translateuser(kproc_getshm(proc),caller->t_epd,
-                                    s,maxchars,&partmaxsize,0);
+  addr = (char *)ktranslator_exec(&trans,s,maxchars,&partmaxsize,0);
   if __unlikely(!addr) break; /* FAULT */
   partmaxsize /= sizeof(char);
   partsize = strnlen(addr,min(maxchars,partmaxsize))*sizeof(char);
@@ -317,7 +301,7 @@ __crit size_t __user_strnlen_c(__user char const *s, size_t maxchars) {
   *(uintptr_t *)&s += partmaxsize;
   maxchars         -= partsize;
  }
- kproc_unlock(proc,KPROC_LOCK_SHM);
+ ktranslator_quit(&trans);
  return result/sizeof(char);
 }
 

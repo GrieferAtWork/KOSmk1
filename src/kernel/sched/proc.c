@@ -50,9 +50,6 @@ void kproc_destroy(struct kproc *__restrict self) {
  assert(self != kproc_kernel());
  kproclist_delproc(self);
  kproc_close(self);
- /* Must destroy the SHM here, because the kernel process
-  * may not destroy its statically allocated page directory! */
- kshm_quit(&self->p_shm);
  free(self);
 }
 
@@ -66,6 +63,7 @@ kerrno_t kproc_close(struct kproc *__restrict self) {
   ktlsman_quit(&self->p_tlsman);
   kprocmodules_quit(&self->p_modules);
   kprocenv_quit(&self->p_environ);
+  kshm_quit(&self->p_shm);
  }
  return error;
 }

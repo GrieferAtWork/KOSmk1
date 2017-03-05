@@ -44,19 +44,19 @@ kproc_loadmodsections(struct kproc *__restrict self,
  KTASK_CRIT_MARK
  end = (iter = module->sh_data.ed_secv)+module->sh_data.ed_secc;
  for (; iter != end; ++iter) {
-  error = kshm_mapfullregion(kproc_getshm(self),
-                            (void *)((uintptr_t)base+iter->sls_albase),
-                             iter->sls_region);
+  error = kshm_mapfullregion_unlocked(kproc_getshm(self),
+                                     (void *)((uintptr_t)base+iter->sls_albase),
+                                      iter->sls_region);
   if __unlikely(KE_ISERR(error)) goto err_seciter;
  }
  return KE_OK;
 err_seciter:
  // Unmap all already mapped sections
  while (iter-- != module->sh_data.ed_secv) {
-  kshm_unmap(kproc_getshm(self),
-            (void *)((uintptr_t)base+iter->sls_albase),
-             kshmregion_getpages(iter->sls_region),
-             KSHMUNMAP_FLAG_NONE);
+  kshm_unmap_unlocked(kproc_getshm(self),
+                     (void *)((uintptr_t)base+iter->sls_albase),
+                      kshmregion_getpages(iter->sls_region),
+                      KSHMUNMAP_FLAG_NONE);
  }
  return error;
 }
@@ -77,17 +77,19 @@ kproc_unloadmodsections(struct kproc *__restrict self,
  secend = (seciter = module->sh_data.ed_secv)+module->sh_data.ed_secc;
  for (; seciter != secend; ++seciter) {
   if (kshmregion_getflags(seciter->sls_region)&KSHMREGION_FLAG_WRITE) {
-   // Force unmap writable sections (Due to copy-on-write,
-   // they may have been re-mapped. - An operation we can't track)
-   kshm_unmap(kproc_getshm(self),
-             (void *)((uintptr_t)base+seciter->sls_albase),
-             (seciter->sls_base-seciter->sls_albase)+
-              kshmregion_getpages(seciter->sls_region),
-              KSHMUNMAP_FLAG_NONE);
+   /* Force unmap writable sections (Due to copy-on-write,
+    * they may have been re-mapped. - An operation we can't track) */
+   kshm_unmap_unlocked(kproc_getshm(self),
+                      (void *)((uintptr_t)base+seciter->sls_albase),
+                      (seciter->sls_base-seciter->sls_albase)+
+                       kshmregion_getpages(seciter->sls_region),
+                       KSHMUNMAP_FLAG_NONE);
   } else {
-   kshm_unmapregion(kproc_getshm(self),
-                   (void *)((uintptr_t)base+seciter->sls_albase),
-                    seciter->sls_region);
+   KTASK_NOINTR_BEGIN
+   __evalexpr(kshm_unmapregion_unlocked(kproc_getshm(self),
+                                       (void *)((uintptr_t)base+seciter->sls_albase),
+                                        seciter->sls_region));
+   KTASK_NOINTR_END
   }
  }
 }
@@ -182,7 +184,7 @@ kproc_insmod_single_unlocked(struct kproc *__restrict self,
  kassert_kproc(self);
  kassert_kshlib(module);
  kassertmem(depids,module->sh_deps.sl_libc*sizeof(kmodid_t));
- assert(kproc_islocked(self,KPROC_LOCK_SHM));
+ assert(krwlock_iswritelocked(&self->p_shm.s_lock));
  assert(kproc_islocked(self,KPROC_LOCK_MODS));
  // Check if this exact module is already loaded.
  // (We can simply compare pointers here...)
@@ -249,7 +251,7 @@ kproc_delmod_single_unlocked(struct kproc *__restrict self, kmodid_t module_id,
  kassert_kproc(self);
  kassertobj(dep_idv);
  kassertobj(dep_idc);
- assert(kproc_islocked(self,KPROC_LOCK_SHM));
+ assert(krwlock_iswritelocked(&self->p_shm.s_lock));
  assert(kproc_islocked(self,KPROC_LOCK_MODS));
  if __unlikely(module_id >= self->p_modules.pms_moda) return KE_INVAL;
  module = self->p_modules.pms_modv+module_id;
@@ -373,7 +375,7 @@ kproc_delmod_unlocked(struct kproc *__restrict self,
  kmodid_t *dep_idv,*iter; size_t dep_idc;
  KTASK_CRIT_MARK
  kassert_kproc(self);
- assert(kproc_islocked(self,KPROC_LOCK_SHM));
+ assert(krwlock_iswritelocked(&self->p_shm.s_lock));
  assert(kproc_islocked(self,KPROC_LOCK_MODS));
  error = kproc_delmod_single_unlocked(self,module_id,&dep_idv,&dep_idc);
  if (error != KE_OK) return error;
@@ -397,10 +399,14 @@ kproc_insmod_c(struct kproc *__restrict self,
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kproc(self);
- error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS);
  if __unlikely(KE_ISERR(error)) return error;
+ error = krwlock_beginwrite(&self->p_shm.s_lock);
+ if __unlikely(KE_ISERR(error)) goto end_mutex;
  error = kproc_insmod_unlocked(self,module,module_id);
- kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ krwlock_endwrite(&self->p_shm.s_lock);
+end_mutex:
+ kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS);
  return error;
 }
 __crit kerrno_t
@@ -409,10 +415,14 @@ kproc_delmod_c(struct kproc *__restrict self,
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kproc(self);
- error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS);
  if __unlikely(KE_ISERR(error)) return error;
+ error = krwlock_beginwrite(&self->p_shm.s_lock);
+ if __unlikely(KE_ISERR(error)) goto end_mutex;
  error = kproc_delmod_unlocked(self,module_id);
- kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ krwlock_endwrite(&self->p_shm.s_lock);
+end_mutex:
+ kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS);
  return error;
 }
 
@@ -421,12 +431,16 @@ kproc_delmodat_c(struct kproc *__restrict self, __user void *addr) {
  kerrno_t error; kmodid_t id;
  KTASK_CRIT_MARK
  kassert_kproc(self);
- error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS);
  if __unlikely(KE_ISERR(error)) return error;
+ error = krwlock_beginwrite(&self->p_shm.s_lock);
+ if __unlikely(KE_ISERR(error)) goto end_mutex;
  if __likely(KE_ISOK(error = kproc_getmodat_unlocked(self,&id,addr))) {
   error = kproc_delmod_unlocked(self,id);
  }
- kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ krwlock_endwrite(&self->p_shm.s_lock);
+end_mutex:
+ kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS);
  return error;
 }
 
@@ -445,13 +459,17 @@ kproc_delmodafter_c(struct kproc *__restrict self, __user void *addr) {
  kerrno_t error; kmodid_t id;
  KTASK_CRIT_MARK
  kassert_kproc(self);
- error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS);
  if __unlikely(KE_ISERR(error)) return error;
+ error = krwlock_beginwrite(&self->p_shm.s_lock);
+ if __unlikely(KE_ISERR(error)) goto end_mutex;
  if __likely(KE_ISOK(error = kproc_getmodat_unlocked(self,&id,addr))) {
   id = kproc_getnextmodid_unlocked(self,id);
   error = kproc_delmod_unlocked(self,id);
  }
- kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ krwlock_endwrite(&self->p_shm.s_lock);
+end_mutex:
+ kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS);
  return error;
 }
 
@@ -459,8 +477,10 @@ static __crit kerrno_t
 kproc_delmod_all(struct kproc *__restrict self) {
  kerrno_t error; kmodid_t i;
  int error_occurred;
- error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ error = kmmutex_locks(&self->p_lock,KPROC_LOCK_MODS);
  if __unlikely(KE_ISERR(error)) return error;
+ error = krwlock_beginwrite(&self->p_shm.s_lock);
+ if __unlikely(KE_ISERR(error)) goto end_mutex;
  for (;;) {
   error_occurred = 0;
   if (!self->p_modules.pms_moda) break;
@@ -470,7 +490,9 @@ kproc_delmod_all(struct kproc *__restrict self) {
   }
   if (error_occurred) break;
  }
- kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS|KPROC_LOCK_SHM);
+ krwlock_endwrite(&self->p_shm.s_lock);
+end_mutex:
+ kmmutex_unlocks(&self->p_lock,KPROC_LOCK_MODS);
  return error;
 }
 

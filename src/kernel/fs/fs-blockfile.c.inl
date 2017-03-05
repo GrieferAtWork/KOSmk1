@@ -251,14 +251,14 @@ _kblockfile_read(struct kblockfile *__restrict self,
                  __user void *buf, size_t bufsize,
                  __kernel size_t *__restrict rsize) {
  size_t bufavail; kerrno_t error;
- __u64 maxread;
+ __u64 maxread; struct ktranslator trans;
 #if DIRECT_TRANSFER_WHOLE_CLUSTERS
  __kernel void *kbuf; size_t kbufsize;
- struct ktask *caller = ktask_self();
 #endif
+ if __unlikely(KE_ISERR(error = ktranslator_init(&trans,ktask_self()))) return error;
  kassert_kfile(&self->bf_file);
  kassertobj(rsize);
- if __unlikely(KE_ISERR(error = kmutex_lock(&self->bf_lock))) return error;
+ if __unlikely(KE_ISERR(error = kmutex_lock(&self->bf_lock))) goto end_trans;
  assert(self->bf_bufpos >= self->bf_buffer && self->bf_bufpos < self->bf_bufmax);
  if __unlikely(!(self->bf_flags&KBLOCKFILE_FLAG_CANREAD)) { error = KE_ACCES; goto end; }
  if (self->bf_flags&KBLOCKFILE_FLAG_BUFDATA) {
@@ -266,7 +266,7 @@ read_buffer:
   /* Read from the blockfile's buffer */
   bufavail = (size_t)(self->bf_bufend-self->bf_bufpos);
   if (bufsize < bufavail) bufavail = bufsize;
-  if __unlikely(copy_to_user(buf,self->bf_bufpos,bufavail)) goto err_fault;
+  if __unlikely(ktranslator_copytouser(&trans,buf,self->bf_bufpos,bufavail)) goto err_fault;
   self->bf_bufpos += bufavail;
   *rsize = bufavail;
   if (!bufavail) goto end;
@@ -325,22 +325,18 @@ read_buffer:
    * #2: 'bufsize % self->bf_chunksize' bytes from the buffer */
   while (bufsize >= self->bf_chunksize) {
    if (!(self->bf_flags&KBLOCKFILE_FLAG_CHUNK) &&
-       KE_ISERR(error = kblockfile_findchunk(self))) goto end;
+       __unlikely(KE_ISERR(error = kblockfile_findchunk(self)))) goto end;
 #if DIRECT_TRANSFER_WHOLE_CLUSTERS /* Lock & translate whole page. */
-   if __unlikely(KE_ISERR(kproc_lock(caller->t_proc,KPROC_LOCK_SHM))) goto err_fault;
-   kbuf = kshm_translateuser(&caller->t_proc->p_shm,caller->t_epd,
-                             buf,self->bf_chunksize,&kbufsize,1);
-   if __unlikely(!kbuf) error = KE_FAULT;
+   kbuf = ktranslator_exec(&trans,buf,self->bf_chunksize,&kbufsize,1);
+        if __unlikely(!kbuf) error = KE_FAULT;
    else if __likely(kbufsize == self->bf_chunksize){
     /* NOTE: Due to partitioning and copy-on-write, the user-chunk may not be linear. */
     error = (*kblockfile_type(self)->bft_loadchunk)(self,&self->bf_currchunk,kbuf);
-   }
-   kproc_unlock(caller->t_proc,KPROC_LOCK_SHM);
-   if (kbufsize != self->bf_chunksize)
+   } else
 #endif
    {
     error = (*kblockfile_type(self)->bft_loadchunk)(self,&self->bf_currchunk,self->bf_buffer);
-    if __unlikely(copy_to_user(buf,self->bf_buffer,self->bf_chunksize)) goto err_fault;
+    if __unlikely(ktranslator_copytouser(&trans,buf,self->bf_buffer,self->bf_chunksize)) goto err_fault;
    }
    if __unlikely(KE_ISERR(error)) goto end;
    kblockfile_selectnextchunk_withoutdata(self);
@@ -357,22 +353,18 @@ read_buffer:
    if __unlikely(KE_ISERR(error)) goto end;
    assert(self->bf_bufpos == self->bf_buffer);
    assert((self->bf_bufend-self->bf_bufpos) >= bufsize);
-   if __unlikely(copy_to_user(buf,self->bf_bufpos,bufsize)) goto err_fault;
+   if __unlikely(ktranslator_copytouser(&trans,buf,self->bf_bufpos,bufsize)) goto err_fault;
    self->bf_bufpos += bufsize;
    *rsize += bufsize;
    assertf(self->bf_bufpos != self->bf_bufmax,
            "Full chunks should have been read above");
   }
  }
-endok:
- error = KE_OK;
-end:
- kmutex_unlock(&self->bf_lock);
+endok:     error = KE_OK;
+end:       kmutex_unlock(&self->bf_lock);
+end_trans: ktranslator_quit(&trans);
  return error;
-err_fault:
- tb_print();
- error = KE_FAULT;
- goto end;
+err_fault: error = KE_FAULT; goto end;
 }
 
 
@@ -381,13 +373,14 @@ _kblockfile_write(struct kblockfile *__restrict self,
                   __user void const *buf, size_t bufsize,
                   __kernel size_t *__restrict wsize) {
  kerrno_t error; size_t bufavail; __u64 newsize;
+ struct ktranslator trans;
 #if DIRECT_TRANSFER_WHOLE_CLUSTERS
  __kernel void *kbuf; size_t kbufsize;
- struct ktask *caller = ktask_self();
 #endif
  kassert_kfile(&self->bf_file);
  kassertobj(wsize);
- if __unlikely(KE_ISERR(error = kmutex_lock(&self->bf_lock))) return error;
+ if __unlikely(KE_ISERR(error = ktranslator_init(&trans,ktask_self()))) return error;
+ if __unlikely(KE_ISERR(error = kmutex_lock(&self->bf_lock))) goto end_trans;
  if __unlikely(!(self->bf_flags&KBLOCKFILE_FLAG_CANWRITE)) { error = KE_ACCES; goto end_unchanged; }
  if (self->bf_flags&KBLOCKFILE_FLAG_APPEND) {
   /* Mode the file cursor to the end of the file */
@@ -407,7 +400,7 @@ write_buffer:
   /* Fill the local buffer */
   bufavail = (size_t)(self->bf_bufmax-self->bf_bufpos);
   if (bufsize < bufavail) bufavail = bufsize;
-  if __unlikely(copy_from_user(self->bf_bufpos,buf,bufavail)) goto err_fault;
+  if __unlikely(ktranslator_copyfromuser(&trans,self->bf_bufpos,buf,bufavail)) goto err_fault;
   *wsize = bufavail;
   self->bf_bufpos += bufavail;
   self->bf_flags |= KBLOCKFILE_FLAG_CHANGED;
@@ -447,19 +440,16 @@ write_buffer:
   if (!(self->bf_flags&KBLOCKFILE_FLAG_CHUNK) &&
       KE_ISERR(error = kblockfile_findchunk(self))) goto end;
 #if DIRECT_TRANSFER_WHOLE_CLUSTERS /* Lock & translate whole page. */
-  if __unlikely(KE_ISERR(kproc_lock(caller->t_proc,KPROC_LOCK_SHM))) goto err_fault;
-  kbuf = kshm_translateuser(&caller->t_proc->p_shm,caller->t_epd,
-                            buf,self->bf_chunksize,&kbufsize,0);
+  kbuf = ktranslator_exec(&trans,buf,self->bf_chunksize,&kbufsize,0);
   if __unlikely(!kbuf) error = KE_FAULT;
   else if __likely(kbufsize == self->bf_chunksize){
    /* NOTE: Due to partitioning and copy-on-write, the user-chunk may not be linear. */
    error = (*kblockfile_type(self)->bft_savechunk)(self,&self->bf_currchunk,kbuf);
   }
-  kproc_unlock(caller->t_proc,KPROC_LOCK_SHM);
   if (kbufsize != self->bf_chunksize)
 #endif
   {
-   if __unlikely(copy_from_user(self->bf_buffer,buf,self->bf_chunksize)) goto err_fault;
+   if __unlikely(ktranslator_copyfromuser(&trans,self->bf_buffer,buf,self->bf_chunksize)) goto err_fault;
    error = (*kblockfile_type(self)->bft_savechunk)(self,&self->bf_currchunk,self->bf_buffer);
   }
   if __unlikely(KE_ISERR(error)) goto end;
@@ -481,7 +471,7 @@ write_buffer:
    /* Create new data */
    self->bf_flags |= KBLOCKFILE_FLAG_BUFDATA;
   }
-  if __unlikely(copy_from_user(self->bf_bufpos,buf,bufsize)) goto err_fault;
+  if __unlikely(ktranslator_copyfromuser(&trans,self->bf_bufpos,buf,bufsize)) goto err_fault;
   self->bf_bufpos += bufsize;
   assert(self->bf_bufpos < self->bf_bufmax);
   /* Update the end of the buffer if we managed to increase the file's size */
@@ -490,15 +480,14 @@ write_buffer:
   self->bf_flags |= KBLOCKFILE_FLAG_CHANGED;
  }
 
-endok:
- error = KE_OK;
+endok: error = KE_OK;
 end:
  /* Always update the new file size (even in the case of an error) */
  newsize = self->bf_currchunk.fc_index*self->bf_chunksize+
           (size_t)(self->bf_bufpos-self->bf_buffer);
  if (newsize > self->bf_filesize) self->bf_filesize = newsize;
-end_unchanged:
- kmutex_unlock(&self->bf_lock);
+end_unchanged: kmutex_unlock(&self->bf_lock);
+end_trans:     ktranslator_quit(&trans);
  return error;
 err_fault: error = KE_FAULT; goto end_unchanged;
 }
@@ -655,12 +644,14 @@ _kblockfile_setattr(struct kblockfile *__restrict self, kattr_t attr,
 
 __ref struct kdirent *
 _kblockfile_dirent(struct kblockfile *__restrict self) {
+ kassert_kdirent(self->bf_dirent);
  return __likely(KE_ISOK(kdirent_incref(self->bf_dirent))) ? self->bf_dirent : NULL;
 }
 
 
 __ref struct kinode *
 _kblockfile_inode(struct kblockfile *__restrict self) {
+ kassert_kinode(self->bf_inode);
  return __likely(KE_ISOK(kinode_incref(self->bf_inode))) ? self->bf_inode : NULL;
 }
 

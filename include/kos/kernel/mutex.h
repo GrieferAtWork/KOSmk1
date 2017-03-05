@@ -54,10 +54,10 @@ __struct_fwd(kmutex);
 #ifndef __ASSEMBLY__
 struct kmutex {
  KOBJECT_HEAD
- struct ksignal     m_sig; /*< Signal used for locking. */
-#define m_locked    m_sig.s_useru /*< [atomic] 0: unlocked; 1: locked */
+ struct ksignal  m_sig; /*< Signal used for locking. */
+#define m_locked m_sig.s_useru /*< [atomic] 0: unlocked; 1: locked */
 #if KCONFIG_HAVE_DEBUG_TRACKEDMUTEX
- struct ktask      *m_holder; /*< [0..1][lock(this)] Current holder of the mutex lock. */
+ struct ktask   *m_holder; /*< [0..1][lock(this)] Current holder of the mutex lock. */
  struct tbtrace *m_locktb; /*< [0..1][lock(this)] Traceback of where the lock was acquired. */
 #endif /* KCONFIG_HAVE_DEBUG_TRACKEDMUTEX */
 };

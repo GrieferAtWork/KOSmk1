@@ -161,7 +161,7 @@ debug_dostackwalk(struct stackframe *start, ptbwalker callback,
  size_t didskip = 0,index = 0; frame = start;
  while (frame) {
   kerrno_t error = kmem_validate(frame,sizeof(struct stackframe));
-  // Validate the stack frame address
+  /* Validate the stack frame address */
   if (KE_ISERR(error)) {
    if (!handle_error) return TRACEBACK_STACKERROR_FRAME;
    temp = (*handle_error)(TRACEBACK_STACKERROR_FRAME,(void const *)frame,closure);
@@ -171,24 +171,24 @@ debug_dostackwalk(struct stackframe *start, ptbwalker callback,
    if (temp != 0) return temp;
 #endif
   }
-  // Validate the instruction pointer
+  /* Validate the instruction pointer */
   if (KE_ISERR(kmem_validatebyte((byte_t const *)(uintptr_t)frame->eip))) {
    if (!handle_error) return TRACEBACK_STACKERROR_EIP;
    temp = (*handle_error)(TRACEBACK_STACKERROR_EIP,(void const *)(uintptr_t)frame->eip,closure);
    if (temp != 0) return temp;
   }
-  // Call the stack entry enumerator
   if (didskip < skip) ++didskip;
   else if (callback) {
+   /* Call the stack entry enumerator */
    temp = (*callback)(frame->eip,frame,index++,closure);
    if (temp != 0) return temp;
   }
   next = frame->caller;
-  // Ensure that the frame hasn't already been enumerated (looping stack)
+  /* Ensure that the frame hasn't already been enumerated (looping stack) */
   check = start;
   for (;;) {
    if (check == next) {
-    // The stackframes are recursive
+    /* The stackframes are recursive */
     if (!handle_error) return TRACEBACK_STACKERROR_LOOP;
     temp = (*handle_error)(TRACEBACK_STACKERROR_LOOP,(void const *)next,closure);
     if (temp != 0) return temp;
@@ -237,16 +237,16 @@ tbcapture_walkcollect(void const *__restrict instruction_pointer,
 }
 
 __public __noinline struct tbtrace *tbtrace_capture(void) { return tbtrace_captureex(1); }
-__public __noinline struct tbtrace *tbtrace_captureex(size_t skip) { void *ebp; __asm_volatile__("movl %%ebp, %0" : "=r" (ebp)); return tbtrace_captureebpex(ebp,skip+1); }
+__public __noinline struct tbtrace *tbtrace_captureex(size_t skip) { void *ebp; __asm_volatile__("movl %%ebp, %0" : "=r" (ebp)); return tbtrace_captureebpex(ebp,skip); }
 __public struct tbtrace *tbtrace_captureebp(void const *ebp) { return tbtrace_captureebpex(ebp,0); }
 __public struct tbtrace *tbtrace_captureebpex(void const *ebp, size_t skip) {
  struct tbtrace *result; size_t entrycount = 0;
- tb_walkex((ptbwalker)&tbcapture_walkcount,NULL,&entrycount,skip);
+ tb_walkebpex(ebp,(ptbwalker)&tbcapture_walkcount,NULL,&entrycount,skip);
  result = (struct tbtrace *)malloc(offsetof(struct tbtrace,tb_entryv)+
                                       entrycount*sizeof(struct dtracebackentry));
  if __unlikely(!result) return NULL;
  result->tb_entryc = entrycount;
- tb_walkex((ptbwalker)&tbcapture_walkcollect,NULL,result,skip);
+ tb_walkebpex(ebp,(ptbwalker)&tbcapture_walkcollect,NULL,result,skip);
  return result;
 }
 

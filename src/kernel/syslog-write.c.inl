@@ -88,7 +88,7 @@ void k_dosyslog(int level, psyslogprefix print_prefix,
 
 #ifdef USER
  KTASK_CRIT_BEGIN
- if __likely(KE_ISOK(error = kproc_lock(caller,KPROC_LOCK_SHM))) {
+ if __likely(KE_ISOK(error = krwlock_beginread(&caller->p_shm.s_lock))) {
   for (;;) {
    kernel_s = (char *)kshm_translateuser(kproc_getshm(caller),
                                          kproc_getpagedir(caller),
@@ -234,7 +234,7 @@ do_print_prefix:
    maxlen -= partmaxsize;
   }
 done:
-  kproc_unlock(caller,KPROC_LOCK_SHM);
+  krwlock_endread(&caller->p_shm.s_lock);
  }
  KTASK_CRIT_END
 #endif /* USER */

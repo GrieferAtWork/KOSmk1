@@ -186,11 +186,12 @@ kshm_ldtsetlimit(struct kshm *__restrict self, kseglimit_t newlimit) {
 }
 
 __crit __nomp ksegid_t
-kshm_ldtalloc(struct kshm *__restrict self,
-              struct ksegment const *__restrict seg) {
+kshm_ldtalloc_unlocked(struct kshm *__restrict self,
+                       struct ksegment const *__restrict seg) {
  struct ksegment *iter,*begin;
  ksegid_t result;
  kassert_kshm(self);
+ assert(krwlock_iswritelocked(&self->s_lock));
  kassertobj(seg);
  assertf(!(self->s_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
  assertf(seg->present,"The given segment configuration must be marked as present");
@@ -217,10 +218,11 @@ end:
 }
 
 __crit __nomp ksegid_t
-kshm_ldtallocat(struct kshm *__restrict self, ksegid_t reqid,
-                struct ksegment const *__restrict seg) {
+kshm_ldtallocat_unlocked(struct kshm *__restrict self, ksegid_t reqid,
+                         struct ksegment const *__restrict seg) {
  struct ksegment *result_seg;
  kassert_kshm(self);
+ assert(krwlock_iswritelocked(&self->s_lock));
  kassertobj(seg);
  assertf(!(self->s_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
  assertf(seg->present,"The given segment configuration must be marked as present");
@@ -242,9 +244,10 @@ kshm_ldtallocat(struct kshm *__restrict self, ksegid_t reqid,
  return KSEG_TOLDT(reqid);
 }
 __crit __nomp void
-kshm_ldtfree(struct kshm *__restrict self, ksegid_t id) {
+kshm_ldtfree_unlocked(struct kshm *__restrict self, ksegid_t id) {
  struct ksegment *iter,*begin,*end;
  kassert_kshm(self);
+ assert(krwlock_iswritelocked(&self->s_lock));
  assertf(!(self->s_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
  assertf(KSEG_ISLDT(id),"The given ID %I16x isn't part of the LDT",id);
  id &= ~0x7; /* Strip away internal bits. */
@@ -264,9 +267,10 @@ kshm_ldtfree(struct kshm *__restrict self, ksegid_t id) {
 }
 
 __nomp void
-kshm_ldtget(struct kshm const *__restrict self,
-            ksegid_t id, struct ksegment *__restrict seg) {
+kshm_ldtget_unlocked(struct kshm const *__restrict self,
+                     ksegid_t id, struct ksegment *__restrict seg) {
  kassert_kshm(self);
+ assert(krwlock_isreadlocked(&self->s_lock));
  assertf(!(self->s_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
  assertf(KSEG_ISLDT(id),"The given ID %I16x isn't part of the LDT",id);
  id &= ~0x7; /* Strip away internal bits. */
@@ -274,9 +278,10 @@ kshm_ldtget(struct kshm const *__restrict self,
  memcpy(seg,SEGAT(id),sizeof(struct ksegment));
 }
 __nomp void
-kshm_ldtset(struct kshm *__restrict self, ksegid_t id,
-            struct ksegment const *__restrict seg) {
+kshm_ldtset_unlocked(struct kshm *__restrict self, ksegid_t id,
+                     struct ksegment const *__restrict seg) {
  kassert_kshm(self);
+ assert(krwlock_iswritelocked(&self->s_lock));
  assertf(!(self->s_ldt.ldt_limit % sizeof(struct ksegment)),"Internal LDT alignment error");
  assertf(KSEG_ISLDT(id),"The given ID %I16x isn't part of the LDT",id);
  id &= ~0x7; /* Strip away internal bits. */
@@ -290,7 +295,76 @@ kshm_ldtset(struct kshm *__restrict self, ksegid_t id,
 #undef VEC_BEGIN
 #undef VEC_SIZE
 #undef VEC_END
-              
+
+
+__crit ksegid_t
+kshm_ldtalloc(struct kshm *__restrict self,
+              struct ksegment const *__restrict seg) {
+ ksegid_t result;
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ KTASK_NOINTR_BEGIN
+ if __unlikely(KE_ISERR(krwlock_beginwrite(&self->s_lock))) result = KSEG_NULL;
+ else {
+  result = kshm_ldtalloc_unlocked(self,seg);
+  krwlock_endwrite(&self->s_lock);
+ }
+ KTASK_NOINTR_END
+ return result;
+}
+__crit ksegid_t
+kshm_ldtallocat(struct kshm *__restrict self, ksegid_t reqid,
+                struct ksegment const *__restrict seg) {
+ ksegid_t result;
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ KTASK_NOINTR_BEGIN
+ if __unlikely(KE_ISERR(krwlock_beginwrite(&self->s_lock))) result = KSEG_NULL;
+ else {
+  result = kshm_ldtallocat_unlocked(self,reqid,seg);
+  krwlock_endwrite(&self->s_lock);
+ }
+ KTASK_NOINTR_END
+ return result;
+}
+__crit void
+kshm_ldtfree(struct kshm *__restrict self, ksegid_t id) {
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ KTASK_NOINTR_BEGIN
+ if __likely(KE_ISOK(krwlock_beginwrite(&self->s_lock))) {
+  kshm_ldtfree_unlocked(self,id);
+  krwlock_endwrite(&self->s_lock);
+ }
+ KTASK_NOINTR_END
+}
+
+__crit kerrno_t
+__kshm_ldtget_c(struct kshm const *__restrict self, ksegid_t id,
+                struct ksegment *__restrict seg) {
+ kerrno_t error;
+ KTASK_CRIT_MARK
+ error = krwlock_beginread(&((struct kshm *)self)->s_lock);
+ if __likely(KE_ISOK(error)) {
+  kshm_ldtget_unlocked(self,id,seg);
+  krwlock_endread(&((struct kshm *)self)->s_lock);
+ }
+ return error;
+}
+__crit kerrno_t
+__kshm_ldtset_c(struct kshm *__restrict self, ksegid_t id,
+                struct ksegment const *__restrict seg) {
+ kerrno_t error;
+ KTASK_CRIT_MARK
+ error = krwlock_beginwrite(&((struct kshm *)self)->s_lock);
+ if __likely(KE_ISOK(error)) {
+  kshm_ldtset_unlocked(self,id,seg);
+  krwlock_endwrite(&((struct kshm *)self)->s_lock);
+ }
+ return error;
+}
+
+
 __DECL_END
 
 #endif /* !__KOS_KERNEL_SHM_LDT_C_INL__ */

@@ -25,10 +25,15 @@
 
 #include <kos/config.h>
 #ifdef __KERNEL__
+#include <kos/kernel/object.h>
 #include <kos/compiler.h>
 #include <kos/atomic.h>
 #include <kos/kernel/signal.h>
 #include <kos/kernel/features.h>
+#if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
+#include <kos/atomic.h>
+#include <kos/kernel/sched_yield.h>
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK */
 
 __DECL_BEGIN
 
@@ -65,13 +70,67 @@ __struct_fwd(krwlock);
 //       tasks to start reading when yet another attempts to start writing).
 
 
-#define KRWLOCK_OFFSETOF_SIG    (KOBJECT_SIZEOFHEAD)
+#if __SIZEOF_POINTER__ >= __SIZEOF_SIZE_T__
+#define __KRWLOCK_DEBUG_SIZEOF     (__SIZEOF_POINTER__*2)
+#else
+#define __KRWLOCK_DEBUG_SIZEOF     (__SIZEOF_SIZE_T__+__SIZEOF_POINTER__)
+#endif
+
+#ifndef __ASSEMBLY__
+#if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
+struct krwlock_debugentry {
+ struct ktask   *de_holder; /*< [1..1][lock(:r_lock)] Current holder of the lock. */
+ struct tbtrace *de_locktb; /*< [1..1][lock(:r_lock)] Traceback of where the lock was acquired. */
+};
+union krwlock_debug {
+ struct {
+  __size_t                   r_locka; /*< Allocated size of the vector (NOTE: When 'rw_readc' is ZERO(0), this must be too). */
+  struct krwlock_debugentry *r_lockv; /*< [0..:rw_readc][owned] Vector of lock entries. */
+ } d_read; /*< [!(:rw_sig.s_flags&KRWLOCK_FLAG_WRITEMODE)] */
+ struct krwlock_debugentry   d_write; /*< [:rw_sig.s_flags&KRWLOCK_FLAG_WRITEMODE] */
+};
+
+#define __KRWLOCK_DEBUG_INIT       ,{{0,NULL}}
+#define __krwlock_debug_init(self) memset(self,0,sizeof(union krwlock_debug))
+
+//////////////////////////////////////////////////////////////////////////
+// Add/Remove/Set the calling thread as a/the read/write lock holder of the given R/W lock.
+// NOTE: Recursively adding a reader is allowed.
+extern void krwlock_debug_addreader(struct krwlock *__restrict self, __size_t skip);
+extern void krwlock_debug_delreader(struct krwlock *__restrict self, __size_t skip);
+extern void krwlock_debug_setwriter(struct krwlock *__restrict self, __size_t skip);
+extern void krwlock_debug_delwriter(struct krwlock *__restrict self, __size_t skip);
+#else /* KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK */
+#define __KRWLOCK_DEBUG_INIT       /* nothing */
+#define __krwlock_debug_init(self) /* nothing */
+#define krwlock_debug_addreader(self,skip) (void)(++(self)->rw_readc)
+#define krwlock_debug_delreader(self,skip) (void)(--(self)->rw_readc)
+#define krwlock_debug_setwriter(self,skip) (void)((self)->rw_sig.s_flags |=   KRWLOCK_FLAG_WRITEMODE)
+#define krwlock_debug_delwriter(self,skip) (void)((self)->rw_sig.s_flags &= ~(KRWLOCK_FLAG_WRITEMODE))
+#endif /* !KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK */
+#endif /* !__ASSEMBLY__ */
+
+#define KRWLOCK_OFFSETOF_SIG      (KOBJECT_SIZEOFHEAD)
 #if KCONFIG_RWLOCK_READERBITS <= KSIGNAL_USERBITS
-#define KRWLOCK_OFFSETOF_READC  (KOBJECT_SIZEOFHEAD+KSIGNAL_OFFSETOF_USER)
-#define KRWLOCK_SIZEOF          (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
+#define KRWLOCK_OFFSETOF_READC    (KOBJECT_SIZEOFHEAD+KSIGNAL_OFFSETOF_USER)
+#define __KRWLOCK_OFFSETOF_DEBUG  (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
 #else
 #define KRWLOCK_OFFSETOF_READC  (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF)
-#define KRWLOCK_SIZEOF          (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+(KCONFIG_RWLOCK_READERBITS/8))
+#if KCONFIG_RWLOCK_READERBITS == 32
+#define __KRWLOCK_OFFSETOF_DEBUG  (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+4)
+#elif KCONFIG_RWLOCK_READERBITS == 16
+#define __KRWLOCK_OFFSETOF_DEBUG  (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+2)
+#elif KCONFIG_RWLOCK_READERBITS == 8
+#define __KRWLOCK_OFFSETOF_DEBUG  (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+1)
+#else
+#define __KRWLOCK_OFFSETOF_DEBUG  (KOBJECT_SIZEOFHEAD+KSIGNAL_SIZEOF+(KCONFIG_RWLOCK_READERBITS/8))
+#endif
+#endif
+#if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
+#define KRWLOCK_OFFSETOF_DEBUG  __KRWLOCK_OFFSETOF_DEBUG
+#define KRWLOCK_SIZEOF         (__KRWLOCK_OFFSETOF_DEBUG+__KRWLOCK_DEBUG_SIZEOF)
+#else
+#define KRWLOCK_SIZEOF          __KRWLOCK_OFFSETOF_DEBUG
 #endif
 
 #ifndef __ASSEMBLY__
@@ -79,15 +138,26 @@ struct krwlock {
  KOBJECT_HEAD
  /* v [lock(KSIGNAL_LOCK_WAIT)] Set when the lock is in write-mode. */
 #define KRWLOCK_FLAG_WRITEMODE   KSIGNAL_FLAG_USER(0)
+#if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
+#define KRWLOCK_FLAG_BROKENREAD  KSIGNAL_FLAG_USER(1) /*< Read-mode debug informations are broken. */
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK */
  struct ksignal          rw_sig;   /*< Underlying signal. */
 #if KCONFIG_RWLOCK_READERBITS <= KSIGNAL_USERBITS
 #define rw_readc         rw_sig.s_useru
 #else
  __un(KCONFIG_RWLOCK_READERBITS) rw_readc; /*< [lock(KSIGNAL_LOCK_WAIT)] Amount of tasks currently performing read operations. */
 #endif
+#if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
+ union krwlock_debug     rw_debug; /*< [lock(KSIGNAL_LOCK_WAIT)] Debug information used for tracking locks. */
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK */
 };
-#define krwlock_iswritelocked(self) (!!((self)->rw_sig.s_flags&KRWLOCK_FLAG_WRITEMODE))
-#define krwlock_isreadlocked(self)     ((self)->rw_readc!=0)
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1)) bool krwlock_iswritelocked(struct krwlock const *__restrict self);
+extern __wunused __nonnull((1)) bool krwlock_isreadlocked(struct krwlock const *__restrict self);
+#else
+#define krwlock_iswritelocked(self)  ((self)->rw_sig.s_flags&KRWLOCK_FLAG_WRITEMODE)
+#define krwlock_isreadlocked(self)   ((self)->rw_readc!=0)
+#endif
 
 #if defined(KOBJECT_INIT_IS_MEMSET_ZERO) && \
     defined(KSIGNAL_INIT_IS_MEMSET_ZERO)
@@ -95,9 +165,9 @@ struct krwlock {
 #endif
 
 #if KCONFIG_RWLOCK_READERBITS <= KSIGNAL_USERBITS
-#define KRWLOCK_INIT  {KOBJECT_INIT(KOBJECT_MAGIC_RWLOCK) KSIGNAL_INIT}
+#define KRWLOCK_INIT  {KOBJECT_INIT(KOBJECT_MAGIC_RWLOCK) KSIGNAL_INIT __KRWLOCK_DEBUG_INIT}
 #else
-#define KRWLOCK_INIT  {KOBJECT_INIT(KOBJECT_MAGIC_RWLOCK) KSIGNAL_INIT,0}
+#define KRWLOCK_INIT  {KOBJECT_INIT(KOBJECT_MAGIC_RWLOCK) KSIGNAL_INIT,0 __KRWLOCK_DEBUG_INIT}
 #endif
 
 #ifdef __INTELLISENSE__
@@ -109,6 +179,7 @@ extern __nonnull((1)) void krwlock_init(struct krwlock *__restrict self);
  __xblock({ struct krwlock *const __rwself = (self);\
             kobject_init(__rwself,KOBJECT_MAGIC_RWLOCK);\
             ksignal_init(&__rwself->rw_sig);\
+            __krwlock_debug_init(&__rwself->rw_debug);\
             (void)0;\
  })
 #else
@@ -117,6 +188,7 @@ extern __nonnull((1)) void krwlock_init(struct krwlock *__restrict self);
             kobject_init(__rwself,KOBJECT_MAGIC_RWLOCK);\
             __rwself->rw_readc = 0;\
             ksignal_init(&__rwself->rw_sig);\
+            __krwlock_debug_init(&__rwself->rw_debug);\
             (void)0;\
  })
 #endif
@@ -183,7 +255,8 @@ extern __crit __wunused __nonnull((1,2)) kerrno_t krwlock_timeoutbeginwrite(stru
 // 'krwlock_beginread' or 'krwlock_beginwrite'
 // @return: KE_OK:        The lock was released, and waiting tasks were signaled.
 // @return: KS_UNCHANGED: [krwlock_endread] More tasks holding read-locks
-//                        are preventing the sending of the read-done signal.
+//                        are preventing the read-done signal being send.
+//                        This is not an error, but simply means no writers were woken.
 // @return: KS_EMPTY:     All shared/exclusive locks have been released,
 //                        but no tasks were waiting, and therefor none
 //                        were signaled.
@@ -197,11 +270,11 @@ extern __crit __nonnull((1)) kerrno_t krwlock_endwrite(struct krwlock *__restric
 // - Unlike the obvious alternate code,
 //   >> krwlock_endwrite(self);
 //   >> krwlock_beginread(self);
-//   this operation is non-blocking and guaranties that no other write
-//   can take ahold of the lock in some minuscule amount of time during
+//   This operation is non-blocking and guaranties that no other writer
+//   can take a hold of the lock in some minuscule amount of time during
 //   which a write-lock would have otherwise been available.
 // - It also prevents a possible KE_DESTROYED error that may
-//   have occurred within a call to 'krwlock_beginread'.
+//   have occurred during a call to 'krwlock_beginread'.
 // @return: KE_OK:    The write-lock was released, and waiting tasks were signaled.
 // @return: KS_EMPTY: The exclusive lock has been released, but no tasks
 //                    were waiting, and therefor none were signaled.
@@ -216,39 +289,41 @@ extern __crit __nonnull((1)) kerrno_t krwlock_downgrade(struct krwlock *__restri
 // was able to begin doing so them self (aka. atomic upgrade).
 // WARNING: In all KE_ISERR(return) situations, the read-lock
 //          previously held by the caller will be lost.
-// @return: KE_OK:         The read-lock held by the caller was upgraded into a write-lock.
+// @return: KE_OK:          The read-lock held by the caller was upgraded into a write-lock.
 // @return: KS_BLOCKING:   [krwlock_*{timed|timeout}upgrade]
-//                         Similar to KE_OK, but the calling task was blocked for a moment,
-//                         meaning that a call to 'krwlock_*tryupgrade' would have
-//                         failed with 'KE_WOULDBLOCK'.
+//                          Similar to KE_OK, but the calling task was blocked for a moment,
+//                          meaning that a call to 'krwlock_*tryupgrade' would have
+//                          failed with 'KE_WOULDBLOCK'.
 // @return: KE_TIMEDOUT:   [krwlock_*(timed|timeout)upgrade] The given timeout has expired.
 // @return: KE_INTR:       [!krwlock_*tryupgrade] The calling task was interrupted.
 // @return: KE_WOULDBLOCK: [krwlock_*tryupgrade] Failed to upgrade the lock immediately.
 // @return: KE_PERM:       [krwlock_atomic_upgrade|krwlock_atomic_(timed|timeout)upgrade]
-//                         The read lock held by the caller was released,
-//                         but because another task attempted to upgrade
-//                         its lock at the same time, it was impossible
-//                         to uphold the guaranty of no other task acquiring
-//                         a write-lock before the caller would get their's.
-//                         NOTE: 'krwlock_upgrade' does not technically solve this problem,
-//                               simply handling this situation by acquiring a normal
-//                               write-lock with the same semantics as calling:
-//                            >> krwlock_endread(self);
-//                            >> krwlock_beginwrite(self);
-//                               Though using 'krwlock_upgrade' will be faster in most
-//                               situations when this special case does not arise.
+//                          The read lock held by the caller was released,
+//                          but because another task attempted to upgrade
+//                          its lock at the same time, it was impossible
+//                          to uphold the guaranty of no other task acquiring
+//                          a write-lock before the caller would get their's.
+//                          NOTE: 'krwlock_upgrade' does not technically solve this problem,
+//                                simply handling this situation by acquiring a normal
+//                                write-lock with the same semantics as calling:
+//                             >> krwlock_endread(self);
+//                             >> krwlock_beginwrite(self);
+//                                Though using 'krwlock_upgrade' will be faster in most
+//                                situations when this special case does not arise.
+//                          WARNING: The caller must _NOT_ call 'krwlock_endread'
+//                          HINT: This error is not returned by 'krwlock_atomic_tryupgrade'
 // @return: KE_DESTROYED:  [krwlock_*{timed|timeout}upgrade]
-//                         Due to how upgrades handle failure, a situation in which
-//                         the R/W lock can be destroyed before the caller was able
-//                         to acquire their write-lock, handling for the destruction
-//                         of a R/W lock must be performed the same way 'krwlock_beginwrite'
-//                         may have returned the same error.
+//                          Due to how upgrades handle failure, a situation in which
+//                          the R/W lock can be destroyed before the caller was able
+//                          to acquire their write-lock can arise, with handling of the
+//                          R/W lock's destruction being performed the same way it would
+//                          have when 'krwlock_beginwrite' returned the same error.
 // @return: KS_UNLOCKED:   [!*atomic*] Successfully managed to upgrade the lock,
-//                         but in order to do so, the calling task momentarily held
-//                         no lock at all. (*atomic* would have returned 'KE_PERM')
-//                         The caller should handle this signal by reloading cached
-//                         variables affected by the lock, as their current values
-//                         may no longer be up to date.
+//                          but in order to do so, the calling task momentarily held
+//                          no lock at all. (*atomic* would have returned 'KE_PERM')
+//                          The caller should handle this signal by reloading cached
+//                          variables affected by the lock, as their previous values
+//                          may no longer be up to date.
 extern __crit __wunused __nonnull((1))   kerrno_t krwlock_upgrade(struct krwlock *__restrict self);
 extern __crit __wunused __nonnull((1))   kerrno_t krwlock_tryupgrade(struct krwlock *__restrict self);
 extern __crit __wunused __nonnull((1,2)) kerrno_t krwlock_timedupgrade(struct krwlock *__restrict self, struct timespec const *__restrict abstime);
@@ -266,7 +341,15 @@ extern __crit __wunused __nonnull((1))   kerrno_t krwlock_atomic_tryupgrade(stru
 /* Since a closed R/W-lock must be in write-mode and because
  * in order to close a R/W-lock, you must first acquire a write-lock,
  * semantically speaking this is the simplest form of closing such a lock. */
-#define _krwlock_endwrite_andclose(self) ksignal_close(&(self)->rw_sig)
+#if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
+#define _krwlock_endwrite_andclose(self) \
+ (assert((self)->rw_debug.d_write.de_holder == ktask_self()),\
+    free((self)->rw_debug.d_write.de_locktb),\
+    ksignal_close(&(self)->rw_sig))
+#else /* KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK */
+#define _krwlock_endwrite_andclose(self) \
+    ksignal_close(&(self)->rw_sig)
+#endif /* !KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK */
 
 #ifndef __INTELLISENSE__
 __local kerrno_t

@@ -59,14 +59,16 @@ void run_init(void) {
  // Create a new root process
  process = kproc_newroot();
  assert(process);
- asserte(KE_ISOK(kproc_locks(process,KPROC_LOCK_SHM|KPROC_LOCK_MODS)));
+ asserte(KE_ISOK(kproc_locks(process,KPROC_LOCK_MODS)));
+ asserte(KE_ISOK(krwlock_beginwrite(&process->p_shm.s_lock)));
  error = kshlib_openexe(path,(size_t)-1,&lib,KTASK_EXEC_FLAG_NONE);
  assertf(KE_ISOK(error),"%d",error);
  error = kproc_insmod_unlocked(process,lib,&modid);
  assertf(KE_ISOK(error),"%d",error);
  root  = kshlib_spawn(lib,process); 
  assert(root);
- kproc_unlocks(process,KPROC_LOCK_SHM|KPROC_LOCK_MODS);
+ krwlock_endwrite(&process->p_shm.s_lock);
+ kproc_unlocks(process,KPROC_LOCK_MODS);
  error = kproc_setenv_k(process
                        ,"SECRECT_KERNEL_VARIABLE",(size_t)-1
                        ,"You have uncovered the secret!",(size_t)-1

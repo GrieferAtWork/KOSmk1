@@ -207,6 +207,7 @@
     <None Include="..\src\kernel\sched\tls.c.inl" />
     <None Include="..\src\kernel\shm-ldt.c.inl" />
     <None Include="..\src\kernel\shm-map.c.inl" />
+    <None Include="..\src\kernel\shm-mmap-impl.c.inl" />
     <None Include="..\src\kernel\shm-translate.c.inl" />
     <None Include="..\src\kernel\socket-packet.c.inl" />
     <None Include="..\src\kernel\syscall\syscall-generic.c.inl" />

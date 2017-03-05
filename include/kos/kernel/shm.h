@@ -32,6 +32,7 @@
 #include <kos/kernel/mutex.h>
 #include <kos/kernel/object.h>
 #include <kos/kernel/paging.h>
+#include <kos/kernel/rwlock.h>
 #include <kos/types.h>
 #include <math.h>
 #include <strings.h>
@@ -111,10 +112,10 @@ __struct_fwd(kpageframe);
 
 #define KOBJECT_MAGIC_SHMCHUNK  0x573C7C25 /*< SHMCHUNK. */
 #define KOBJECT_MAGIC_SHMREGION 0x5736E610 /*< SHMREGIO. */
-#define KOBJECT_MAGIC_SHM      0x5732     /*< SHM2. */
+#define KOBJECT_MAGIC_SHM       0x573      /*< SHM. */
 #define kassert_kshmchunk(self)  kassert_object(self,KOBJECT_MAGIC_SHMCHUNK)
 #define kassert_kshmregion(self) kassert_refobject(self,sre_clustera,KOBJECT_MAGIC_SHMREGION)
-#define kassert_kshm(self)      kassert_object(self,KOBJECT_MAGIC_SHM)
+#define kassert_kshm(self)       kassert_object(self,KOBJECT_MAGIC_SHM)
 
 /* In pages: amount of memory managed by a single reference counter.
  *        >> Higher values --> more redundency during copy-on-write.
@@ -162,10 +163,10 @@ typedef __u16 kshm_flag_t; /*< Set of 'KSHMREGION_FLAG_*' */
 #define KSHMREGION_ADDR_SIZEOF    __SIZEOF_POINTER__
 #define KSHMREGION_CLUSTER_SIZEOF __SIZEOF_POINTER__
 #ifndef __ASSEMBLY__
-typedef __uintptr_t kshmchunk_page_t;
-typedef __uintptr_t kshmregion_page_t;
-typedef __uintptr_t kshmregion_addr_t;
-typedef __uintptr_t kshmregion_cluster_t;
+typedef __uintptr_t      kshmchunk_page_t;
+typedef kshmchunk_page_t kshmregion_page_t;
+typedef __uintptr_t      kshmregion_addr_t;
+typedef __uintptr_t      kshmregion_cluster_t;
 #endif /* !__ASSEMBLY__ */
 
 
@@ -204,6 +205,10 @@ struct kshmchunk {
 
 //////////////////////////////////////////////////////////////////////////
 // Initialize a given SHM chunk of memory.
+// @return: KE_OK:    Successfully initialized the given chunk.
+// @return: KE_NOMEM: Not enough available physical memory.
+//                    May either refer to physical (pageframe),
+//                    or kernel memory (malloc) memory.
 extern __crit __wunused __nonnull((1)) kerrno_t kshmchunk_initlinear(struct kshmchunk *__restrict self, __size_t pages, kshm_flag_t flags);
 extern __crit __wunused __nonnull((1)) kerrno_t kshmchunk_initphys(struct kshmchunk *__restrict self, __pagealigned __kernel void *addr, __size_t pages, kshm_flag_t flags);
 extern __crit __wunused __nonnull((1)) kerrno_t kshmchunk_initram(struct kshmchunk *__restrict self, __size_t pages, kshm_flag_t flags);
@@ -259,10 +264,25 @@ struct kshmregion {
 
 //////////////////////////////////////////////////////////////////////////
 // Increment/Decrement the reference counter of all of the specified clusters.
-// When a cluster reference counter reaches ZERO(0), 
-// @return: KE_OVERFLOW: One of the cluster reference counters has overflown,
-extern __crit __wunused kerrno_t kshmregion_incref(struct kshmregion *__restrict self, struct kshmcluster *cls_min, struct kshmcluster *cls_max);
-extern __crit void               kshmregion_decref(struct kshmregion *__restrict self, struct kshmcluster *cls_min, struct kshmcluster *cls_max);
+// When a cluster reference counter reaches ZERO(0), all associated pages
+// will be freed using 'kpageframe_free()', unless the 'KSHMREGION_FLAG_NOFREE'
+// flag has been set.
+// NOTE: Using these functions to acquire/release references to a given region
+//       will also generate 'sre_branches' references, meaning that every call
+//       to 'kshmregion_incref' must eventually be followed by a call to
+//       'kshmregion_decref', passing the exact same arguments to ensure
+//       binary integrity.
+// WARNING: Unlike many other reference counters in KOS, the sre_branches
+//          counter is not checked for overflow during increment, meaning
+//          that the caller must ensure an environment in which no more
+//          than SIZE_MAX references are possible.
+//    HINT: This can easily be implemented by assigning/reserving at least
+//          ONE(1) byte of physical memory for every reference (to-be) taken.
+// @return: KE_OK:       Successfully incremented the reference counters of all associated clusters.
+// @return: KE_OVERFLOW: One of the cluster reference counters has overflown.
+//                 NOTE: Undefined behavior is invoked if the 'sre_branches' counter overflows.
+extern __crit __wunused __nonnull((1,2,3)) kerrno_t kshmregion_incref(struct kshmregion *__restrict self, struct kshmcluster *cls_min, struct kshmcluster *cls_max);
+extern __crit           __nonnull((1,2,3))     void kshmregion_decref(struct kshmregion *__restrict self, struct kshmcluster *cls_min, struct kshmcluster *cls_max);
 #define kshmregion_incref_full(self) kshmregion_incref(self,(self)->sre_clusterv,(self)->sre_clusterv+((self)->sre_clusterc-1))
 #define kshmregion_decref_full(self) kshmregion_decref(self,(self)->sre_clusterv,(self)->sre_clusterv+((self)->sre_clusterc-1))
 
@@ -276,7 +296,7 @@ kshmregion_getphyspage(struct kshmregion *__restrict self,
 
 //////////////////////////////////////////////////////////////////////////
 // Convenience wrapper around 'kshmregion_getphyspage'.
-// Automatically handles page alignemnt.
+// Automatically handles page alignment.
 extern __wunused __retnonnull __nonnull((1,3)) __kernel void *
 kshmregion_getphysaddr(struct kshmregion *__restrict self,
                        kshmregion_addr_t address_offset,
@@ -296,6 +316,8 @@ struct kfile;
 // NOTE: Data not read from the file will be filled with ZERO(0),
 //       making these functions perfect for use during the linker
 //       loading process.
+// @return: KE_ISOK(*):  Successfully read data from the given file.
+// @return: KE_ISERR(*): Some file-specific error occurred.
 extern __wunused __nonnull((1,3)) kerrno_t
 kshmregion_ploaddata(struct kshmregion *__restrict self,
                      __uintptr_t offset, struct kfile *__restrict fp,
@@ -309,15 +331,15 @@ kshmregion_loaddata(struct kshmregion *__restrict self,
 //////////////////////////////////////////////////////////////////////////
 // Create various kinds of SHM memory chunks.
 // NOTE: Initially, the caller inherits ONE(1) reference to every cluster.
-// kshmregion_newram:
+// kshmregion_newram(...):
 //    Allocate new, possibly parted (aka. scattered) memory,
 //    returning a region describing that newly allocated ram.
-// kshmregion_newlinear:
+// kshmregion_newlinear(...):
 //    Similar to 'kshmregion_newram', but ensure that
 //    allocated memory is liner in a physical sense.
-//    That is: it is one continuous string in the physical address space,
-//             with the region only consisting of a single part.
-// kshmregion_newphys:
+//    That is: it is one continuous string in the physical address space, with the
+//             region only consisting of a single part ('return->sre_chunk.sc_partc == 1').
+// kshmregion_newphys(...):
 //    Create a new region that can be used for mapping a physical
 //    address, allowing you to map special areas of memory, such
 //    as the VGA screen buffer outside of ring-#0.
@@ -358,9 +380,9 @@ extern __crit __wunused __malloccall __ref struct kshmregion *kshmregion_newphys
 // @return: * :   A new region controller for both of the
 //                given regions, initialized as described above.
 // @return: NULL: Not enough available memory to allocate the new region controller.
-extern __crit __wunused __malloccall __ref struct kshmregion *
-kshmregion_merge(__ref struct kshmregion *min_region,
-                 __ref struct kshmregion *max_region);
+extern __crit __wunused __malloccall __nonnull((1,2)) __ref struct kshmregion *
+kshmregion_merge(__ref struct kshmregion *__restrict min_region,
+                 __ref struct kshmregion *__restrict max_region);
 
 //////////////////////////////////////////////////////////////////////////
 // Create a hard copy of the given region, containing a new area
@@ -374,8 +396,8 @@ kshmregion_merge(__ref struct kshmregion *min_region,
 // WARNING: Even if the given region only contains linear memory,
 //          the returned hard copy may contain non-linear parts
 //          when the 'KSHMCHUNK_FLAG_NOCOPY' flag wasn't set.
-extern __crit __wunused __malloccall __ref struct kshmregion *
-kshmregion_hardcopy(struct kshmregion const *self,
+extern __crit __wunused __malloccall __nonnull((1)) __ref struct kshmregion *
+kshmregion_hardcopy(struct kshmregion const *__restrict self,
                     kshmregion_page_t page_offset,
                     __size_t pages);
 
@@ -406,8 +428,8 @@ kshmregion_hardcopy(struct kshmregion const *self,
 //     of 'self' dropping to ZERO(0), the given region will still be freed.
 // @return: * :   A new reference to a newly allocated SHM region, as described above.
 // @return: NULL: Not enough available memory.
-extern __crit __wunused __malloccall __ref struct kshmregion *
-kshmregion_extractpart(__ref struct kshmregion *self,
+extern __crit __wunused __malloccall __nonnull((1,2,3)) __ref struct kshmregion *
+kshmregion_extractpart(__ref struct kshmregion *__restrict self,
                        struct kshmcluster *cls_min,
                        struct kshmcluster *cls_max);
 #endif /* !__ASSEMBLY__ */
@@ -592,11 +614,10 @@ kshmbranch_plocateat(struct kshmbranch **__restrict proot, __uintptr_t addr,
 // WARNING: The given 'page_offset' is an offset within the SHM region of '*pself'.
 //          It is _NOT_ an offset within the area of that region mapped by '*pself'!
 extern __crit __nomp __wunused __nonnull((1)) kerrno_t
-kshmbrach_putsplit(struct kshmbranch **__restrict pself,
-                   struct kshmbranch ***pmin, __uintptr_t *pmin_semi,
-                   struct kshmbranch ***pmax, __uintptr_t *pmax_semi,
-                   kshmregion_page_t page_offset,
-                   __uintptr_t addr_semi);
+kshmbrach_putsplit(struct kshmbranch **__restrict pself, __uintptr_t addr_semi,
+            /*opt*/struct kshmbranch ***pmin, /*opt*/__uintptr_t *pmin_semi,
+            /*opt*/struct kshmbranch ***pmax, /*opt*/__uintptr_t *pmax_semi,
+                   kshmregion_page_t page_offset);
 
 //////////////////////////////////////////////////////////////////////////
 // Merge two given branches 'pmin' and 'pmax' that are located directly next to each other.
@@ -610,7 +631,7 @@ kshmbrach_putsplit(struct kshmbranch **__restrict pself,
 extern __crit __nomp __wunused __nonnull((1,3)) kerrno_t
 kshmbrach_merge(struct kshmbranch **__restrict pmin, __uintptr_t min_semi,
                 struct kshmbranch **__restrict pmax, __uintptr_t max_semi,
-                struct kshmbranch ***presult, __uintptr_t *presult_semi);
+         /*opt*/struct kshmbranch ***presult, /*opt*/__uintptr_t *presult_semi);
 
 //////////////////////////////////////////////////////////////////////////
 // (Re-)maps the region associated with a given
@@ -760,33 +781,42 @@ __COMPILER_PACK_POP
 
 
 
-#define KSHM_OFFSETOF_PD   (KOBJECT_SIZEOFHEAD)
-#define KSHM_OFFSETOF_MAP  (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__)
-#define KSHM_OFFSETOF_LDT  (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__+KSHMMAP_SIZEOF)
-#define KSHM_SIZEOF        (KOBJECT_SIZEOFHEAD+__SIZEOF_POINTER__+KSHMMAP_SIZEOF+KLDT_SIZEOF)
+#define KSHM_OFFSETOF_LOCK (KOBJECT_SIZEOFHEAD)
+#define KSHM_OFFSETOF_PD   (KOBJECT_SIZEOFHEAD+KRWLOCK_SIZEOF)
+#define KSHM_OFFSETOF_MAP  (KOBJECT_SIZEOFHEAD+KRWLOCK_SIZEOF+__SIZEOF_POINTER__)
+#define KSHM_OFFSETOF_LDT  (KOBJECT_SIZEOFHEAD+KRWLOCK_SIZEOF+__SIZEOF_POINTER__+KSHMMAP_SIZEOF)
+#define KSHM_SIZEOF        (KOBJECT_SIZEOFHEAD+KRWLOCK_SIZEOF+__SIZEOF_POINTER__+KSHMMAP_SIZEOF+KLDT_SIZEOF)
 #ifndef __ASSEMBLY__
 struct kshm {
- /* Main, per-process controller structure for everything memory-related.
-  * NOTE: Access to this structure is not thread-safe and therefor
-  *       protected by the 'KPROC_LOCK_SHM' lock in kproc. */
+ /* Main, per-process controller structure for everything memory-related. */
  KOBJECT_HEAD
- struct kpagedir *s_pd;  /*< [1..1][owned] Per-process page directory (NOTE: May contain more mappings than those of 's_map', though not less!). */
- struct kshmmap   s_map; /*< Map used for mapping a given user-space pointer to a mapped region of memory. */
- struct kldt      s_ldt; /*< The per-process local descriptor table. */
+ struct krwlock   s_lock; /*< R/W lock used to synchronize access to this structure. */
+ struct kpagedir *s_pd;   /*< [lock(s_lock)][1..1][owned] Per-process page directory (NOTE: May contain more mappings than those of 's_map', though not less!). */
+ struct kshmmap   s_map;  /*< [lock(s_lock)] Map used for mapping a given user-space pointer to a mapped region of memory. */
+ struct kldt      s_ldt;  /*< [lock(s_lock)] The per-process local descriptor table. */
 };
-#define KSHM_INIT(pagedir,gdtid) \
- {KOBJECT_INIT(KOBJECT_MAGIC_SHM) pagedir,KSHMMAP_INIT,KLDT_INIT(gdtid)}
 
 
 //////////////////////////////////////////////////////////////////////////
 // Initialize/Finalize a given SHM per-process controller structure.
 // @return: KE_OK:    Successfully initialized the given structure.
 // @return: KE_NOMEM: Not enough available memory (Such as when allocating the page directory).
-extern __crit __nomp __wunused __nonnull((1)) kerrno_t
+extern __crit __wunused __nonnull((1)) kerrno_t
 kshm_init(struct kshm *__restrict self,
           kseglimit_t ldt_size_hint);
-extern __crit __nomp __nonnull((1)) void
+#ifdef __INTELLISENSE__
+extern __crit __nonnull((1)) void
 kshm_quit(struct kshm *__restrict self);
+#else
+#define kshm_quit  (void)kshm_close
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Close a given SHM manager.
+// @return: KE_OK:        Successfully closed the given manager.
+// @return: KS_UNCHANGED: The given manager was already closed.
+extern __crit __nonnull((1)) kerrno_t
+kshm_close(struct kshm *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
 // Performs all the operations necessary to initialized 'self' as
@@ -797,9 +827,16 @@ kshm_quit(struct kshm *__restrict self);
 // the new, as well as page directory of 'right', as well as the
 // entire mapping tree being copied, incrementing the user-counters
 // of all regions before sharing all of them by reference.
-// @return: KE_OK:    Successfully initialized 'self' as a fork()-copy of 'right'.
-// @return: KE_NOMEM: Not enough available memory.
+// NOTE: When calling 'kshm_initfork_unlocked', the caller
+//       must hold a write-lock on the given 'right' SHM.
+// @return: KE_OK:        Successfully initialized 'self' as a fork()-copy of 'right'.
+// @return: KE_NOMEM:     Not enough available memory.
+// @return: KE_DESTROYED: [kshm_initfork] The given SHM was closed.
+// @return: KE_INTR:      [kshm_initfork] The calling task was interrupted.
 extern __crit __nomp __wunused __nonnull((1,2)) kerrno_t
+kshm_initfork_unlocked(struct kshm *__restrict self,
+                       struct kshm *__restrict right);
+extern __crit __wunused __nonnull((1,2)) kerrno_t
 kshm_initfork(struct kshm *__restrict self,
               struct kshm *__restrict right);
 
@@ -817,7 +854,7 @@ kshm_initfork(struct kshm *__restrict self,
 // NOTE: The given 'region' may already be in use by another process,
 //       though in this case the caller is responsible to ensure that
 //       the given region is either allowed to be shared between processes,
-//       or to keep a lock on all other process's KPROC_LOCK_SHM locks,
+//       or to keep a write-lock on all other process's SHM locks,
 //       as well as remap the region as read-only in all of them upon
 //       success of this function.
 // HINT: If the caller doesn't desire to map the given region at
@@ -836,31 +873,55 @@ kshm_initfork(struct kshm *__restrict self,
 //          counter is greater than ONE(1), indicating that the
 //          region isn't unique and cannot be modified directly,
 //          as would be required during the process of merging.
-// @return: KE_OK:     Successfully mapped the given region of memory.
-// @return: KE_EXISTS: Some part of the given area of memory was
-//                     already mapped by an SHM-style mapping.
-// @return: KE_NOMEM:  Not enough kernel memory to allocate the
-//                     necessary control entries and structures.
+// NOTE: When calling '*_unlocked', the caller must
+//       hold a write-lock on the given 'self' SHM.
+// @return: KE_OK:         Successfully mapped the given region of memory.
+// @return: KE_EXISTS:     Some part of the given area of memory was
+//                         already mapped by an SHM-style mapping.
+// @return: KE_NOMEM:      Not enough kernel memory to allocate the
+//                         necessary control entries and structures.
+// @return: KE_DESTROYED: [!*_unlocked] The given SHM was closed.
+// @return: KE_INTR:      [!*_unlocked] The calling task was interrupted.
 extern __crit __nomp __wunused __nonnull((1,3)) kerrno_t
+kshm_mapregion_inherited_unlocked(struct kshm *__restrict self,
+                                  __pagealigned __user void *address,
+                                  __ref struct kshmregion *__restrict region,
+                                  kshmregion_page_t in_region_page_start,
+                                  __size_t in_region_page_count);
+extern __crit __nomp __wunused __nonnull((1,3)) kerrno_t
+kshm_mapregion_unlocked(struct kshm *__restrict self,
+                        __pagealigned __user void *address,
+                        struct kshmregion *__restrict region,
+                        kshmregion_page_t in_region_page_start,
+                        __size_t in_region_page_count);
+extern __crit __wunused __nonnull((1,3)) kerrno_t
 kshm_mapregion_inherited(struct kshm *__restrict self,
                          __pagealigned __user void *address,
                          __ref struct kshmregion *__restrict region,
                          kshmregion_page_t in_region_page_start,
                          __size_t in_region_page_count);
-extern __crit __nomp __wunused __nonnull((1,3)) kerrno_t
+extern __crit __wunused __nonnull((1,3)) kerrno_t
 kshm_mapregion(struct kshm *__restrict self,
                __pagealigned __user void *address,
-               struct kshmregion *__restrict region,
+               __ref struct kshmregion *__restrict region,
                kshmregion_page_t in_region_page_start,
                __size_t in_region_page_count);
 __local __crit __nomp __wunused __nonnull((1,3)) kerrno_t
-kshm_mapfullregion(struct kshm *__restrict self,
-                   __pagealigned __user void *address,
-                   struct kshmregion *__restrict region);
+kshm_mapfullregion_inherited_unlocked(struct kshm *__restrict self,
+                                      __pagealigned __user void *address,
+                                      struct kshmregion *__restrict region);
 __local __crit __nomp __wunused __nonnull((1,3)) kerrno_t
+kshm_mapfullregion_unlocked(struct kshm *__restrict self,
+                            __pagealigned __user void *address,
+                            struct kshmregion *__restrict region);
+__local __crit __wunused __nonnull((1,3)) kerrno_t
 kshm_mapfullregion_inherited(struct kshm *__restrict self,
                              __pagealigned __user void *address,
                              struct kshmregion *__restrict region);
+__local __crit __wunused __nonnull((1,3)) kerrno_t
+kshm_mapfullregion(struct kshm *__restrict self,
+                   __pagealigned __user void *address,
+                   struct kshmregion *__restrict region);
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -868,24 +929,42 @@ kshm_mapfullregion_inherited(struct kshm *__restrict self,
 // Behaves the same as call 'kpagedir_findfreerange' to
 // find a suitable user-space address before passing
 // that value in a call to 'kshm_mapregion'.
+// NOTE: When calling '*_unlocked', the caller must
+//       hold a write-lock on the given 'self' SHM.
 // @param: hint: Used as a hint when searching for usable space in the page directory.
-// @return: KE_OK:    Successfully mapped the given region of memory.
-// @return: KE_NOMEM: Not enough kernel memory to allocate the
-//                    necessary control entries and structures.
-// @return: KE_NOSPC: Failed to find an unused region of sufficient size.
+// @return: KE_OK:         Successfully mapped the given region of memory.
+// @return: KE_NOMEM:      Not enough kernel memory to allocate the
+//                         necessary control entries and structures.
+// @return: KE_NOSPC:      Failed to find an unused region of sufficient size.
+// @return: KE_DESTROYED: [!*_unlocked] The given SHM was closed.
+// @return: KE_INTR:      [!*_unlocked] The calling task was interrupted.
 extern __crit __nomp __wunused __nonnull((1,2,3)) kerrno_t
+kshm_mapautomatic_inherited_unlocked(struct kshm *__restrict self,
+                              /*out*/__pagealigned __user void **__restrict user_address,
+                                     __ref struct kshmregion *__restrict region, __pagealigned __user void *hint,
+                                     kshmregion_page_t in_region_page_start, __size_t in_region_page_count);
+extern __crit __wunused __nonnull((1,2,3)) kerrno_t
 kshm_mapautomatic_inherited(struct kshm *__restrict self,
-                            /*out*/__pagealigned __user void **__restrict user_address,
+                     /*out*/__pagealigned __user void **__restrict user_address,
                             __ref struct kshmregion *__restrict region, __pagealigned __user void *hint,
                             kshmregion_page_t in_region_page_start, __size_t in_region_page_count);
 extern __crit __nomp __wunused __nonnull((1,2,3)) kerrno_t
+kshm_mapautomatic_unlocked(struct kshm *__restrict self,
+                    /*out*/__pagealigned __user void **__restrict user_address,
+                           struct kshmregion *__restrict region, __pagealigned __user void *hint,
+                           kshmregion_page_t in_region_page_start, __size_t in_region_page_count);
+extern __crit __nomp __wunused __nonnull((1,2,3)) kerrno_t
 kshm_mapautomatic(struct kshm *__restrict self,
-                  /*out*/__pagealigned __user void **__restrict user_address,
+           /*out*/__pagealigned __user void **__restrict user_address,
                   struct kshmregion *__restrict region, __pagealigned __user void *hint,
                   kshmregion_page_t in_region_page_start, __size_t in_region_page_count);
 __local __crit __nomp __wunused __nonnull((1,2,3)) kerrno_t
+kshm_mapfullautomatic_unlocked(struct kshm *__restrict self,
+                        /*out*/__pagealigned __user void **__restrict user_address,
+                               struct kshmregion *__restrict region, __pagealigned __user void *hint);
+__local __crit __nomp __wunused __nonnull((1,2,3)) kerrno_t
 kshm_mapfullautomatic(struct kshm *__restrict self,
-                      /*out*/__pagealigned __user void **__restrict user_address,
+               /*out*/__pagealigned __user void **__restrict user_address,
                       struct kshmregion *__restrict region, __pagealigned __user void *hint);
 
 //////////////////////////////////////////////////////////////////////////
@@ -900,18 +979,32 @@ kshm_mapfullautomatic(struct kshm *__restrict self,
 //                    necessary control entries and structures.
 // @return: KE_NOSPC: Failed to find an unused region of sufficient size.
 extern __crit __nomp __wunused __nonnull((1,2)) kerrno_t
-kshm_mapram(struct kshm *__restrict self,
-            /*out*/__pagealigned __user void **__restrict user_address,
-            __size_t pages, __pagealigned __user void *hint, kshm_flag_t flags);
+kshm_mapram_unlocked(struct kshm *__restrict self,
+              /*out*/__pagealigned __user void **__restrict user_address,
+                     __size_t pages, __pagealigned __user void *hint, kshm_flag_t flags);
 extern __crit __nomp __wunused __nonnull((1,2,3)) kerrno_t
-kshm_mapram_linear(struct kshm *__restrict self,
-                   /*out*/__pagealigned __kernel void **__restrict kernel_address,
-                   /*out*/__pagealigned __user   void **__restrict user_address,
-                   __size_t pages, __pagealigned __user void *hint, kshm_flag_t flags);
+kshm_mapram_linear_unlocked(struct kshm *__restrict self,
+                     /*out*/__pagealigned __kernel void **__restrict kernel_address,
+                     /*out*/__pagealigned __user   void **__restrict user_address,
+                            __size_t pages, __pagealigned __user void *hint, kshm_flag_t flags);
 extern __crit __nomp __wunused __nonnull((1,3)) kerrno_t
+kshm_mapphys_unlocked(struct kshm *__restrict self,
+                      __pagealigned __kernel void *__restrict phys_address,
+               /*out*/__pagealigned __user void **__restrict user_address,
+                      __size_t pages, __pagealigned __user void *hint, kshm_flag_t flags);
+extern __crit __wunused __nonnull((1,2)) kerrno_t
+kshm_mapram(struct kshm *__restrict self,
+     /*out*/__pagealigned __user void **__restrict user_address,
+            __size_t pages, __pagealigned __user void *hint, kshm_flag_t flags);
+extern __crit __wunused __nonnull((1,2,3)) kerrno_t
+kshm_mapram_linear(struct kshm *__restrict self,
+            /*out*/__pagealigned __kernel void **__restrict kernel_address,
+            /*out*/__pagealigned __user   void **__restrict user_address,
+                   __size_t pages, __pagealigned __user void *hint, kshm_flag_t flags);
+extern __crit __wunused __nonnull((1,3)) kerrno_t
 kshm_mapphys(struct kshm *__restrict self,
-                    __pagealigned __kernel void *__restrict phys_address,
-             /*out*/__pagealigned __user void **__restrict user_address,
+             __pagealigned __kernel void *__restrict phys_address,
+      /*out*/__pagealigned __user void **__restrict user_address,
              __size_t pages, __pagealigned __user void *hint, kshm_flag_t flags);
 
 
@@ -947,6 +1040,8 @@ kshm_mapphys(struct kshm *__restrict self,
 // Special optimizations are performed to merge small consecutive
 // regions of memory located directly next to each other in the case
 // of consecutive write operations covering multiple clusters.
+// NOTE: When calling 'kshm_touch_unlocked', the caller
+//       must hold a write-lock on the given 'self' SHM.
 // @param: req_flags: A set of flags that the found branch must have
 //                    set in order to allow touching to commence.
 //                    For request originating from user-space, this argument
@@ -967,6 +1062,10 @@ kshm_mapphys(struct kshm *__restrict self,
 // WARNING: Upon success, more pages than specified may get touched, as
 //          the algorithm attempts to align touches to cluster boundaries.
 extern __crit __nomp __nonnull((1)) __size_t
+kshm_touch_unlocked(struct kshm *__restrict self,
+                    __pagealigned __user void *address,
+                    __size_t touch_pages, kshm_flag_t req_flags);
+extern __crit __nonnull((1)) __size_t
 kshm_touch(struct kshm *__restrict self,
            __pagealigned __user void *address,
            __size_t touch_pages, kshm_flag_t req_flags);
@@ -974,8 +1073,14 @@ kshm_touch(struct kshm *__restrict self,
 //////////////////////////////////////////////////////////////////////////
 // Similar to 'kshm_touch', but capable of touching all pages
 // from all branches within the given area of memory.
+// NOTE: When calling 'kshm_touchall_unlocked', the caller
+//       must hold a write-lock on the given 'self' SHM.
 // @return: * : The amount of successfully touched pages (sum).
 extern __crit __nomp __nonnull((1)) __size_t
+kshm_touchall_unlocked(struct kshm *__restrict self,
+                       __pagealigned __user void *address,
+                       __size_t touch_pages, kshm_flag_t req_flags);
+extern __crit __nonnull((1)) __size_t
 kshm_touchall(struct kshm *__restrict self,
               __pagealigned __user void *address,
               __size_t touch_pages, kshm_flag_t req_flags);
@@ -983,8 +1088,16 @@ kshm_touchall(struct kshm *__restrict self,
 //////////////////////////////////////////////////////////////////////////
 // Similar to 'kshm_touch', but allows for finer control
 // over what pages in which branch should be touched.
+// NOTE: When calling 'kshm_touchex_unlocked', the caller
+//       must hold a write-lock on the given 'self' SHM.
 // @return: * : The amount of successfully touched pages.
 extern __crit __nomp __nonnull((1,2)) __size_t
+kshm_touchex_unlocked(struct kshm *__restrict self,
+                      struct kshmbranch **__restrict pbranch,
+                      __uintptr_t addr_semi,
+                      kshmregion_page_t min_page,
+                      kshmregion_page_t max_page);
+extern __crit __nonnull((1,2)) __size_t
 kshm_touchex(struct kshm *__restrict self,
              struct kshmbranch **__restrict pbranch,
              __uintptr_t addr_semi,
@@ -1003,8 +1116,15 @@ kshm_touchex(struct kshm *__restrict self,
 // WARNING: If the given address range only scrapes an SHM-region,
 //          that region will be sub-ranged, with only apart of it
 //          remaining mapped. (Meaning that partial munmap() is allowed)
+// NOTE: When calling 'kshm_unmap_unlocked', the caller
+//       must hold a write-lock on the given 'self' SHM.
+// @return: 0 : Nothing was unmapped, [kshm_unmap] or the given SHM was closed.
 // @return: * : The amount of actually unmapped pages (as removed from the page directory).
 extern __crit __nomp __nonnull((1)) __size_t
+kshm_unmap_unlocked(struct kshm *__restrict self,
+                    __pagealigned __user void *address,
+                    __size_t pages, kshmunmap_flag_t flags);
+extern __crit __nonnull((1)) __size_t
 kshm_unmap(struct kshm *__restrict self,
            __pagealigned __user void *address,
            __size_t pages, kshmunmap_flag_t flags);
@@ -1017,11 +1137,17 @@ kshm_unmap(struct kshm *__restrict self,
 //       unmapping something other than what you're expecting to find
 //       at a given address, given the fact that user-code can freely
 //       unmap anything that wasn't mapped with 'KSHMREGION_FLAG_RESTRICTED'.
-// @return: KE_FAULT: Nothing was mapped to the given 'base_address'.
-// @return: KE_RANGE: The given 'base_address' doesn't point to the base of a mapped region.
-// @return: KE_PERM:  The given 'region' didn't match the one mapped at 'base_address'.
-// @return: KE_OK:    Successfully unmapped the entirety of the given region.
+// @return: KE_FAULT:      Nothing was mapped to the given 'base_address'.
+// @return: KE_RANGE:      The given 'base_address' doesn't point to the base of a mapped region.
+// @return: KE_PERM:       The given 'region' didn't match the one mapped at 'base_address'.
+// @return: KE_OK:         Successfully unmapped the entirety of the given region.
+// @return: KE_DESTROYED: [kshm_unmapregion] The given SHM was closed.
+// @return: KE_INTR:      [kshm_unmapregion] The calling task was interrupted.
 extern __crit __nomp __nonnull((1,3)) kerrno_t
+kshm_unmapregion_unlocked(struct kshm *__restrict self,
+                          __pagealigned __user void *base_address,
+                          struct kshmregion *__restrict region);
+extern __crit __wunused __nonnull((1,3)) kerrno_t
 kshm_unmapregion(struct kshm *__restrict self,
                  __pagealigned __user void *base_address,
                  struct kshmregion *__restrict region);
@@ -1046,6 +1172,8 @@ kshm_devaccess(struct ktask *__restrict caller,
 // Upon successful allocation, the new segment will have already
 // been flushed and capable of being used for whatever means necessary.
 // NOTE: On success, the returned index always compares true for 'KSEG_ISLDT()'
+// NOTE: When calling '*_unlocked', the caller
+//       must hold a write-lock on the given 'self' SHM.
 // @param: seg:   The initial contents of the segment to-be allocated.
 //                HINT: Contents can later be changed through calls to 'kldt_setseg'.
 // @param: reqid: The requested segment id to allocate the entry at.
@@ -1057,15 +1185,32 @@ kshm_devaccess(struct ktask *__restrict caller,
 // @return: reqid:     Successfully reserved the given index.
 // @return: KSEG_NULL: Failed to allocate a new segment (no-memory/too-many-segments)
 //                    [kldt_allocsegat] The given ID is already in use.
-extern __crit __nomp __wunused __nonnull((1,2)) ksegid_t kshm_ldtalloc(struct kshm *__restrict self, struct ksegment const *__restrict seg);
-extern __crit __nomp __wunused __nonnull((1,3)) ksegid_t kshm_ldtallocat(struct kshm *__restrict self, ksegid_t reqid, struct ksegment const *__restrict seg);
-extern __crit __nomp           __nonnull((1)) void kshm_ldtfree(struct kshm *__restrict self, ksegid_t id);
+extern __crit __nomp __wunused __nonnull((1,2)) ksegid_t kshm_ldtalloc_unlocked(struct kshm *__restrict self, struct ksegment const *__restrict seg);
+extern __crit __nomp __wunused __nonnull((1,3)) ksegid_t kshm_ldtallocat_unlocked(struct kshm *__restrict self, ksegid_t reqid, struct ksegment const *__restrict seg);
+extern __crit __nomp           __nonnull((1)) void kshm_ldtfree_unlocked(struct kshm *__restrict self, ksegid_t id);
+extern __crit __wunused __nonnull((1,2)) ksegid_t kshm_ldtalloc(struct kshm *__restrict self, struct ksegment const *__restrict seg);
+extern __crit __wunused __nonnull((1,3)) ksegid_t kshm_ldtallocat(struct kshm *__restrict self, ksegid_t reqid, struct ksegment const *__restrict seg);
+extern __crit           __nonnull((1)) void kshm_ldtfree(struct kshm *__restrict self, ksegid_t id);
 
 //////////////////////////////////////////////////////////////////////////
 // Get/Set the segment data associated with a given segment ID.
 // NOTE: 'kldt_setseg' will flush the changed segment upon success.
-extern __nomp __nonnull((1,3)) void kshm_ldtget(struct kshm const *__restrict self, ksegid_t id, struct ksegment *__restrict seg);
-extern __nomp __nonnull((1,3)) void kshm_ldtset(struct kshm *__restrict self, ksegid_t id, struct ksegment const *__restrict seg);
+// NOTE: When calling 'kshm_ldtget_unlocked', the caller must hold a read-lock on the given 'self' SHM.
+// NOTE: When calling 'kshm_ldtset_unlocked', the caller must hold a write-lock on the given 'self' SHM.
+// @return: KE_OK:        [!*_unlocked] Successfully read/wrote the given segment.
+// @return: KE_DESTROYED: [!*_unlocked] The given SHM was closed.
+// @return: KE_INTR:      [!*_unlocked] The calling task was interrupted.
+extern __nomp __nonnull((1,3)) void kshm_ldtget_unlocked(struct kshm const *__restrict self, ksegid_t id, struct ksegment *__restrict seg);
+extern __nomp __nonnull((1,3)) void kshm_ldtset_unlocked(struct kshm *__restrict self, ksegid_t id, struct ksegment const *__restrict seg);
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,3)) kerrno_t kshm_ldtget(struct kshm const *__restrict self, ksegid_t id, struct ksegment *__restrict seg);
+extern __wunused __nonnull((1,3)) kerrno_t kshm_ldtset(struct kshm *__restrict self, ksegid_t id, struct ksegment const *__restrict seg);
+#else
+extern __crit __wunused __nonnull((1,3)) kerrno_t __kshm_ldtget_c(struct kshm const *__restrict self, ksegid_t id, struct ksegment *__restrict seg);
+extern __crit __wunused __nonnull((1,3)) kerrno_t __kshm_ldtset_c(struct kshm *__restrict self, ksegid_t id, struct ksegment const *__restrict seg);
+#define kshm_ldtget(self,id,seg) KTASK_CRIT(__kshm_ldtget_c(self,id,seg))
+#define kshm_ldtset(self,id,seg) KTASK_CRIT(__kshm_ldtset_c(self,id,seg))
+#endif
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -1091,23 +1236,131 @@ extern __crit __nomp __wunused __nonnull((1,2)) __size_t kshm_copyfromuser(struc
 extern __crit __nomp __wunused __nonnull((1))   __size_t kshm_copyinuser_w(struct kshm const *self, __user void *dst, __user void const *src, __size_t bytes);
 extern __crit __nomp __wunused __nonnull((1,3)) __size_t kshm_copytouser_w(struct kshm const *self, __user void *dst, __kernel void const *src, __size_t bytes);
 
+struct ktranslator {
+ struct kshm           *t_shm;  /*< [1..1][const] Associated SHM. */
+ struct kpagedir const *t_epd;  /*< [1..1][const] Effective page directory. */
+#define KTRANSLATOR_FLAG_NONE 0x00000000
+#define KTRANSLATOR_FLAG_LOCK 0x00000001 /*< When set, the translator holds a read-lock on 't_shm'. */
+#define KTRANSLATOR_FLAG_SEPD 0x00000002 /*< When set, 't_epd == t_shm->s_pd'. */
+#define KTRANSLATOR_FLAG_KEPD 0x00000004 /*< When set, 't_epd' is 'kpagedir_kernel()'. */
+#define KTRANSLATOR_FLAG_RQLK KTRANSLATOR_FLAG_SEPD /*< The translator requires a read-lock to function. */
+ __u32                  t_flags; /*< A set of 'KTRANSLATOR_FLAG_*'. */
+};
+
+//////////////////////////////////////////////////////////////////////////
+// Initialize a translator describing the ring-#3
+// address space and EPD associated with the given task.
+// @return: KE_OK:        Successfully initialized the translator.
+// @return: KE_DESTROYED: The associated SHM was closed.
+#ifdef __INTELLISENSE__
+extern __crit kerrno_t ktranslator_init(struct ktranslator *__restrict self, struct ktask *__restrict caller);
+extern __crit void     ktranslator_quit(struct ktranslator *__restrict self);
+#else
+#define ktranslator_init(self,caller) \
+ (/*KTASK_ISKEPD_P   ? (__ktranslator_init_kepd(self),KE_OK) :*/\
+  KTASK_ISNOINTR_P ?  __ktranslator_init_nointr(self,caller)\
+                   :  __ktranslator_init_intr(self,caller))
+__local __crit kerrno_t
+__ktranslator_init_intr(struct ktranslator *__restrict self,
+                        struct ktask *__restrict caller);
+__local __crit kerrno_t
+__ktranslator_init_nointr(struct ktranslator *__restrict self,
+                          struct ktask *__restrict caller);
+__local __crit void
+__ktranslator_init_kepd(struct ktranslator *__restrict self) {
+#if kpagedir_kernel
+ self->t_epd = kpagedir_kernel();
+#else
+ extern struct kpagedir __kpagedir_kernel;
+ self->t_epd = &__kpagedir_kernel;
+#endif
+ self->t_flags = KTRANSLATOR_FLAG_KEPD;
+}
+__local __crit void
+ktranslator_quit(struct ktranslator *__restrict self) {
+ KTASK_CRIT_MARK
+ kassertobj(self);
+ if (self->t_flags&KTRANSLATOR_FLAG_LOCK) {
+  krwlock_endread(&self->t_shm->s_lock);
+ }
+}
+#endif
+
 #ifdef __INTELLISENSE__
 //////////////////////////////////////////////////////////////////////////
 // Translate a given user-space pointer to its physical counterpart.
-// @param: addr:      A virtual user-space pointer.
-// @param: maxbytes:  The max amount of bytes of confirm (*rwbytes
-//                    will not be set to something higher than this).
-// @param: rwbytes:   Mandatory output parameter that stores the amount
-//                    of linear bytes available for operations.
-//                    NOTE: In all situations, it can be assumed that
-//                          upon return this value is '<= maxbytes'.
+// @param: addr:     A virtual user-space pointer.
+// @param: maxbytes: The max amount of bytes of confirm (*rwbytes
+//                   will not be set to something higher than this).
+// @param: rwbytes:  Mandatory output parameter that stores the amount
+//                   of linear bytes available for operations.
+//                   NOTE: In all situations, it can be assumed that
+//                         upon return this value is '<= maxbytes'.
 // @param: writable: When non-ZERO, perform translation with the intent
-//                    of writing to the returned pointer upon success.
-//                    >> If the user-space address is part of an uncopied copy-on-write page,
-//                       that page is copied the same way a page-fault would when ring-#3
-//                       user-code had tried to write to the same address.
-//                    >> If the region of memory associated with the address is not writable
-//                       to the user, NULL is returned and '*rwbytes' is set to ZERO(0).
+//                   of writing to the returned pointer upon success.
+//                   >> If the user-space address is part of an uncopied copy-on-write page,
+//                      that page is copied the same way a page-fault would when ring-#3
+//                      user-code had tried to write to the same address.
+//                   >> If the region of memory associated with the address is not writable
+//                      to the user, NULL is returned and '*rwbytes' is set to ZERO(0).
+// @return: * :       The physical counterpart to the given virtual address.
+// @return: NULL :    '*rwbytes' was set to ZERO(0) because the given pointer isn't mapped.
+extern __crit __wunused __nonnull((1,4)) __kernel void *
+ktranslator_exec(struct ktranslator *__restrict self,
+                 __user void const *addr, __size_t maxbytes,
+                 __kernel __size_t *__restrict rwbytes, int writable);
+
+//////////////////////////////////////////////////////////////////////////
+// Same 'ktranslator_exec', but allows write-access to otherwise
+// read-only regions, using the same semantics as though they were
+// mapped as writable.
+// WARNING: This should only be used by the kernel, as it bypasses
+//          the intended restrictions of read-only memory, such as
+//          '.text' sections, yet is required during processes,
+//          such as dynamic relocations.
+extern __crit __wunused __nonnull((1,4)) __kernel void *
+ktranslator_wexec(struct ktranslator *__restrict self,
+                  __user void *addr, __size_t maxbytes,
+                  __kernel __size_t *__restrict rwbytes);
+#else
+extern __crit __wunused __nonnull((1,3)) __kernel void *
+__ktranslator_exec_impl(struct ktranslator *__restrict self,
+                        __user void const *addr,
+                        __kernel __size_t *__restrict rwbytes,
+                        int writable);
+extern __crit __wunused __nonnull((1,3)) __kernel void *
+__ktranslator_wexec_impl(struct ktranslator *__restrict self,
+                         __user void *addr,
+                         __kernel __size_t *__restrict rwbytes);
+#define ktranslator_exec(self,addr,maxbytes,rwbytes,writable) \
+ (*(rwbytes) = (maxbytes),__ktranslator_exec_impl(self,addr,rwbytes,writable))
+#define ktranslator_wexec(self,addr,maxbytes,rwbytes) \
+ (*(rwbytes) = (maxbytes),__ktranslator_wexec_impl(self,addr,rwbytes))
+#endif
+
+extern __size_t ktranslator_copyinuser(struct ktranslator *__restrict self, __user void *dst, __user void const *src, __size_t bytes);
+extern __size_t ktranslator_copytouser(struct ktranslator *__restrict self, __user void *dst, __kernel void const *src, __size_t bytes);
+extern __size_t ktranslator_copyfromuser(struct ktranslator *__restrict self, __kernel void *dst, __user void const *src, __size_t bytes);
+
+
+
+#ifdef __INTELLISENSE__
+//////////////////////////////////////////////////////////////////////////
+// Translate a given user-space pointer to its physical counterpart.
+// @param: addr:     A virtual user-space pointer.
+// @param: maxbytes: The max amount of bytes of confirm (*rwbytes
+//                   will not be set to something higher than this).
+// @param: rwbytes:  Mandatory output parameter that stores the amount
+//                   of linear bytes available for operations.
+//                   NOTE: In all situations, it can be assumed that
+//                         upon return this value is '<= maxbytes'.
+// @param: writable: When non-ZERO, perform translation with the intent
+//                   of writing to the returned pointer upon success.
+//                   >> If the user-space address is part of an uncopied copy-on-write page,
+//                      that page is copied the same way a page-fault would when ring-#3
+//                      user-code had tried to write to the same address.
+//                   >> If the region of memory associated with the address is not writable
+//                      to the user, NULL is returned and '*rwbytes' is set to ZERO(0).
 // @return: * :       The physical counterpart to the given virtual address.
 // @return: NULL :    '*rwbytes' was set to ZERO(0) because the given pointer isn't mapped.
 extern __crit __nomp __wunused __nonnull((1,2,5)) __kernel void *
@@ -1128,17 +1381,17 @@ kshm_translateuser_w(struct kshm const *__restrict self, struct kpagedir const *
                      __user void *addr, __size_t maxbytes,
                      __size_t *__restrict rwbytes);
 #else
-#define kshm_translateuser(self,epd,addr,maxbytes,rwbytes,writable) \
- (*(rwbytes) = (maxbytes),__kshm_translateuser_impl(self,epd,addr,rwbytes,writable))
-#define kshm_translateuser_w(self,epd,addr,maxbytes,rwbytes) \
- (*(rwbytes) = (maxbytes),__kshm_translateuser_w_impl(self,epd,addr,rwbytes))
-#endif
 extern __crit __nomp __wunused __nonnull((1,2,4)) __kernel void *
 __kshm_translateuser_impl(struct kshm const *__restrict self, struct kpagedir const *epd,
                           __user void const *addr, __size_t *__restrict rwbytes, int writable);
 extern __crit __nomp __wunused __nonnull((1,2,4)) __kernel void *
 __kshm_translateuser_w_impl(struct kshm const *__restrict self, struct kpagedir const *epd,
                             __user void *addr, __size_t *__restrict rwbytes);
+#define kshm_translateuser(self,epd,addr,maxbytes,rwbytes,writable) \
+ (*(rwbytes) = (maxbytes),__kshm_translateuser_impl(self,epd,addr,rwbytes,writable))
+#define kshm_translateuser_w(self,epd,addr,maxbytes,rwbytes) \
+ (*(rwbytes) = (maxbytes),__kshm_translateuser_w_impl(self,epd,addr,rwbytes))
+#endif
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -1155,6 +1408,30 @@ extern void kernel_initialize_copyonwrite(void);
 #ifndef __INTELLISENSE__
 #ifndef __ASSEMBLY__
 __local __crit __nomp kerrno_t
+kshm_mapfullregion_inherited_unlocked(struct kshm *__restrict self,
+                                      __pagealigned __user void *address,
+                                      struct kshmregion *__restrict region) {
+ kassert_kshmregion(region);
+ return kshm_mapregion_inherited_unlocked(self,address,region,
+                                          0,region->sre_chunk.sc_pages);
+}
+__local __crit __nomp kerrno_t
+kshm_mapfullregion_unlocked(struct kshm *__restrict self,
+                            __pagealigned __user void *address,
+                            struct kshmregion *__restrict region) {
+ kassert_kshmregion(region);
+ return kshm_mapregion_unlocked(self,address,region,
+                                0,region->sre_chunk.sc_pages);
+}
+__local __crit kerrno_t
+kshm_mapfullregion_inherited(struct kshm *__restrict self,
+                             __pagealigned __user void *address,
+                             struct kshmregion *__restrict region) {
+ kassert_kshmregion(region);
+ return kshm_mapregion_inherited(self,address,region,
+                                 0,region->sre_chunk.sc_pages);
+}
+__local __crit kerrno_t
 kshm_mapfullregion(struct kshm *__restrict self,
                    __pagealigned __user void *address,
                    struct kshmregion *__restrict region) {
@@ -1163,17 +1440,19 @@ kshm_mapfullregion(struct kshm *__restrict self,
                        0,region->sre_chunk.sc_pages);
 }
 __local __crit __nomp kerrno_t
-kshm_mapfullregion_inherited(struct kshm *__restrict self,
-                             __pagealigned __user void *address,
-                             struct kshmregion *__restrict region) {
+kshm_mapfullautomatic_unlocked(struct kshm *__restrict self,
+                        /*out*/__pagealigned __user void **__restrict user_address,
+                               struct kshmregion *__restrict region,
+                               __pagealigned __user void *hint) {
  kassert_kshmregion(region);
- return kshm_mapregion_inherited(self,address,region,
-                                 0,region->sre_chunk.sc_pages);
+ return kshm_mapautomatic_unlocked(self,user_address,region,hint,
+                                   0,region->sre_chunk.sc_pages);
 }
-__local __crit __nomp kerrno_t
+__local __crit kerrno_t
 kshm_mapfullautomatic(struct kshm *__restrict self,
-                      /*out*/__pagealigned __user void **__restrict user_address,
-                      struct kshmregion *__restrict region, __pagealigned __user void *hint) {
+               /*out*/__pagealigned __user void **__restrict user_address,
+                      struct kshmregion *__restrict region,
+                      __pagealigned __user void *hint) {
  kassert_kshmregion(region);
  return kshm_mapautomatic(self,user_address,region,hint,
                           0,region->sre_chunk.sc_pages);

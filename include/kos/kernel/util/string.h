@@ -28,6 +28,7 @@
 #include <kos/compiler.h>
 #include <kos/types.h>
 #include <stdarg.h>
+#include <kos/kernel/shm.h>
 #ifndef __INTELLISENSE__
 #include <stdio.h>
 #include <kos/errno.h>
@@ -137,22 +138,17 @@ extern __crit __wunused __malloccall __kernel char *__user_strndup_c(__user char
 
 /* Begin a user-pointer foreach-part iteration. */
 #define USER_FOREACH_BEGIN(p,s,part_p,part_s,writeable) \
-do{ struct ktask *const __uf_caller = ktask_self();\
-    struct kproc *const __uf_proc = ktask_getproc(__uf_caller);\
-    struct kpagedir const *const __uf_epd = __uf_caller->t_epd;\
-    int const __uf_kepd = KTASK_ISKEPD_P || __uf_epd == kpagedir_kernel();\
+do{ struct ktranslator __uf_trans;\
     __user void *__uf_p; __user __attribute_unused void *__uf_start;\
-    __uf_p = __uf_start = (__user void *)(p);\
     __size_t __uf_part,__uf_s = (s);\
+    __uf_p = __uf_start = (__user void *)(p);\
     KTASK_CRIT_BEGIN\
-    if __likely(__uf_kepd || KE_ISOK(kproc_lock(__uf_proc,KPROC_LOCK_SHM))) {\
-     while (__uf_s && (__uf_kepd\
+    if __likely(KTASK_ISKEPD_P || KE_ISOK(ktranslator_init(&__uf_trans,ktask_self()))) {\
+     while (__uf_s && (KTASK_ISKEPD_P\
         ? ( *(__kernel void **)&(part_p) = __uf_p,__uf_part = __uf_s,1)\
         : ((*(__kernel void **)&(part_p) = \
-              kshm_translateuser(kproc_getshm(__uf_proc),\
-                                 __uf_epd,\
-                                 __uf_p,__uf_s,&__uf_part,\
-                                 writeable)) != NULL))) {\
+              ktranslator_exec(&__uf_trans,__uf_p,__uf_s,\
+                               &__uf_part,writeable)) != NULL))) {\
       assert(__uf_part);\
       assert(__uf_part <= __uf_s);\
       (part_s) = __uf_part;\
@@ -164,13 +160,13 @@ do{ struct ktask *const __uf_caller = ktask_self();\
       __uf_s -= __uf_part;\
       *(__uintptr_t *)&__uf_p += __uf_part;\
      }\
-     if (!__uf_kepd) kproc_unlock(__uf_proc,KPROC_LOCK_SHM);\
+     if (!KTASK_ISKEPD_P) ktranslator_quit(&__uf_trans);\
     }\
     KTASK_CRIT_END\
     if (__uf_s) {__VA_ARGS__;}\
 }while(0)
 
-#define USER_FOREACH_BREAK  do{__uf_s=0;break;}while(0)
+#define USER_FOREACH_BREAK  {__uf_s=0;break;}
 
 
 __DECL_END

@@ -1664,6 +1664,7 @@ kshm_init(struct kshm *__restrict self,
  KTASK_CRIT_MARK
  kassertobj(self);
  kobject_init(self,KOBJECT_MAGIC_SHM);
+ krwlock_init(&self->s_lock);
  if __unlikely((self->s_pd = kpagedir_new()) == (struct kpagedir *)PAGENIL) return KE_NOMEM;
  if __unlikely(KE_ISERR(error = kpagedir_mapkernel(self->s_pd,KERNEL_MAP_FLAGS))) goto err_pd;
  if __unlikely(KE_ISERR(error = kshm_initldt(self,ldt_size_hint))) goto err_pd;
@@ -1674,14 +1675,19 @@ err_pd:
  return error;
 }
 
-__crit void
-kshm_quit(struct kshm *__restrict self) {
+__crit kerrno_t
+kshm_close(struct kshm *__restrict self) {
+ kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kshm(self);
- kshmmap_quit(&self->s_map);
- kshm_quitldt(self);
- k_syslogf(KLOG_DEBUG,"[SHM] Deleting page directory at %p\n",self->s_pd);
- kpagedir_delete(self->s_pd);
+ error = krwlock_close(&self->s_lock);
+ if (error == KE_OK && self != &kproc_kernel()->p_shm) {
+  kshmmap_quit(&self->s_map);
+  kshm_quitldt(self);
+  k_syslogf(KLOG_DEBUG,"[SHM] Deleting page directory at %p\n",self->s_pd);
+  kpagedir_delete(self->s_pd);
+ }
+ return error;
 }
 
 
@@ -1689,19 +1695,23 @@ kshm_quit(struct kshm *__restrict self) {
 
 
 __crit __nomp kerrno_t
-kshm_initfork(struct kshm *__restrict self,
-              struct kshm *__restrict right) {
+kshm_initfork_unlocked(struct kshm *__restrict self,
+                       struct kshm *__restrict right) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassertobj(self);
+ kassert_kshm(right);
  kobject_init(self,KOBJECT_MAGIC_SHM);
+ assert(krwlock_iswritelocked(&right->s_lock));
+ krwlock_init(&self->s_lock);
  if __unlikely((self->s_pd = kpagedir_new()) == (struct kpagedir *)PAGENIL) return KE_NOMEM;
  if __unlikely(KE_ISERR(error = kpagedir_mapkernel(self->s_pd,KERNEL_MAP_FLAGS))) goto err_pd;
  if __unlikely(KE_ISERR(error = kshm_initldtcopy(self,right))) goto err_pd;
  /* Enable copy-on-write semantics for the original process. */
  kshmmap_init(&self->s_map);
  if (right->s_map.m_root) {
-  error = kshmbranch_fillfork(&self->s_map.m_root,self->s_pd,right->s_map.m_root,right->s_pd);
+  error = kshmbranch_fillfork(&self->s_map.m_root,self->s_pd,
+                              right->s_map.m_root,right->s_pd);
   if __unlikely(KE_ISERR(error)) goto err_map;
  }
  return error;
@@ -1710,18 +1720,32 @@ err_map: kshmmap_quit(&self->s_map);
 err_pd:  kpagedir_delete(self->s_pd);
  return error;
 }
+__crit kerrno_t
+kshm_initfork(struct kshm *__restrict self,
+              struct kshm *__restrict right) {
+ kerrno_t error;
+ KTASK_CRIT_MARK
+ kassert_kshm(right);
+ error = krwlock_beginwrite(&right->s_lock);
+ if __unlikely(KE_ISERR(error)) return error;
+ error = kshm_initfork_unlocked(self,right);
+ krwlock_endwrite(&right->s_lock);
+ return error;
+}
+
 
 
 __crit __nomp kerrno_t
-kshm_mapregion_inherited(struct kshm *__restrict self,
-                         __pagealigned __user void *address,
-                         __ref struct kshmregion *__restrict region,
-                         kshmregion_page_t in_region_page_start,
-                         size_t in_region_page_count) {
+kshm_mapregion_inherited_unlocked(struct kshm *__restrict self,
+                                  __pagealigned __user void *address,
+                                  __ref struct kshmregion *__restrict region,
+                                  kshmregion_page_t in_region_page_start,
+                                  size_t in_region_page_count) {
  struct kshmbranch *branch;
  kerrno_t error;
  KTASK_CRIT_MARK
- kassertobj(self);
+ kassert_kshm(self);
+ assert(krwlock_iswritelocked(&self->s_lock));
  kassert_kshmregion(region);
  assert(katomic_load(region->sre_branches) != 0);
  assert(in_region_page_count != 0);
@@ -1830,15 +1854,14 @@ err_branch:
 }
 
 __crit __nomp kerrno_t
-kshm_mapregion(struct kshm *__restrict self,
-               __pagealigned __user void *address,
-               struct kshmregion *__restrict region,
-               kshmregion_page_t in_region_page_start,
-               size_t in_region_page_count) {
+kshm_mapregion_unlocked(struct kshm *__restrict self,
+                        __pagealigned __user void *address,
+                        struct kshmregion *__restrict region,
+                        kshmregion_page_t in_region_page_start,
+                        size_t in_region_page_count) {
  kerrno_t error;
  struct kshmcluster *cls_min,*cls_max;
  KTASK_CRIT_MARK
- kassertobj(self);
  kassert_kshmregion(region);
  assert(in_region_page_count != 0);
  assert(in_region_page_start+in_region_page_count > in_region_page_start);
@@ -1850,7 +1873,55 @@ kshm_mapregion(struct kshm *__restrict self,
  error = kshmregion_incref(region,cls_min,cls_max);
  if __unlikely(KE_ISERR(error)) return error;
  /* Actually do the mapping. */
- error = kshm_mapregion_inherited(self,address,region,in_region_page_start,in_region_page_count);
+ error = kshm_mapregion_inherited_unlocked(self,address,region,
+                                           in_region_page_start,
+                                           in_region_page_count);
+ if __likely(KE_ISOK(error)) return error;
+ /* Must delete all previously created references. */
+ kshmregion_decref(region,cls_min,cls_max);
+ return error;
+}
+
+__crit kerrno_t
+kshm_mapregion_inherited(struct kshm *__restrict self,
+                         __pagealigned __user void *address,
+                         __ref struct kshmregion *__restrict region,
+                         kshmregion_page_t in_region_page_start,
+                         size_t in_region_page_count) {
+ kerrno_t error;
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ error = krwlock_beginwrite(&self->s_lock);
+ if __unlikely(KE_ISERR(error)) return error;
+ error = kshm_mapregion_inherited_unlocked(self,address,region,
+                                           in_region_page_start,
+                                           in_region_page_count);
+ krwlock_endwrite(&self->s_lock);
+ return error;
+}
+__crit kerrno_t
+kshm_mapregion(struct kshm *__restrict self,
+               __pagealigned __user void *address,
+               __ref struct kshmregion *__restrict region,
+               kshmregion_page_t in_region_page_start,
+               size_t in_region_page_count) {
+ kerrno_t error;
+ struct kshmcluster *cls_min,*cls_max;
+ KTASK_CRIT_MARK
+ kassert_kshmregion(region);
+ assert(in_region_page_count != 0);
+ assert(in_region_page_start+in_region_page_count > in_region_page_start);
+ assert(in_region_page_start+in_region_page_count <= region->sre_chunk.sc_pages);
+ assert(isaligned((uintptr_t)address,PAGEALIGN));
+ cls_min = kshmregion_getcluster(region,in_region_page_start);
+ cls_max = kshmregion_getcluster(region,(in_region_page_start+in_region_page_count)-1);
+ /* Create references to all affected clusters. */
+ error = kshmregion_incref(region,cls_min,cls_max);
+ if __unlikely(KE_ISERR(error)) return error;
+ /* Actually do the mapping. */
+ error = kshm_mapregion_inherited(self,address,region,
+                                  in_region_page_start,
+                                  in_region_page_count);
  if __likely(KE_ISOK(error)) return error;
  /* Must delete all previously created references. */
  kshmregion_decref(region,cls_min,cls_max);
@@ -1859,9 +1930,9 @@ kshm_mapregion(struct kshm *__restrict self,
 
 
 __crit __nomp size_t
-kshm_touch(struct kshm *__restrict self,
-           __pagealigned __user void *address,
-           size_t touch_pages, kshm_flag_t req_flags) {
+kshm_touch_unlocked(struct kshm *__restrict self,
+                    __pagealigned __user void *address,
+                    size_t touch_pages, kshm_flag_t req_flags) {
  struct kshmbranch **pbranch,*branch;
  struct kshmregion *region;
  uintptr_t         addr_semi;
@@ -1869,6 +1940,7 @@ kshm_touch(struct kshm *__restrict self,
  kshmregion_page_t max_page;
  KTASK_CRIT_MARK
  kassert_kshm(self);
+ assert(krwlock_iswritelocked(&self->s_lock));
  assert(isaligned((uintptr_t)address,PAGEALIGN));
  assertf(touch_pages != 0,"Undefined behavior: 'touch_pages' is ZERO(0)");
  /* First step: Figure out the branch at the start address.
@@ -1903,21 +1975,24 @@ kshm_touch(struct kshm *__restrict self,
  min_page += branch->sb_rstart;
  max_page  = min_page+touch_pages;
 
- return kshm_touchex(self,pbranch,addr_semi,min_page,max_page);
+ return kshm_touchex_unlocked(self,pbranch,addr_semi,
+                              min_page,max_page);
 }
 
 
 static __crit __nomp size_t
-kshmbranch_touchall(struct kshm *__restrict self,
-                    struct kshmbranch **__restrict proot,
-                    __pagealigned uintptr_t addr_min,
-                                  uintptr_t addr_max,
-                    uintptr_t addr_semi, unsigned int addr_level,
-                    kshmunmap_flag_t req_flags) {
+kshmbranch_touchall_unlocked(struct kshm *__restrict self,
+                             struct kshmbranch **__restrict proot,
+                             __pagealigned uintptr_t addr_min,
+                                           uintptr_t addr_max,
+                             uintptr_t addr_semi, unsigned int addr_level,
+                             kshmunmap_flag_t req_flags) {
  struct kshmbranch *root;
  size_t result = 0;
  uintptr_t new_semi;
  unsigned int new_level;
+ kassert_kshm(self);
+ assert(krwlock_iswritelocked(&self->s_lock));
  kassertobj(proot);
  root = *proot;
  kassertobj(root);
@@ -1934,7 +2009,8 @@ kshmbranch_touchall(struct kshm *__restrict self,
    else max_page = root->sb_rpages-((root->sb_map_max-addr_max)/PAGESIZE);
    min_page += root->sb_rstart;
    max_page += root->sb_rstart;
-   result   += kshm_touchex(self,proot,addr_semi,min_page,max_page);
+   result   += kshm_touchex_unlocked(self,proot,addr_semi,
+                                     min_page,max_page);
   }
  }
  /* Continue searching. */
@@ -1944,40 +2020,84 @@ kshmbranch_touchall(struct kshm *__restrict self,
   /* Recursively continue searching left. */
   new_semi = addr_semi,new_level = addr_level;
   KSHMBRANCH_WALKMIN(new_semi,new_level);
-  result += kshmbranch_touchall(self,&root->sb_min,addr_min,addr_max,
-                                new_semi,new_level,req_flags);
+  result += kshmbranch_touchall_unlocked(self,&root->sb_min,addr_min,addr_max,
+                                         new_semi,new_level,req_flags);
  }
  if (addr_max >= addr_semi && root->sb_max) {
   /* Recursively continue searching right. */
   new_semi = addr_semi,new_level = addr_level;
   KSHMBRANCH_WALKMAX(new_semi,new_level);
-  result += kshmbranch_touchall(self,&root->sb_max,addr_min,addr_max,
-                                new_semi,new_level,req_flags);
+  result += kshmbranch_touchall_unlocked(self,&root->sb_max,addr_min,addr_max,
+                                         new_semi,new_level,req_flags);
  }
  return result;
 }
 
-__crit __nomp __size_t
-kshm_touchall(struct kshm *__restrict self,
-              __pagealigned __user void *address,
-              __size_t touch_pages, kshm_flag_t req_flags) {
+__crit size_t
+kshm_touch(struct kshm *__restrict self,
+           __pagealigned __user void *address,
+           size_t touch_pages, kshm_flag_t req_flags) {
+ size_t result;
+ KTASK_CRIT_MARK
  kassert_kshm(self);
- assert(touch_pages);
- return kshmbranch_touchall(self,&self->s_map.m_root,
-                           (uintptr_t)address,
-                           (uintptr_t)address+(touch_pages*PAGESIZE)-1,
-                            KSHMBRANCH_ADDRSEMI_INIT,
-                            KSHMBRANCH_ADDRLEVEL_INIT,
-                            req_flags);
+ KTASK_NOINTR_BEGIN
+ if __unlikely(KE_ISERR(krwlock_beginwrite(&self->s_lock))) result = 0;
+ else {
+  result = kshm_touch_unlocked(self,address,touch_pages,req_flags);
+  krwlock_endwrite(&self->s_lock);
+ }
+ KTASK_NOINTR_END
+ return result;
 }
 
-
 __crit __nomp size_t
+kshm_touchall(struct kshm *__restrict self,
+              __pagealigned __user void *address,
+              size_t touch_pages, kshm_flag_t req_flags) {
+ size_t result;
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ assert(touch_pages);
+ KTASK_NOINTR_BEGIN
+ if __unlikely(KE_ISERR(krwlock_beginwrite(&self->s_lock))) result = 0;
+ else {
+  result = kshmbranch_touchall_unlocked(self,&self->s_map.m_root,
+                                       (uintptr_t)address,
+                                       (uintptr_t)address+(touch_pages*PAGESIZE)-1,
+                                        KSHMBRANCH_ADDRSEMI_INIT,
+                                        KSHMBRANCH_ADDRLEVEL_INIT,
+                                        req_flags);
+  krwlock_endwrite(&self->s_lock);
+ }
+ KTASK_NOINTR_END
+ return result;
+}
+
+__crit size_t
 kshm_touchex(struct kshm *__restrict self,
              struct kshmbranch **__restrict pbranch,
              uintptr_t addr_semi,
              kshmregion_page_t min_page,
              kshmregion_page_t max_page) {
+ size_t result;
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ KTASK_NOINTR_BEGIN
+ if __unlikely(KE_ISERR(krwlock_beginwrite(&self->s_lock))) result = 0;
+ else {
+  result = kshm_touchex_unlocked(self,pbranch,addr_semi,min_page,max_page);
+  krwlock_endwrite(&self->s_lock);
+ }
+ KTASK_NOINTR_END
+ return result;
+}
+
+__crit __nomp size_t
+kshm_touchex_unlocked(struct kshm *__restrict self,
+                      struct kshmbranch **__restrict pbranch,
+                      uintptr_t addr_semi,
+                      kshmregion_page_t min_page,
+                      kshmregion_page_t max_page) {
  struct kshmbranch *branch;
  struct kshmregion *region,*subregion;
  kerrno_t          error;
@@ -2323,9 +2443,9 @@ end_success:
 
 
 __crit __nomp size_t
-kshm_unmap(struct kshm *__restrict self,
-           __pagealigned __user void *address,
-           size_t pages, kshmunmap_flag_t flags) {
+kshm_unmap_unlocked(struct kshm *__restrict self,
+                    __pagealigned __user void *address,
+                    size_t pages, kshmunmap_flag_t flags) {
  kassert_kshm(self);
  if __unlikely(!pages || !self->s_map.m_root) return 0;
  return kshmbranch_unmap(&self->s_map.m_root,self->s_pd,
@@ -2335,14 +2455,31 @@ kshm_unmap(struct kshm *__restrict self,
                          KSHMBRANCH_ADDRLEVEL_INIT,
                          flags);
 }
+__crit size_t
+kshm_unmap(struct kshm *__restrict self,
+           __pagealigned __user void *address,
+           size_t pages, kshmunmap_flag_t flags) {
+ size_t result;
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ KTASK_NOINTR_BEGIN
+ if __unlikely(KE_ISERR(krwlock_beginwrite(&self->s_lock))) result = 0;
+ else {
+  result = kshm_unmap_unlocked(self,address,pages,flags);
+  krwlock_endwrite(&self->s_lock);
+ }
+ KTASK_NOINTR_END
+ return result;
+}
 
 __crit __nomp kerrno_t
-kshm_unmapregion(struct kshm *self,
-                 __pagealigned __user void *base_address,
-                 struct kshmregion *region) {
+kshm_unmapregion_unlocked(struct kshm *self,
+                          __pagealigned __user void *base_address,
+                          struct kshmregion *region) {
  struct kshmbranch **pbranch,*branch;
  uintptr_t addr_semi;
  kassert_kshm(self);
+ assert(krwlock_iswritelocked(&self->s_lock));
  kassert_kshmregion(region);
  assert(isaligned((uintptr_t)base_address,PAGEALIGN));
  pbranch = kshmbranch_plocate(&self->s_map.m_root,
@@ -2368,9 +2505,45 @@ kshm_unmapregion(struct kshm *self,
  return KE_OK;
 }
 
+__crit kerrno_t
+kshm_unmapregion(struct kshm *__restrict self,
+                 __pagealigned __user void *base_address,
+                 struct kshmregion *__restrict region) {
+ kerrno_t error;
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ error = krwlock_beginwrite(&self->s_lock);
+ if __unlikely(KE_ISERR(error)) return error;
+ error = kshm_unmapregion_unlocked(self,base_address,region);
+ krwlock_endwrite(&self->s_lock);
+ return error;
+}
 
 
 
+
+__crit __nomp kerrno_t
+kshm_mapautomatic_inherited_unlocked(struct kshm *__restrict self,
+                              /*out*/__pagealigned __user void **__restrict user_address,
+                                     struct kshmregion *__restrict region, __pagealigned __user void *hint,
+                                     kshmregion_page_t in_region_page_start, size_t in_region_page_count) {
+ kerrno_t error;
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ assert(krwlock_iswritelocked(&self->s_lock));
+ kassertobj(user_address);
+ kassert_kshmregion(region);
+ if __unlikely((*user_address = kpagedir_findfreerange(
+                self->s_pd,region->sre_chunk.sc_pages,hint
+               )) == KPAGEDIR_FINDFREERANGE_ERR) error = KE_NOSPC;
+ else {
+  error = kshm_mapregion_inherited_unlocked(self,*user_address,region,
+                                            in_region_page_start,
+                                            in_region_page_count);
+  assertf(error != KE_EXISTS,"But we've just found this as an unused memory range...");
+ }
+ return error;
+}
 __crit __nomp kerrno_t
 kshm_mapautomatic_inherited(struct kshm *__restrict self,
                             /*out*/__pagealigned __user void **__restrict user_address,
@@ -2381,18 +2554,37 @@ kshm_mapautomatic_inherited(struct kshm *__restrict self,
  kassert_kshm(self);
  kassertobj(user_address);
  kassert_kshmregion(region);
- if __unlikely((*user_address = kpagedir_findfreerange(
-                self->s_pd,region->sre_chunk.sc_pages,hint
-               )) == KPAGEDIR_FINDFREERANGE_ERR) return KE_NOSPC;
- error = kshm_mapregion_inherited(self,*user_address,region,
-                                  in_region_page_start,
-                                  in_region_page_count);
- assertf(error != KE_EXISTS,"But we've just found this as an unused memory range...");
+ error = krwlock_beginwrite(&self->s_lock);
+ if __unlikely(KE_ISERR(error)) return error;
+ error = kshm_mapautomatic_inherited_unlocked(self,user_address,region,hint,
+                                              in_region_page_start,
+                                              in_region_page_count);
+ krwlock_endwrite(&self->s_lock);
  return error;
 }
 __crit __nomp kerrno_t
+kshm_mapautomatic_unlocked(struct kshm *__restrict self,
+                    /*out*/__pagealigned __user void **__restrict user_address,
+                           struct kshmregion *__restrict region, __pagealigned __user void *hint,
+                           kshmregion_page_t in_region_page_start, size_t in_region_page_count) {
+ kerrno_t error;
+ struct kshmcluster *cls_min;
+ struct kshmcluster *cls_max;
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ assert(in_region_page_count);
+ cls_min = kshmregion_getcluster(region,in_region_page_start);
+ cls_max = kshmregion_getcluster(region,in_region_page_start+(in_region_page_count-1));
+ error = kshmregion_incref(region,cls_min,cls_max);
+ if __unlikely(KE_ISERR(error)) return error;
+ error = kshm_mapautomatic_inherited_unlocked(self,user_address,region,hint,
+                                              in_region_page_start,in_region_page_count);
+ if __unlikely(KE_ISERR(error)) kshmregion_decref(region,cls_min,cls_max);
+ return error;
+}
+__crit kerrno_t
 kshm_mapautomatic(struct kshm *__restrict self,
-                  /*out*/__pagealigned __user void **__restrict user_address,
+           /*out*/__pagealigned __user void **__restrict user_address,
                   struct kshmregion *__restrict region, __pagealigned __user void *hint,
                   kshmregion_page_t in_region_page_start, size_t in_region_page_count) {
  kerrno_t error;
@@ -2410,64 +2602,6 @@ kshm_mapautomatic(struct kshm *__restrict self,
  if __unlikely(KE_ISERR(error)) kshmregion_decref(region,cls_min,cls_max);
  return error;
 }
-__crit __nomp kerrno_t
-kshm_mapram(struct kshm *__restrict self,
-            /*out*/__pagealigned __user void **__restrict user_address,
-            size_t pages, __pagealigned __user void *hint, kshm_flag_t flags) {
- struct kshmregion *region;
- kerrno_t error;
- KTASK_CRIT_MARK
- kassert_kshm(self);
- assert(pages != 0);
- region = kshmregion_newram(pages,flags);
- if __unlikely(!region) return KE_NOMEM;
- error = kshm_mapautomatic_inherited(self,user_address,region,hint,
-                                     0,region->sre_chunk.sc_pages);
- if __unlikely(KE_ISERR(error)) kshmregion_decref_full(region);
- return error;
-}
-__crit __nomp kerrno_t
-kshm_mapram_linear(struct kshm *__restrict self,
-                   /*out*/__pagealigned __kernel void **__restrict kernel_address,
-                   /*out*/__pagealigned __user   void **__restrict user_address,
-                   size_t pages, __pagealigned __user void *hint, kshm_flag_t flags) {
- struct kshmregion *region;
- kerrno_t error;
- KTASK_CRIT_MARK
- kassert_kshm(self);
- kassertobj(kernel_address);
- assert(pages != 0);
- region = kshmregion_newlinear(pages,flags);
- if __unlikely(!region) return KE_NOMEM;
- assert(region->sre_chunk.sc_partc == 1);
- *kernel_address = region->sre_chunk.sc_partv[0].sp_frame;
- error = kshm_mapautomatic_inherited(self,user_address,region,hint,
-                                     0,region->sre_chunk.sc_pages);
- if __unlikely(KE_ISERR(error)) kshmregion_decref_full(region);
- return error;
-}
-
-__crit __nomp kerrno_t
-kshm_mapphys(struct kshm *__restrict self,
-                    __pagealigned __kernel void *__restrict phys_address,
-             /*out*/__pagealigned __user void **__restrict user_address,
-             size_t pages, __pagealigned __user void *hint, kshm_flag_t flags) {
- struct kshmregion *region;
- kerrno_t error;
- KTASK_CRIT_MARK
- kassert_kshm(self);
- kassertobj(user_address);
- assert(pages != 0);
- region = kshmregion_newphys(phys_address,pages,flags);
- if __unlikely(!region) return KE_NOMEM;
- assert(region->sre_chunk.sc_partc             == 1);
- assert(region->sre_chunk.sc_partv[0].sp_frame == phys_address);
- error = kshm_mapautomatic_inherited(self,user_address,region,hint,
-                                     0,region->sre_chunk.sc_pages);
- if __unlikely(KE_ISERR(error)) kshmregion_decref_full(region);
- return error;
-}
-
 
 __crit kerrno_t
 kshm_devaccess(struct ktask *__restrict caller,
@@ -2564,6 +2698,51 @@ kshm_copyfromuser(struct kshm const *self, __kernel void *dst,
 }
 
 
+size_t
+ktranslator_copyinuser(struct ktranslator *__restrict self,
+                       __user void *dst, __user void const *src,
+                       size_t bytes) {
+ size_t max_dst,max_src; __kernel void *kdst,*ksrc;
+ while ((kdst = ktranslator_exec(self,dst,bytes,&max_dst,1)) != NULL &&
+        (ksrc = ktranslator_exec(self,src,max_dst,&max_src,0)) != NULL) {
+  memcpy(kdst,ksrc,max_src);
+  if ((bytes -= max_src) == 0) break;
+  *(uintptr_t *)&dst += max_src;
+  *(uintptr_t *)&src += max_src;
+ }
+ return bytes;
+}
+size_t
+ktranslator_copytouser(struct ktranslator *__restrict self,
+                       __user void *dst, __kernel void const *src,
+                       size_t bytes) {
+ size_t copy_max; __kernel void *kdst;
+ while ((kdst = ktranslator_exec(self,dst,bytes,&copy_max,1)) != NULL) {
+  assert(copy_max <= bytes);
+  memcpy(kdst,src,copy_max);
+  if ((bytes -= copy_max) == 0) break;
+  *(uintptr_t *)&dst += copy_max;
+  *(uintptr_t *)&src += copy_max;
+ }
+ return bytes;
+}
+size_t
+ktranslator_copyfromuser(struct ktranslator *__restrict self,
+                         __kernel void *dst, __user void const *src,
+                         size_t bytes) {
+ size_t copy_max; __kernel void *ksrc;
+ while ((ksrc = ktranslator_exec(self,src,bytes,&copy_max,0)) != NULL) {
+  assert(copy_max <= bytes);
+  memcpy(dst,ksrc,copy_max);
+  if ((bytes -= copy_max) == 0) break;
+  *(uintptr_t *)&dst += copy_max;
+  *(uintptr_t *)&src += copy_max;
+ }
+ return bytes;
+}
+
+
+
 
 void kshm_pf_handler(struct kirq_registers *__restrict regs) {
  struct ktask *caller = ktask_self();
@@ -2589,10 +2768,10 @@ void kshm_pf_handler(struct kirq_registers *__restrict regs) {
          "Should have been detected by kernel-task detection");
  /* Acquire the SHM-lock to ensure that nothing gets in our way... */
  NOIRQ_BEGIN
- if __unlikely(KE_ISERR(kproc_lock(caller_process,KPROC_LOCK_SHM))) goto def_handler;
- touched_pages = kshm_touch(kproc_getshm(caller_process),
-                           (__user void *)alignd((uintptr_t)address_in_question,PAGEALIGN),1,
-                            KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE);
+ if __unlikely(KE_ISERR(krwlock_beginwrite(&caller_process->p_shm.s_lock))) goto def_handler;
+ touched_pages = kshm_touch_unlocked(kproc_getshm(caller_process),
+                                    (__user void *)alignd((uintptr_t)address_in_question,PAGEALIGN),1,
+                                     KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE);
  /* kshmbranch_print(kproc_getshm(caller_process)->s_map.m_root,
   *                  KSHMBRANCH_ADDRSEMI_INIT,KSHMBRANCH_ADDRLEVEL_INIT); */
  assertf(!touched_pages || kpagedir_ismappedex_b(kproc_getpagedir(caller_process),address_in_question,1,
@@ -2602,7 +2781,7 @@ void kshm_pf_handler(struct kirq_registers *__restrict regs) {
           ,address_in_question
           ,(__user void *)alignd((uintptr_t)address_in_question,PAGEALIGN)
           ,touched_pages);
- kproc_unlock(caller_process,KPROC_LOCK_SHM);
+ krwlock_endwrite(&caller_process->p_shm.s_lock);
  NOIRQ_END
 
  /* If nothing was touched, call the default handler. */
@@ -2620,8 +2799,6 @@ void kernel_initialize_copyonwrite(void) {
  kirq_sethandler(KIRQ_EXCEPTION_PF,&kshm_pf_handler);
 }
 
-
-
 __DECL_END
 
 #ifndef __INTELLISENSE__
@@ -2630,6 +2807,9 @@ __DECL_END
 #define WRITEABLE
 #include "shm-translate.c.inl"
 #include "shm-translate.c.inl"
+#define UNLOCKED
+#include "shm-mmap-impl.c.inl"
+#include "shm-mmap-impl.c.inl"
 #endif
 
 #endif /* !__KOS_KERNEL_SHM_C__ */

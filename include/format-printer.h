@@ -246,7 +246,7 @@ extern int stringprinter_print __P((char const *__restrict __data, __size_t __ma
 // Print a given strnlen-style user-string using the given PRINTER.
 // Alongside usual printer-rules, KE_FAULT is returned when the given string is faulty.
 // WARNING: The given printer is executed while the internal function
-//          holds a lock on the calling process's KPROC_LOCK_SHM lock.
+//          holds a read-lock on the calling process's SHM R/W lock.
 // NOTES:
 //   - Pointer translation respects an overwritten effective
 //     page directory, meaning you can use 'KTASK_KEPD' to

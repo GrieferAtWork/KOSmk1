@@ -110,9 +110,9 @@ ktask_newex_suspended(void *(*main)(void *), void *closure,
  struct kproc *proc;
  KTASK_CRIT_MARK
  proc = ktask_getproc(parent);
- if __unlikely(KE_ISERR(kproc_lock(proc,KPROC_LOCK_SHM))) return NULL;
+ if __unlikely(KE_ISERR(krwlock_beginwrite(&proc->p_shm.s_lock))) return NULL;
  result = ktask_newctxex_suspended(parent,proc,main,closure,stacksize,flags);
- kproc_unlock(proc,KPROC_LOCK_SHM);
+ krwlock_endwrite(&proc->p_shm.s_lock);
  return result;
 }
 __crit __ref struct ktask *

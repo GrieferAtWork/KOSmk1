@@ -138,8 +138,9 @@ kproc_exec(struct kshlib *__restrict exec_main,
  }
  // NOTE: The process should not be a zombie at this point,
  //       as we (being a critical task) are still alive.
- error = kproc_locks(self,KPROC_LOCK_MODS|KPROC_LOCK_SHM|
-                     KPROC_LOCK_TLSMAN|KPROC_LOCK_ENVIRON);
+ error = kproc_locks(self,KPROC_LOCK_MODS|KPROC_LOCK_TLSMAN|KPROC_LOCK_ENVIRON);
+ assertf(KE_ISOK(error),"Why did this fail? %d",error);
+ error = krwlock_beginwrite(&self->p_shm.s_lock);
  assertf(KE_ISOK(error),"Why did this fail? %d",error);
 
  kproc_delmods(self);
@@ -151,11 +152,11 @@ kproc_exec(struct kshlib *__restrict exec_main,
  //    have to worry about failing to allocate a new one below.
  // >> This also gives user-level code more control by allowing them
  //    to specify a custom stack to be used for exec-ed processes.
- kshm_unmap(kproc_getshm(self),NULL,((size_t)caller_thread->t_ustackvp)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
- kshm_unmap(kproc_getshm(self),
-           (void *)((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz),
-           ((uintptr_t)0-((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz))/PAGESIZE,
-            KSHMUNMAP_FLAG_NONE);
+ kshm_unmap_unlocked(kproc_getshm(self),NULL,((size_t)caller_thread->t_ustackvp)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
+ kshm_unmap_unlocked(kproc_getshm(self),
+                    (void *)((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz),
+                    ((uintptr_t)0-((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz))/PAGESIZE,
+                     KSHMUNMAP_FLAG_NONE);
  assertf(kpagedir_ismapped(kproc_getpagedir(self),caller_thread->t_ustackvp,
                            ceildiv(ktask_getustacksize(caller_thread),PAGESIZE)),
          "Be we explicitly excluded the user-stack...");
@@ -202,8 +203,8 @@ kproc_exec(struct kshlib *__restrict exec_main,
  userregs->eip     = (uintptr_t)self->p_modules.pms_modv[modid].pm_base+
                      (uintptr_t)exec_main->sh_callbacks.slc_start;
  // Unlock all locks that we're still holding
- kproc_unlocks(self,KPROC_LOCK_MODS|KPROC_LOCK_TLSMAN|
-               KPROC_LOCK_SHM|KPROC_LOCK_ENVIRON);
+ krwlock_endwrite(&self->p_shm.s_lock);
+ kproc_unlocks(self,KPROC_LOCK_MODS|KPROC_LOCK_TLSMAN|KPROC_LOCK_ENVIRON);
  return error;
 }
 

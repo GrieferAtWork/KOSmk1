@@ -53,13 +53,11 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc,
  result->p_refcnt = 1;
 
  /* TODO: Initialize the LDT later in case we won't be able to do a root-fork. */
- if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_SHM))) goto err_free;
  error = kshm_initfork(&result->p_shm,&proc->p_shm);
- kproc_unlock(proc,KPROC_LOCK_SHM);
  if __unlikely(KE_ISERR(error)) goto err_free;
 
  /* Check for root-fork permissions _AFTER_ we've already
-  * created the process, just so we can ensure that there
+  * created the SHM, just so we can ensure that there
   * are no race-conditions that would allow modification
   * of code allowed to perform a root-fork after we would
   * have otherwise checked for that permission.
@@ -131,7 +129,7 @@ ktask_copy4fork(struct ktask *__restrict self,
  kassert_ktask(self); kassert_kproc(proc); kassertobj(userregs);
  assert(self->t_flags&KTASK_FLAG_USERTASK);
  assert(!(self->t_flags&KTASK_FLAG_MALLKSTACK));
- assert(kproc_islocked(proc,KPROC_LOCK_SHM));
+ assert(krwlock_iswritelocked(&proc->p_shm.s_lock));
  if __unlikely(KE_ISERR(ktask_incref(parent))) return NULL;
  if __unlikely(KE_ISERR(kproc_incref(proc))) goto err_taskref;
  if __unlikely((result = omalloc(struct ktask)) == NULL) goto err_procref;
@@ -163,21 +161,21 @@ ktask_copy4fork(struct ktask *__restrict self,
  result->t_curpriority = result->t_setpriority;
  result->t_proc        = proc; /* Inherit reference. */
  result->t_parent      = parent; /* Inherit reference. */
- // The user-stack was already copied when forking the SHM
+ /* The user-stack was already copied when forking the SHM. */
  result->t_ustackvp    = self->t_ustackvp;
  result->t_ustacksz    = self->t_ustacksz;
- // Since the kernel stack isn't addressable from ring-3, it
- // wasn't copied during the forking of the page directory.
- // >> That is good! So now lets manually allocate a new stack
+ /* Since the kernel stack isn't addressable from ring-3, it
+  * wasn't copied during the forking of the page directory.
+  * >> That is good! So now lets manually allocate a new stack. */
  kstacksize = ktask_getkstacksize(self);
- // Map linear memory for the kernel stack
- if __unlikely(KE_ISERR(kshm_mapram_linear(kproc_getshm(proc),
-                                           &result->t_kstack,
-                                           &result->t_kstackvp,
-                                            ceildiv(kstacksize,PAGESIZE),
-                                           KPAGEDIR_MAPANY_HINT_KSTACK,
-                                           KSHMREGION_FLAG_LOSEONFORK|
-                                           KSHMREGION_FLAG_RESTRICTED
+ /* Map linear memory for the kernel stack. */
+ if __unlikely(KE_ISERR(kshm_mapram_linear_unlocked(kproc_getshm(proc),
+                                                   &result->t_kstack,
+                                                   &result->t_kstackvp,
+                                                    ceildiv(kstacksize,PAGESIZE),
+                                                    KPAGEDIR_MAPANY_HINT_KSTACK,
+                                                    KSHMREGION_FLAG_LOSEONFORK|
+                                                    KSHMREGION_FLAG_RESTRICTED
                ))) goto err_tls;
  result->t_kstackend  = (__kernel void *)((uintptr_t)result->t_kstack+kstacksize);
  // Make sure the linear memory was allocated correctly
@@ -188,7 +186,7 @@ ktask_copy4fork(struct ktask *__restrict self,
  result->t_name = NULL;
 #endif /* KCONFIG_HAVE_TASK_NAMES */
 
- // todo: minor: Shouldn't the resulting task wait for the same signals?
+ /* todo: minor: Shouldn't the resulting task wait for the same signals? */
  ktasksig_init(&result->t_sigchain,result);
  ksignal_init(&result->t_joinsig);
  ktasklist_init(&result->t_children);
@@ -203,7 +201,7 @@ ktask_copy4fork(struct ktask *__restrict self,
  result->t_deadlock_closure  = NULL;
 #endif
 
- // Setup the stack pointer to point to the new kernel stack
+ /* Setup the stack pointer to point to the new kernel stack */
  result->t_esp = (__user void *)((uintptr_t)result->t_kstackvp+kstacksize);
  result->t_esp0 = result->t_esp;
  assertf(kpagedir_ismappedp(result->t_userpd,
@@ -266,7 +264,8 @@ ktask_fork(__u32 flags, struct kirq_userregisters const *__restrict userregs,
  error = kproc_copy4fork(flags,ktask_getproc(task_self),
                         (__user void *)userregs->eip,&newproc);
  if __unlikely(KE_ISERR(error)) return error;
- if __unlikely(KE_ISERR(error = kproc_lock(newproc,KPROC_LOCK_SHM))) goto err_proc;
+ error = krwlock_beginwrite(&newproc->p_shm.s_lock);
+ if __unlikely(KE_ISERR(error)) goto err_proc;
  if (flags&KTASK_NEW_FLAG_UNREACHABLE) {
   /* Spawn the task as unreachable */
   if (flags&KTASK_NEW_FLAG_ROOTFORK) {
@@ -283,13 +282,13 @@ ktask_fork(__u32 flags, struct kirq_userregisters const *__restrict userregs,
  } else {
   newtask = ktask_copy4fork(task_self,task_self,newproc,userregs);
  }
- kproc_unlock(newproc,KPROC_LOCK_SHM);
+ krwlock_endwrite(&newproc->p_shm.s_lock);
  if __unlikely(!newtask) { error = KE_NOMEM; goto err_proc; }
  assert(newtask != ktask_self());
  kproc_decref(newproc);
  *presult = newtask;
  return error;
-err_proc_unlock: kproc_unlock(newproc,KPROC_LOCK_SHM);
+err_proc_unlock: krwlock_endwrite(&newproc->p_shm.s_lock);
 err_proc: kproc_decref(newproc);
  return error;
 }
@@ -300,7 +299,10 @@ __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *
  struct kprocmodule *iter,*end;
  struct kshlibsection *sec_iter,*sec_end;
  kassert_kproc(self);
- if __unlikely(KE_ISERR(error = kproc_locks(self,KPROC_LOCK_SHM|KPROC_LOCK_MODS))) return error;
+ error = kproc_locks(self,KPROC_LOCK_MODS);
+ if __unlikely(KE_ISERR(error)) return error;
+ error = krwlock_beginwrite(&self->p_shm.s_lock);
+ if __unlikely(KE_ISERR(error)) goto end_mods;
  /* Figure out which module the given EIP belongs to (if any). */
  end = (iter = self->p_modules.pms_modv)+self->p_modules.pms_moda;
  for (; iter != end; ++iter) if (iter->pm_lib && (uintptr_t)eip >= (uintptr_t)iter->pm_base) {
@@ -397,8 +399,8 @@ __crit kerrno_t kproc_canrootfork_c(struct kproc *__restrict self, __user void *
   }
 cont:;
  }
-end:
- kproc_unlocks(self,KPROC_LOCK_SHM|KPROC_LOCK_MODS);
+end:      krwlock_endwrite(&self->p_shm.s_lock);
+end_mods: kproc_unlocks(self,KPROC_LOCK_MODS);
  return error;
 }
 
