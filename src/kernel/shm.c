@@ -39,6 +39,13 @@
 __DECL_BEGIN
 
 
+/* Automatically merge branches
+ * >> s.a. long comment atop of the large
+ *    AUTOMERGE_BRANCHES block near the end of kshm_touch. */
+#define AUTOMERGE_BRANCHES 1
+
+
+
 static kerrno_t kshm_initldt(struct kshm *__restrict self, kseglimit_t size_hint);
 static kerrno_t kshm_initldtcopy(struct kshm *__restrict self, struct kshm *__restrict right);
 static void kshm_quitldt(struct kshm *__restrict self);
@@ -1722,6 +1729,7 @@ kshm_mapregion_inherited(struct kshm *__restrict self,
  KTASK_CRIT_MARK
  kassertobj(self);
  kassert_kshmregion(region);
+ assert(katomic_load(region->sre_branches) != 0);
  assert(in_region_page_count != 0);
  assert(in_region_page_start+in_region_page_count > in_region_page_start);
  assert(in_region_page_start+in_region_page_count <= region->sre_chunk.sc_pages);
@@ -1758,7 +1766,58 @@ kshm_mapregion_inherited(struct kshm *__restrict self,
 
  /* (Re-)map the paging memory of the branch. */
  error = kshmbranch_remap(branch,self->s_pd);
- if __likely(KE_ISOK(error)) return error;
+ if __likely(KE_ISOK(error)) {
+#if AUTOMERGE_BRANCHES
+  /* Check if we can merge this region with potentially existing neighbors. */
+  if (__likely(KE_ISOK(error)) && katomic_load(region->sre_branches) == 1) {
+   struct kshmbranch **pneighbor,**pbranch = NULL;
+   uintptr_t neighbor_semi,branch_semi;
+   kerrno_t merge_error; kshm_flag_t region_flags;
+
+   region_flags = KSHMREGION_EFFECTIVEFLAGS(region->sre_chunk.sc_flags);
+   /* Check for max-region merge.
+    * NOTE: Check this first so we don't need to store
+    *       'region->sre_chunk.sc_pages' for later. */
+   if (in_region_page_start+in_region_page_count == region->sre_chunk.sc_pages) {
+    pneighbor = kshmbranch_plocate(&self->s_map.m_root,branch->sb_map_max+1,&neighbor_semi);
+    if (pneighbor && kshmbranch_canexpand_min(*pneighbor) && region_flags ==
+        KSHMREGION_EFFECTIVEFLAGS((*pneighbor)->sb_region->sre_chunk.sc_flags)) {
+     pbranch = kshmbranch_plocate(&self->s_map.m_root,branch->sb_map_min,&branch_semi);
+     assert(pbranch && *pbranch == branch);
+     /* Merge the branch with its max-neighbor. */
+     k_syslogf(KLOG_DEBUG,"[SHM] Merging branch [%p..%p] with %p..%p during mmap()\n",
+               branch->sb_map_min,branch->sb_map_max,
+              (*pneighbor)->sb_map_min,(*pneighbor)->sb_map_max);
+     merge_error = kshmbrach_merge(pbranch,branch_semi,
+                                   pneighbor,neighbor_semi,
+                                  &pbranch,&branch_semi);
+     /* Ignore errors here. */
+     if __likely(KE_ISOK(merge_error)) branch = *pbranch;
+    }
+   }
+   if (in_region_page_start == 0) {
+    pneighbor = kshmbranch_plocate(&self->s_map.m_root,branch->sb_map_min-1,&neighbor_semi);
+    if (pneighbor && kshmbranch_canexpand_max(*pneighbor) && region_flags ==
+        KSHMREGION_EFFECTIVEFLAGS((*pneighbor)->sb_region->sre_chunk.sc_flags)) {
+     if (!pbranch) {
+      pbranch = kshmbranch_plocate(&self->s_map.m_root,branch->sb_map_min,&branch_semi);
+      assert(pbranch && *pbranch == branch);
+     }
+     /* Merge the branch with its min-neighbor. */
+     k_syslogf(KLOG_DEBUG,"[SHM] Merging branch %p..%p with [%p..%p] during mmap()\n",
+              (*pneighbor)->sb_map_min,(*pneighbor)->sb_map_max,
+               branch->sb_map_min,branch->sb_map_max);
+     merge_error = kshmbrach_merge(pneighbor,neighbor_semi,
+                                   pbranch,branch_semi,
+                                  &pbranch,&branch_semi);
+     /* Ignore errors here. */
+     if __likely(KE_ISOK(merge_error)) branch = *pbranch;
+    }
+   }
+  }
+#endif
+  return error;
+ }
 #ifdef __DEBUG__
  {
   struct kshmbranch *oldbranch;
@@ -1918,11 +1977,6 @@ kshm_touchall(struct kshm *__restrict self,
                             req_flags);
 }
 
-
-/* Automatically merge branches
- * >> s.a. long comment atop of the large
- *    AUTOMERGE_BRANCHES block near the end of kshm_touch. */
-#define AUTOMERGE_BRANCHES 1
 
 __crit __nomp size_t
 kshm_touchex(struct kshm *__restrict self,
@@ -2227,8 +2281,8 @@ true_shared_access:;
   /* Note how we also compare the flags, as not to
    * accidentally merge a '.text' with a '.bss' section. */
   if (pneighbor && kshmbranch_canexpand_max(*pneighbor) &&
-                      region->sre_chunk.sc_flags ==
-     (*pneighbor)->sb_region->sre_chunk.sc_flags) {
+      KSHMREGION_EFFECTIVEFLAGS(region->sre_chunk.sc_flags) ==
+      KSHMREGION_EFFECTIVEFLAGS((*pneighbor)->sb_region->sre_chunk.sc_flags)) {
    /* We can expand this 'neighbor' to merge it with 'branch' */
    assert((*pneighbor)->sb_map_max == branch->sb_map_min-1);
    error = kshmbrach_merge(pneighbor,neighbor_semi,
@@ -2245,8 +2299,8 @@ true_shared_access:;
   /* Fully mapped region memory at the back (high potential for a neighbor above) */
   pneighbor = kshmbranch_plocate(&self->s_map.m_root,branch->sb_map_max+1,&neighbor_semi);
   if (pneighbor && kshmbranch_canexpand_min(*pneighbor) &&
-                      region->sre_chunk.sc_flags ==
-     (*pneighbor)->sb_region->sre_chunk.sc_flags) {
+      KSHMREGION_EFFECTIVEFLAGS(region->sre_chunk.sc_flags) ==
+      KSHMREGION_EFFECTIVEFLAGS((*pneighbor)->sb_region->sre_chunk.sc_flags)) {
    /* We can expand this 'neighbor' to merge it with 'branch' */
    assert((*pneighbor)->sb_map_min == branch->sb_map_max+1);
    error = kshmbrach_merge(pbranch,addr_semi,

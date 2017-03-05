@@ -138,6 +138,10 @@ typedef __u32 kshmrefcnt_t;
 #define KSHMREGION_FLAG_NOCOPY     0x0080 /*< Don't hard-copy memory from this chunk, but alias it when set in 'right->sre_chunk.sc_flags' in 'kshmchunk_hardcopy'. */
 //#define KSHMREGION_FLAG_ZERO     0x0400 /*< TODO: Symbolic region of potentially infinite size; fill-on-read; filled only with zeros (useful for bss sections). */
 
+/* Returns the set of sub-flags that carry effects that must be considered before merging two regions.
+ * Basically: Only merge two regions if their effective flags are equal. */
+#define KSHMREGION_EFFECTIVEFLAGS(flags) (flags)
+
 #define KSHM_FLAG_SIZEOF  2
 #ifndef __ASSEMBLY__
 typedef __u16 kshm_flag_t; /*< Set of 'KSHMREGION_FLAG_*' */
@@ -822,6 +826,16 @@ kshm_initfork(struct kshm *__restrict self,
 //       the found region should be passed instead.
 // HINT: To simply map dynamic memory, allocate a region
 //       and then pass that region to this function.
+// WARNING: If the given region is unique and the function returns success,
+//          the given region may no longer point to a valid block of memory.
+//          This can happen due to automatic region merging that is used
+//          to merge the given 'region' with additional regions that may
+//          or may not exist immediately below and above the given one.
+//    HINT: You can easily suppress this behavior by passing
+//          a region who's reference (aka. 'sre_branches')
+//          counter is greater than ONE(1), indicating that the
+//          region isn't unique and cannot be modified directly,
+//          as would be required during the process of merging.
 // @return: KE_OK:     Successfully mapped the given region of memory.
 // @return: KE_EXISTS: Some part of the given area of memory was
 //                     already mapped by an SHM-style mapping.
