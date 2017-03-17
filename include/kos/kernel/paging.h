@@ -112,13 +112,13 @@ extern __crit void kpagedir_delete(struct kpagedir *__restrict self);
 // @return: KE_EXISTS: [kpagedir_map] The given area (or a part of it) was already mapped.
 extern __crit __nonnull((1)) kerrno_t
 kpagedir_map(struct kpagedir *__restrict self,
-             __physicaladdr void const *phys,
-             __virtualaddr void const *virt,
+             __kernel void const *phys,
+             __user void const *virt,
              __size_t pages, kpageflag_t flags);
 extern __crit __nonnull((1)) kerrno_t
 kpagedir_remap(struct kpagedir *__restrict self,
-               __physicaladdr void const *phys,
-               __virtualaddr void const *virt,
+               __kernel void const *phys,
+               __user void const *virt,
                __size_t pages, kpageflag_t flags);
 
 //////////////////////////////////////////////////////////////////////////
@@ -126,7 +126,7 @@ kpagedir_remap(struct kpagedir *__restrict self,
 // @return: * : Amount of successfully modified pages.
 extern __nonnull((1)) __size_t
 kpagedir_setflags(struct kpagedir *__restrict self,
-                  __virtualaddr void const *virt,
+                  __user void const *virt,
                   __size_t pages, kpageflag_t mask,
                   kpageflag_t flags);
 
@@ -135,9 +135,9 @@ kpagedir_setflags(struct kpagedir *__restrict self,
 // NOTE: Will never map the NULL page
 // @return: * :                         The virtual address the given physical range was mapped to.
 // @return: KPAGEDIR_FINDFREERANGE_ERR: Failed to find an unused are big enough to map the given range.
-extern __nonnull((1)) __virtualaddr void *
+extern __nonnull((1)) __user void *
 kpagedir_findfreerange(struct kpagedir const *__restrict self,
-                       __size_t pages, __virtualaddr void const *hint);
+                       __size_t pages, __user void const *hint);
 #define KPAGEDIR_FINDFREERANGE_ERR ((void *)(__uintptr_t)-1)
 
 //////////////////////////////////////////////////////////////////////////
@@ -148,9 +148,9 @@ kpagedir_findfreerange(struct kpagedir const *__restrict self,
 // @return: * :   The virtual address the given physical range was mapped to.
 // @return: NULL: Failed to find an unused are big enough to
 //                map the given range, or not enough memory.
-extern __nonnull((1,2)) __virtualaddr void *
-kpagedir_mapanyex(struct kpagedir *__restrict self, __physicaladdr void const *phys,
-                  __size_t pages, __virtualaddr void const *hint, kpageflag_t flags);
+extern __nonnull((1,2)) __user void *
+kpagedir_mapanyex(struct kpagedir *__restrict self, __kernel void const *phys,
+                  __size_t pages, __user void const *hint, kpageflag_t flags);
 
 #define KPAGEDIR_MAPANY_HINT_UDEV     ((void *)0x20000000) /*< mmap_dev-mapped device memory. */
 #define KPAGEDIR_MAPANY_HINT_UHEAP    ((void *)0x40000000) /*< User-space heap. */
@@ -164,7 +164,7 @@ kpagedir_mapanyex(struct kpagedir *__restrict self, __physicaladdr void const *p
 // @return: * : A set of 'KPAGEDIR_RANGEATTR_*'
 extern __nonnull((1)) int
 kpagedir_rangeattr(struct kpagedir const *__restrict self,
-                   __virtualaddr void const *virt,
+                   __user void const *virt,
                    __size_t pages);
 #define KPAGEDIR_RANGEATTR_NONE         0
 #define KPAGEDIR_RANGEATTR_HASMAPPED    1 /*< There are mapped pages within the given range. */
@@ -177,22 +177,22 @@ kpagedir_rangeattr(struct kpagedir const *__restrict self,
 // Returns non-zero if all pages of the given virtual address range are mapped (all)
 extern __wunused __nonnull((1)) int
 kpagedir_ismapped(struct kpagedir const *__restrict self,
-                  __pagealigned __virtualaddr void const *virt,
+                  __pagealigned __user void const *virt,
                   __size_t pages);
 extern __wunused __nonnull((1)) int
 kpagedir_ismappedex(struct kpagedir const *__restrict self,
-                    __pagealigned __virtualaddr void const *virt,
+                    __pagealigned __user void const *virt,
                     __size_t pages, kpageflag_t mask, kpageflag_t flags);
 extern __wunused __nonnull((1)) int
 kpagedir_ismappedex_b(struct kpagedir const *__restrict self,
-                      __virtualaddr void const *virt,
+                      __user void const *virt,
                       __size_t bytes, kpageflag_t mask, kpageflag_t flags);
 
 //////////////////////////////////////////////////////////////////////////
 // Returns non-zero if no page in the given virtual address range is mapped (!any)
 extern __wunused __nonnull((1)) int
 kpagedir_isunmapped(struct kpagedir const *__restrict self,
-                    __virtualaddr void const *virt,
+                    __user void const *virt,
                     __size_t pages);
 
 //////////////////////////////////////////////////////////////////////////
@@ -212,7 +212,7 @@ kpagedir_mapkernel(struct kpagedir *__restrict self, kpageflag_t flags);
 // Unmaps a given area of memory from the given page directory
 extern __crit __nonnull((1)) void
 kpagedir_unmap(struct kpagedir *__restrict self,
-               __virtualaddr void const *virt,
+               __user void const *virt,
                __size_t pages);
 
 
@@ -224,8 +224,8 @@ kpagedir_unmap(struct kpagedir *__restrict self,
 // @param: pagecount: The amount of mapped pages (multiply by 'PAGESIZE' to bytes)
 extern __nonnull((1,2)) int
 kpagedir_enum(struct kpagedir const *__restrict self,
-              int (*callback)(__virtualaddr void *vbegin,
-                              __physicaladdr void *pbegin,
+              int (*callback)(__user void *vbegin,
+                              __kernel void *pbegin,
                               __size_t pagecount,
                               kpageflag_t flags,
                               void *closure),
@@ -256,14 +256,14 @@ extern __nonnull((1)) void kpagedir_print(struct kpagedir const *__restrict self
 // >> This function does the same conversion as performed
 //    by the CPU when the page directory is active.
 // @return: NULL: The given address is not mapped.
-extern __constcall __wunused __nonnull((1)) __physicaladdr void *KPAGEDIR_TRANSLATE_CALL
-kpagedir_translate(struct kpagedir const *__restrict self, __virtualaddr void const *virt);
-extern __constcall __wunused __nonnull((1)) __physicaladdr void *KPAGEDIR_TRANSLATE_CALL
-kpagedir_translate_flags(struct kpagedir const *__restrict self, __virtualaddr void const *virt, kpageflag_t flags);
+extern __constcall __wunused __nonnull((1)) __kernel void *KPAGEDIR_TRANSLATE_CALL
+kpagedir_translate(struct kpagedir const *__restrict self, __user void const *virt);
+extern __constcall __wunused __nonnull((1)) __kernel void *KPAGEDIR_TRANSLATE_CALL
+kpagedir_translate_flags(struct kpagedir const *__restrict self, __user void const *virt, kpageflag_t flags);
 
 extern __constcall __wunused __nonnull((1)) kpage_t *KPAGEDIR_TRANSLATE_CALL
 kpagedir_getpage(struct kpagedir *__restrict self,
-                 __virtualaddr void const *virt);
+                 __user void const *virt);
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the page directory used by the kernel
@@ -276,7 +276,7 @@ kpagedir_getpage(struct kpagedir *__restrict self,
 extern struct kpagedir      __kpagedir_kernel;
 
 extern void
-kpagedir_kernel_installmemory(__pagealigned __physicaladdr void *addr,
+kpagedir_kernel_installmemory(__pagealigned __kernel void *addr,
                               __size_t pages, kpageflag_t flags);
 #define KERNEL_INSTALLMEMORY(start,bytes,writable) \
  kpagedir_kernel_installmemory((void *)alignd((__uintptr_t)(start),PAGEALIGN)\

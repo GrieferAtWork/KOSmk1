@@ -257,6 +257,7 @@ vfs_mount(char const *__restrict path,
 #define MOUNT(path,fs) \
  vfs_mount(path,(struct ksuperblock *)&(fs));
 void kernel_initialize_vfs(void) {
+ k_syslogf(KLOG_INFO,"[init] VFS...\n");
  MOUNT("/dev",kvfs_dev);
  MOUNT("/proc",kvfs_proc);
 }

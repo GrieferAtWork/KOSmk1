@@ -41,13 +41,13 @@ void kernel_initialize_serial(void) {
  serial_enable(SERIAL_01);
 }
 void serial_enable(int device) {
- outb(0x00,device+1); // Disable all interrupts
- outb(0x80,device+3); // Enable DLAB (set baud rate divisor)
- outb(0x03,device+0); // Set divisor to 3 (lo byte) 38400 baud
- outb(0x00,device+1); //                  (hi byte)
- outb(0x03,device+3); // 8 bits, no parity, one stop bit
- outb(0xC7,device+2); // Enable FIFO, clear them, with 14-byte threshold
- outb(0x0B,device+4); // IRQs enabled, RTS/DSR set
+ outb(device+1,0x00); // Disable all interrupts
+ outb(device+3,0x80); // Enable DLAB (set baud rate divisor)
+ outb(device+0,0x03); // Set divisor to 3 (lo byte) 38400 baud
+ outb(device+1,0x00); //                  (hi byte)
+ outb(device+3,0x03); // 8 bits, no parity, one stop bit
+ outb(device+2,0xC7); // Enable FIFO, clear them, with 14-byte threshold
+ outb(device+4,0x0B); // IRQs enabled, RTS/DSR set
 }
 #if 0
 #define is_transmit_empty(device) 1

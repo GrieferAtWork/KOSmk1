@@ -166,7 +166,9 @@ extern int execvpe __P((char const *file, char *const __argv[], char *const __en
 
 extern unsigned int alarm __P((unsigned int __seconds));
 extern __useconds_t ualarm __P((__useconds_t __value, __useconds_t __interval));
+#ifndef __DOS_H__
 extern unsigned int sleep __P((unsigned int __seconds));
+#endif
 extern int usleep __P((__useconds_t __useconds));
 extern int pause __P((void));
 

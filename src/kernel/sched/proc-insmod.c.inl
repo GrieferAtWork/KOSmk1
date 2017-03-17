@@ -243,7 +243,8 @@ err_modtab:
 
 
 __crit kerrno_t
-kproc_delmod_single_unlocked(struct kproc *__restrict self, kmodid_t module_id,
+kproc_delmod_single_unlocked(struct kproc *__restrict self,
+                             kmodid_t module_id,
                              kmodid_t **dep_idv, size_t *dep_idc) {
  struct kprocmodule *module; size_t newvecsize;
  __ref struct kshlib *shlib;
@@ -326,7 +327,10 @@ err_iter:
  return error;
 }
 
-static void kproc_modrelocate(struct kproc *self, kmodid_t modid, kmodid_t start_modid) {
+static void
+kproc_modrelocate(struct kproc *self,
+                  kmodid_t modid,
+                  kmodid_t start_modid) {
  struct kprocmodule *module;
  kmodid_t *iter,*end;
  assert(start_modid < self->p_modules.pms_moda);

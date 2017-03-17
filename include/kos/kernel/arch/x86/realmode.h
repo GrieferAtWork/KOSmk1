@@ -32,13 +32,21 @@
 
 __DECL_BEGIN
 
+#define KCONFIG_HAVE_X86_REALMODE_SEGMENT_REGISTERS 1
+
 #ifdef __ASSEMBLY__
-#define REALMODE_REGS_SIZE   24
+#if KCONFIG_HAVE_X86_REALMODE_SEGMENT_REGISTERS
+#   define REALMODE_REGS_SIZE   34
+#else
+#   define REALMODE_REGS_SIZE   24
+#endif
 #else
 struct __packed realmode_regs {
+#if KCONFIG_HAVE_X86_REALMODE_SEGMENT_REGISTERS
+ __u16 ds,es,fs,gs,ss;
+#endif /* KCONFIG_HAVE_X86_REALMODE_SEGMENT_REGISTERS */
  __u16 di,si,bp,sp;
  /* todo: Might we need eflags here? If so: they can be added... */
- /* TODO: Add segment registers! */
 union __packed {
  struct __packed { __u32 ebx,edx,ecx,eax; };
  struct __packed { __u16 bx,__hbx;
@@ -50,6 +58,12 @@ union __packed {
                    __u8  cl,ch,__hcl,__hch;
                    __u8  al,ah,__hal,__hah; };
 };};
+
+#ifdef KCONFIG_HAVE_SINGLECORE
+#   define __REALMODE_NOSMP /* nothing */
+#else
+#   define __REALMODE_NOSMP __nomp
+#endif
 
 #ifdef __INTELLISENSE__
 //////////////////////////////////////////////////////////////////////////
@@ -63,19 +77,23 @@ union __packed {
 //   - The interrupt-enabled state is preserved across a call to this function. 
 //   - While executing, the interrupt vector is temporarily
 //     overwritten on the calling CPU, though restore afterwards.
-//   - It should be OK for other threads to 
 //   - The paging-enabled state is preserved across a call to this function. 
 //    (As a matter of fact: all bits from %CR0 are preserved)
 //   - The active page directory is _NOT_ 'preserved' and
 //     will be set to that of 'kpagedir_kernel()' upon return.
-extern void realmode_interrupt(__u8 intnum, struct realmode_regs *regs);
+//   - While multithreading-safe across the same CPU, this function
+//     is _NOT_ SMP safe and should not invoked without a guard when
+//     more than one CPU is online.
+extern __REALMODE_NOSMP void realmode_interrupt(__u8 intnum, struct realmode_regs *regs);
 #else
-extern void __realmode_interrupt(__u8 intnum, struct realmode_regs *regs);
+extern __REALMODE_NOSMP void __realmode_interrupt(__u8 intnum, struct realmode_regs *regs);
 /* Regular interrupts (cli/sti) must be disabled before switching to real mode. */
 #define realmode_interrupt(intnum,regs) \
  NOIRQ_EVAL_V(__realmode_interrupt(intnum,regs))
 #endif
-#endif
+
+#undef __REALMODE_NOSMP
+#endif /* !__ASSEMBLY__ */
 
 // Real-mode memory configuration.
 // These are used by memory initialization to

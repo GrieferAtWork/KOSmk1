@@ -33,12 +33,14 @@
 
 __DECL_BEGIN
 
-__struct_fwd(kfile);
-__struct_fwd(ktask);
-__struct_fwd(kproc);
-__struct_fwd(kinode);
-__struct_fwd(kdirent);
-__struct_fwd(kdev);
+#ifndef __ASSEMBLY__
+struct kfile;
+struct ktask;
+struct kproc;
+struct kinode;
+struct kdirent;
+struct kdev;
+#endif /* __ASSEMBLY__ */
 
 #define kassert_kfdentry kassertobj
 

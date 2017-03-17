@@ -891,7 +891,58 @@ struct kfiletype kptyfile_master_type = {
  .ft_getdirent = &kptyfile_getdirent,
 };
 
+__DECL_END
 
+
+#include <kos/kernel/proc.h>
+#include <kos/kernel/syscall.h>
+__DECL_BEGIN
+
+KSYSCALL_DEFINE_EX5(c,kerrno_t,kfd_openpty,
+                    __user int *,amaster,
+                    __user int *,aslave,
+                    __user char *,name,
+                    __user struct termios const *,termp,
+                    __user struct winsize const *,winp) {
+ struct termios ios; struct winsize size;
+ kerrno_t error; struct kfspty *fs_pty;
+ __ref struct kdirent *m_ent,*s_ent;
+ struct kfdentry fd_master,fd_slave;
+ struct kproc *proc_self = kproc_self();
+ int fno_master,fno_slave;
+ KTASK_CRIT_MARK
+ fd_master.fd_attr = KFD_ATTR(KFDTYPE_FILE,KFD_FLAG_NONE);
+ fd_slave.fd_attr = KFD_ATTR(KFDTYPE_FILE,KFD_FLAG_NONE);
+ if (termp && copy_from_user(&ios,termp,sizeof(ios))) return KE_FAULT;
+ if (winp && copy_from_user(&size,winp,sizeof(size))) return KE_FAULT;
+ /* Create the actual filesystem-compatible PTY device. */
+ fs_pty = kfspty_new(termp ? &ios : NULL,winp ? &size : NULL);
+ if __unlikely(!fs_pty) return KE_NOMEM;
+ /* Insert that device into the filesystem. */
+ error = kfspty_insnod(fs_pty,&m_ent,&s_ent,name);
+ if __unlikely(KE_ISERR(error)) goto end_fspty;
+ /* Create the files used to interface with the master & slave ports. */
+ fd_master.fd_file = (struct kfile *)kptyfile_master_new(fs_pty,m_ent);
+ kdirent_decref(m_ent);
+ if __unlikely(!fd_master.fd_file) { kdirent_decref(s_ent); goto err_nomem2; }
+ fd_slave.fd_file = (struct kfile *)kptyfile_slave_new(fs_pty,s_ent);
+ kdirent_decref(s_ent);
+ if __unlikely(!fd_slave.fd_file) goto err_nomem3;
+ /* Register the Master and Slave files as valid descriptors in the calling process. */
+ error = kproc_insfd_inherited(proc_self,&fno_slave,&fd_slave);
+ if __unlikely(KE_ISERR(error)) goto err4;
+ if __unlikely(copy_to_user(aslave,&fno_slave,sizeof(fno_slave))) { error = KE_FAULT; goto err3; }
+ error = kproc_insfd_inherited(proc_self,&fno_master,&fd_master);
+ if __unlikely(KE_ISERR(error)) goto err3;
+ if __unlikely(copy_to_user(amaster,&fno_master,sizeof(fno_master))) error = KE_FAULT;
+ /* Do some finalizing cleanup... */
+end_fspty: kinode_decref((struct kinode *)fs_pty);
+ return error;
+err4: kfile_decref(fd_slave.fd_file);
+err3: kfile_decref(fd_master.fd_file); goto end_fspty; 
+err_nomem3: error = KE_NOMEM; goto err3;
+err_nomem2: error = KE_NOMEM; goto end_fspty; 
+}
 
 __DECL_END
 

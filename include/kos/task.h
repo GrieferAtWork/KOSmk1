@@ -40,7 +40,9 @@
 
 __DECL_BEGIN
 
-__struct_fwd(timespec);
+#ifndef __ASSEMBLY__
+struct timespec;
+#endif /* __ASSEMBLY__ */
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -273,7 +275,7 @@ extern __wunused __constcall ktask_t ktask_proc(void);
 //////////////////////////////////////////////////////////////////////////
 // Exit the calling thread with the given exitcode
 __local __noreturn void ktask_exit(void *exitcode) {
- // NOTE: Don't terminate child-threads here.
+ /* NOTE: Don't terminate child-threads here. */
  ktask_terminate(ktask_self(),exitcode,KTASKOPFLAG_NONE);
  __compiler_unreachable();
 }
@@ -575,7 +577,9 @@ __local _syscall5(kerrno_t,ktask_newthreadi,ktask_threadfun_t,thread_main,
 // @param: flags: A set of 'KTASK_NEW_FLAG_*' flags.
 __local _syscall2(kerrno_t,ktask_fork,__uintptr_t *,childfd_or_exitcode,__u32,flags);
 
-__struct_fwd(kexecargs);
+#ifndef __ASSEMBLY__
+struct kexecargs;
+#endif /* __ASSEMBLY__ */
 
 //////////////////////////////////////////////////////////////////////////
 // Overwrite the address space of the calling process with the given executable.

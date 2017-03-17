@@ -1095,7 +1095,7 @@ __public int brk(void *addr)
   map_result = mmap(real_oldbrk,real_newbrk-real_oldbrk,
                     PROT_READ|PROT_WRITE,MAP_FIXED|MAP_ANONYMOUS,0,0);
   if (map_result == (void *)(uintptr_t)-1) return -1;
-  assert(map_result == real_oldbrk);
+  assertf(map_result == real_oldbrk,"%p != %p",map_result,real_oldbrk);
  }
  __brk_end = (__u8 *)addr;
  return 0;

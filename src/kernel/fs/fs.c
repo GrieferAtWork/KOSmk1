@@ -1519,12 +1519,13 @@ struct kdirent __kfs_root = KDIRENT_INIT_UNNAMED(NULL,NULL);
 void kernel_initialize_filesystem(void) {
  struct ksuperblock *root_superblock;
  struct ksdev *storage_device; kerrno_t error;
+ k_syslogf(KLOG_INFO,"[init] Filesystem...\n");
  /* Look for a usable storage device for the root filesystem. */
  error = ksdev_new_findfirstata(&storage_device);
  if (error == KE_NOSYS) {
   /* Without a usable storage device, create a new ram disk. */
   error = ksdev_new_ramdisk(&storage_device,512,
-                            /*128MB*/(1024*1024*128)/512);
+                            /*128MB*/(1024*1024*4)/512);
  }
  if __unlikely(KE_ISERR(error)) {
   k_syslogf(KLOG_ERROR,"Failed to initialize the filesystem: %d\n",error);
@@ -1579,8 +1580,138 @@ struct kinodetype kinode_generic_emptytype = {
 
 __DECL_END
 
+
+#include <kos/kernel/proc.h>
+#include <kos/kernel/syscall.h>
+__DECL_BEGIN
+
+KSYSCALL_DEFINE_EX4(c,kerrno_t,kfs_mkdir,int,dirfd,
+                    __user char const *,path,
+                    size_t,pathmax,mode_t,mode) {
+ struct kproc *ctx = kproc_self();
+ kerrno_t error; struct kfspathenv env;
+ union kinodeattr attr[1];
+ KTASK_CRIT_MARK
+ path = (char const *)kpagedir_translate(ktask_self()->t_epd,path); /* TODO: Unsafe. */
+ env.env_cwd = kproc_getfddirent(ctx,dirfd);
+ if __unlikely(!env.env_cwd) return KE_NOCWD;
+ env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
+ if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
+ env.env_flags = 0;
+ env.env_uid   = kproc_getuid(ctx);
+ env.env_gid   = kproc_getgid(ctx);
+ kfspathenv_initcommon(&env);
+ attr[0].ia_perm.a_id   = KATTR_FS_PERM;
+ attr[0].ia_perm.p_perm = mode;
+ error = kdirent_mkdirat(&env,path,pathmax,1,attr,NULL,NULL);
+ kdirent_decref(env.env_root);
+err_cwd:
+ kdirent_decref(env.env_cwd);
+ return error;
+}
+
+KSYSCALL_DEFINE_EX3(c,kerrno_t,kfs_rmdir,int,dirfd,
+                    __user char const *,path,size_t,pathmax) {
+ struct kproc *ctx = kproc_self();
+ kerrno_t error; struct kfspathenv env;
+ KTASK_CRIT_MARK
+ path = (char const *)kpagedir_translate(ktask_self()->t_epd,path); /* TODO: Unsafe. */
+ env.env_cwd = kproc_getfddirent(ctx,dirfd);
+ if __unlikely(!env.env_cwd) return KE_NOCWD;
+ env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
+ if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
+ env.env_flags = 0;
+ env.env_uid   = kproc_getuid(ctx);
+ env.env_gid   = kproc_getgid(ctx);
+ kfspathenv_initcommon(&env);
+ error = kdirent_rmdirat(&env,path,pathmax);
+ kdirent_decref(env.env_root);
+err_cwd:
+ kdirent_decref(env.env_cwd);
+ return error;
+}
+
+KSYSCALL_DEFINE_EX3(c,kerrno_t,kfs_unlink,int,dirfd,
+                    __user char const *,path,size_t,pathmax) {
+ struct kproc *ctx = kproc_self();
+ kerrno_t error; struct kfspathenv env;
+ KTASK_CRIT_MARK
+ path = (char const *)kpagedir_translate(ktask_self()->t_epd,path); /* TODO: Unsafe. */
+ env.env_cwd = kproc_getfddirent(ctx,dirfd);
+ if __unlikely(!env.env_cwd) return KE_NOCWD;
+ env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
+ if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
+ env.env_flags = 0;
+ env.env_uid   = kproc_getuid(ctx);
+ env.env_gid   = kproc_getgid(ctx);
+ kfspathenv_initcommon(&env);
+ error = kdirent_unlinkat(&env,path,pathmax);
+ kdirent_decref(env.env_root);
+err_cwd:
+ kdirent_decref(env.env_cwd);
+ return error;
+}
+
+KSYSCALL_DEFINE_EX3(c,kerrno_t,kfs_remove,int,dirfd,
+                    __user char const *,path,size_t,pathmax) {
+ struct kproc *ctx = kproc_self();
+ kerrno_t error; struct kfspathenv env;
+ KTASK_CRIT_MARK
+ path = (char const *)kpagedir_translate(ktask_self()->t_epd,path); /* TODO: Unsafe. */
+ env.env_cwd = kproc_getfddirent(ctx,dirfd);
+ if __unlikely(!env.env_cwd) return KE_NOCWD;
+ env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
+ if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
+ env.env_flags = 0;
+ env.env_uid   = kproc_getuid(ctx);
+ env.env_gid   = kproc_getgid(ctx);
+ kfspathenv_initcommon(&env);
+ error = kdirent_removeat(&env,path,pathmax);
+ kdirent_decref(env.env_root);
+err_cwd:
+ kdirent_decref(env.env_cwd);
+ return error;
+}
+
+KSYSCALL_DEFINE_EX5(c,kerrno_t,kfs_symlink,int,dirfd,__user char const *,target,
+                    size_t,targetmax,__user char const *,lnk,size_t,lnkmax) {
+ struct kdirentname targetname;
+ struct kproc *ctx = kproc_self();
+ kerrno_t error; struct kfspathenv env;
+ KTASK_CRIT_MARK
+ target = (char const *)kpagedir_translate(ktask_self()->t_epd,target); /* TODO: Unsafe. */
+ lnk = (char const *)kpagedir_translate(ktask_self()->t_epd,lnk); /* TODO: Unsafe. */
+ env.env_cwd = kproc_getfddirent(ctx,dirfd);
+ if __unlikely(!env.env_cwd) return KE_NOCWD;
+ env.env_root = kproc_getfddirent(ctx,KFD_ROOT);
+ if __unlikely(!env.env_root) { error = KE_NOROOT; goto err_cwd; }
+ env.env_flags = 0;
+ env.env_uid   = kproc_getuid(ctx);
+ env.env_gid   = kproc_getgid(ctx);
+ kfspathenv_initcommon(&env);
+ targetname.dn_name = (char *)target;
+ targetname.dn_size = strnlen(target,targetmax);
+ kdirentname_refreshhash(&targetname);
+ error = kdirent_mklnkat(&env,lnk,lnkmax,0,NULL,&targetname,NULL,NULL);
+ kdirent_decref(env.env_root);
+err_cwd:
+ kdirent_decref(env.env_cwd);
+ return error;
+}
+
+KSYSCALL_DEFINE5(kerrno_t,kfs_hrdlink,int,dirfd,__user char const *,target,
+                 size_t,targetmax,__user char const *,lnk,size_t,lnkmax) {
+ (void)dirfd;
+ (void)target;
+ (void)targetmax;
+ (void)lnk;
+ (void)lnkmax;
+ return KE_NOSYS; /* TODO */
+}
+
+__DECL_END
+
 #ifndef __INTELLISENSE__
-#include "file.c.inl"
 #include "fs-blockfile.c.inl"
 #include "fs-dirfile.c.inl"
 #include "fs-generic.c.inl"

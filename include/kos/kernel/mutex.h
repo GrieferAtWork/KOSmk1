@@ -36,7 +36,9 @@ __DECL_BEGIN
 
 /* A non-recursive bi-state mutex. */
 
-__struct_fwd(kmutex);
+#ifndef __ASSEMBLY__
+struct kmutex;
+#endif /* __ASSEMBLY__ */
 
 #define KOBJECT_MAGIC_MUTEX  0x707E3E /*< MUTEX */
 #define kassert_kmutex(self) kassert_object(self,KOBJECT_MAGIC_MUTEX)

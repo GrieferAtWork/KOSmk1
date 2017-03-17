@@ -35,6 +35,10 @@
  *    stuff will still be possible to compile, as this
  *    is merely meant for intellisense (and other IDEs) */
 #   define NULL  nullptr
+#elif defined(__SIZEOF_LONG__) && __SIZEOF_LONG__ == __SIZEOF_POINTER__
+#   define NULL  0l
+#elif defined(__SIZEOF_LONG_LONG__) && __SIZEOF_LONG_LONG__ == __SIZEOF_POINTER__
+#   define NULL  0ll
 #else
 #   define NULL  0
 #endif

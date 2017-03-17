@@ -26,6 +26,7 @@
 #include <kos/compiler.h>
 #include <kos/kernel/features.h>
 #include <kos/kernel/task.h>
+#include <kos/kernel/sigset.h>
 #include <malloc.h>
 
 __DECL_BEGIN
@@ -55,7 +56,7 @@ void ktasksig_init(struct ktasksig *__restrict self,
   iter->tss_next = NULL;
 #endif
   iter->tss_sig  = NULL;
-  iter->tss_self = task; // Weakly referenced (for now)
+  iter->tss_self = task; /* Weakly referenced (for now) */
  }
 }
 
@@ -110,12 +111,12 @@ struct ktasksigslot *ktasksig_newslot(struct ktasksig *__restrict self) {
  for (;;) {
   end = (iter = bufiter->ts_sigs)+KTASK_SIGBUFSIZE;
   for (; iter != end; ++iter) if (!iter->tss_sig) {
-   return iter; // Found a free slot
+   return iter; /* Found a free slot. */
   }
   if (!bufiter->ts_next) break;
   bufiter = bufiter->ts_next;
  }
- // Must allocate a new chain buffer
+ /* Must allocate a new chain buffer. */
  newbuf = omalloc(struct ktasksig);
  if __unlikely(!newbuf) return NULL;
  bufiter->ts_next = newbuf;
@@ -134,14 +135,14 @@ void ktasksig_delslot(struct ktasksig *__restrict self,
   if (slot >= self->ts_sigs &&
       slot < self->ts_sigs+KTASK_SIGBUFSIZE) {
    struct ktasksigslot *iter,*end;
-   // Found the slot
+   /* Found the slot. */
    if (bufslot == self) return;
    assert(lastslot != NULL);
-   // Check if the signal buffer is empty.
-   // >> And if it is, free it.
+   /* Check if the signal buffer is empty.
+    * >> And if it is, free it. */
    end = (iter = bufslot->ts_sigs)+KTASK_SIGBUFSIZE;
    while (iter != end) if ((iter++)->tss_sig) return;
-   // Slot is empty >> Free it
+   /* Slot is empty >> Free it. */
    lastslot->ts_next = bufslot->ts_next;
    free(bufslot);
    return;
@@ -158,8 +159,9 @@ void ktasksig_delslot(struct ktasksig *__restrict self,
 #endif
 }
 
-kerrno_t ktasksig_addsig_locked(struct ktasksig *__restrict self,
-                                struct ksignal *__restrict sig) {
+kerrno_t
+ktasksig_addsig_locked(struct ktasksig *__restrict self,
+                       struct ksignal *__restrict sig) {
  kerrno_t error; struct ktasksigslot *slot;
  kassertobj(self);
  kassert_ksignal(sig);
@@ -168,7 +170,7 @@ kerrno_t ktasksig_addsig_locked(struct ktasksig *__restrict self,
  if __unlikely(!slot) return KE_NOMEM;
  assert(!slot->tss_sig);
  kassert_ktask(slot->tss_self);
- // Turn the weak self-reference into a strong one
+ /* Turn the weak self-reference into a strong one. */
  if __unlikely(KE_ISERR(error = ktask_incref(slot->tss_self))) {
   ktasksig_delslot(self,slot);
   return error;
@@ -181,6 +183,23 @@ kerrno_t ktasksig_addsig_locked(struct ktasksig *__restrict self,
  } else sig->s_wakefirst = slot;
  sig->s_wakelast = slot;
  return KE_OK;
+}
+
+
+__wunused kerrno_t
+ktasksig_addsigs_andunlock(struct ktasksig *__restrict self,
+                           struct ksigset const *signals) {
+ struct ksignal *sig;
+ kerrno_t error = KE_OK;
+ /* TODO: Make this faster by knowing how may signals there are beforehand. */
+ /* TODO: Is this function even called if 'signals' is empty? (can we make it non-NULL+non-EMPTY?) */
+ KSIGSET_FOREACH(sig,signals) {
+  if __likely(KE_ISOK(error)) {
+   error = ktasksig_addsig_locked(self,sig);
+  }
+  ksignal_unlock_c(sig,KSIGNAL_LOCK_WAIT);
+ }
+ return error;
 }
 
 

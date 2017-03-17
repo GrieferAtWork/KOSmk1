@@ -21,7 +21,6 @@
 	kernel/sched/*.S;
 	kernel/sched/sync/*.c;
 	kernel/test/*.c;
-	kernel/syscall/*.c;
 }
 
 

@@ -60,15 +60,17 @@ __DECL_BEGIN
 
 #define LINK_MAX  64 /*< Max amount of times a link is allowed to be dereferenced. */
 
-__struct_fwd(kinodetype);
-__struct_fwd(kinode);
-__struct_fwd(kdirent);
-__struct_fwd(kdirentname);
-__struct_fwd(kfiletype);
-__struct_fwd(kfile);
-__struct_fwd(ksuperblock);
-__struct_fwd(ksuperblocktype);
-__struct_fwd(kfspathenv);
+#ifndef __ASSEMBLY__
+struct kinodetype;
+struct kinode;
+struct kdirent;
+struct kdirentname;
+struct kfiletype;
+struct kfile;
+struct ksuperblock;
+struct ksuperblocktype;
+struct kfspathenv;
+#endif /* __ASSEMBLY__ */
 
 #define KOBJECT_MAGIC_INODE      0x1A0DE    /*< INODE. */
 #define KOBJECT_MAGIC_DIRENT     0xD15EA7   /*< DIRENT. */

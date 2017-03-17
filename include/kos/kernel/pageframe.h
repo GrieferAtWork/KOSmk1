@@ -83,9 +83,22 @@ union __packed {
 //    returned if no more memory was available.
 // @return: * :            Successfully allocated more memory.
 // @return: PAGEFRAME_NIL: Not enough available memory.
-extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL kpageframe_alloc(__size_t n_pages);
-extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL kpageframe_tryalloc(__size_t n_pages, __size_t *__restrict did_alloc_pages);
+extern __crit __wunused __malloccall __attribute_aligned_c(PAGESIZE)
+__kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL kpageframe_tryalloc(__size_t n_pages, __size_t *__restrict did_alloc_pages);
 extern __crit __nonnull((1)) void KPAGEFRAME_CALL kpageframe_free(__kernel __pagealigned struct kpageframe *__restrict start, __size_t n_pages);
+#ifdef __INTELLISENSE__
+extern __crit __wunused __malloccall __attribute_aligned_c(PAGESIZE)
+__kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL kpageframe_alloc(__size_t n_pages);
+#else
+extern __crit __wunused __malloccall __attribute_aligned_c(PAGESIZE)
+__kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL __kpageframe_alloc_many(__size_t n_pages);
+extern __crit __wunused __malloccall __attribute_aligned_c(PAGESIZE)
+__kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL __kpageframe_alloc_one(void);
+#define kpageframe_alloc(n_pages) \
+ ((__builtin_constant_p(n_pages) && (n_pages) == 1)\
+  ? __kpageframe_alloc_one()\
+  : __kpageframe_alloc_many(n_pages))
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 // Perform a memcpy of all memory from 'src' to 'dst',
@@ -105,7 +118,8 @@ kpageframe_memcpy(__kernel __pagealigned struct kpageframe *__restrict dst,
 // NOTE: If 'new_pages <= old_pages' free pages near the end of the given old_start.
 // NOTE: Unlike 'kpageframe_alloc'
 // @return: PAGEFRAME_NIL: Failed to reallocate memory in-place.
-extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL
+extern __crit __wunused __malloccall __attribute_aligned_c(PAGESIZE)
+__kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL
 kpageframe_realloc_inplace(__kernel __pagealigned struct kpageframe *old_start,
                            __size_t old_pages, __size_t new_pages);
 
@@ -119,7 +133,8 @@ kpageframe_realloc_inplace(__kernel __pagealigned struct kpageframe *old_start,
 //       if it can potentially expand the given 'old_start' downwards.
 // @return: PAGEFRAME_NIL: Failed to reallocate memory, but not portion
 //                         of the given old_start will have been freed.
-extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL
+extern __crit __wunused __malloccall __attribute_aligned_c(PAGESIZE)
+__kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL
 kpageframe_realloc(__kernel __pagealigned struct kpageframe *old_start,
                    __size_t old_pages, __size_t new_pages);
 
@@ -128,7 +143,8 @@ kpageframe_realloc(__kernel __pagealigned struct kpageframe *old_start,
 // Allocate consecutive page frames at a pre-defined address.
 // @return: PAGEFRAME_NIL: The given start+n area is already allocated, or not mapped.
 // @return: start:         Successfully allocated 'n_pages' of memory starting at 'start'.
-extern __crit __wunused __malloccall __kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL
+extern __crit __wunused __malloccall __attribute_aligned_c(PAGESIZE)
+__kernel __pagealigned struct kpageframe *KPAGEFRAME_CALL
 kpageframe_allocat(__kernel __pagealigned struct kpageframe *__restrict start, __size_t n_pages);
 
 

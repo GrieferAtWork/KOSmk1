@@ -136,7 +136,7 @@ int builtin_exit(int argc, char *argv[]) {
 #include <traceback.h>
 
 int builtin_color(int argc, char *argv[]) {
-#if 1
+#if 0
  mod_t md;
  //md = mod_open("/bin/pe-test",MOD_OPEN_NONE);
  md = mod_open("/usr/lib/pe-lib.dll",MOD_OPEN_NONE);

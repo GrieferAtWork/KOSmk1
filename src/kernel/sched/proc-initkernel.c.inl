@@ -28,6 +28,7 @@
 #include <kos/kernel/paging.h>
 #include <kos/kernel/proc.h>
 #include <kos/kernel/task.h>
+#include <kos/syslog.h>
 #include <malloc.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -100,6 +101,7 @@ struct timespec __kernel_boot_time = {0,0};
 struct kproclist __kproclist_global = KPROCLIST_INIT;
 
 void kernel_initialize_process(void) {
+ k_syslogf(KLOG_INFO,"[init] Process...\n");
  __kproc_kernel.p_threads.t_taskv = (struct ktask **)malloc(1*sizeof(struct ktask *));
  if __unlikely(!__kproc_kernel.p_threads.t_taskv) {
   PANIC("Failed to initialize kernel task context: Not enough memory\n");
@@ -119,10 +121,11 @@ void kernel_initialize_process(void) {
   PANIC("Failed to initialize kernel process modules: Not enough memory\n");
  }
  kobject_init(&__kproc_kernel.p_modules.pms_modv[0],KOBJECT_MAGIC_PROCMODULE);
- __kproc_kernel.p_modules.pms_modv[0].pm_loadc = 1;
- __kproc_kernel.p_modules.pms_modv[0].pm_flags = KPROCMODULE_FLAG_RELOC;
- __kproc_kernel.p_modules.pms_modv[0].pm_lib = kshlib_kernel();
- __kproc_kernel.p_modules.pms_modv[0].pm_base = NULL;
+ __kproc_kernel.p_modules.pms_modv[0].pm_loadc  = 1;
+ __kproc_kernel.p_modules.pms_modv[0].pm_flags  = KPROCMODULE_FLAG_RELOC;
+ __kproc_kernel.p_modules.pms_modv[0].pm_lib    = kshlib_kernel();
+ __kproc_kernel.p_modules.pms_modv[0].pm_base   = NULL;
+ __kproc_kernel.p_modules.pms_modv[0].pm_depids = NULL;
 
  __kproclist_global.pl_procv = (struct kproc **)malloc(1*sizeof(struct kproc *));
  if __unlikely(!__kproclist_global.pl_procv) {

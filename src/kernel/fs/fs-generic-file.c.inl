@@ -42,7 +42,6 @@ kerrno_t kfile_generic_setattr(struct kfile *__restrict self, kattr_t attr,
 {
  kerrno_t error;
  kassert_kfile(self);
- kassertmem(buf,bufsize);
 #ifdef GETATTR
  kassertobjnull(reqsize);
 #endif

@@ -85,7 +85,7 @@
 #endif
 #endif
 
-/* Kill definitions from stuff like 'debug_new' */
+/* Kill user-defined malloc macros. */
 #undef calloc
 #undef free
 #undef malloc
@@ -100,53 +100,51 @@
 
 __DECL_BEGIN
 
-#if __GCC_VERSION(4,9,0)
-#   define __ATTRIBUTE_ALIGNED_BY_CONSTANT(x) __attribute__((__assume_aligned__ x))
-#else
-#   define __ATTRIBUTE_ALIGNED_BY_CONSTANT(x)
-#endif
-#if __GCC_VERSION(5,4,0)
-#   define __ATTRIBUTE_ALIGNED_BY_ARGUMENT(x) __attribute__((__alloc_align__ x))
-#else
-#   define __ATTRIBUTE_ALIGNED_BY_ARGUMENT(x)
-#endif
-
-#ifdef __i386__
-#   define __ATTRIBUTE_ALIGNED_PAGE    __ATTRIBUTE_ALIGNED_BY_CONSTANT((4096))
+#ifdef PAGESIZE
+#   define __ATTRIBUTE_ALIGNED_PAGE __attribute_aligned_c(PAGESIZE)
+#elif defined(PAGE_SIZE)
+#   define __ATTRIBUTE_ALIGNED_PAGE __attribute_aligned_c(PAGE_SIZE)
+#elif defined(__i386__) && __SIZEOF_POINTER__ >= 4
+#   define __ATTRIBUTE_ALIGNED_PAGE __attribute_aligned_c(4096)
 #else
 #   define __ATTRIBUTE_ALIGNED_PAGE    
 #endif
 #if __SIZEOF_POINTER__ == 8
-#   define __ATTRIBUTE_ALIGNED_DEFAULT __ATTRIBUTE_ALIGNED_BY_CONSTANT((16))
+#   define __ATTRIBUTE_ALIGNED_DEFAULT __attribute_aligned_c(16)
 #elif __SIZEOF_POINTER__ == 4
-#   define __ATTRIBUTE_ALIGNED_DEFAULT __ATTRIBUTE_ALIGNED_BY_CONSTANT((8))
+#   define __ATTRIBUTE_ALIGNED_DEFAULT __attribute_aligned_c(8)
+#elif __SIZEOF_POINTER__ == 2
+#   define __ATTRIBUTE_ALIGNED_DEFAULT __attribute_aligned_c(4)
 #else
 #   define __ATTRIBUTE_ALIGNED_DEFAULT
 #endif
 
-#if defined(__KERNEL__) && !defined(__INTELLISENSE__)
+#ifndef __MALLOC_C__
+#if defined(__CONFIG_MIN_LIBC__) && !defined(__INTELLISENSE__)
 #   define cfree              free
 #elif !defined(__STDC_PURE__)
-extern __crit void cfree __P((void *__restrict __mallptr));
+extern __crit void cfree __P((void *__restrict __mallptr)) __asmname("free");
 #endif
 
 // C11/C++11 aligned_alloc (it's literally memalign...)
-// PS: The standard says this should fail if 'BYTES%ALIGNMENT != 0'
-//    (aka. 'BYTES' is a multiple of 'ALIGNMENT').
-//     Now if that isn't a bunch of bull, I don't know what is, so the
-//     default libc implementation of KOS doesn't support that ~feature~...
+// NOTE: The standard says this should fail if 'BYTES%ALIGNMENT != 0'
+//      (aka. 'BYTES' is a multiple of 'ALIGNMENT').
+//       Now if that isn't a bunch of bull, I don't know what is.
+//       So the default libc implementation of KOS doesn't
+//       support that *quote* 'feature'...
 #ifdef __INTELLISENSE__
-extern __crit __sizemalloccall((2)) __ATTRIBUTE_ALIGNED_BY_ARGUMENT((1))
+extern __crit __sizemalloccall((2)) __attribute_aligned_a(1)
 void *aligned_alloc(__size_t __alignment, __size_t __bytes);
-#elif !defined(__KERNEL__)
-extern __crit __sizemalloccall((2)) __ATTRIBUTE_ALIGNED_BY_ARGUMENT((1))
-void *aligned_alloc __P((__size_t __alignment, __size_t __bytes));
+#elif !defined(__CONFIG_MIN_LIBC__)
+extern __crit __sizemalloccall((2)) __attribute_aligned_a(1)
+void *aligned_alloc __P((__size_t __alignment, __size_t __bytes)) __asmname("memalign");
 #ifdef __LIBC_HAVE_DEBUG_MALLOC
 #   define aligned_alloc  memalign
 #endif
 #else
 #   define aligned_alloc  memalign
 #endif
+#endif /* !__MALLOC_C__ */
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -159,7 +157,7 @@ void *aligned_alloc __P((__size_t __alignment, __size_t __bytes));
 //  - free() Never modifies the currently set value of 'errno'.
 extern __crit __wunused __sizemalloccall((1)) __ATTRIBUTE_ALIGNED_DEFAULT void *malloc __P((__size_t __bytes));
 extern __crit __wunused __sizemalloccall((1,2)) __ATTRIBUTE_ALIGNED_DEFAULT void *calloc __P((__size_t __count, __size_t __bytes));
-extern __crit __wunused __sizemalloccall((2)) __ATTRIBUTE_ALIGNED_BY_ARGUMENT((1)) void *memalign __P((__size_t __alignment, __size_t __bytes));
+extern __crit __wunused __sizemalloccall((2)) __attribute_aligned_a(1) void *memalign __P((__size_t __alignment, __size_t __bytes));
 extern __crit __wunused __sizemalloccall((2)) __nonnull((1)) __ATTRIBUTE_ALIGNED_DEFAULT void *realloc __P((void *__restrict __mallptr, __size_t __bytes));
 extern __crit __nonnull((1)) void free __P((void *__restrict __freeptr));
 extern __crit __nonnull((1)) int posix_memalign __P((void **__restrict __memptr, __size_t __alignment, __size_t __bytes));
@@ -230,6 +228,7 @@ extern __wunused __size_t malloc_usable_size __P((void *__restrict __mallptr));
 //       >> /* Yes: This might look strange, but due to
 //       >>  *      the way macros work, this is allowed! */
 //       >> void *p = (malloc)(42);
+#if !defined(__CONFIG_MIN_LIBC__) || !defined(__LIBC_DEBUG_X_ARGS)
 extern __crit __wunused __sizemalloccall((1)) __ATTRIBUTE_ALIGNED_DEFAULT void *_malloc_d __P((__size_t __bytes __LIBC_DEBUG__PARAMS));
 extern __crit __wunused __sizemalloccall((1,2)) __ATTRIBUTE_ALIGNED_DEFAULT void *_calloc_d __P((__size_t __count, __size_t __bytes __LIBC_DEBUG__PARAMS));
 extern __crit __wunused __sizemalloccall((2)) __nonnull((1)) __ATTRIBUTE_ALIGNED_DEFAULT void *_realloc_d __P((void *__restrict __mallptr, __size_t __bytes __LIBC_DEBUG__PARAMS));
@@ -238,7 +237,19 @@ extern __crit __nonnull((1)) void _free_d __P((void *__restrict __freeptr __LIBC
 extern __crit __nonnull((1)) int _posix_memalign_d __P((void **__restrict __memptr, __size_t __alignment, __size_t __bytes __LIBC_DEBUG__PARAMS));
 extern __crit __wunused __sizemalloccall((1)) __ATTRIBUTE_ALIGNED_PAGE void *_pvalloc_d __P((__size_t __bytes __LIBC_DEBUG__PARAMS));
 extern __crit __wunused __sizemalloccall((1)) __ATTRIBUTE_ALIGNED_PAGE void *_valloc_d __P((__size_t __bytes __LIBC_DEBUG__PARAMS));
-extern __crit __wunused __sizemalloccall((2)) __ATTRIBUTE_ALIGNED_BY_ARGUMENT((1)) void *_memalign_d __P((__size_t __alignment, __size_t __bytes __LIBC_DEBUG__PARAMS));
+extern __crit __wunused __sizemalloccall((2)) __attribute_aligned_a(1) void *_memalign_d __P((__size_t __alignment, __size_t __bytes __LIBC_DEBUG__PARAMS));
+#endif
+#if !defined(__CONFIG_MIN_LIBC__) || defined(__LIBC_DEBUG_X_ARGS)
+extern __crit __wunused __sizemalloccall((1)) __ATTRIBUTE_ALIGNED_DEFAULT void *_malloc_x __P((__size_t __bytes __LIBC_DEBUG_X__PARAMS));
+extern __crit __wunused __sizemalloccall((1,2)) __ATTRIBUTE_ALIGNED_DEFAULT void *_calloc_x __P((__size_t __count, __size_t __bytes __LIBC_DEBUG_X__PARAMS));
+extern __crit __wunused __sizemalloccall((2)) __nonnull((1)) __ATTRIBUTE_ALIGNED_DEFAULT void *_realloc_x __P((void *__restrict __mallptr, __size_t __bytes __LIBC_DEBUG_X__PARAMS));
+extern __wunused __nonnull((1)) __size_t _malloc_usable_size_x __P((void *__restrict __mallptr __LIBC_DEBUG_X__PARAMS));
+extern __crit __nonnull((1)) void _free_x __P((void *__restrict __freeptr __LIBC_DEBUG_X__PARAMS));
+extern __crit __nonnull((1)) int _posix_memalign_x __P((void **__restrict __memptr, __size_t __alignment, __size_t __bytes __LIBC_DEBUG_X__PARAMS));
+extern __crit __wunused __sizemalloccall((1)) __ATTRIBUTE_ALIGNED_PAGE void *_pvalloc_x __P((__size_t __bytes __LIBC_DEBUG_X__PARAMS));
+extern __crit __wunused __sizemalloccall((1)) __ATTRIBUTE_ALIGNED_PAGE void *_valloc_x __P((__size_t __bytes __LIBC_DEBUG_X__PARAMS));
+extern __crit __wunused __sizemalloccall((2)) __attribute_aligned_a(1) void *_memalign_x __P((__size_t __alignment, __size_t __bytes __LIBC_DEBUG_X__PARAMS));
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 // Mallblock extension functions
@@ -280,8 +291,8 @@ extern char const *_mallblock_getaddr_d(struct _mallblock_d const *__restrict se
 #ifndef __pdebug_stackwalker_defined
 #define __pdebug_stackwalker_defined 1
 typedef int (*ptbwalker) __P((void const *__restrict __instruction_pointer,
-                                              void const *__restrict __frame_address,
-                                              __size_t __frame_index, void *__closure));
+                              void const *__restrict __frame_address,
+                              __size_t __frame_index, void *__closure));
 #endif
 
 //////////////////////////////////////////////////////////////////////////
@@ -359,18 +370,30 @@ extern "C++" template<class __T> inline __T *_malloc_untrack(__T *__mallptr) { r
 #endif
 
 #ifndef __INTELLISENSE__
+#ifdef __LIBC_DEBUG_X__ARGS
+#define malloc(bytes)                _malloc_x(bytes __LIBC_DEBUG_X__ARGS)
+#define calloc(count,bytes)          _calloc_x(count,bytes __LIBC_DEBUG_X__ARGS)
+#define realloc(mallptr,bytes)       _realloc_x(mallptr,bytes __LIBC_DEBUG_X__ARGS)
+#define memalign(alignment,bytes)    _memalign_x(alignment,bytes __LIBC_DEBUG_X__ARGS)
+#define free(mallptr)                _free_x(mallptr __LIBC_DEBUG_X__ARGS)
+#define malloc_usable_size(mallptr)  _malloc_usable_size_x(mallptr __LIBC_DEBUG_X__ARGS)
+#define posix_memalign(memptr,alignment,bytes) _posix_memalign_x(memptr,alignment,bytes __LIBC_DEBUG_X__ARGS)
+#define pvalloc(bytes)               _pvalloc_x(bytes __LIBC_DEBUG_X__ARGS)
+#define valloc(bytes)                _valloc_x(bytes __LIBC_DEBUG_X__ARGS)
+#else /* __LIBC_DEBUG_X__ARGS */
 #define malloc(bytes)                _malloc_d(bytes __LIBC_DEBUG__ARGS)
 #define calloc(count,bytes)          _calloc_d(count,bytes __LIBC_DEBUG__ARGS)
 #define realloc(mallptr,bytes)       _realloc_d(mallptr,bytes __LIBC_DEBUG__ARGS)
 #define memalign(alignment,bytes)    _memalign_d(alignment,bytes __LIBC_DEBUG__ARGS)
 #define free(mallptr)                _free_d(mallptr __LIBC_DEBUG__ARGS)
 #define malloc_usable_size(mallptr)  _malloc_usable_size_d(mallptr __LIBC_DEBUG__ARGS)
-#ifndef __KERNEL__
-#define cfree(mallptr)               _free_d(mallptr __LIBC_DEBUG__ARGS)
-#endif /* !__KERNEL__ */
 #define posix_memalign(memptr,alignment,bytes) _posix_memalign_d(memptr,alignment,bytes __LIBC_DEBUG__ARGS)
 #define pvalloc(bytes)               _pvalloc_d(bytes __LIBC_DEBUG__ARGS)
 #define valloc(bytes)                _valloc_d(bytes __LIBC_DEBUG__ARGS)
+#endif /* !__LIBC_DEBUG_X__ARGS */
+#ifndef __KERNEL__
+#define cfree                        free
+#endif /* !__KERNEL__ */
 #endif /* !__INTELLISENSE__ */
 #else /* __LIBC_HAVE_DEBUG_MALLOC */
 // mallblock extension function stubs
@@ -388,7 +411,7 @@ struct _mallblock_d;
 #define _malloc_untrack(mallptr)                      (mallptr)
 #endif /* !__LIBC_HAVE_DEBUG_MALLOC */
 
-#ifndef __KERNEL__
+#ifndef __CONFIG_MIN_LIBC__
 
 //////////////////////////////////////////////////////////////////////////
 // Malloc Info extensions (Not available in kernel mode)
@@ -416,40 +439,38 @@ struct mallinfo {
 extern struct mallinfo mallinfo __P((void));
 extern void malloc_stats __P((void));
 
-#endif /* !__KERNEL__ */
+#endif /* !__CONFIG_MIN_LIBC__ */
 
-#undef __ATTRIBUTE_ALIGNED_BY_CONSTANT
-#undef __ATTRIBUTE_ALIGNED_BY_ARGUMENT
 #undef __ATTRIBUTE_ALIGNED_DEFAULT
 #undef __ATTRIBUTE_ALIGNED_PAGE
 
 __DECL_END
 
 #ifdef __COMPILER_HAVE_PRAGMA_PUSH_MACRO
-// Restore user-defined malloc macros
-#ifdef __malloc_h_realloc_defined
-#undef __malloc_h_realloc_defined
-#pragma pop_macro("realloc")
-#endif
-#ifdef __malloc_h_mallopt_defined
-#undef __malloc_h_mallopt_defined
-#pragma pop_macro("mallopt")
-#endif
-#ifdef __malloc_h_malloc_usable_size_defined
-#undef __malloc_h_malloc_usable_size_defined
-#pragma pop_macro("malloc_usable_size")
-#endif
-#ifdef __malloc_h_malloc_defined
-#undef __malloc_h_malloc_defined
-#pragma pop_macro("malloc")
+/* Restore user-defined malloc macros */
+#ifdef __malloc_h_calloc_defined
+#undef __malloc_h_calloc_defined
+#pragma pop_macro("calloc")
 #endif
 #ifdef __malloc_h_free_defined
 #undef __malloc_h_free_defined
 #pragma pop_macro("free")
 #endif
-#ifdef __malloc_h_calloc_defined
-#undef __malloc_h_calloc_defined
-#pragma pop_macro("calloc")
+#ifdef __malloc_h_malloc_defined
+#undef __malloc_h_malloc_defined
+#pragma pop_macro("malloc")
+#endif
+#ifdef __malloc_h_malloc_usable_size_defined
+#undef __malloc_h_malloc_usable_size_defined
+#pragma pop_macro("malloc_usable_size")
+#endif
+#ifdef __malloc_h_mallopt_defined
+#undef __malloc_h_mallopt_defined
+#pragma pop_macro("mallopt")
+#endif
+#ifdef __malloc_h_realloc_defined
+#undef __malloc_h_realloc_defined
+#pragma pop_macro("realloc")
 #endif
 #ifdef __malloc_h_cfree_defined
 #undef __malloc_h_cfree_defined

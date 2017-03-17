@@ -41,6 +41,7 @@
 #include <kos/kernel/task.h>
 #include <kos/kernel/time.h>
 #include <kos/kernel/tty.h>
+#include <kos/kernel/syslog_io.h>
 #include <kos/syslog.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -78,6 +79,7 @@ void run_init(void) {
  assertf(KE_ISOK(error),"%d",error);
  error = ktask_setname(root,"INIT");
  assertf(KE_ISOK(error),"%d",error);
+ ksyslog_deltty();
  error = ktask_resume_k(root);
  assertf(KE_ISOK(error),"%d",error);
  //printf("Joining process\n");
@@ -92,6 +94,7 @@ void run_init(void) {
 }
 
 int k_sysloglevel = KLOG_DEBUG;
+//int k_sysloglevel = KLOG_TRACE;
 
 
 static void *task_main(void *c) {
@@ -154,53 +157,65 @@ void test_write_file(void) {
 #endif
 }
 
+#include <hw/net/ne2000.h>
 #include <kos/arch/x86/bios.h>
 #include <kos/kernel/arch/x86/realmode.h>
-static void print_realmode_regs(struct realmode_regs const *regs) {
- k_syslogf(KLOG_INFO
-          ,"realmode_regs(%p) {\n"
-           " di = %#.4I16x; si = %#.4I16x\n"
-           " bp = %#.4I16x; sp = %#.4I16x\n"
-           " ebx = %#.8I32x; bx = %#.4I16x; bh = %#.2I8x; bl = %#.2I8x\n"
-           " edx = %#.8I32x; dx = %#.4I16x; dh = %#.2I8x; dl = %#.2I8x\n"
-           " ecx = %#.8I32x; cx = %#.4I16x; ch = %#.2I8x; cl = %#.2I8x\n"
-           " eax = %#.8I32x; ax = %#.4I16x; ah = %#.2I8x; al = %#.2I8x\n"
-           "}"
-          ,regs
-          ,regs->di,regs->si,regs->bp,regs->sp
-          ,regs->ebx,regs->bx,regs->bh,regs->bl
-          ,regs->edx,regs->dx,regs->dh,regs->dl
-          ,regs->ecx,regs->cx,regs->ch,regs->cl
-          ,regs->eax,regs->ax,regs->ah,regs->al);
-}
+#include <hw/video/vga.h>
 
-
-void test_realmode(void) {
- struct timespec tmo = {1,0};
+void test_vga(void) {
  struct realmode_regs regs;
+ struct vgastate mode;
+
  memset(&regs,0,sizeof(regs));
-
- regs.ax = 0x0118;
  regs.ah = BIOS_VGA_SETMODE;
+ regs.al = BIOS_VGA_MODE_TEXT_40x25x16_GRAY;
  regs.al = BIOS_VGA_MODE_GFX_640x480x16;
+ regs.al = BIOS_VGA_MODE_TEXT_80x25x16_COLOR;
+ regs.al = BIOS_VGA_MODE_GFX_320x200x256;
  realmode_interrupt(BIOS_INTNO_VGA,&regs);
 
- memset((char *)0xA0000,0x0f,320*100);
+ kernel_initialize_vga();
 
- regs.ah = 0x0f;
- realmode_interrupt(BIOS_INTNO_VGA,&regs);
- print_realmode_regs(&regs);
+ unsigned pitch = 320;
+ unsigned sx = 320;
+ unsigned sy = 200;
+ char *vid = (char *)0xA0000;
+ for (int y = 0; y < sy; ++y) {
+  for (int x = 0; x < sx; ++x) {
+   vid[x] = (x+y) % 256;
+  }
+  vid += pitch;
+ }
 
- ktask_sleep(ktask_self(),&tmo);
+ vgastate_save(&mode);
+ serial_printf(SERIAL_01,"misc          = %x\n",mode.vs_mis_regs.vm_misc);
+ serial_printf(SERIAL_01,"pitch         = %u\n",vgastate_get_pitch(&mode));
+ serial_printf(SERIAL_01,"dim.x         = %u\n",vgastate_get_dim_x(&mode));
+ serial_printf(SERIAL_01,"dim.y         = %u\n",vgastate_get_dim_y(&mode));
+ serial_printf(SERIAL_01,"h_total       = %u\n",vgastate_get_crt_h_total      (&mode));
+ serial_printf(SERIAL_01,"h_disp        = %u\n",vgastate_get_crt_h_disp       (&mode));
+ serial_printf(SERIAL_01,"h_blank_start = %u\n",vgastate_get_crt_h_blank_start(&mode));
+ serial_printf(SERIAL_01,"h_sync_start  = %u\n",vgastate_get_crt_h_sync_start (&mode));
+ serial_printf(SERIAL_01,"h_blank_end   = %u\n",vgastate_get_crt_h_blank_end  (&mode));
+ serial_printf(SERIAL_01,"h_sync_end    = %u\n",vgastate_get_crt_h_sync_end   (&mode));
+ serial_printf(SERIAL_01,"h_skew        = %u\n",vgastate_get_crt_h_skew       (&mode));
+ serial_printf(SERIAL_01,"v_total       = %u\n",vgastate_get_crt_v_total      (&mode));
+ serial_printf(SERIAL_01,"v_sync_start  = %u\n",vgastate_get_crt_v_sync_start (&mode));
+ serial_printf(SERIAL_01,"v_sync_end    = %u\n",vgastate_get_crt_v_sync_end   (&mode));
+ serial_printf(SERIAL_01,"v_disp_end    = %u\n",vgastate_get_crt_v_disp_end   (&mode));
+ serial_printf(SERIAL_01,"v_blank_start = %u\n",vgastate_get_crt_v_blank_start(&mode));
+ serial_printf(SERIAL_01,"v_blank_end   = %u\n",vgastate_get_crt_v_blank_end  (&mode));
+ //asserte(KE_ISOK(vgastate_set_crt_v_disp_end(&mode,400)));
+ vgastate_restore(&mode);
 
- // switch to 80x25x16 text mode
+ //memset((char *)0xA0000,0x0f,320*200);
+ getchar();
+
+ /* switch to 80x25x16 text mode */
  regs.ah = BIOS_VGA_SETMODE;
  regs.al = BIOS_VGA_MODE_TEXT_80x25x16_COLOR;
  realmode_interrupt(BIOS_INTNO_VGA,&regs);
-
 }
-
-
 
 void kernel_main(void) {
 
@@ -221,15 +236,16 @@ void kernel_main(void) {
  kernel_initialize_tty();
  kernel_initialize_serial();
  kernel_initialize_raminfo(); /*< NOTE: Also initializes arguments/environ. */
+ ksyslog_addtty();
  kernel_initialize_realmode();
  kernel_initialize_interrupts();
  kernel_initialize_gdt();
+ kernel_initialize_paging();
  kernel_initialize_keyboard();
  kernel_initialize_fpu();
  kernel_initialize_cmos();
  kernel_initialize_copyonwrite();
  kernel_initialize_process();
- kernel_initialize_paging();
  kernel_initialize_filesystem();
  kernel_initialize_vfs();
  kernel_initialize_syscall();
@@ -249,9 +265,10 @@ void kernel_main(void) {
 #undef RUN
  //test_taskstat();
  //test_write_file();
- //test_realmode();
+ test_vga();
  run_init();
 
+ ksyslog_deltty();
  karch_irq_disable();
  kernel_finalize_process();
  kshlibrecent_clear(); /*< Must clear before filesystem to close open library files. */

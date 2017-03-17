@@ -34,8 +34,10 @@
 __DECL_BEGIN
 #define KOBJECT_MAGIC_CLOSELOCK 0xC705E70C /*< CLOSELOC */
 
-__struct_fwd(timespec);
-__struct_fwd(kcloselock);
+#ifndef __ASSEMBLY__
+struct timespec;
+struct kcloselock;
+#endif /* __ASSEMBLY__ */
 
 #define kassert_kcloselock(self) kassert_object(self,KOBJECT_MAGIC_CLOSELOCK)
 

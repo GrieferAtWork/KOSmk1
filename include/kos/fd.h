@@ -313,8 +313,10 @@ __local _syscall4(kerrno_t,kfd_readlink,int,fd,char *,buf,
 __local _syscall2(int,kfd_dup,int,fd,int,flags);
 __local _syscall3(int,kfd_dup2,int,fd,int,resfd,int,flags);
 
-__struct_fwd(termios);
-__struct_fwd(winsize);
+#ifndef __ASSEMBLY__
+struct termios;
+struct winsize;
+#endif /* __ASSEMBLY__ */
 
 // TODO: DOC
 // NOTE: pipefd[0] is reader; pipefd[1] is writer.

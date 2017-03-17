@@ -150,6 +150,7 @@ static void (*idt_functions[256])(void) = {
 
 static void set_default_irq_handlers(void);
 void kernel_initialize_interrupts(void) {
+ k_syslogf(KLOG_INFO,"[init] Interrupts...\n");
  memset(&idt,0,sizeof(idt));
  set_default_irq_handlers();
 #define ICW1        0x11
@@ -305,12 +306,14 @@ void __kirq_default_handler(struct kirq_registers *regs) {
     size_t disasm_size = 120;
     physical_eip = (void *)regs->regs.eip;
     if (pd) physical_eip = kpagedir_translate(pd,physical_eip);
+    if (physical_eip) {
 #if 1
-    debug_hexdump(physical_eip,disasm_size);
+     debug_hexdump(physical_eip,disasm_size);
 #else
-    disasm_x86((void *)((uintptr_t)physical_eip-(disasm_size/2)),
-               disasm_size+1,&print_error,NULL,DISASM_FLAG_ADDR);
+     disasm_x86((void *)((uintptr_t)physical_eip-(disasm_size/2)),
+                disasm_size+1,&print_error,NULL,DISASM_FLAG_ADDR);
 #endif
+    }
    }
 #endif
   }

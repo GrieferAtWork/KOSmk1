@@ -167,6 +167,8 @@ kmmutex_deadlock_help_callback(struct kmmutex_deadlock_help_data *data) {
 #endif
 
 #ifndef __INTELLISENSE__
+#undef DEADLOCKHELP_BEGIN
+#undef DEADLOCKHELP_END
 #undef KMMUTEX_ONACQUIRE
 #undef KMMUTEX_ONRELEASE
 #undef KMMUTEX_ONLOCKINUSE

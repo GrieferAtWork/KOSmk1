@@ -29,7 +29,8 @@
 
 __DECL_BEGIN
 
-kerrno_t __ktask_suspend_kr_impl(struct ktask *__restrict self) {
+kerrno_t
+__ktask_suspend_kr_impl(struct ktask *__restrict self) {
  struct ktask **iter,**end,*child;
  kerrno_t error = KE_OK;
  ktask_lock(self,KTASK_LOCK_CHILDREN);
@@ -55,7 +56,8 @@ resumeall:
  }
  return KE_OK;
 }
-kerrno_t __ktask_resume_kr_impl(struct ktask *__restrict self) {
+kerrno_t
+__ktask_resume_kr_impl(struct ktask *__restrict self) {
  struct ktask **iter,**end,*child;
  kerrno_t error = KE_OK;
  ktask_lock(self,KTASK_LOCK_CHILDREN);
@@ -82,14 +84,16 @@ resumeall:
  return KE_OK;
 }
 
-kerrno_t ktask_suspend_kr(struct ktask *__restrict self) {
+kerrno_t
+ktask_suspend_kr(struct ktask *__restrict self) {
  kerrno_t error;
  NOIRQ_BEGIN;
  error = __ktask_suspend_kr_impl(self);
  NOIRQ_END
  return error;
 }
-kerrno_t ktask_resume_kr(struct ktask *__restrict self) {
+kerrno_t
+ktask_resume_kr(struct ktask *__restrict self) {
  kerrno_t error;
  NOIRQ_BEGIN;
  error = __ktask_resume_kr_impl(self);
@@ -98,7 +102,8 @@ kerrno_t ktask_resume_kr(struct ktask *__restrict self) {
 }
 
 #if 0
-static void ktask_terminatechildren(struct ktask *__restrict self, void *exitcode) {
+static void
+ktask_terminatechildren(struct ktask *__restrict self, void *exitcode) {
  struct ktask *child; size_t i; int found_running;
  ktask_lock(self,KTASK_LOCK_CHILDREN);
  while (self->t_children.t_taska) {
@@ -126,16 +131,18 @@ static void ktask_terminatechildren(struct ktask *__restrict self, void *exitcod
   }
   if (!found_running) break;
  }
- // TODO: We must not unlock 'KTASK_LOCK_CHILDREN'
- //       here to prevent new children from being added.
+ /* TODO: We must not unlock 'KTASK_LOCK_CHILDREN'
+  *       here to prevent new children from being added. */
  ktask_unlock(self,KTASK_LOCK_CHILDREN);
 }
 
-kerrno_t _ktask_terminate_kr(struct ktask *__restrict self, void *exitcode) {
+kerrno_t
+_ktask_terminate_kr(struct ktask *__restrict self, void *exitcode) {
  ktask_terminatechildren(self,exitcode);
  return _ktask_terminate_k(self,exitcode);
 }
-kerrno_t ktask_terminate_kr(struct ktask *__restrict self, void *exitcode) {
+kerrno_t
+ktask_terminate_kr(struct ktask *__restrict self, void *exitcode) {
  ktask_terminatechildren(self,exitcode);
  return self == ktask_self()
   ? _ktask_terminate_k(self,exitcode)

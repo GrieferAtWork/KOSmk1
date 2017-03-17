@@ -54,13 +54,21 @@ mode16_reloc_begin:
 	mov32 %eax, %cr0
 	jmp16 $0x0000, $MODE16_SYM(mode16_startup)
 mode16_startup:
+	mov16 $MODE16_SYM(mode16_regs), %sp
+#if KCONFIG_HAVE_X86_REALMODE_SEGMENT_REGISTERS
+	pop16 %ds
+	pop16 %es
+	pop16 %fs
+	pop16 %gs
+	pop16 %ss
+#else /* SEGMENT_REGISTERS... */
 	mov16 $0, %ax
 	mov16 %ax, %ds
 	mov16 %ax, %es
 	mov16 %ax, %fs
 	mov16 %ax, %gs
 	mov16 %ax, %ss
-	mov16 $MODE16_SYM(mode16_regs), %sp
+#endif /* !SEGMENT_REGISTERS... */
 	pop16 %di
 	pop16 %si
 	pop16 %bp
@@ -93,6 +101,13 @@ move16_irqnum:
 	push16 %bp
 	push16 %si
 	push16 %di
+#if KCONFIG_HAVE_X86_REALMODE_SEGMENT_REGISTERS
+	pop16 %ss
+	pop16 %gs
+	pop16 %fs
+	pop16 %es
+	pop16 %ds
+#endif /* SEGMENT_REGISTERS... */
 
 	mov32 MODE16_SYM(mode16_oldcr0), %eax
 	mov32 %eax, %cr0
@@ -159,12 +174,15 @@ GLOBAL_FUNCTION(__realmode_interrupt):
 	pushI %esi
 	pushI %ebp
 
-	/* Save the old stack. */
+	/* Save the old stack (Since we exchange the stack, we
+	 * must store its old address at a static variable, making
+	 * this function unsafe to call in unprotected SMP mode). */
 	movI %esp, mode16_oldstack
 
-	// Jump into 16-bit code
+	/* +++ Jump into 16-bit code */
 	jmp16 $KSEG_KERNEL_CODE_16, $MODE16_SYM(mode16_reloc_begin)
 mode16_leave:
+	/* --- Return from 16-bit code */
 	mov16 $KSEG_KERNEL_DATA, %ax
 	mov16 %ax, %ds
 	mov16 %ax, %es
@@ -172,6 +190,8 @@ mode16_leave:
 	mov16 %ax, %gs
 	mov16 %ax, %ss
 	
+	/* Restore the old stack, allowing us
+	 * to restore registers and more. */
 	movI mode16_oldstack, %esp
 
 	/* Restore old 32-bit registers on the stack. */
@@ -184,7 +204,6 @@ mode16_leave:
 
 	popI %eax
 	movI %eax, %cr0
-//	sti
 
 	/* It is possible for an unhandled interrupt to have occurred
 	 * while we were in real mode. While we can't know for sure,

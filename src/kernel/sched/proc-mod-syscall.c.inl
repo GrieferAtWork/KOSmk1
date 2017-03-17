@@ -20,32 +20,32 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_KERNEL_SYSCALL_SYSCALL_MOD_C_INL__
-#define __KOS_KERNEL_SYSCALL_SYSCALL_MOD_C_INL__ 1
+#ifndef __KOS_KERNEL_SCHED_PROC_MOD_SYSCALL_C_INL__
+#define __KOS_KERNEL_SCHED_PROC_MOD_SYSCALL_C_INL__ 1
 
-#include "syscall-common.h"
-#include <kos/kernel/linker.h>
+#include <kos/compiler.h>
+#include <kos/config.h>
 #include <kos/kernel/proc.h>
+#include <kos/kernel/syscall.h>
+#include <kos/kernel/linker.h>
 #include <kos/kernel/fs/fs.h>
 #include <kos/kernel/fs/file.h>
 #include <kos/kernel/util/string.h>
+#include <kos/task.h>
 #include <sys/types.h>
 #include <stddef.h>
 
 __DECL_BEGIN
 
-/* _syscall4(kerrno_t,kmod_open,char const *,name,size_t,namemax,kmodid_t *,modid,__u32,flags); */
-SYSCALL(sys_kmod_open) {
- LOAD4(char const *,U(name),
-       size_t      ,K(namemax),
-       kmodid_t   *,K(modid),
-       __u32       ,K(flags));
+KSYSCALL_DEFINE_EX4(c,kerrno_t,kmod_open,__user char const *,name,
+                    size_t,namemax,kmodid_t *,modid,__u32,flags) {
  kerrno_t error; struct kshlib *lib;
  kmodid_t resid; struct kproc *proc_self = kproc_self();
- KTASK_CRIT_BEGIN_FIRST
- (void)flags; // TODO
+ KTASK_CRIT_MARK
+ name = (char const *)kpagedir_translate(ktask_self()->t_epd,name); /* TODO: Unsafe. */
+ (void)flags; /* TODO */
  error = kshlib_openlib(name,namemax,&lib);
- if __unlikely(KE_ISERR(error)) goto end;
+ if __unlikely(KE_ISERR(error)) return error;
  error = kproc_insmod(proc_self,lib,&resid);
  kshlib_decref(lib);
  if (__likely(KE_ISOK(error)) &&
@@ -53,25 +53,20 @@ SYSCALL(sys_kmod_open) {
   kproc_delmod(proc_self,resid);
   error = KE_FAULT;
  }
-end:
- KTASK_CRIT_END
- RETURN(error);
+ return error;
 }
 
-/* _syscall3(kerrno_t,kmod_fopen,int,fd,kmodid_t *,modid,__u32,flags); */
-SYSCALL(sys_kmod_fopen) {
- LOAD3(int         ,K(fd),
-       kmodid_t   *,K(modid),
-       __u32       ,K(flags));
+KSYSCALL_DEFINE_EX3(c,kerrno_t,kmod_fopen,int,fd,
+                    __user kmodid_t *,modid,__u32,flags) {
  kerrno_t error; struct kshlib *lib; struct kfile *fp;
  kmodid_t resid; struct kproc *proc_self = kproc_self();
- KTASK_CRIT_BEGIN_FIRST
+ KTASK_CRIT_MARK
  fp = kproc_getfdfile(proc_self,fd);
- if __unlikely(!fp) { error = KE_BADF; goto end; }
+ if __unlikely(!fp) return KE_BADF;
  (void)flags; /* As of now unused. */
  error = kshlib_fopenfile(fp,&lib);
  kfile_decref(fp);
- if __unlikely(KE_ISERR(error)) goto end;
+ if __unlikely(KE_ISERR(error)) return error;
  error = kproc_insmod(proc_self,lib,&resid);
  kshlib_decref(lib);
  if (__likely(KE_ISOK(error)) &&
@@ -79,49 +74,32 @@ SYSCALL(sys_kmod_fopen) {
   kproc_delmod(proc_self,resid);
   error = KE_FAULT;
  }
-end:
- KTASK_CRIT_END
- RETURN(error);
+ return error;
 }
 
-/* _syscall1(kerrno_t,kmod_close,kmodid_t,modid); */
-SYSCALL(sys_kmod_close) {
- LOAD1(kmodid_t,K(modid));
- kerrno_t error;
- KTASK_CRIT_BEGIN_FIRST
- error = kproc_delmod2(kproc_self(),modid,
-                      (__user void *)regs->regs.eip);
- KTASK_CRIT_END
- RETURN(error);
+KSYSCALL_DEFINE_EX1(rc,kerrno_t,kmod_close,kmodid_t,modid) {
+ return kproc_delmod2(kproc_self(),modid,(__user void *)regs->regs.eip);
 }
 
 /* _syscall3(void *,kmod_sym,kmodid_t,modid,char const *,name,size_t,namemax); */
-SYSCALL(sys_kmod_sym) {
- LOAD3(kmodid_t    ,K(modid),
-       char const *,U(name),
-       size_t      ,K(namemax));
- void *result; namemax = strnlen(name,namemax);
- result = kproc_dlsymex2(kproc_self(),modid,name,namemax,
-                         ksymhash_of(name,namemax),
-                        (__user void *)regs->regs.eip);
- RETURN(result);
+KSYSCALL_DEFINE_EX3(r,void *,kmod_sym,kmodid_t,modid,__user char const *,name,size_t,namemax) {
+ name = (char const *)kpagedir_translate(ktask_self()->t_epd,name); /* TODO: Unsafe. */
+ namemax = strnlen(name,namemax);
+ return kproc_dlsymex2(kproc_self(),modid,name,namemax,
+                       ksymhash_of(name,namemax),
+                      (__user void *)regs->regs.eip);
 }
 
-/* _syscall6(kerrno_t,kmod_info,int,procfd,kmodid_t,modid,struct kmodinfo *,buf,size_t,bufsize,size_t *,reqsize,__u32,flags); */
-SYSCALL(sys_kmod_info) {
- LOAD6(int              ,K(procfd),
-       kmodid_t         ,K(modid),
-       struct kmodinfo *,K(buf),
-       size_t           ,K(bufsize),
-       size_t          *,K(preqsize),
-       __u32            ,K(flags));
- kerrno_t error; size_t reqsize;
+/* _syscall6(kerrno_t,kmod_info,int,procfd,kmodid_t,modid,struct kmodinfo *,buf,size_t,bufsize,size_t *,kernel_reqsize,__u32,flags); */
+KSYSCALL_DEFINE_EX6(rc,kerrno_t,kmod_info,int,procfd,kmodid_t,modid,
+                    __user struct kmodinfo *,buf,size_t,bufsize,
+                    __user size_t *,reqsize,__u32,flags) {
+ kerrno_t error; size_t kernel_reqsize;
  struct kproc *proc,*caller = kproc_self();
  struct kprocmodule *module;
  struct kfdentry fd;
- if (!buf) bufsize = 0;
- KTASK_CRIT_BEGIN_FIRST
- if __unlikely(KE_ISERR(error = kproc_getfd(caller,procfd,&fd))) goto end;
+ KTASK_CRIT_MARK
+ if __unlikely(KE_ISERR(error = kproc_getfd(caller,procfd,&fd))) return error;
       if (fd.fd_type == KFDTYPE_PROC) proc = fd.fd_proc;
  else if (fd.fd_type == KFDTYPE_TASK) proc = ktask_getproc(fd.fd_task);
  else { error = KE_BADF; goto end_fd; }
@@ -142,16 +120,15 @@ SYSCALL(sys_kmod_info) {
 parse_module:
   error = kshlib_user_getinfo(module->pm_lib,module->pm_base,
                              (kmodid_t)(module-proc->p_modules.pms_modv),
-                              buf,bufsize,preqsize ? &reqsize : NULL,flags);
+                              buf,bufsize,reqsize ? &kernel_reqsize : NULL,flags);
  }
 end_unlock:
  kproc_unlock(proc,KPROC_LOCK_MODS);
- if (__likely(KE_ISOK(error)) && preqsize &&
-     __unlikely(copy_to_user(preqsize,&reqsize,sizeof(reqsize)))
+ if (__likely(KE_ISOK(error)) && reqsize &&
+     __unlikely(copy_to_user(reqsize,&kernel_reqsize,sizeof(kernel_reqsize)))
      ) error = KE_FAULT;
 end_fd: kfdentry_quit(&fd);
-end: KTASK_CRIT_END
- RETURN(error);
+ return error;
 }
 
 
@@ -217,7 +194,7 @@ ksymbol_fillinfo(struct kproc *__restrict proc,
                  struct ksymbol const *__restrict symbol,
                  ksymaddr_t effective_addr,
                  __user struct ksyminfo *buf,
-                 size_t bufsize, size_t *__restrict reqsize,
+                 size_t bufsize, size_t *__restrict kernel_reqsize,
                  __u32 flags, __u32 symbol_flags) {
  struct ksyminfo info; byte_t *buf_end; kerrno_t error;
  size_t copy_size,bufavail,bufreq,info_size;
@@ -245,7 +222,7 @@ dont_copy_input:
  else if (flags&KMOD_SYMINFO_FLAG_WANTNAME) info_size = offsetafter(struct ksyminfo,si_nmsz);
  else                                       info_size = offsetafter(struct ksyminfo,si_size);
  /* Figure out how much memory is available after the buffer (used for inline strings). */
- *reqsize = info_size;
+ *kernel_reqsize = info_size;
  if (bufsize < info_size) {
   info_size = bufsize;
   bufavail  = 0;
@@ -266,7 +243,7 @@ dont_copy_input:
    if __unlikely(copy_to_user(info.si_name,symbol->s_name,copy_size)) return KE_FAULT;
    if (info.si_name == (char *)buf_end) {
     if (!info.si_nmsz) info.si_name = NULL;
-    *reqsize += bufreq;
+    *kernel_reqsize += bufreq;
     buf_end  += copy_size;
     bufavail -= copy_size;
    }
@@ -300,7 +277,7 @@ dont_copy_input:
     copy_size = bufreq-(size_t)print_error;
     if (info.si_file == (char *)buf_end) {
      if (!info.si_flsz) info.si_file = NULL;
-     *reqsize += bufreq;
+     *kernel_reqsize += bufreq;
      buf_end  += copy_size;
      bufavail -= copy_size;
     }
@@ -320,29 +297,25 @@ dont_copy_input:
 
 
 
-/* _syscall7(kerrno_t,kmod_syminfo,int,procfd,kmodid_t,modid,void const *,addr_or_name,struct ksyminfo *,buf,size_t,bufsize,size_t *,reqsize,__u32,flags); */
-SYSCALL(sys_kmod_syminfo) {
- LOAD7(int                    ,K(procfd),
-       kmodid_t               ,K(modid),
-       struct ksymname const *,K(addr_or_name),
-       struct ksyminfo       *,K(buf),
-       size_t                 ,K(bufsize),
-       size_t                *,K(preqsize),
-       __u32                  ,K(flags));
- kerrno_t error; size_t reqsize;
+/* _syscall7(kerrno_t,kmod_syminfo,int,procfd,kmodid_t,modid,void const *,addr_or_name,struct ksyminfo *,buf,size_t,bufsize,size_t *,kernel_reqsize,__u32,flags); */
+KSYSCALL_DEFINE_EX7(rc,kerrno_t,kmod_syminfo,int,procfd,kmodid_t,modid,
+                    __user void const *,addr_or_name,
+                    __user struct ksyminfo *,buf,size_t,bufsize,
+                    __user size_t *,reqsize,__u32,flags) {
+ kerrno_t error; size_t kernel_reqsize;
  struct kproc *proc,*caller = kproc_self();
  struct kprocmodule *module; size_t sym_name_hash;
  struct ksymname sym_name; __u32 symbol_flags;
  struct kfdentry fd; struct ksymbol const *symbol;
+ KTASK_CRIT_MARK
  if (!buf) bufsize = 0;
- KTASK_CRIT_BEGIN_FIRST
- if __unlikely(KE_ISERR(error = kproc_getfd(caller,procfd,&fd))) goto end;
+ if __unlikely(KE_ISERR(error = kproc_getfd(caller,procfd,&fd))) return error;
       if (fd.fd_type == KFDTYPE_PROC) proc = fd.fd_proc;
  else if (fd.fd_type == KFDTYPE_TASK) proc = ktask_getproc(fd.fd_task);
  else { error = KE_BADF; goto end_fd; }
  if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_MODS))) goto end_fd;
  if (!(flags&KMOD_SYMINFO_FLAG_LOOKUPADDR)) {
-  error = ksymname_copyfromuser(&sym_name,addr_or_name);
+  error = ksymname_copyfromuser(&sym_name,(struct ksymname *)addr_or_name);
   if __unlikely(KE_ISERR(error)) goto end_unlock;
   sym_name_hash = ksymhash_of(sym_name.sn_name,sym_name.sn_size);
  }
@@ -402,8 +375,8 @@ found_symbol:
   assert(module);
   error = ksymbol_fillinfo(proc,module,symbol,(flags&KMOD_SYMINFO_FLAG_LOOKUPADDR)
                            ? ((uintptr_t)addr_or_name-(uintptr_t)module->pm_base)
-                           : symbol->s_addr,buf,bufsize,preqsize
-                           ? &reqsize : NULL,flags,symbol_flags);
+                           : symbol->s_addr,buf,bufsize,reqsize
+                           ? &kernel_reqsize : NULL,flags,symbol_flags);
  }
 end_freename:
  if (!(flags&KMOD_SYMINFO_FLAG_LOOKUPADDR)) {
@@ -412,15 +385,13 @@ end_freename:
  }
 end_unlock:
  kproc_unlock(proc,KPROC_LOCK_MODS);
- if (__likely(KE_ISOK(error)) && preqsize &&
-     __unlikely(copy_to_user(preqsize,&reqsize,sizeof(reqsize)))
+ if (__likely(KE_ISOK(error)) && reqsize &&
+     __unlikely(copy_to_user(reqsize,&kernel_reqsize,sizeof(kernel_reqsize)))
      ) error = KE_FAULT;
 end_fd: kfdentry_quit(&fd);
-end: KTASK_CRIT_END
- RETURN(error);
+ return error;
 }
-
 
 __DECL_END
 
-#endif /* !__KOS_KERNEL_SYSCALL_SYSCALL_MOD_C_INL__ */
+#endif /* !__KOS_KERNEL_SCHED_PROC_MOD_SYSCALL_C_INL__ */

@@ -96,7 +96,7 @@ struct __packed {
  __be16       tcp_checksum;      /*< TCP checksum. */
  __be16       tcp_urgent;        /*< Urgent pointer (For TCP_FLAG_URG: index of last urgent data byte). */
 
- // More options (as allowed through tcp_offset > 5) would go here
+ /* More options (as allowed through tcp_offset > 5) would go here */
  __byte_t     tcp_payload[1460]; /*< [6..1460] TCP payload. */
 };
 
@@ -110,7 +110,7 @@ struct __packed udp_packet {
  __be16   udp_dstport;       /*< Destination port address. */
  __be16   udp_length;        /*< Length of the entire datagram (aka. non-fragmented udp size). */
  __be16   udp_checksum;      /*< UDP Checksum. */
- __byte_t udp_payload[1472]; /*< Payload (of a single frame). */
+ __byte_t udp_payload[1472]; /*< [18..1472] Payload (of a single frame). */
 };
 
 

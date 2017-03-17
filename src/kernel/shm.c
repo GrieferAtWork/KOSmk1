@@ -439,6 +439,7 @@ kshmregion_raw_alloc(size_t clusters, kshm_flag_t flags) {
  result->sre_clusterc = clusters;
  return result;
 }
+
 static __crit void 
 kshmregion_setup_clusters(struct kshmregion *__restrict self) {
  struct kshmcluster *iter,*end;
@@ -532,18 +533,18 @@ kshmregion_merge(__ref struct kshmregion *__restrict min_region,
   cend = (citer = min_region->sre_clusterv)+min_region->sre_clusterc;
   for (; citer != cend; ++citer) {
    assertf(citer->sc_refcnt == 1
-           ,"Min region cluster %Iu/%Iu has refcnt %I32u"
-           ,citer-min_region->sre_clusterv
-           ,min_region->sre_clusterc
-           ,citer->sc_refcnt);
+          ,"Min region cluster %Iu/%Iu has refcnt %I32u"
+          ,citer-min_region->sre_clusterv
+          ,min_region->sre_clusterc
+          ,citer->sc_refcnt);
   }
   cend = (citer = max_region->sre_clusterv)+max_region->sre_clusterc;
   for (; citer != cend; ++citer) {
    assertf(citer->sc_refcnt == 1
-           ,"Max region cluster %Iu/%Iu has refcnt %I32u"
-           ,citer-max_region->sre_clusterv
-           ,max_region->sre_clusterc
-           ,citer->sc_refcnt);
+          ,"Max region cluster %Iu/%Iu has refcnt %I32u"
+          ,citer-max_region->sre_clusterv
+          ,max_region->sre_clusterc
+          ,citer->sc_refcnt);
   }
  }
 #endif
@@ -1568,8 +1569,10 @@ free_max_branch:
 
 
 __crit __nomp kerrno_t
-kshmbranch_fillfork(struct kshmbranch **__restrict proot, struct kpagedir *__restrict self_pd,
-                    struct kshmbranch *__restrict source, struct kpagedir *__restrict source_pd) {
+kshmbranch_fillfork(struct kshmbranch **__restrict proot,
+                    struct kpagedir *__restrict self_pd,
+                    struct kshmbranch *__restrict source,
+                    struct kpagedir *__restrict source_pd) {
  struct kshmbranch *newbranch;
  kshm_flag_t source_flags;
  kerrno_t error = KE_OK;
@@ -1770,16 +1773,16 @@ kshm_mapregion_inherited_unlocked(struct kshm *__restrict self,
 #if 0
  printf("BEGIN Insert leaf %p .. %p\n",branch->sb_map_min,branch->sb_map_max);
  kshmbranch_print(self->s_map.m_root,
-              KSHMBRANCH_ADDRSEMI_INIT,
-              KSHMBRANCH_ADDRLEVEL_INIT);                                  
+                  KSHMBRANCH_ADDRSEMI_INIT,
+                  KSHMBRANCH_ADDRLEVEL_INIT);                                  
 #endif
  error = kshmmap_insert(&self->s_map,branch);
  if __unlikely(KE_ISERR(error)) goto err_branch;
 #if 0
  printf("END Insert leaf %p .. %p\n",branch->sb_map_min,branch->sb_map_max);
  kshmbranch_print(self->s_map.m_root,
-              KSHMBRANCH_ADDRSEMI_INIT,
-              KSHMBRANCH_ADDRLEVEL_INIT);
+                  KSHMBRANCH_ADDRSEMI_INIT,
+                  KSHMBRANCH_ADDRLEVEL_INIT);
 #endif
  assert(kshmmap_locate(&self->s_map,branch->sb_map_min) == branch);
  assert(kshmmap_locate(&self->s_map,branch->sb_map_max) == branch);
@@ -2365,24 +2368,26 @@ true_shared_access:;
   * Such a memory layout will result from multiple touches of
   * consecutive branches, resulting from something like:
   * >> void *big_memory = malloc(4096*4096*128); // 128Mib
-  * >> fork();
+  * >> fork(); // Invoke COW semantics
   * >> memset(big_memory,0xAA,malloc_usable_size(big_memory));
   * >> exit(0);
   *
   * Memory is modified post-fork, meaning that copy-on-write is active,
   * but since the memory modifications aren't performed all at once,
-  * the kernel will get informed about the touches in chunks of
+  * the kernel will only get informed about the touches in chunks of
   * (by default) about ~64Kib (KSHM_CLUSTERSIZE*PAGESIZE).
   * The actual SHM mappings at that time will look as follows:
   * #1 [.................big_memory....] (Before 'memset')
   * #2 [.][..............big_memory....] (After 'memset' begins writing the first cluster)
   * #3 [.][.][...........big_memory....] (After 'memset' begins writing the second cluster)
-  * #? [.][.][.][.][.][..big_memory....] (It get worse and worse...)
+  * #4 [.][.][.][........big_memory....] (...)
+  * #6 [.][.][.][.][.][..big_memory....] (It get worse and worse...)
   *
   * The following code detects such situations starting at #3,
-  * it will merge the two branches and the associated regions
-  * into a single branch+region.
+  * meaning the two branches and the associated regions into
+  * a single branch+region.
   * #3 [....][...........big_memory....] (Layout after #3 with auto-merging)
+  * #4 [.......][........big_memory....] (...)
   */
 #define CHECK_MIN_NEIGHBOR   (!did_min_split && branch->sb_rstart == 0)
 #define CHECK_MAX_NEIGHBOR   (!did_max_split && (branch->sb_rstart+branch->sb_rpages) == region->sre_chunk.sc_pages)
@@ -2797,6 +2802,7 @@ def_handler:
 
 
 void kernel_initialize_copyonwrite(void) {
+ k_syslogf(KLOG_INFO,"[init] Copy-on-write...\n");
  /* Install the COW #PF handler. */
  kirq_sethandler(KIRQ_EXCEPTION_PF,&kshm_pf_handler);
 }
@@ -2806,6 +2812,7 @@ __DECL_END
 #ifndef __INTELLISENSE__
 #include "shm-map.c.inl"
 #include "shm-ldt.c.inl"
+#include "shm-syscall.c.inl"
 #define WRITEABLE
 #include "shm-translate.c.inl"
 #include "shm-translate.c.inl"

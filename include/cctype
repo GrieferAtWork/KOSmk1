@@ -90,9 +90,16 @@ __local __wunused __constcall int _tolower(int __ch) { __assertf(isupper(__ch),"
 __local __wunused __constcall int _toupper(int __ch) { __assertf(islower(__ch),"'%c' is not lowercase",__ch); return __ch+('A'-'a'); }
 __forcelocal __wunused __constcall int __tolower_d(int __ch __LIBC_DEBUG__PARAMS) { __assert_atf("_tolower(...)",0,isupper(__ch),"'%c' is not uppercase",__ch); return __ch+('a'-'A'); }
 __forcelocal __wunused __constcall int __toupper_d(int __ch __LIBC_DEBUG__PARAMS) { __assert_atf("_toupper(...)",0,islower(__ch),"'%c' is not lowercase",__ch); return __ch+('A'-'a'); }
-// These macros are OK, as they still require the 'std::' prefix
+__forcelocal __wunused __constcall int __tolower_x(int __ch __LIBC_DEBUG_X__PARAMS) { __assert_xatf("_tolower(...)",0,isupper(__ch),"'%c' is not uppercase",__ch); return __ch+('a'-'A'); }
+__forcelocal __wunused __constcall int __toupper_x(int __ch __LIBC_DEBUG_X__PARAMS) { __assert_xatf("_toupper(...)",0,islower(__ch),"'%c' is not lowercase",__ch); return __ch+('A'-'a'); }
+/* These macros are OK, as they still require the 'std::' prefix */
+#ifdef __LIBC_DEBUG_X__ARGS
+#define _tolower(ch) __tolower_x(ch __LIBC_DEBUG_X__ARGS)
+#define _toupper(ch) __toupper_x(ch __LIBC_DEBUG_X__ARGS)
+#else
 #define _tolower(ch) __tolower_d(ch __LIBC_DEBUG__ARGS)
 #define _toupper(ch) __toupper_d(ch __LIBC_DEBUG__ARGS)
+#endif
 #else
 __local int _tolower(int __ch) { return __ch+('a'-'A'); }
 __local int _toupper(int __ch) { return __ch+('A'-'a'); }

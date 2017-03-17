@@ -25,12 +25,13 @@
 
 #include <kos/compiler.h>
 #include <kos/kernel/debug.h>
-#include <kos/kernel/time.h>
 #include <kos/kernel/proc.h>
+#include <kos/kernel/time.h>
+#include <kos/syslog.h>
 #include <kos/timespec.h>
+#include <stdio.h>
 #include <sys/io.h>
 #include <time.h>
-#include <stdio.h>
 
 __DECL_BEGIN
 
@@ -88,6 +89,7 @@ static __u8 cmos_regb;
 
 
 void kernel_initialize_cmos(void) {
+ k_syslogf(KLOG_INFO,"[init] CMOS...\n");
  cmos_regb = cmos_getregister(CMOS_REGISTER_B);
 }
 
@@ -230,6 +232,41 @@ kerrno_t cmos_setnow(struct cmostime const *__restrict tmnow) {
    && (settm.ct_year == updatedtm.ct_year)
    && (setcent == updatedcent)) break;
  }
+ return KE_OK;
+}
+
+__DECL_END
+
+
+#include <kos/kernel/proc.h>
+#include <kos/kernel/syscall.h>
+#include <kos/kernel/util/string.h>
+
+__DECL_BEGIN
+
+KSYSCALL_DEFINE1(kerrno_t,ktime_getnow,__user struct timespec *,ptm) {
+ struct timespec tmnow;
+ kerrno_t error = ktime_getnow(&tmnow);
+ if (__likely(KE_ISOK(error)) && 
+     __unlikely(copy_to_user(ptm,&tmnow,sizeof(tmnow)))
+     ) error = KE_FAULT;
+ return error;
+}
+
+KSYSCALL_DEFINE1(kerrno_t,ktime_setnow,__user struct timespec *,ptm) {
+ kerrno_t error;
+ struct timespec tmnow;
+ KTASK_CRIT_BEGIN_FIRST
+ if __unlikely(copy_from_user(&tmnow,ptm,sizeof(tmnow))) error = KE_FAULT;
+ else error = ktime_setnow(&tmnow);
+ KTASK_CRIT_END
+ return error;
+}
+
+KSYSCALL_DEFINE1(kerrno_t,ktime_getcpu,struct timespec *,ptm) {
+ struct timespec tmnow;
+ ktime_getcpu(&tmnow);
+ if __unlikely(copy_to_user(ptm,&tmnow,sizeof(tmnow))) return KE_FAULT;
  return KE_OK;
 }
 

@@ -37,6 +37,8 @@
 #include <errno.h>
 #endif
 
+#undef __LIBC_HAVE_DEBUG_MEMCHECKS
+
 #include <kos/arch/string.h>
 #include <kos/config.h>
 #ifdef __LIBC_HAVE_DEBUG_MEMCHECKS
@@ -47,6 +49,45 @@
 #   define __STRING_ASSERTBYTE(p)  (void)0
 #   define __STRING_ASSERTMEM(p,s) assert(!(s) || (p))
 #endif
+
+/* Avoid repeated use of strchr.
+ * Instead, cache the string's length and use memchr.
+ * >> This mode is used if the arch doesn't provide
+ *    special optimizations for strchr, but does
+ *    offer some for memchr and strlen. */
+#if (defined(karch_memchr) && \
+     defined(karch_strlen)) && \
+    !defined(karch_strchr)
+#define STRING_AVOID_STRCHR 1
+#endif
+#if (defined(karch_memchr) && \
+     defined(karch_strnlen)) && \
+    !defined(karch_strnchr)
+#define STRING_AVOID_STRNCHR 1
+#endif
+
+#ifndef __LIBC_HAVE_DEBUG_MEMCHECKS
+#ifdef karch_memchr
+#   define string_memchr  karch_memchr
+#endif
+#ifdef karch_strlen
+#   define string_strlen  karch_strlen
+#endif
+#ifdef karch_strnlen
+#   define string_strnlen karch_strnlen
+#endif
+#endif /* !__LIBC_HAVE_DEBUG_MEMCHECKS */
+
+#ifndef string_memchr
+#define string_memchr  memchr
+#endif
+#ifndef string_strlen
+#define string_strlen  strlen
+#endif
+#ifndef string_strnlen
+#define string_strnlen strnlen
+#endif
+
 
 __DECL_BEGIN
 
@@ -217,14 +258,13 @@ __public void *memrchr(void const *p, int needle, size_t bytes) {
  __STRING_ASSERTMEM(p,bytes);
  return karch_memrchr(p,needle,bytes);
 #else
- byte_t *iter,*end,*result = NULL;
+ byte_t *iter;
  __STRING_ASSERTMEM(p,bytes);
- end = (iter = (byte_t *)p)+bytes;
- while (iter != end) {
-  if (*iter == needle) result = iter;
-  ++iter;
+ iter = (byte_t *)p+bytes;
+ while (iter-- != (byte_t *)p) {
+  if (*iter == needle) return iter;
  }
- return result;
+ return NULL;
 #endif
 }
 #endif
@@ -278,14 +318,14 @@ _memrmem(void const *haystack, size_t haystacklen,
 #endif
 
 
-#if !defined(memcat) || !defined(__CONFIG_MIN_LIBC__)
+#if !defined(strcat) || !defined(__CONFIG_MIN_LIBC__)
 #undef strcat
 __public char *strcat(char *dst, char const *src) {
  return strcpy(_strend(dst),src);
 }
 #endif
 
-#if !defined(memncat) || !defined(__CONFIG_MIN_LIBC__)
+#if !defined(strncat) || !defined(__CONFIG_MIN_LIBC__)
 #undef strncat
 __public char *strncat(char *dst, char const *src,
                        size_t maxchars) {
@@ -407,7 +447,13 @@ __public size_t strspn(char const *str, char const *spanset) {
  return karch_strspn(str,spanset);
 #else
  char const *iter = str;
+#ifdef STRING_AVOID_STRCHR
+ size_t spanset_size = string_strlen(spanset)*sizeof(char);
+ while ((__STRING_ASSERTBYTE(iter),
+         string_memchr(spanset,*iter,spanset_size))) ++iter;
+#else
  while ((__STRING_ASSERTBYTE(iter),strchr(spanset,*iter))) ++iter;
+#endif
  return (size_t)(iter-str);
 #endif
 }
@@ -421,8 +467,18 @@ __public size_t _strnspn(char const *str, size_t maxstr,
    !defined(__LIBC_HAVE_DEBUG_MEMCHECKS)
  return karch_strnspn(str,maxstr,spanset,maxspanset);
 #else
- char const *iter,*end; end = (iter = str)+maxstr;
- while (iter != end && (__STRING_ASSERTBYTE(iter),strnchr(spanset,maxspanset,*iter))) ++iter;
+ char const *iter,*end;
+#ifdef STRING_AVOID_STRNCHR
+ maxspanset = string_strnlen(spanset,maxspanset)*sizeof(char);
+#endif
+ end = (iter = str)+maxstr;
+#ifdef STRING_AVOID_STRNCHR
+ while (iter != end && (__STRING_ASSERTBYTE(iter),
+        string_memchr(spanset,*iter,maxspanset))) ++iter;
+#else
+ while (iter != end && (__STRING_ASSERTBYTE(iter),
+        strnchr(spanset,maxspanset,*iter))) ++iter;
+#endif
  return (size_t)(iter-str);
 #endif
 }
@@ -436,7 +492,14 @@ __public size_t strcspn(char const *str, char const *spanset) {
  return karch_strcspn(str,spanset);
 #else
  char const *iter = str;
- while ((__STRING_ASSERTBYTE(iter),*iter && !strchr(spanset,*iter))) ++iter;
+#ifdef STRING_AVOID_STRCHR
+ size_t spanset_size = string_strlen(spanset)*sizeof(char);
+ while ((__STRING_ASSERTBYTE(iter),*iter &&
+        !string_memchr(spanset,*iter,spanset_size))) ++iter;
+#else
+ while ((__STRING_ASSERTBYTE(iter),*iter &&
+        !strchr(spanset,*iter))) ++iter;
+#endif
  return (size_t)(iter-str);
 #endif
 }
@@ -451,9 +514,16 @@ __public size_t _strncspn(char const *str, size_t maxstr,
  return karch_strncspn(str,maxstr,spanset,maxspanset);
 #else
  char const *iter,*end; end = (iter = str)+maxstr;
+#ifdef STRING_AVOID_STRNCHR
+ maxspanset = string_strnlen(spanset,maxspanset)*sizeof(char);
+ while (iter != end && (__STRING_ASSERTBYTE(iter),*iter &&
+                       !string_memchr(spanset,*iter,maxspanset))
+        ) ++iter;
+#else
  while (iter != end && (__STRING_ASSERTBYTE(iter),*iter &&
                        !strnchr(spanset,maxspanset,*iter))
         ) ++iter;
+#endif
  return (size_t)(iter-str);
 #endif
 }
@@ -1200,8 +1270,6 @@ __public char *_strinrpbrk(char const *haystack, size_t max_haychars,
 __public char *_strset(char *__restrict dst, int chr) {
 #if defined(karch_strset) && !defined(__LIBC_HAVE_DEBUG_MEMCHECKS)
  return karch_strset(dst,chr);
-#elif defined(karch_memset) && defined(karch_strlen)
- return (char *)memset(dst,chr,strlen(dst));
 #else
  char *iter = dst;
  while ((__STRING_ASSERTBYTE(iter),*iter)) *iter = (char)chr;
@@ -1302,17 +1370,28 @@ strtok_r(char *__restrict str,
          const char *__restrict delim,
          char **__restrict saveptr) {
  char ch,*result;
+#ifdef STRING_AVOID_STRCHR
+ size_t delim_size = string_strlen(delim)*sizeof(char);
+#endif
  assert(delim);
  assert(saveptr);
  if (!str && (str = *saveptr) == NULL) return NULL;
  /* Skip leading delimiters. */
+#ifdef STRING_AVOID_STRCHR
+ while ((ch = *str++) != '\0' && string_memchr(delim,ch,delim_size));
+#else
  while ((ch = *str++) != '\0' && strchr(delim,ch));
+#endif
  if __unlikely(ch == '\0') goto stop; /* End of string. */
  result = str-1; /* Will return the next non-empty segment. */
  for (;;) {
   ch = *str++;
   if __unlikely(ch == '\0') { str = NULL; break; }
+#ifdef STRING_AVOID_STRCHR
+  if (string_memchr(delim,ch,delim_size)) { str[-1] = '\0'; break; }
+#else
   if (strchr(delim,ch)) { str[-1] = '\0'; break; }
+#endif
  }
  *saveptr = str;
  return result;
@@ -1328,17 +1407,28 @@ __public char *
 _strntok_r(char *__restrict str, const char *__restrict delim,
            size_t delim_max, char **__restrict saveptr) {
  char ch,*result;
+#ifdef STRING_AVOID_STRNCHR
+ delim_max = string_strnlen(delim,delim_max)*sizeof(char);
+#endif
  assert(delim);
  assert(saveptr);
  if (!str && (str = *saveptr) == NULL) return NULL;
  /* Skip leading delimiters. */
+#ifdef STRING_AVOID_STRNCHR
+ while ((ch = *str++) != '\0' && string_memchr(delim,ch,delim_max));
+#else
  while ((ch = *str++) != '\0' && strnchr(delim,delim_max,ch));
+#endif
  if __unlikely(ch == '\0') goto stop; /* End of string. */
  result = str-1; /* Will return the next non-empty segment. */
  for (;;) {
   ch = *str++;
   if __unlikely(ch == '\0') { str = NULL; break; }
+#ifdef STRING_AVOID_STRNCHR
+  if (string_memchr(delim,ch,delim_max)) { str[-1] = '\0'; break; }
+#else
   if (strnchr(delim,delim_max,ch)) { str[-1] = '\0'; break; }
+#endif
  }
  *saveptr = str;
  return result;

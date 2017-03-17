@@ -3,3 +3,4 @@ binutils/*
 build/*
 make.sh
 bochsrc.bxrc
+*.iso

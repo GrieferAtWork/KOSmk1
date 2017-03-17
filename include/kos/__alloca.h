@@ -53,16 +53,32 @@ __DECL_END
 #ifdef __KERNEL_HAVE_DEBUG_STACKCHECKS
 #include <kos/types.h>
 __DECL_BEGIN
+#ifdef __LIBC_DEBUG_X__ARGS
+extern void debug_checkalloca_x __P((__size_t bytes __LIBC_DEBUG_X__PARAMS));
+#else
 extern void debug_checkalloca_d __P((__size_t bytes __LIBC_DEBUG__PARAMS));
+#endif
 __DECL_END
 #ifndef __NO_xblock
+#ifdef __LIBC_DEBUG_X__ARGS
+#define __alloca(s) \
+ __xblock({ __size_t const __alloca_s = (s); \
+            debug_checkalloca_x(__alloca_s __LIBC_DEBUG_X__ARGS);\
+            __xreturn __builtin_alloca(__alloca_s);\
+ })
+#else /* __LIBC_DEBUG_X__ARGS */
 #define __alloca(s) \
  __xblock({ __size_t const __alloca_s = (s); \
             debug_checkalloca_d(__alloca_s __LIBC_DEBUG__ARGS);\
             __xreturn __builtin_alloca(__alloca_s);\
  })
+#endif /* !__LIBC_DEBUG_X__ARGS */
+#else
+#ifdef __LIBC_DEBUG_X__ARGS
+#define __alloca(s) (debug_checkalloca_x(s __LIBC_DEBUG_X__ARGS),__builtin_alloca(s))
 #else
 #define __alloca(s) (debug_checkalloca_d(s __LIBC_DEBUG__ARGS),__builtin_alloca(s))
+#endif
 #endif
 #endif /* __KERNEL_HAVE_DEBUG_STACKCHECKS */
 #endif /* __KERNEL__ */

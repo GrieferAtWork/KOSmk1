@@ -48,6 +48,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "include", "include", "{FC82
 		..\include\curses.h = ..\include\curses.h
 		..\include\dirent.h = ..\include\dirent.h
 		..\include\dlfcn.h = ..\include\dlfcn.h
+		..\include\dos.h = ..\include\dos.h
 		..\include\elf.h = ..\include\elf.h
 		..\include\envlock.h = ..\include\envlock.h
 		..\include\errno.h = ..\include\errno.h
@@ -107,6 +108,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kos", "kos", "{0BC61691-24B
 		..\include\kos\compiler-gcc.h = ..\include\kos\compiler-gcc.h
 		..\include\kos\compiler-intellisense.h = ..\include\kos\compiler-intellisense.h
 		..\include\kos\compiler-msvc.h = ..\include\kos\compiler-msvc.h
+		..\include\kos\compiler-sparse.h = ..\include\kos\compiler-sparse.h
 		..\include\kos\compiler.h = ..\include\kos\compiler.h
 		..\include\kos\config.h = ..\include\kos\config.h
 		..\include\kos\endian.h = ..\include\kos\endian.h
@@ -231,6 +233,18 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libcmd", "libs\libcmd.vcxproj", "{43B74335-6A24-4D76-BC6F-1258633E466D}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pe-test", "userland\pe-test.vcxproj", "{1C200B65-C44E-41C3-B66C-67014189C758}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "hw", "hw", "{81DF2AB2-5463-40A2-B23A-6E7F2215F7B0}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "video", "video", "{0343CB51-A6B6-4369-B679-5F2207D0E825}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\hw\video\vga.h = ..\include\hw\video\vga.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "net", "net", "{2FF07674-83FB-4FE1-A80A-A023FCD30A74}"
+	ProjectSection(SolutionItems) = preProject
+		..\include\hw\net\ne2000.h = ..\include\hw\net\ne2000.h
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -376,5 +390,8 @@ Global
 		{79BE4F16-35EA-4BC9-868F-01AE5F1D733E} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
 		{43B74335-6A24-4D76-BC6F-1258633E466D} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
 		{1C200B65-C44E-41C3-B66C-67014189C758} = {9430368A-404E-4917-982A-DABD0023453A}
+		{81DF2AB2-5463-40A2-B23A-6E7F2215F7B0} = {FC824D74-9E67-461A-ACFB-ED2065E7F255}
+		{0343CB51-A6B6-4369-B679-5F2207D0E825} = {81DF2AB2-5463-40A2-B23A-6E7F2215F7B0}
+		{2FF07674-83FB-4FE1-A80A-A023FCD30A74} = {81DF2AB2-5463-40A2-B23A-6E7F2215F7B0}
 	EndGlobalSection
 EndGlobal

@@ -40,8 +40,10 @@ __DECL_BEGIN
 #define KOBJECT_MAGIC_RWLOCK 0x5770C4 /*< RWLOCK */
 #define kassert_krwlock(self) kassert_object(self,KOBJECT_MAGIC_RWLOCK)
 
-__struct_fwd(timespec);
-__struct_fwd(krwlock);
+#ifndef __ASSEMBLY__
+struct timespec;
+struct krwlock;
+#endif /* __ASSEMBLY__ */
 
 //////////////////////////////////////////////////////////////////////////
 // A R/W lock (long: Read-write lock) is a special kind of lock

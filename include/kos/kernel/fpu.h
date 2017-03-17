@@ -33,7 +33,7 @@ __DECL_BEGIN
 
 
 #ifdef __MAIN_C__
-extern __crit void kernel_initialize_fpu(void);
+extern void kernel_initialize_fpu(void);
 #endif
 #endif /* !__ASSEMBLY__ */
 

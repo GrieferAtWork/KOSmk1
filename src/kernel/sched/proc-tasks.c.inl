@@ -42,8 +42,9 @@ void kproc_deltask(struct kproc *__restrict self,
  kerrno_t error; kassert_kproc(self);
  kassert_object(task,KOBJECT_MAGIC_TASK);
  error = kproc_lock(self,KPROC_LOCK_THREADS);
- asserte(ktasklist_erase(&self->p_threads,task->t_tid) == task);
- if (!self->p_threads.t_taska) kproc_close(self);
+ if (ktasklist_erase(&self->p_threads,task->t_tid)) {
+  if (!self->p_threads.t_taska) kproc_close(self);
+ }
  if __likely(KE_ISOK(error)) kproc_unlock(self,KPROC_LOCK_THREADS);
 }
 

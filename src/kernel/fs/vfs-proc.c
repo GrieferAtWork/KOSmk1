@@ -271,6 +271,7 @@ struct kinodetype kvinodetype_proc_pid_root = { KVINODEPIDFILETYPE_INIT .it_read
 struct kvprocdirent vfsent_proc_pid[] = {
  KVPROCDIRENT_INIT("cwd", &kvinodetype_proc_pid_cwd, &kvfile_empty_type,S_IFLNK),
  KVPROCDIRENT_INIT("exe", &kvinodetype_proc_pid_exe, &kvfile_empty_type,S_IFLNK),
+ KVPROCDIRENT_INIT("file",&kvinodetype_proc_pid_exe, &kvfile_empty_type,S_IFLNK), /* FreeBSD */
  KVPROCDIRENT_INIT("root",&kvinodetype_proc_pid_root,&kvfile_empty_type,S_IFLNK),
  KVPROCDIRENT_INIT_SENTINAL
 };
@@ -442,8 +443,9 @@ struct kinodetype kvinodetype_proc_kcore = {
 extern struct kvsdirsuperblock kvfs_proc;
 extern struct ksuperblocktype kvfsproc_type;
 static struct kvsdirent vfsent_proc[] = {
- KVSDIRENT_INIT("kcore",&kvinode_proc_kcore),
- KVSDIRENT_INIT("self", &kvinode_proc_self),
+ KVSDIRENT_INIT("curproc",&kvinode_proc_self), /* FreeBSD & NetBSD */
+ KVSDIRENT_INIT("kcore",  &kvinode_proc_kcore),
+ KVSDIRENT_INIT("self",   &kvinode_proc_self),
  KVSDIRENT_INIT_SENTINAL
 };
 

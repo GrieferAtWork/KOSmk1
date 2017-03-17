@@ -38,11 +38,13 @@
 
 __DECL_BEGIN
 
-__struct_fwd(kfiletype);
-__struct_fwd(kfile);
-__struct_fwd(kinode);
-__struct_fwd(kdirent);
-__struct_fwd(kdirentname);
+#ifndef __ASSEMBLY__
+struct kfiletype;
+struct kfile;
+struct kinode;
+struct kdirent;
+struct kdirentname;
+#endif /* __ASSEMBLY__ */
 
 #define KOBJECT_MAGIC_FILE       0xF17E     /*< FILE. */
 #define kassert_kfile(ob)       kassert_refobject(ob,f_refcnt,KOBJECT_MAGIC_FILE)

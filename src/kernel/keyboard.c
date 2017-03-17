@@ -163,6 +163,7 @@ static void kb_irq_handler(struct kirq_registers *__restrict regs) {
 static void kernel_initialize_bklayout(void);
 
 void kernel_initialize_keyboard(void) {
+ k_syslogf(KLOG_INFO,"[init] Keyboard...\n");
  kirq_sethandler(33,&kb_irq_handler);
  inb(PS2_DATA);
  kernel_initialize_bklayout();

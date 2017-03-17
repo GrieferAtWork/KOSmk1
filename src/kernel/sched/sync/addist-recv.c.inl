@@ -55,10 +55,11 @@ again:
  /* Move the ticket to the ready list. */
  assert((ticket->dt_prev != NULL) == (ticket != self->ad_tnready));
  if (ticket->dt_next) ticket->dt_next->dt_prev = ticket->dt_prev;
- if (ticket->dt_prev) ticket->dt_prev->dt_next = ticket->dt_next;
+ if (ticket->dt_prev)
+  ticket->dt_prev->dt_next = ticket->dt_next,
+  ticket->dt_prev = NULL;
  else self->ad_tnready = ticket->dt_next;
- ticket->dt_prev = NULL;
- ticket->dt_next = self->ad_tiready;
+ ticket->dt_next  = self->ad_tiready;
  self->ad_tiready = ticket;
 #if KCONFIG_HAVE_DEBUG_TRACKEDDDIST
  assert(!ticket->dt_rd_tb);
@@ -99,7 +100,7 @@ again:
  assert((ticket->dt_prev != NULL) == (ticket != self->ad_tiready));
  --self->ad_ready;
  /* Do some cleanup to remove the ticket from the list of
-  * ready tickets, adding it to that of non-ready ones. */
+  * ready tickets, adding it to that of the non-ready ones. */
  if (ticket->dt_next) ticket->dt_next->dt_prev = ticket->dt_prev;
  if (ticket->dt_prev)
   ticket->dt_prev->dt_next = ticket->dt_next,

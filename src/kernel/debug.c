@@ -48,15 +48,38 @@ __DECL_BEGIN
 extern __u8 stack_top[];
 extern __u8 stack_bottom[];
 
-void debug_checkalloca_d(__size_t bytes __LIBC_DEBUG__PARAMS) {
+static __noinline void
+__debug_checkalloca_x_impl(__size_t bytes __LIBC_DEBUG_X__PARAMS);
+
+#ifndef __LIBC_DEBUG_X__ARGS
+__noinline void
+debug_checkalloca_d(__size_t bytes __LIBC_DEBUG__PARAMS) {
+#ifdef __DEBUG__
+ struct __libc_debug dbg = {__LIBC_DEBUG_FILE,__LIBC_DEBUG_LINE,__LIBC_DEBUG_FUNC};
+ __debug_checkalloca_x_impl(bytes,&dbg);
+#else
+ __debug_checkalloca_x_impl(bytes __LIBC_DEBUG__NULL);
+#endif
+}
+#endif /* !__LIBC_DEBUG_X__ARGS */
+
+#ifdef __LIBC_DEBUG_X__ARGS
+__noinline void
+debug_checkalloca_x(__size_t bytes __LIBC_DEBUG_X__PARAMS) {
+ __debug_checkalloca_x_impl(bytes __LIBC_DEBUG_X__FWD);
+}
+#endif /* __LIBC_DEBUG_X__ARGS */
+
+static __noinline void
+__debug_checkalloca_x_impl(__size_t bytes __LIBC_DEBUG_X__PARAMS) {
  struct ktask *task_self = ktask_self();
  uintptr_t base_addr,alloc_addr;
  __asm_volatile__("movl %%ebp, %0" : "=r" (base_addr));
  alloc_addr = base_addr-bytes;
- __assert_atf("alloca(...)",1,alloc_addr <= base_addr
-             ,"Stack overflow while alloca-ing %Iu (%#Ix) bytes\n"
-              ">> Negative address offset by %Iu (%#Ix) bytes"
-             ,bytes,bytes,alloc_addr-base_addr,alloc_addr-base_addr);
+ __assert_xatf("alloca(...)",2,alloc_addr <= base_addr
+              ,"Stack overflow while alloca-ing %Iu (%#Ix) bytes\n"
+               ">> Negative address offset by %Iu (%#Ix) bytes"
+              ,bytes,bytes,alloc_addr-base_addr,alloc_addr-base_addr);
  if (task_self) {
   kassert_ktask(task_self);
 #if 1
@@ -102,22 +125,22 @@ void debug_checkalloca_d(__size_t bytes __LIBC_DEBUG__PARAMS) {
               ,(uintptr_t)task_self->t_kstack-base_addr
               ,(uintptr_t)task_self->t_kstack-base_addr);
 #endif
-  __assert_atf("alloca(...)",1
-              ,(uintptr_t)task_self->t_kstack <= alloc_addr
-              ,"Stack overflow while alloca-ing %Iu (%#Ix) bytes\n"
-               ">> cannot accomodate %Iu (%#Ix) bytes"
-              ,bytes,bytes
-              ,(uintptr_t)task_self->t_kstack-alloc_addr
-              ,(uintptr_t)task_self->t_kstack-alloc_addr);
+  __assert_xatf("alloca(...)",2
+               ,(uintptr_t)task_self->t_kstack <= alloc_addr
+               ,"Stack overflow while alloca-ing %Iu (%#Ix) bytes\n"
+                ">> cannot accomodate %Iu (%#Ix) bytes"
+               ,bytes,bytes
+               ,(uintptr_t)task_self->t_kstack-alloc_addr
+               ,(uintptr_t)task_self->t_kstack-alloc_addr);
  } else if (base_addr >= (uintptr_t)stack_bottom &&
             base_addr < (uintptr_t)stack_top) {
-  __assert_atf("alloca(...)",1
-              ,(uintptr_t)stack_bottom <= alloc_addr
-              ,"Stack overflow while alloca-ing %Iu (%#Ix) bytes\n"
-               ">> cannot accomodate %Iu (%#Ix) bytes"
-              ,bytes,bytes
-              ,(uintptr_t)stack_bottom-alloc_addr
-              ,(uintptr_t)stack_bottom-alloc_addr);
+  __assert_xatf("alloca(...)",2
+               ,(uintptr_t)stack_bottom <= alloc_addr
+               ,"Stack overflow while alloca-ing %Iu (%#Ix) bytes\n"
+                ">> cannot accomodate %Iu (%#Ix) bytes"
+               ,bytes,bytes
+               ,(uintptr_t)stack_bottom-alloc_addr
+               ,(uintptr_t)stack_bottom-alloc_addr);
  }
 }
 #endif /* __KERNEL_HAVE_DEBUG_STACKCHECKS */
@@ -177,7 +200,7 @@ kmem_validate(__kernel void const *__restrict p, size_t s) {
  if __unlikely(kpagedir_current() != kpagedir_kernel()) return KE_OK;
  aligned_p = alignd((uintptr_t)p,PAGEALIGN);
  if __unlikely(!kpagedir_ismapped(kpagedir_kernel(),(void *)aligned_p,
-              ceildiv(((uintptr_t)p-aligned_p)+s,PAGESIZE))) return KE_RANGE;
+               ceildiv(((uintptr_t)p-aligned_p)+s,PAGESIZE))) return KE_RANGE;
  if __unlikely(kpageframe_isfreepage(p,s)) return KE_INVAL;
  return KE_OK;
 }

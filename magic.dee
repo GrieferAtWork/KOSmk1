@@ -1097,16 +1097,17 @@ function run_addr2line(addr) {
 }
 
 
-function run_qemu(kernel_binary) {
+function run_qemu(mode,kernel_binary) {
 	local qemu_exe = "qemu-system-"+arch;
 	try qemu_exe = executables[qemu_exe]; catch (...);
 	local qemu = process(qemu_exe,[
 		(hosted ? ["-no-reboot","-no-shutdown"] : [])...,
 		"-serial","stdio",
 		(remote ? ["-s","-S"] : [])...,
-		"-kernel",kernel_binary,
+		"-"+mode,kernel_binary,
 		"-drive","file=disk/kos.img,format=raw,index=0,media=disk",
 		"-device","isa-debug-exit,iobase=0xf4,iosize=0x04",
+		(mode == "cdrom" ? ["-boot","d"] : [])...,
 		"-vga","std",
 		(kernel_args ? ["-append","\""+
 			" ".join(for (local a: kernel_args) if (a) a)
@@ -1166,7 +1167,8 @@ function run_qemu(kernel_binary) {
 try {
 	if (run_only) start_addr2line();
 	if (verbose >= 1) print "Starting emulator";
-	run_qemu("bin/kos_kernel.bin");
+	//run_qemu("cdrom","kos.iso");
+	run_qemu("kernel","bin/kos_kernel.bin");
 } finally {
 	if (addr2line_proc) {
 		addr2line_proc.get().terminate();

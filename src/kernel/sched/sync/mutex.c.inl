@@ -35,7 +35,10 @@
 #include <kos/kernel/task.h>
 #include <stdio.h>
 #include <stdlib.h>
-#endif
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+#include <kos/kernel/serial.h>
+#endif /* KCONFIG_HAVE_TASK_DEADLOCK_CHECK */
+#endif /* KCONFIG_HAVE_DEBUG_TRACKEDMUTEX */
 
 __DECL_BEGIN
 
@@ -84,6 +87,16 @@ do{\
  }\
 }while(0)
 
+#if KCONFIG_HAVE_TASK_DEADLOCK_CHECK
+#define DEADLOCKHELP_BEGIN(self) KTASK_DEADLOCK_HELP_BEGIN((void(*)(void *))&kmutex_deadlock_help,self)
+#define DEADLOCKHELP_END         KTASK_DEADLOCK_HELP_END
+static void kmutex_deadlock_help(struct kmutex *self) {
+ serial_printf(SERIAL_01,"mmutex = %p\n"
+               "See reference to acquisition of lock\n",self);
+ tbtrace_print(self->m_locktb);
+}
+#endif /* KCONFIG_HAVE_TASK_DEADLOCK_CHECK */
+
 // struct ktask      *m_holder; /*< [0..1][lock(this)] Current holder of the mutex lock. */
 // struct tbtrace *m_locktb; /*< [0..1][lock(this)] Traceback of where the lock was acquired. */
 #else
@@ -92,7 +105,14 @@ do{\
 #define KMUTEX_ONLOCKINUSE(self) (void)0
 #endif
 
-__crit kerrno_t kmutex_lock(struct kmutex *__restrict self) {
+#ifndef DEADLOCKHELP_BEGIN
+#define DEADLOCKHELP_BEGIN(self) do
+#define DEADLOCKHELP_END         while(0)
+#endif
+
+
+__crit kerrno_t
+kmutex_lock(struct kmutex *__restrict self) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kmutex(self);
@@ -102,11 +122,14 @@ __crit kerrno_t kmutex_lock(struct kmutex *__restrict self) {
    return KE_OK;
   }
   KMUTEX_ONLOCKINUSE(self);
-  error = ksignal_recv(&self->m_sig);
+  DEADLOCKHELP_BEGIN(self) {
+   error = ksignal_recv(&self->m_sig);
+  } DEADLOCKHELP_END;
  } while (KE_ISOK(error));
  return error;
 }
-__crit kerrno_t kmutex_trylock(struct kmutex *__restrict self) {
+__crit kerrno_t
+kmutex_trylock(struct kmutex *__restrict self) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kmutex(self);
@@ -126,8 +149,9 @@ __crit kerrno_t kmutex_trylock(struct kmutex *__restrict self) {
  ksignal_unlock(&self->m_sig,KSIGNAL_LOCK_WAIT);
  return error;
 }
-__crit kerrno_t kmutex_timedlock(struct kmutex *__restrict self,
-                                 struct timespec const *__restrict abstime) {
+__crit kerrno_t
+kmutex_timedlock(struct kmutex *__restrict self,
+                 struct timespec const *__restrict abstime) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kmutex(self);
@@ -137,7 +161,9 @@ __crit kerrno_t kmutex_timedlock(struct kmutex *__restrict self,
    return KE_OK;
   }
   KMUTEX_ONLOCKINUSE(self);
-  error = ksignal_timedrecv(&self->m_sig,abstime);
+  DEADLOCKHELP_BEGIN(self) {
+   error = ksignal_timedrecv(&self->m_sig,abstime);
+  } DEADLOCKHELP_END;
  } while (KE_ISOK(error));
  return error;
 }
@@ -152,20 +178,24 @@ kmutex_timeoutlock(struct kmutex *__restrict self,
  __timespec_add(&abstime,timeout);
  return kmutex_timedlock(self,&abstime);
 }
-__crit kerrno_t kmutex_unlock(struct kmutex *__restrict self) {
+__crit kerrno_t
+kmutex_unlock(struct kmutex *__restrict self) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kmutex(self);
  KMUTEX_ONRELEASE(self);
  assertf(kmutex_islocked(self),"Lock not held");
  katomic_store(self->m_locked,0);
- // Signal a single task (Ignoring tasks that were re-schedued due to race conditions)
+ /* Signal a single task (Ignoring tasks that were re-scheduled due to race conditions) */
  while ((error = ksignal_sendone(&self->m_sig)) == KS_UNCHANGED);
- assertf(error != KE_DESTROYED,"How did a non-critical task manage to wait for a mutex?");
+ assertf(error != KE_DESTROYED,
+         "How did a non-critical task manage to wait for a mutex?");
  return error;
 }
 
 #ifndef __INTELLISENSE__
+#undef DEADLOCKHELP_BEGIN
+#undef DEADLOCKHELP_END
 #undef KMUTEX_ONACQUIRE
 #undef KMUTEX_ONRELEASE
 #undef KMUTEX_ONLOCKINUSE

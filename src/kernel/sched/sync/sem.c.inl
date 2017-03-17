@@ -30,6 +30,8 @@
 #include <kos/kernel/task.h>
 #include <kos/kernel/time.h>
 #include <kos/timespec.h>
+#include <alloca.h>
+#include <stddef.h>
 
 __DECL_BEGIN
 
@@ -100,29 +102,6 @@ kerrno_t ksem_timoutwait(struct ksem *__restrict self,
  __timespec_add(&abstime,timeout);
  return ksem_timedwait(self,&abstime);
 }
-
-
-
-struct ksem *ksem_trywaits(__size_t semc, struct ksem *const *semv) {
- struct ksem *const *iter,*const *end,*elem;
- end = (iter = semv)+semc;
- while (iter != end) {
-  elem = *iter++;
-  kassert_ksem(elem);
-  if (KE_ISOK(ksem_trywait(elem))) return elem;
- }
- return NULL;
-}
-struct ksem *ksem_waits(__size_t semc, struct ksem *const *semv) {
- return NULL; // TODO
-}
-struct ksem *ksem_timedwaits(__size_t semc, struct ksem *const *semv, struct timespec const *__restrict abstime) {
- return NULL; // TODO
-}
-struct ksem *ksem_timoutwaits(__size_t semc, struct ksem *const *semv, struct timespec const *__restrict timeout) {
- return NULL; // TODO
-}
-
 
 __DECL_END
 

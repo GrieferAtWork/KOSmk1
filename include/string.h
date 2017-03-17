@@ -70,7 +70,7 @@
 #endif
 #endif /* __COMPILER_HAVE_PRAGMA_PUSH_MACRO */
 
-// Kill definitions of stuff like 'debug_new'
+/* Kill user-defined malloc macros. */
 #undef strdup
 #undef strndup
 #undef memdup
@@ -87,15 +87,12 @@ __DECL_BEGIN
 typedef __size_t size_t;
 #endif
 
-#if __GCC_VERSION(4,9,0)
-#   define __ATTRIBUTE_ALIGNED_BY_CONSTANT(x) __attribute__((__assume_aligned__ x))
-#else
-#   define __ATTRIBUTE_ALIGNED_BY_CONSTANT(x)
-#endif
 #if __SIZEOF_POINTER__ == 8
-#   define __ATTRIBUTE_ALIGNED_DEFAULT __ATTRIBUTE_ALIGNED_BY_CONSTANT((16))
+#   define __ATTRIBUTE_ALIGNED_DEFAULT __attribute_aligned_c(16)
 #elif __SIZEOF_POINTER__ == 4
-#   define __ATTRIBUTE_ALIGNED_DEFAULT __ATTRIBUTE_ALIGNED_BY_CONSTANT((8))
+#   define __ATTRIBUTE_ALIGNED_DEFAULT __attribute_aligned_c(8)
+#elif __SIZEOF_POINTER__ == 2
+#   define __ATTRIBUTE_ALIGNED_DEFAULT __attribute_aligned_c(4)
 #else
 #   define __ATTRIBUTE_ALIGNED_DEFAULT
 #endif
@@ -136,9 +133,9 @@ extern __wunused __retnonnull __malloccall __attribute_vaformat(__printf__,1,0) 
  * Or better yet! Add something like: '__attribute__((clobber("%esp")))'
  *
  * Here's what the hacky code below does:
- * We nust use '__builtin_alloca' to inform the compiler that the stack pointer
+ * We must use '__builtin_alloca' to inform the compiler that the stack pointer
  * contract has been broken, meaning that %ESP can (no longer) be used for offsets.
- * NOTE: If you don't belive me that this is required, and think this is just me
+ * NOTE: If you don't believe me that this is required, and think this is just me
  *       ranting about missing GCC functionality, try the following code yourself:
  * >> printf("path = '%s'\n",_strdupaf("%s/%s","/usr","lib")); // OK (Also try cloning this line a bunch of times)
  * >> #undef _strdupaf
@@ -146,13 +143,21 @@ extern __wunused __retnonnull __malloccall __attribute_vaformat(__printf__,1,0) 
  *
  * NOTE: We also can't do __builtin_alloca(0) because that's optimized away too early
  *       and the compiler will (correctly) not mark %ESP as clobbered internally.
- *       So we're left with no choice but to waste a bit of
+ *       So we're left with no choice but to waste another bit of
  *       stack memory, and more importantly: instructions!
- * Oh and by-the-way: Unlike with str(n)dupa It's not possible to implement
- *                    this without using a dedicated function, and without
- *                    evaluating the format+variadic arguments twice.
+ * Oh and by-the-way: Unlike with str(n)dupa It's only possible to implement
+ *                    this as a dedicated function, when wanting to ensure
+ *                    one-time evaluation of the variadic arguments.
  *                 -> So we can't just implement the while thing as a macro.
  *                   (OK: '_vstrdupaf' could be, but when are you even going to use any to begin with...)
+ * HINT: A standard-compliant, but double-evaluating version would look something like this:
+ * >> #define _strdupaf(...) \
+ * >>   ({ char *result; size_t s;\
+ * >>      s = (snprintf(NULL,0,__VA_ARGS__)+1)*sizeof(char);\
+ * >>      result = (char *)__builtin_alloca(s);\
+ * >>      snprintf(result,s,__VA_ARGS__);\
+ * >>      result;\
+ * >>   })\
  */
 #define _strdupaf(...) \
  __xblock({ char *const __sdares = _strdupaf(__VA_ARGS__);\
@@ -728,30 +733,47 @@ extern __crit __wunused __nonnull((1)) __attribute_vaformat(__printf__,1,0) __ma
 
 
 #ifdef __LIBC_HAVE_DEBUG_MALLOC
+#if !defined(__CONFIG_MIN_LIBC__) || !defined(__LIBC_DEBUG_X_ARGS)
 extern __crit __wunused __nonnull((1)) __malloccall __ATTRIBUTE_ALIGNED_DEFAULT char *_strdup_d __P((char const *__restrict __s __LIBC_DEBUG__PARAMS));
 extern __crit __wunused __nonnull((1)) __malloccall __ATTRIBUTE_ALIGNED_DEFAULT char *_strndup_d __P((char const *__restrict __s, __size_t __maxchars __LIBC_DEBUG__PARAMS));
 extern __crit __wunused __nonnull((1)) __sizemalloccall((2)) __ATTRIBUTE_ALIGNED_DEFAULT void *_memdup_d __P((void const *__restrict __p, __size_t __bytes __LIBC_DEBUG__PARAMS));
 extern __crit __wunused __nonnull((1)) __attribute_vaformat(__printf__,1,2) __malloccall __ATTRIBUTE_ALIGNED_DEFAULT char *_strdupf_d __P((__LIBC_DEBUG_PARAMS_ char const *__restrict __format, ...));
 extern __crit __wunused __nonnull((1)) __attribute_vaformat(__printf__,1,0) __malloccall __ATTRIBUTE_ALIGNED_DEFAULT char *_vstrdupf_d __P((char const *__restrict __format, va_list __args __LIBC_DEBUG__PARAMS));
+#endif
+#if !defined(__CONFIG_MIN_LIBC__) || defined(__LIBC_DEBUG_X_ARGS)
+extern __crit __wunused __nonnull((1)) __malloccall __ATTRIBUTE_ALIGNED_DEFAULT char *_strdup_x __P((char const *__restrict __s __LIBC_DEBUG_X__PARAMS));
+extern __crit __wunused __nonnull((1)) __malloccall __ATTRIBUTE_ALIGNED_DEFAULT char *_strndup_x __P((char const *__restrict __s, __size_t __maxchars __LIBC_DEBUG_X__PARAMS));
+extern __crit __wunused __nonnull((1)) __sizemalloccall((2)) __ATTRIBUTE_ALIGNED_DEFAULT void *_memdup_x __P((void const *__restrict __p, __size_t __bytes __LIBC_DEBUG_X__PARAMS));
+extern __crit __wunused __nonnull((1)) __attribute_vaformat(__printf__,1,2) __malloccall __ATTRIBUTE_ALIGNED_DEFAULT char *_strdupf_x __P((__LIBC_DEBUG_X_PARAMS_ char const *__restrict __format, ...));
+extern __crit __wunused __nonnull((1)) __attribute_vaformat(__printf__,1,0) __malloccall __ATTRIBUTE_ALIGNED_DEFAULT char *_vstrdupf_x __P((char const *__restrict __format, va_list __args __LIBC_DEBUG_X__PARAMS));
+#endif
 
 #ifndef __INTELLISENSE__
-#undef strdup
-#undef strndup
-#undef _memdup
-#undef _strdupf
-#undef _vstrdupf
+#   undef strdup
+#   undef strndup
+#   undef _memdup
+#   undef _strdupf
+#   undef _vstrdupf
+#ifdef __LIBC_DEBUG_X__ARGS
+#   define strdup(s)                _strdup_x(s __LIBC_DEBUG_X__ARGS)
+#   define strndup(s,maxchars)     _strndup_x(s,maxchars __LIBC_DEBUG_X__ARGS)
+#   define _memdup(p,bytes)         _memdup_x(p,bytes __LIBC_DEBUG_X__ARGS)
+#   define _strdupf(...)           _strdupf_x(__LIBC_DEBUG_X_ARGS_ __VA_ARGS__)
+#   define _vstrdupf(format,args) _vstrdupf_x(format,args __LIBC_DEBUG_X__ARGS)
+#else
 #   define strdup(s)                _strdup_d(s __LIBC_DEBUG__ARGS)
 #   define strndup(s,maxchars)     _strndup_d(s,maxchars __LIBC_DEBUG__ARGS)
 #   define _memdup(p,bytes)         _memdup_d(p,bytes __LIBC_DEBUG__ARGS)
 #   define _strdupf(...)           _strdupf_d(__LIBC_DEBUG_ARGS_ __VA_ARGS__)
 #   define _vstrdupf(format,args) _vstrdupf_d(format,args __LIBC_DEBUG__ARGS)
+#endif
 #ifndef __STDC_PURE__
-#undef memdup
-#undef strdupf
-#undef vstrdupf
-#   define memdup(p,bytes)         _memdup_d(p,bytes __LIBC_DEBUG__ARGS)
-#   define strdupf(...)           _strdupf_d(__LIBC_DEBUG_ARGS_ __VA_ARGS__)
-#   define vstrdupf(format,args) _vstrdupf_d(format,args __LIBC_DEBUG__ARGS)
+#   undef memdup
+#   undef strdupf
+#   undef vstrdupf
+#   define memdup   _memdup
+#   define strdupf  _strdupf
+#   define vstrdupf _vstrdupf
 #endif /* ... */
 #endif /* !__INTELLISENSE__ */
 #elif defined(__OPTIMIZE__) && !defined(__INTELLISENSE__)
@@ -859,8 +881,6 @@ extern __wunused __constcall int ffsll __P((long long __i));
 __DECL_END
 
 #undef __ATTRIBUTE_ALIGNED_DEFAULT
-#undef __ATTRIBUTE_ALIGNED_BY_CONSTANT
-
 
 #if !defined(__INTELLISENSE__) && defined(__LIBC_USE_ARCH_OPTIMIZATIONS)
 #include <kos/arch/string.h>
@@ -1068,7 +1088,7 @@ __DECL_END
 #endif /* __LIBC_USE_ARCH_OPTIMIZATIONS */
 
 #ifdef __COMPILER_HAVE_PRAGMA_PUSH_MACRO
-// Restore user-defined malloc macros
+/* Restore user-defined malloc-macros */
 #ifdef __string_h_strndup_defined
 #undef __string_h_strndup_defined
 #pragma pop_macro("strndup")

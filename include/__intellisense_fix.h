@@ -318,6 +318,7 @@ enum{ /* Highlight attributes in a different color */
  __alias__,              /*< __attribute__((alias(...))). */
  __regparm__,            /*< __attribute__((regparm(...))). */
  __returns_twice__,      /*< __attribute__((returns_twice)). */
+ __assume_aligned__,     /*< __attribute__((assume_aligned(...))). */
 };
 #endif
 
@@ -569,4 +570,21 @@ ____INTELLISENE_integer<4321,unsigned short> ____INTELLISENE_beswap16(unsigned s
 ____INTELLISENE_integer<4321,unsigned int> ____INTELLISENE_beswap32(unsigned int);
 ____INTELLISENE_integer<4321,unsigned long> ____INTELLISENE_beswap32(unsigned long);
 ____INTELLISENE_integer<4321,unsigned __int64> ____INTELLISENE_beswap64(unsigned __int64);
+
+
+/* Sparse emulation */
+#define __CHECKER__    1
+#if 1
+#define ____INTELLISENE_attribute_noderef          /* nothing */
+#define ____INTELLISENE_attribute_address_space(x) /* nothing */
+#else
+#define ____INTELLISENE_attribute_noderef          __declspec(restrict)
+#define ____INTELLISENE_attribute_address_space(x) __declspec(restrict)
+#endif
+#define ____INTELLISENE_attribute_safe             /* What is this even supposed to do? */
+#define ____INTELLISENE_attribute_force            ____INTELLISENE_ATTR_TYPE
+#define ____INTELLISENE_attribute_nocast           ____INTELLISENE_ATTR_TYPE
+#define ____INTELLISENE_attribute_bitwise          ____INTELLISENE_ATTR_TYPE
+#define ____INTELLISENE_attribute_context          ____INTELLISENE_ATTR_FUNC
+void __context__(void const volatile *expr, int mode);
 

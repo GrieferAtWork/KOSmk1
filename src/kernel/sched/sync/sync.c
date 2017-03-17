@@ -34,6 +34,7 @@
 #include "rwlock.c.inl"
 #include "sem.c.inl"
 #include "signal.c.inl"
+#include "sigset.c.inl"
 #endif
 
 #endif /* !__KOS_KERNEL_SCHED_SYNC_SYNC_C__ */

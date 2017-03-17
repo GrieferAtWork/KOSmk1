@@ -206,6 +206,7 @@ void kernel_initialize_gdt(void) {
  struct kidtpointer gdt;
 #endif /* !GDT_USE_DYNAMIC_MEMORY */
  struct ktss *tss0 = &kcpu_zero()->c_tss;
+ k_syslogf(KLOG_INFO,"[init] GDT...\n");
  assertf(!kpaging_enabled(),"Must initialize GDT before paging");
 
  memset(tss0,0,sizeof(struct ktss));

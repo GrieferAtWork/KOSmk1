@@ -49,8 +49,10 @@
 
 __DECL_BEGIN
 
-__public int format_printf(pformatprinter printer, void *closure,
-                           char const *__restrict format, ...) {
+__public int format_printf(pformatprinter printer,
+                           void *closure,
+                           char const *__restrict format,
+                           ...) {
  int result;
  va_list args;
  va_start(args,format);
@@ -337,6 +339,7 @@ def_length:
        __s32 s_32; __s64 s_64;
        __u32 u_32; __u64 u_64;
       } arg;
+      if (0) { case 'b': numsys = 2; }
       if (0) { case 'o': numsys = 8; }
       if (0) { case 'u': numsys = 10; if __unlikely(length == len_t) flags |= PRINTF_FLAG_SIGNED; }
       if (0) { case 'd': case 'i': numsys = 10; if __likely(length != len_z) flags |= PRINTF_FLAG_SIGNED; }
@@ -353,7 +356,8 @@ def_length:
            ) *bufbegin++ = ' ';
       if (flags&PRINTF_FLAG_PREFIX && numsys != 10) {
        *bufbegin++ = '0';
-       if (numsys == 16) *bufbegin++ = 'x';
+            if (numsys == 16) *bufbegin++ = 'x';
+       else if (numsys == 2)  *bufbegin++ = 'b';
       }
       if (length == len_I64) {
        if (flags&PRINTF_FLAG_SIGNED) {
@@ -1032,7 +1036,7 @@ format_hexdump(pformatprinter printer, void *closure,
  }
  if (flags&FORMAT_HEXDUMP_FLAG_OFFSETS) {
   /* Figure out how wide we should pad the address offset field. */
-  size_t i = (__size_t)1 << (offset_size = __SIZEOF_POINTER__*8-1);
+  size_t i = (size_t)1 << (offset_size = __SIZEOF_POINTER__*8-1);
   while (!(linesize&i)) --offset_size,i >>= 1;
   offset_size = ceildiv(offset_size,4);
  }

@@ -34,6 +34,9 @@
 #elif !defined(__INTELLISENSE__)
 #include <kos/kernel/signal_v.h>
 #endif
+#ifndef __INTELLISENSE__
+#include <kos/kernel/task.h>
+#endif
 
 //
 // === THIS IS NOT AN OFFICIAL SYNC-PRIMITIVE; I CAME UP WITH IT ===
@@ -302,7 +305,7 @@ extern __crit __nonnull((1))   __ssize_t kddist_asyncbeginsend_c(struct kddist *
 #else
 #define kddist_beginsend_c(self) \
  __xblock({ struct kddist *const __ddsself = (self);\
-            __ssize_t __ddserr; assert(ktask_iscrit());\
+            __ssize_t __ddserr; KTASK_CRIT_MARK\
             ksignal_lock_c(&__ddsself->dd_sigpoll,KSIGNAL_LOCK_WAIT);\
             __ddserr = _kddist_beginsend_c_maybeunlock(__ddsself);\
             if __unlikely(KE_ISERR(__ddserr)) {\
@@ -312,7 +315,7 @@ extern __crit __nonnull((1))   __ssize_t kddist_asyncbeginsend_c(struct kddist *
  })
 #define kddist_trybeginsend_c(self) \
  __xblock({ struct kddist *const __ddsself = (self);\
-            __ssize_t __ddserr; assert(ktask_iscrit());\
+            __ssize_t __ddserr; KTASK_CRIT_MARK\
             ksignal_lock_c(&__ddsself->dd_sigpoll,KSIGNAL_LOCK_WAIT);\
             __ddserr = _kddist_trybeginsend_c_maybeunlock(__ddsself);\
             if __unlikely(KE_ISERR(__ddserr)) {\
@@ -322,7 +325,7 @@ extern __crit __nonnull((1))   __ssize_t kddist_asyncbeginsend_c(struct kddist *
  })
 #define kddist_timedbeginsend_c(self,abstime) \
  __xblock({ struct kddist *const __ddsself = (self);\
-            __ssize_t __ddserr; assert(ktask_iscrit());\
+            __ssize_t __ddserr; KTASK_CRIT_MARK\
             ksignal_lock_c(&__ddsself->dd_sigpoll,KSIGNAL_LOCK_WAIT);\
             __ddserr = _kddist_timedbeginsend_c_maybeunlock(__ddsself);\
             if __unlikely(KE_ISERR(__ddserr)) {\
@@ -332,7 +335,7 @@ extern __crit __nonnull((1))   __ssize_t kddist_asyncbeginsend_c(struct kddist *
  })
 #define kddist_timeoutbeginsend_c(self,timeout) \
  __xblock({ struct kddist *const __ddsself = (self);\
-            __ssize_t __ddserr; assert(ktask_iscrit());\
+            __ssize_t __ddserr; KTASK_CRIT_MARK\
             ksignal_lock_c(&__ddsself->dd_sigpoll,KSIGNAL_LOCK_WAIT);\
             __ddserr = _kddist_timeoutbeginsend_c_maybeunlock(__ddsself);\
             if __unlikely(KE_ISERR(__ddserr)) {\
@@ -342,7 +345,7 @@ extern __crit __nonnull((1))   __ssize_t kddist_asyncbeginsend_c(struct kddist *
  })
 #define kddist_asyncbeginsend_c(self,timeout) \
  __xblock({ struct kddist *const __ddsself = (self);\
-            __ssize_t __ddserr; assert(ktask_iscrit());\
+            __ssize_t __ddserr; KTASK_CRIT_MARK\
             ksignal_lock_c(&__ddsself->dd_sigpoll,KSIGNAL_LOCK_WAIT);\
             __ddserr = _kddist_asyncbeginsend_c_maybeunlock(__ddsself);\
             if __unlikely(KE_ISERR(__ddserr)) {\

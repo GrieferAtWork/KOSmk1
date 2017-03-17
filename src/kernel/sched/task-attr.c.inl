@@ -55,12 +55,15 @@ ktask_user_getattr_k(struct ktask *__restrict self, kattr_t attr,
    return KE_OK;
   }
  }
- return KE_NOSYS; // TODO
+ /* TODO: Other attributes, such as priorities, etc.? */
+ return KE_NOSYS;
 }
 kerrno_t
 ktask_user_setattr_k(struct ktask *__restrict self, kattr_t attr,
                      __user void const *__restrict buf, size_t bufsize) {
- return KE_NOSYS; // TODO
+ /* TODO: Set task name. */
+ /* TODO: Other attributes, such as priorities, etc.? */
+ return KE_NOSYS;
 }
 kerrno_t
 ktask_user_getattr(struct ktask *__restrict self, kattr_t attr,

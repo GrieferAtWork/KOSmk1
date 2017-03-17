@@ -79,24 +79,24 @@ struct kaddistticket {
 
 struct kasyncdata {
  __atomic __un(KCONFIG_DDIST_USERBITS) sd_pending; /*< [!0] Amount of tickets pending to receive this chunk (acts as a reference counter),
-                                                     but must not reach ZERO(0) if this isn't the first chunk (aka 'tc_prev' != NULL). */
- struct kasyncdata             *sd_prev;    /*< [0..1] Previous data chunk, or NULL if first. */
- struct kasyncdata             *sd_next;    /*< [0..1] Next data chunk, or NULL if last. */
- __u8                           sd_data[1]; /*< [:ad_chunksz] Inlined vector of memory. */
+                                                            but must not reach ZERO(0) if this isn't the first chunk (aka 'tc_prev' != NULL). */
+ struct kasyncdata                    *sd_prev;    /*< [0..1] Previous data chunk, or NULL if first. */
+ struct kasyncdata                    *sd_next;    /*< [0..1] Next data chunk, or NULL if last. */
+ __u8                                  sd_data[1]; /*< [:ad_chunksz] Inlined vector of memory. */
 };
 struct kaddist {
  KOBJECT_HEAD
- struct ksignal        ad_nbdat;    /*< Non-buffered data transfer signal. */
+ struct ksignal               ad_nbdat;    /*< Non-buffered data transfer signal. */
  __un(KCONFIG_DDIST_USERBITS) ad_ready;    /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][<=ad_known] Amount of ticket holders ready for unbuffered transfer of data
-                                        (equal to the linked list length in 'ad_tready', but due to race conditions may not be equal to the amount of scheduled tasks in 'ad_nbdat'). */
+                                               (equal to the linked list length in 'ad_tready', but due to race conditions may not be equal to the amount of scheduled tasks in 'ad_nbdat'). */
  __un(KCONFIG_DDIST_USERBITS) ad_known;    /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][>=ad_ready] Amount of known ticket holders. */
- struct kaddistticket *ad_tiready;  /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][0..1] Linked list of tickets that are ready. */
- struct kaddistticket *ad_tnready;  /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][0..1] Linked list of tickets that are not ready. */
- __size_t              ad_chunksz;  /*< [const] Size of the raw data block in any given chunk. */
- __size_t              ad_chunkmax; /*< [const] Max amount of chunks allowed before data is overwritten. */
- __size_t              ad_chunkc;   /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)] Current amount of existing chunks. (When equal to 'ad_chunkmax', data in the last chunk 'ad_back' is overwritten). */
- struct kasyncdata    *ad_front;    /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][->sd_prev == NULL][0..1][owned] First asynchronous data chunk. */
- struct kasyncdata    *ad_back;     /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][->sd_next == NULL][0..1][owned] Last asynchronous data chunk. */
+ struct kaddistticket        *ad_tiready;  /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][0..1] Linked list of tickets that are ready. */
+ struct kaddistticket        *ad_tnready;  /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][0..1] Linked list of tickets that are not ready. */
+ __size_t                     ad_chunksz;  /*< [const] Size of the raw data block in any given chunk. */
+ __size_t                     ad_chunkmax; /*< [const] Max amount of chunks allowed before data is overwritten. */
+ __size_t                     ad_chunkc;   /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)] Current amount of existing chunks. (When equal to 'ad_chunkmax', data in the last chunk 'ad_back' is overwritten). */
+ struct kasyncdata           *ad_front;    /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][->sd_prev == NULL][0..1][owned] First asynchronous data chunk. */
+ struct kasyncdata           *ad_back;     /*< [lock(ad_nbdat:KSIGNAL_LOCK_WAIT)][->sd_next == NULL][0..1][owned] Last asynchronous data chunk. */
 };
 
 #define KADDIST_INIT(chunksize,chunkmax) \

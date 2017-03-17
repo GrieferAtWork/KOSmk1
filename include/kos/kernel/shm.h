@@ -108,7 +108,9 @@ __DECL_BEGIN
 //     and the page directory.
 //
 
-__struct_fwd(kpageframe);
+#ifndef __ASSEMBLY__
+struct kpageframe;
+#endif /* __ASSEMBLY__ */
 
 #define KOBJECT_MAGIC_SHMCHUNK  0x573C7C25 /*< SHMCHUNK. */
 #define KOBJECT_MAGIC_SHMREGION 0x5736E610 /*< SHMREGIO. */

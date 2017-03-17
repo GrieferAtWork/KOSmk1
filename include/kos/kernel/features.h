@@ -32,7 +32,6 @@
  * >> Required for x/y-style memory usage statistics. */
 #define KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED 1
 
-
 /* Save all segment registers individually during a task switch
  * When not defined, only '%es' is saved.
  * Otherwise '%es', '%ds', '%fs' and '%gs' are saved. */
@@ -50,7 +49,9 @@
 #define KCONFIG_HAVE_TASK_STATS_SWITCHOUT 1
 #define KCONFIG_HAVE_TASK_STATS_SWITCHIN  1
 
-
+/* Include functionality to trace system calls,
+ * as well information on their arguments and names. */
+#define KCONFIG_HAVE_SYSCALL_TRACE  defined(__DEBUG__)
 
 /* NOTE: Special size optimizations may be performed for bit sizes fitting
  *       inside of 'KSIGNAL_USERBITS' (16) (s.a.: <kos/kernel/signal.h>) */
@@ -64,13 +65,15 @@
  * given task doesn't attempt to acquire a single mutex more than once.
  * NOTE: Due to the fact that the traceback of acquired locks is stored
  *       as well, non-released locks will be dumped as memory leaks. */
-#define KCONFIG_HAVE_DEBUG_TRACKEDMUTEX  1
-#define KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX 1
-#define KCONFIG_HAVE_DEBUG_TRACKEDDDIST  1
-#define KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK 0 /*< Too expensive, considering its use by copy_*_user. */
-#define KCONFIG_HAVE_DEBUG_MEMCHECKS     0
-#define KCONFIG_HAVE_TASK_DEADLOCK_CHECK 1
+#define KCONFIG_HAVE_DEBUG_TRACKEDMUTEX     1
+#define KCONFIG_HAVE_DEBUG_TRACKEDMMUTEX    1
+#define KCONFIG_HAVE_DEBUG_TRACKEDDDIST     1
+#define KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK    0 /*< Too expensive, considering its use by copy_*_user. */
+#define KCONFIG_HAVE_DEBUG_MEMCHECKS        1
+#define KCONFIG_HAVE_TASK_DEADLOCK_CHECK    1
+#define KCONFIG_HAVE_DEBUG_PAGEFRAME_MEMSET 1
 #endif
+
 
 /* Size for the global cache of recently loaded shared libraries
  * & executables. Define as ZERO(0) to disable this cache. */
@@ -134,6 +137,9 @@
 #endif
 #ifndef KCONFIG_HAVE_DEBUG_MEMCHECKS
 #define KCONFIG_HAVE_DEBUG_MEMCHECKS 0
+#endif
+#ifndef KCONFIG_HAVE_DEBUG_PAGEFRAME_MEMSET
+#define KCONFIG_HAVE_DEBUG_PAGEFRAME_MEMSET 0
 #endif
 #ifndef KCONFIG_HAVE_TASK_STATS_START
 #define KCONFIG_HAVE_TASK_STATS_START 0

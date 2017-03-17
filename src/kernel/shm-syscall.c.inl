@@ -20,44 +20,41 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_KERNEL_SYSCALL_SYSCALL_KMEM_C_INL__
-#define __KOS_KERNEL_SYSCALL_SYSCALL_KMEM_C_INL__ 1
+#ifndef __KOS_KERNEL_SHM_SYSCALL_C_INL__
+#define __KOS_KERNEL_SHM_SYSCALL_C_INL__ 1
 
-#include "syscall-common.h"
-#include <kos/errno.h>
-#include <kos/kernel/pageframe.h>
-#include <kos/kernel/paging.h>
-#include <kos/kernel/shm.h>
-#include <kos/kernel/util/string.h>
-#include <kos/mem.h>
-#include <kos/syscallno.h>
-#include <math.h>
+#include <kos/compiler.h>
 #include <sys/mman.h>
+#include <kos/config.h>
 #include <kos/syslog.h>
+#include <kos/kernel/syscall.h>
+#include <kos/kernel/shm.h>
+#include <kos/kernel/proc.h>
 
 __DECL_BEGIN
 
 /*< _syscall6(void *,kmem_map,void *,hint,size_t,length,int,prot,int,flags,int,fd,__u64,offset); */
-SYSCALL(sys_kmem_map) {
 #ifdef KFD_HAVE_BIARG_POSITIONS
- LOAD7(void *,K(hint),
-       size_t,K(length),
-       int   ,K(prot),
-       int   ,K(flags),
-       int   ,K(fd),
-       __u64 ,D(offset),
-       void  ,N);
-#else
- LOAD6(void *,K(hint),
-       size_t,K(length),
-       int   ,K(prot),
-       int   ,K(flags),
-       int   ,K(fd),
-       __u64 ,K(offset));
-#endif
+#if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
+KSYSCALL_DEFINE7(__user void *,kmem_map,__user void *,hint,size_t,length,
+                 int,prot,int,flags,int,fd,__u32,offhi,__u32,offlo)
+#else /* linear: down */
+KSYSCALL_DEFINE7(__user void *,kmem_map,__user void *,hint,size_t,length,
+                 int,prot,int,flags,int,fd,__u32,offlo,__u32,offhi)
+#endif /* linear: up */
+#else /* KFD_HAVE_BIARG_POSITIONS */
+KSYSCALL_DEFINE6(__user void *,kmem_map,__user void *,hint,size_t,length,
+                 int,prot,int,flags,int,fd,__u64,offset)
+#endif /* !KFD_HAVE_BIARG_POSITIONS */
+{
  struct kproc *procself = kproc_self();
  __ref struct kshmregion *region; size_t pages; kerrno_t error;
- (void)fd,(void)offset; /* TODO? */
+ (void)fd;
+#ifdef KFD_HAVE_BIARG_POSITIONS
+ (void)offlo,(void)offhi; /* TODO? */
+#else
+ (void)offset; /* TODO? */
+#endif
  /* Fix the given hint. */
  if (!hint) hint = KPAGEDIR_MAPANY_HINT_UHEAP;
  else hint = (void *)alignd((uintptr_t)hint,PAGEALIGN);
@@ -83,19 +80,14 @@ SYSCALL(sys_kmem_map) {
 end_unlock:
  krwlock_endwrite(&procself->p_shm.s_lock);
 end: KTASK_CRIT_END
- RETURN(hint);
+ return hint;
 err_unlock:
  hint = (void *)(uintptr_t)-1;
  goto end_unlock;
 }
 
-/*< _syscall5(kerrno_t,kmem_mapdev,void **,hint_and_result,__size_t,length,int,prot,int,flags,void *,physptr); */
-SYSCALL(sys_kmem_mapdev) {
- LOAD5(void  **,K(hint_and_result),
-       __size_t,K(length),
-       int     ,K(prot),
-       int     ,K(flags),
-       void   *,K(physptr));
+KSYSCALL_DEFINE5(kerrno_t,kmem_mapdev,__user void **,hint_and_result,
+                 __size_t,length,int,prot,int,flags,__kernel void *,physptr) {
  void *hint,*aligned_physptr,*result;
  size_t alignment_offset;
  struct ktask *caller = ktask_self();
@@ -108,12 +100,12 @@ SYSCALL(sys_kmem_mapdev) {
  prot            &= (KSHMREGION_FLAG_EXEC|KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE); /*< Don't reveal the hidden flags. */
  if (flags&MAP_SHARED) prot |= KSHMREGION_FLAG_SHARED;
  if (flags&_MAP_LOOSE) prot |= KSHMREGION_FLAG_LOSEONFORK;
- if __unlikely(copy_from_user(&hint,hint_and_result,sizeof(hint))) RETURN(KE_FAULT);
+ if __unlikely(copy_from_user(&hint,hint_and_result,sizeof(hint))) return KE_FAULT;
  if (flags&MAP_FIXED) {
   void *aligned_hint;
   aligned_hint    = (void *)alignd((uintptr_t)hint,PAGEALIGN);
   if (((uintptr_t)aligned_hint-(uintptr_t)hint) != alignment_offset
-      ) RETURN(KE_INVAL); /*< Impossible alignment requirements. */
+      ) return KE_INVAL; /*< Impossible alignment requirements. */
   hint = aligned_hint;
  } else if (!hint) {
   hint = KPAGEDIR_MAPANY_HINT_UDEV;
@@ -124,7 +116,7 @@ SYSCALL(sys_kmem_mapdev) {
  if __unlikely(!pages) pages = 1;
  /* Make sure that the specified area of physical memory doesn't overflow. */
  if __unlikely(((uintptr_t)aligned_physptr+pages*PAGESIZE) <=
-                (uintptr_t)aligned_physptr) RETURN(KE_OVERFLOW);
+                (uintptr_t)aligned_physptr) return KE_OVERFLOW;
  KTASK_CRIT_BEGIN_FIRST
  /* Check if the calling process has access to this physical  */
  error = kshm_devaccess(caller,aligned_physptr,pages);
@@ -155,14 +147,11 @@ SYSCALL(sys_kmem_mapdev) {
 end_unlock:
  krwlock_endwrite(&procself->p_shm.s_lock);
 end: KTASK_CRIT_END
- RETURN(error);
+ return error;
 }
 
 
-/*< _syscall2(kerrno_t,kmem_unmap,void *,addr,size_t,length); */
-SYSCALL(sys_kmem_unmap) {
- LOAD2(void *,K(addr),
-       size_t,K(length));
+KSYSCALL_DEFINE2(kerrno_t,kmem_unmap,void *,addr,size_t,length) {
  kerrno_t error;
  uintptr_t aligned_start,aligned_length;
  struct kproc *procself = kproc_self();
@@ -179,18 +168,17 @@ SYSCALL(sys_kmem_unmap) {
  krwlock_endwrite(&procself->p_shm.s_lock);
 end:
  KTASK_CRIT_END
- RETURN(error);
+ return error;
 }
 
 
-/*< _syscall2(kerrno_t,kmem_validate,void *__restrict,addr,__size_t,bytes); */
-SYSCALL(sys_kmem_validate) {
- LOAD2(void *,K(addr),
-       size_t,K(bytes));
+KSYSCALL_DEFINE2(kerrno_t,kmem_validate,
+                 __user void *__restrict,addr,
+                 __size_t,bytes) {
  kerrno_t error;
  struct kproc *procself = kproc_self();
  KTASK_CRIT_BEGIN_FIRST
- error = krwlock_beginwrite(&procself->p_shm.s_lock);
+ error = krwlock_beginread(&procself->p_shm.s_lock);
  if __likely(KE_ISOK(error)) {
   void *pageaddr = (void *)alignd((uintptr_t)addr,PAGEALIGN);
   size_t alignedsize = ((uintptr_t)addr-(uintptr_t)pageaddr)+bytes;
@@ -205,13 +193,12 @@ SYSCALL(sys_kmem_validate) {
    addr = kpagedir_translate(kproc_getpagedir(procself),addr);
    error = kmem_validate(addr,bytes);
   }
-  krwlock_endwrite(&procself->p_shm.s_lock);
+  krwlock_endread(&procself->p_shm.s_lock);
  }
  KTASK_CRIT_END
- RETURN(error);
+ return error;
 }
-
 
 __DECL_END
 
-#endif /* !__KOS_KERNEL_SYSCALL_SYSCALL_KMEM_C_INL__ */
+#endif /* !__KOS_KERNEL_SHM_SYSCALL_C_INL__ */

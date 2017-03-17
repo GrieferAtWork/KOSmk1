@@ -45,7 +45,11 @@
 #define __extension__
 #endif
 #ifndef __compiler_FUNCTION
+#if 1
+#define __compiler_FUNCTION()     __func__
+#else
 #define __compiler_FUNCTION()     __builtin_FUNCTION()
+#endif
 #endif
 #ifndef __public
 #define __public        __attribute__((__visibility__("default")))
@@ -133,6 +137,9 @@
 #ifndef __attribute_thread
 #define __attribute_thread        __thread
 #endif
+#ifndef __attribute_section
+#define __attribute_section(name) __attribute__((__section__(name)))
+#endif
 #ifndef __attribute_inline
 #if __GCC_VERSION(4,0,0)
 #define __attribute_inline        __inline__
@@ -140,6 +147,19 @@
 #define __attribute_inline        __attribute_forceinline
 #endif
 #endif
+#ifndef __attribute_aligned_a
+#if __GCC_VERSION(5,4,0)
+/* Returns pointer aligned by at least the value of argument 'x' (1-based) */
+#define __attribute_aligned_a(x) __attribute__((__alloc_align__(x)))
+#endif
+#endif /* !__attribute_aligned_a */
+#ifndef __attribute_aligned_c
+#if __GCC_VERSION(4,9,0)
+/* Returns pointer aligned by at least 'x' */
+#define __attribute_aligned_c(x) __attribute__((__assume_aligned__(x)))
+#endif
+#endif /* !__attribute_aligned_c */
+
 #ifndef __asmname
 #define __asmname(x) __asm__(x)
 #endif

@@ -73,7 +73,6 @@ static size_t __get_availphyspages(void) {
  return info.pfi_freepages;
 }
 
-
 extern long k_sysconf(int name);
 long k_sysconf(int name) {
  switch (name) {
@@ -108,6 +107,16 @@ long k_sysconf(int name) {
   default: break;
  }
  return KE_INVAL;
+}
+
+__DECL_END
+
+
+#include <kos/kernel/syscall.h>
+__DECL_BEGIN
+
+KSYSCALL_DEFINE1(long,k_sysconf,int,name) {
+ return k_sysconf(name);
 }
 
 __DECL_END

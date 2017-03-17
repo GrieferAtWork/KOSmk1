@@ -241,26 +241,14 @@ __DECL_BEGIN
 
 
 #define KOBJECT_MAGIC_SIGNAL 0x518AA7 // SIGNAL
+#define kassert_ksignal(self) kassert_object(self,KOBJECT_MAGIC_SIGNAL)
 
 #ifndef __ASSEMBLY__
 struct ktask;
 struct kcpu;
 struct timespec;
 struct ksignal;
-
-#define kassert_ksignal(self) kassert_object(self,KOBJECT_MAGIC_SIGNAL)
-#ifdef __INTELLISENSE__
-extern void kassert_ksignals(__size_t sigc, struct ksignal const *const *sigv);
-#elif defined(__DEBUG__)
-#define kassert_ksignals(sigc,sigv) \
- __xblock({ struct ksignal const *const *__ksass_iter,*const *__ksass_end;\
-            __ksass_end = (__ksass_iter = (struct ksignal const *const *)(sigv))+(sigc);\
-            for (; __ksass_iter != __ksass_end; ++__ksass_iter) kassert_ksignal(*__ksass_iter);\
-            (void)0;\
- })
-#else
-#define kassert_ksignals(sigc,sigv) (void)0
-#endif
+struct ksigset;
 #endif /* !__ASSEMBLY__ */
 
 //////////////////////////////////////////////////////////////////////////
@@ -308,6 +296,9 @@ extern void kassert_ksignals(__size_t sigc, struct ksignal const *const *sigv);
 #define KSIGNAL_OFFSETOF_WAKELAST  (KOBJECT_SIZEOFHEAD+4+__SIZEOF_POINTER__)
 
 #ifndef __ASSEMBLY__
+typedef __u8 ksiglock_t;
+typedef __u8 ksigflag_t;
+
 struct ksignal {
  KOBJECT_HEAD
 #endif /* !__ASSEMBLY__ */
@@ -315,22 +306,22 @@ struct ksignal {
 #define KSIGNAL_LOCK_USER_COUNT  7
 #define KSIGNAL_LOCK_USER(n) (0x2 << (n)) /*< Returns up to 7 different signal locks (0..6) */
 #ifndef __ASSEMBLY__
- __atomic __u8   s_locks; /*< Internal set available spinlocks. */
+ __atomic ksiglock_t s_locks; /*< Internal set available spinlocks. */
 #endif /* !__ASSEMBLY__ */
 #define KSIGNAL_FLAG_NONE    0x00
 #define KSIGNAL_FLAG_DEAD    0x01 /*< [lock(KSIGNAL_LOCK_WAIT)] Set to mark dead signals. */
 #define KSIGNAL_FLAG_USER_COUNT  7
 #define KSIGNAL_FLAG_USER(i) (0x2 << (i)) /*< Returns up to 7 different signal flags (0..6) */
 #ifndef __ASSEMBLY__
-          __u8   s_flags; /*< Signal flags. */
+          ksigflag_t s_flags; /*< Signal flags. */
 union{ /* 16 bits of Userdata (Used by extended implementations; set to 0 when not needed). */
 #endif /* !__ASSEMBLY__ */
 #define KSIGNAL_USERBITS 16
 #ifndef __ASSEMBLY__
-          __u16  s_useru;
-          __s16  s_users;
-          __u8   s_useru8[2];
-          __s8   s_users8[2];
+          __un(KSIGNAL_USERBITS) s_useru;
+          __sn(KSIGNAL_USERBITS) s_users;
+          __u8                   s_useru8[KSIGNAL_USERBITS/8];
+          __s8                   s_users8[KSIGNAL_USERBITS/8];
 };
  struct ktasksigslot *s_wakefirst; /*< [0..1][lock(KSIGNAL_LOCK_WAIT)] First task to wake on signal reception. */
  struct ktasksigslot *s_wakelast;  /*< [0..1][lock(KSIGNAL_LOCK_WAIT)] Last task to wake on signal reception. */
@@ -356,29 +347,18 @@ union{ /* 16 bits of Userdata (Used by extended implementations; set to 0 when n
 // >> }
 
 
-extern __crit __wunused __nonnull((2)) int ksignal_trylocks_c(__size_t sigc, struct ksignal *const *sigv, __u8 lock);
 #ifdef __INTELLISENSE__
-extern __crit __wunused __nonnull((1)) bool ksignal_trylock_c(struct ksignal *self, __u8 lock);
+extern __crit __wunused __nonnull((1)) bool ksignal_trylock_c(struct ksignal *self, ksiglock_t lock);
 extern        __wunused __nonnull((1)) bool ksignal_isdead(struct ksignal const *self);
 extern __crit __wunused __nonnull((1)) bool ksignal_isdead_c(struct ksignal const *self);
 extern        __wunused __nonnull((1)) bool ksignal_isdead_unlocked(struct ksignal const *self);
-extern        __wunused __nonnull((1)) bool ksignal_isdeads(__size_t sigc, struct ksignal const *const *sigv);
-extern __crit __wunused __nonnull((1)) bool ksignal_isdeads_c(__size_t sigc, struct ksignal const *const *sigv);
-extern        __wunused __nonnull((1)) bool ksignal_isdeads_unlocked(__size_t sigc, struct ksignal const *const *sigv);
 extern        __wunused __nonnull((1)) bool ksignal_hasrecv(struct ksignal const *self);
 extern __crit __wunused __nonnull((1)) bool ksignal_hasrecv_c(struct ksignal const *self);
 extern        __wunused __nonnull((1)) bool ksignal_hasrecv_unlocked(struct ksignal const *self);
-extern        __wunused __nonnull((1)) bool ksignal_hasrecvs(__size_t sigc, struct ksignal const *const *sigv);
-extern __crit __wunused __nonnull((1)) bool ksignal_hasrecvs_c(__size_t sigc, struct ksignal const *const *sigv);
-extern        __wunused __nonnull((1)) bool ksignal_hasrecvs_unlocked(__size_t sigc, struct ksignal const *const *sigv);
 extern        __wunused __nonnull((1)) __size_t ksignal_cntrecv(struct ksignal const *self);
 extern __crit __wunused __nonnull((1)) __size_t ksignal_cntrecv_c(struct ksignal const *self);
 extern        __wunused __nonnull((1)) __size_t ksignal_cntrecv_unlocked(struct ksignal const *self);
-extern        __wunused __nonnull((1)) __size_t ksignal_cntrecvs(__size_t sigc, struct ksignal const *const *sigv);
-extern __crit __wunused __nonnull((1)) __size_t ksignal_cntrecvs_c(__size_t sigc, struct ksignal const *const *sigv);
-extern        __wunused __nonnull((1)) __size_t ksignal_cntrecvs_unlocked(__size_t sigc, struct ksignal const *const *sigv);
-extern        __wunused __nonnull((1)) bool ksignal_islocked(struct ksignal const *self, __u8 lock);
-extern        __wunused __nonnull((2)) bool ksignal_islockeds(__size_t sigc, struct ksignal const *const *sigv, __u8 lock);
+extern        __wunused __nonnull((1)) bool ksignal_islocked(struct ksignal const *self, ksiglock_t lock);
 
 //////////////////////////////////////////////////////////////////////////
 // Lock a given signal while simultaneously ensuring a critical block in the calling task.
@@ -387,23 +367,16 @@ extern        __wunused __nonnull((2)) bool ksignal_islockeds(__size_t sigc, str
 #define ksignal_breaklock()                  break
 #define ksignal_breakunlock                  ksignal_unlock_c
 #define ksignal_endlock()                    do{}while(0);}while(0)
-#define ksignal_locks                        do{ksignal_locks_c
-#define ksignal_unlocks(sigc,sigv,lock)      do{ksignal_unlocks_c(sigc,sigv,lock);}while(0);}while(0)
-#define ksignal_breaklocks()                 break
-#define ksignal_breakunlocks                 ksignal_unlocks_c
-#define ksignal_endlocks()                   do{}while(0);}while(0)
-extern __crit __nonnull((1)) void ksignal_lock_c(struct ksignal *self, __u8 lock);
-extern __crit __nonnull((1)) void ksignal_unlock_c(struct ksignal *self, __u8 lock);
-extern __crit __nonnull((2)) void ksignal_locks_c(__size_t sigc, struct ksignal *const *sigv, __u8 lock);
-extern __crit __nonnull((2)) void ksignal_unlocks_c(__size_t sigc, struct ksignal *const *sigv, __u8 lock);
+extern __crit __nonnull((1)) void ksignal_lock_c(struct ksignal *self, ksiglock_t lock);
+extern __crit __nonnull((1)) void ksignal_unlock_c(struct ksignal *self, ksiglock_t lock);
 
 //////////////////////////////////////////////////////////////////////////
 // Initialize a given signal
 // >> An extended version can be called to specify additional
 //    flags to be set before the signal is allowed to be send/received.
 extern void ksignal_init(struct ksignal *self);
-extern void ksignal_init_u(struct ksignal *self, __u16 userval);
-extern void ksignal_init_ex(struct ksignal *self, __u8 flags);
+extern void ksignal_init_u(struct ksignal *self, __un(KSIGNAL_USERBITS) userval);
+extern void ksignal_init_ex(struct ksignal *self, ksiglock_t flags);
 
 //////////////////////////////////////////////////////////////////////////
 // Close a given signal, broadcasting to all tasks still receiving.
@@ -436,7 +409,7 @@ extern void ksignal_init_ex(struct ksignal *self, __u8 flags);
 #else
 #define /*__crit*/ ksignal_lock_c(self,lock) \
  __xblock({ struct ksignal *const __kslself = (self);\
-            __u8 const __ksllock = (lock);\
+            ksiglock_t const __ksllock = (lock);\
             KTASK_SPIN(ksignal_trylock_c(__kslself,__ksllock));\
             (void)0;\
  })
@@ -449,27 +422,6 @@ extern void ksignal_init_ex(struct ksignal *self, __u8 flags);
 #define ksignal_breaklock()            NOIRQ_BREAK
 #define ksignal_breakunlock(self,lock) NOIRQ_BREAKUNLOCK(ksignal_unlock_c(self,lock))
 #define ksignal_endlock()              NOIRQ_END
-
-#define ksignal_breaklocks()                 NOIRQ_BREAK
-#define ksignal_breakunlocks(sigc,sigv,lock) NOIRQ_BREAKUNLOCK(ksignal_unlocks_c(sigc,sigv,lock))
-#define ksignal_endlocks()                   NOIRQ_END
-#define /*__crit*/ ksignal_locks_c(sigc,sigv,lock) \
- __xblock({ struct ksignal *const *const __kslssigv = (sigv);\
-            __size_t const __kslssigc = (sigc); __u8 const __kslslock = (lock);\
-            KTASK_SPIN(ksignal_trylocks_c(__kslssigc,__kslssigv,__kslslock));\
-            (void)0;\
- })
-#define /*__crit*/ ksignal_unlocks_c(sigc,sigv,lock) \
- __xblock({ struct ksignal *const *__ksul_iter,*const *__ksul_end;\
-            __u8 const __ksul_lock = (lock);\
-            __ksul_end = (__ksul_iter = (struct ksignal *const *)(sigv))+(sigc);\
-            while (__ksul_end != __ksul_iter) { --__ksul_end;\
-             ksignal_unlock_c(*__ksul_end,__ksul_lock);\
-            }\
-            (void)0;\
- })
-#define ksignal_locks(sigc,sigv,lock)   NOIRQ_BEGINLOCK(ksignal_trylocks_c(sigc,sigv,lock))
-#define ksignal_unlocks(sigc,sigv,lock) NOIRQ_ENDUNLOCK(ksignal_unlocks_c(sigc,sigv,lock))
 
 #define __ksignal_getprop(T,self,lock,unlocked_getter) \
  __xblock({ struct ksignal const *const __ksgpself = (self); T __ksgpres;\
@@ -499,45 +451,6 @@ extern void ksignal_init_ex(struct ksignal *self, __u8 flags);
             ksignal_unlock_c((struct ksignal *)__ksgpself,KSIGNAL_LOCK_WAIT);\
             __xreturn __ksgpres;\
  })
-#define __ksignal_getprops_boolany(sigc,sigv,single_getter) \
- __xblock({ struct ksignal *const *__ksgpsyiter,*const *__ksgpsyend; int __ksgpsyres = 0;\
-            __ksgpsyend = (__ksgpsyiter = (struct ksignal *const *)(sigv))+(sigc);\
-            for (;__ksgpsyiter != __ksgpsyend; ++__ksgpsyiter) {\
-             if (single_getter(*__ksgpsyiter)) { __ksgpsyres = 1; break; }\
-            }\
-            __xreturn __ksgpsyres;\
- })
-#define __ksignal_getprops_sizesum(sigc,sigv,single_getter) \
- __xblock({ struct ksignal *const *__ksgpsyiter,*const *__ksgpsyend; __size_t __ksgpsyres = 0;\
-            __ksgpsyend = (__ksgpsyiter = (struct ksignal *const *)(sigv))+(sigc);\
-            for (;__ksgpsyiter != __ksgpsyend; ++__ksgpsyiter)\
-             __ksgpsyres += single_getter(*__ksgpsyiter);\
-            __xreturn __ksgpsyres;\
- })
-#define __ksignal_getprops_boolany_(sigc,sigv,single_getter,...) \
- __xblock({ struct ksignal *const *__ksgpsyiter,*const *__ksgpsyend; int __ksgpsyres = 0;\
-            __ksgpsyend = (__ksgpsyiter = (struct ksignal *const *)(sigv))+(sigc);\
-            for (;__ksgpsyiter != __ksgpsyend; ++__ksgpsyiter) {\
-             if (single_getter(*__ksgpsyiter,__VA_ARGS__)) { __ksgpsyres = 1; break; }\
-            }\
-            __xreturn __ksgpsyres;\
- })
-#define __ksignal_getprops_boolall(sigc,sigv,single_getter) \
- __xblock({ struct ksignal *const *__ksgpsaiter,*const *__ksgpsaend; int __ksgpsares = 1;\
-            __ksgpsaend = (__ksgpsaiter = (struct ksignal *const *)(sigv))+(sigc);\
-            for (;__ksgpsaiter != __ksgpsaend; ++__ksgpsaiter) {\
-             if (!single_getter(*__ksgpsaiter)) { __ksgpsares = 0; break; }\
-            }\
-            __xreturn __ksgpsares;\
- })
-#define __ksignal_getprops_boolall_(sigc,sigv,single_getter,...) \
- __xblock({ struct ksignal *const *__ksgpsaiter,*const *__ksgpsaend; int __ksgpsares = 1;\
-            __ksgpsaend = (__ksgpsaiter = (struct ksignal *const *)(sigv))+(sigc);\
-            for (;__ksgpsaiter != __ksgpsaend; ++__ksgpsaiter) {\
-             if (!single_getter(*__ksgpsaiter,__VA_ARGS__)) { __ksgpsares = 0; break; }\
-            }\
-            __xreturn __ksgpsares;\
- })
 #define            ksignal_cntrecv_unlocked(self)  \
  __xblock({ __size_t __kscrures = 0;\
             struct ktasksigslot *__kscruiter = (self)->s_wakefirst;\
@@ -553,17 +466,7 @@ extern void ksignal_init_ex(struct ksignal *self, __u8 flags);
 #define            ksignal_hasrecv_unlocked(self)     ((self)->s_wakefirst!=NULL)
 #define            ksignal_cntrecv(self)                __ksignal_getprop(__size_t,self,KSIGNAL_LOCK_WAIT,ksignal_cntrecv_unlocked)
 #define /*__crit*/ ksignal_cntrecv_c(self)              __ksignal_getprop_ni(__size_t,self,KSIGNAL_LOCK_WAIT,ksignal_cntrecv_unlocked)
-#define            ksignal_isdeads(sigc,sigv)           __ksignal_getprops_boolany(sigc,sigv,ksignal_isdead)
-#define /*__crit*/ ksignal_isdeads_c(sigc,sigv)         __ksignal_getprops_boolany(sigc,sigv,ksignal_isdead_c)
-#define            ksignal_isdeads_unlocked(sigc,sigv)  __ksignal_getprops_boolany(sigc,sigv,ksignal_isdead_unlocked)
-#define            ksignal_hasrecvs(sigc,sigv)          __ksignal_getprops_boolany(sigc,sigv,ksignal_hasrecv)
-#define /*__crit*/ ksignal_hasrecvs_c(sigc,sigv)        __ksignal_getprops_boolany(sigc,sigv,ksignal_hasrecv_c)
-#define            ksignal_hasrecvs_unlocked(sigc,sigv) __ksignal_getprops_boolany(sigc,sigv,ksignal_hasrecv_unlocked)
-#define            ksignal_cntrecvs(sigc,sigv)          __ksignal_getprops_sizesum(sigc,sigv,ksignal_cntrecv)
-#define /*__crit*/ ksignal_cntrecvs_c(sigc,sigv)        __ksignal_getprops_sizesum(sigc,sigv,ksignal_cntrecv_c)
-#define            ksignal_cntrecvs_unlocked(sigc,sigv) __ksignal_getprops_sizesum(sigc,sigv,ksignal_cntrecv_unlocked)
 #define            ksignal_islocked(self,lock)        ((katomic_load((self)->s_locks)&(lock))!=0)
-#define            ksignal_islockeds(sigc,sigv,lock)    __ksignal_getprops_boolall_(sigc,sigv,ksignal_islocked,lock)
 
 #define ksignal_init(self) \
  kobject_initzero(self,KOBJECT_MAGIC_SIGNAL)
@@ -662,14 +565,11 @@ extern void ksignal_init_ex(struct ksignal *self, __u8 flags);
 //          (Or you can wait for that signal with an optional timeout)
 // @return: KE_OK:         The signal was successfully received.
 // @return: KE_DESTROYED:  The signal was/has-been killed.
-// @return: KE_TIMEDOUT:   [ksignal_(timed|timeout)recv{s}] The given timeout has passed.
+// @return: KE_TIMEDOUT:   [ksignal_(timed|timeout)recv] The given timeout has passed.
 // @return: KE_INTR:       The calling task was interrupted.
 extern           __nonnull((1))   kerrno_t ksignal_recv(struct ksignal *__restrict signal);
 extern __wunused __nonnull((1,2)) kerrno_t ksignal_timedrecv(struct ksignal *__restrict signal, struct timespec const *__restrict abstime);
 extern __wunused __nonnull((1,2)) kerrno_t ksignal_timeoutrecv(struct ksignal *__restrict signal, struct timespec const *__restrict timeout);
-extern           __nonnull((2))   kerrno_t ksignal_recvs(__size_t sigc, struct ksignal *const *__restrict sigv);
-extern __wunused __nonnull((2,3)) kerrno_t ksignal_timedrecvs(__size_t sigc, struct ksignal *const *__restrict sigv, struct timespec const *__restrict abstime);
-extern __wunused __nonnull((2,3)) kerrno_t ksignal_timeoutrecvs(__size_t sigc, struct ksignal *const *__restrict sigv, struct timespec const *__restrict timeout);
 #else
 #define ksignal_recv(signal) \
  __xblock({ struct ksignal *const __ksrcvself = (signal);\
@@ -695,40 +595,10 @@ extern __wunused __nonnull((2,3)) kerrno_t ksignal_timeoutrecvs(__size_t sigc, s
             ksignal_endlock();\
             __xreturn __kstorcverr;\
  })
-#define ksignal_recvs(sigc,sigv) \
- __xblock({ kerrno_t __ksrcvserr; __size_t const __ksrcvssigc = (sigc);\
-            struct ksignal *const *const __ksrcvssigv = (sigv);\
-            kassert_ksignals(__ksrcvssigc,__ksrcvssigv);\
-            ksignal_locks(__ksrcvssigc,__ksrcvssigv,KSIGNAL_LOCK_WAIT);\
-            __ksrcvserr = _ksignal_recvs_andunlock_c(__ksrcvssigc,__ksrcvssigv);\
-            ksignal_endlock();\
-            __xreturn __ksrcvserr;\
- })
-#define ksignal_timedrecvs(sigc,sigv,abstime) \
- __xblock({ kerrno_t __kstrcvserr; __size_t const __kstrcvssigc = (sigc);\
-            struct ksignal *const *const __kstrcvssigv = (sigv);\
-            kassert_ksignals(__kstrcvssigc,__kstrcvssigv);\
-            ksignal_locks(__kstrcvssigc,__kstrcvssigv,KSIGNAL_LOCK_WAIT);\
-            __kstrcvserr = _ksignal_timedrecvs_andunlock_c(__kstrcvssigc,__kstrcvssigv,abstime);\
-            ksignal_endlock();\
-            __xreturn __kstrcvserr;\
- })
-#define ksignal_timeoutrecvs(sigc,sigv,timeout) \
- __xblock({ kerrno_t __kstorcvserr; __size_t const __kstorcvssigc = (sigc);\
-            struct ksignal *const *const __kstorcvssigv = (sigv);\
-            kassert_ksignals(__kstorcvssigc,__kstorcvssigv);\
-            ksignal_locks(__kstorcvssigc,__kstorcvssigv,KSIGNAL_LOCK_WAIT);\
-            __kstorcvserr = _ksignal_timeoutrecvs_andunlock_c(__kstorcvssigc,__kstorcvssigv,timeout);\
-            ksignal_endlock();\
-            __xreturn __kstorcvserr;\
- })
 #endif
 extern __crit           __nonnull((1))   kerrno_t _ksignal_recv_andunlock_c(struct ksignal *__restrict self);
-extern __crit           __nonnull((2))   kerrno_t _ksignal_recvs_andunlock_c(__size_t sigc, struct ksignal *const *__restrict sigv);
 extern __crit __wunused __nonnull((1,2)) kerrno_t _ksignal_timedrecv_andunlock_c(struct ksignal *self, struct timespec const *__restrict abstime);
-extern __crit __wunused __nonnull((2,3)) kerrno_t _ksignal_timedrecvs_andunlock_c(__size_t sigc, struct ksignal *const *__restrict sigv, struct timespec const *__restrict abstime);
 extern __crit __wunused __nonnull((1,2)) kerrno_t _ksignal_timeoutrecv_andunlock_c(struct ksignal *self, struct timespec const *__restrict timeout);
-extern __crit __wunused __nonnull((2,3)) kerrno_t _ksignal_timeoutrecvs_andunlock_c(__size_t sigc, struct ksignal *const *__restrict sigv, struct timespec const *__restrict timeout);
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the first task in line for being awoken.
@@ -754,6 +624,7 @@ _ksignal_popone_andunlock_c(struct ksignal *self);
 //////////////////////////////////////////////////////////////////////////
 // Send a given signal to one waiting task.
 // @param: newcpu: If NULL, schedule any waiting task on the calling (aka. current) CPU
+// @return: KE_OK:        Successfully re-scheduled one task.
 // @return: KE_DESTROYED: The task has been terminated and due to race-conditions
 //                        was not yet able to remove itself from this signal.
 //                        NOTE: This error is only returned if the task that
@@ -825,7 +696,6 @@ extern __nonnull((1)) __size_t ksignal_sendall(struct ksignal *__restrict self);
 #endif
 extern __crit __nonnull((1)) __size_t
 _ksignal_sendall_andunlock_c(struct ksignal *__restrict self);
-#endif /* !__ASSEMBLY__ */
 
 #ifdef __INTELLISENSE__
 //////////////////////////////////////////////////////////////////////////
@@ -863,14 +733,11 @@ _ksignal_sendall_andunlock_c(struct ksignal *__restrict self);
 // >> }
 // @return: KE_OK:         The signal was successfully received.
 // @return: KE_DESTROYED:  The signal was/has-been killed.
-// @return: KE_TIMEDOUT:   [ksignal_(timed|timeout)recv{s}] The given timeout has passed.
+// @return: KE_TIMEDOUT:   [ksignal_(timed|timeout)recv] The given timeout has passed.
 // @return: KE_INTR:       The calling task was interrupted.
 #define ksignal_recvc(signal,...)                    __xblock({ struct ksignal *__ksrcvcself = (signal); (__VA_ARGS__); __xreturn KE_OK; })
 #define ksignal_timedrecvc(signal,abstime,...)       __xblock({ struct ksignal *__kstrcvcself = (signal); struct timespec const *__kstrcvcabstime = (abstime); (__VA_ARGS__); __xreturn KE_OK; })
 #define ksignal_timeoutrecvc(signal,timeout,...)     __xblock({ struct ksignal *__kstorcvcself = (signal); struct timespec const *__kstorcvctimeout = (timeout); (__VA_ARGS__); __xreturn KE_OK; })
-#define ksignal_recvcs(sigc,sigv,...)                __xblock({ __size_t __ksrcvcssigc = (sigc); struct ksignal *const *__ksrcvcssigv = (sigv); (__VA_ARGS__); __xreturn KE_OK; })
-#define ksignal_timedrecvcs(sigc,sigv,abstime,...)   __xblock({ __size_t __kstrcvcssigc = (sigc); struct ksignal *const *__kstrcvcssigv = (sigv); struct timespec const *__kstrcvcsabstime = (abstime); (__VA_ARGS__); __xreturn KE_OK; })
-#define ksignal_timeoutrecvcs(sigc,sigv,timeout,...) __xblock({ __size_t __kstorcvcssigc = (sigc); struct ksignal *const *__kstorcvcssigv = (sigv); struct timespec const *__kstorcvcstimeout = (timeout); (__VA_ARGS__); __xreturn KE_OK; })
 #else
 #define ksignal_recvc(signal,...) \
  __xblock({ struct ksignal *const __ksrcvcself = (signal);\
@@ -899,37 +766,9 @@ _ksignal_sendall_andunlock_c(struct ksignal *__restrict self);
             ksignal_endlock();\
             __xreturn __kstorcvcerr;\
  })
-#define ksignal_recvcs(sigc,sigv,...) \
- __xblock({ kerrno_t __ksrcvcserr; __size_t const __ksrcvcssigc = (sigc);\
-            struct ksignal *const *const __ksrcvcssigv = (sigv);\
-            kassert_ksignals(__ksrcvcssigc,__ksrcvcssigv);\
-            ksignal_locks(__ksrcvcssigc,__ksrcvcssigv,KSIGNAL_LOCK_WAIT);\
-            (__VA_ARGS__);\
-            __ksrcvcserr = _ksignal_recvs_andunlock_c(__ksrcvcssigc,__ksrcvcssigv);\
-            ksignal_endlock();\
-            __xreturn __ksrcvcserr;\
- })
-#define ksignal_timedrecvcs(sigc,sigv,abstime,...) \
- __xblock({ kerrno_t __kstrcvcserr; __size_t const __kstrcvcssigc = (sigc);\
-            struct ksignal *const *const __kstrcvcssigv = (sigv);\
-            kassert_ksignals(__kstrcvcssigc,__kstrcvcssigv);\
-            ksignal_locks(__kstrcvcssigc,__kstrcvcssigv,KSIGNAL_LOCK_WAIT);\
-            (__VA_ARGS__);\
-            __kstrcvcserr = _ksignal_timedrecvs_andunlock_c(__kstrcvcssigc,__kstrcvcssigv,abstime);\
-            ksignal_endlock();\
-            __xreturn __kstrcvcserr;\
- })
-#define ksignal_timeoutrecvcs(sigc,sigv,timeout,...) \
- __xblock({ kerrno_t __kstorcvcserr; __size_t const __kstorcvcssigc = (sigc);\
-            struct ksignal *const *const __kstorcvcssigv = (sigv);\
-            kassert_ksignals(__kstorcvcssigc,__kstorcvcssigv);\
-            ksignal_locks(__kstorcvcssigc,__kstorcvcssigv,KSIGNAL_LOCK_WAIT);\
-            (__VA_ARGS__);\
-            __kstorcvcserr = _ksignal_timeoutrecvs_andunlock_c(__kstorcvcssigc,__kstorcvcssigv,timeout);\
-            ksignal_endlock();\
-            __xreturn __kstorcvcserr;\
- })
 #endif
+
+#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 

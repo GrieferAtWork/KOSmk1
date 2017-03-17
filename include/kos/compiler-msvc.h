@@ -56,6 +56,10 @@
 #define __attribute_thread __declspec(thread)
 #endif
 
+#ifndef __attribute_section
+#define __attribute_section(name) __declspec(allocate(name))
+#endif
+
 #ifndef __compiler_assume
 #define __compiler_assume   __assume
 #endif

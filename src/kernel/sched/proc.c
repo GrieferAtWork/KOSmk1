@@ -102,21 +102,22 @@ __crit __ref struct kproc *kproc_newroot(void) {
  ktlsman_initroot(&result->p_tlsman);
  ktasklist_init(&result->p_threads);
  if __unlikely(!result->p_fdman.fdm_root.fd_file) {
-  result->p_fdman.fdm_root.fd_type = KFDTYPE_NONE;
-  result->p_fdman.fdm_cwd.fd_type = KFDTYPE_NONE;
-decref_result:
-  kproc_decref(result);
-  result = NULL;
+  /* NOTE: We may have failed to open the root directory because there is no filesystem.
+   *    >> If that's the case, it's not our job to handle it! */
+  result->p_fdman.fdm_root.fd_type =
+  result->p_fdman.fdm_cwd.fd_type = KFD_ATTR(KFDTYPE_FILE,KFD_FLAG_NONE);
+  k_syslogf(KLOG_ERROR,"Failed to allocate KFD_ROOT/KFD_CWD descriptors\n");
  } else {
   assert(result->p_fdman.fdm_root.fd_file->f_refcnt == 1);
   ++result->p_fdman.fdm_root.fd_file->f_refcnt;
-  result->p_fdman.fdm_root.fd_type = KFDTYPE_FILE;
+  result->p_fdman.fdm_root.fd_attr = KFD_ATTR(KFDTYPE_FILE,KFD_FLAG_NONE);
   result->p_fdman.fdm_cwd = result->p_fdman.fdm_root;
  }
  return result;
 err_shm: kshm_quit(&result->p_shm);
 err_sand: kprocperm_quit(&result->p_perm);
 err_r: free(result);
+ if (0) {decref_result: kproc_decref(result); result = NULL; }
  return NULL;
 }
 
@@ -198,7 +199,9 @@ __DECL_END
 #include "proc-fork.c.inl"
 #include "proc-initkernel.c.inl"
 #include "proc-insmod.c.inl"
+#include "proc-mod-syscall.c.inl"
 #include "proc-pid.c.inl"
+#include "proc-syscall.c.inl"
 #include "proc-tasks.c.inl"
 #endif
 

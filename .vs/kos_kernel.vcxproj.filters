@@ -31,9 +31,6 @@
     <Filter Include="src\kernel\sched\sync">
       <UniqueIdentifier>{e0ac2916-f11d-4e12-a94c-ef5d17908a43}</UniqueIdentifier>
     </Filter>
-    <Filter Include="src\kernel\syscall">
-      <UniqueIdentifier>{3cb16e2b-c113-4e14-840f-2f8e86096789}</UniqueIdentifier>
-    </Filter>
     <Filter Include="src\kernel\arch">
       <UniqueIdentifier>{8cfb2271-3eb5-4fe2-bc37-902b1c7d95ff}</UniqueIdentifier>
     </Filter>
@@ -210,12 +207,6 @@
     <ClInclude Include="..\include\kos\kernel\fs\file.h">
       <Filter>include\fs</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\kernel\syscall\syscall-common.h">
-      <Filter>src\kernel\syscall</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\kernel\syscall\syscall-groups.h">
-      <Filter>src\kernel\syscall</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\kos\kernel\pipe.h">
       <Filter>include</Filter>
     </ClInclude>
@@ -283,6 +274,21 @@
       <Filter>src\kernel\linker</Filter>
     </ClInclude>
     <ClInclude Include="..\include\kos\kernel\procperm.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\sigset.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\syslog_io.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\stdkernel.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\syscall.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\syscall_list.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
@@ -359,9 +365,6 @@
     <ClCompile Include="..\src\kernel\fs\fs.c">
       <Filter>src\kernel\fs</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\kernel\syscall\syscall.c">
-      <Filter>src\kernel\syscall</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\kernel\pipe.c">
       <Filter>src\kernel</Filter>
     </ClCompile>
@@ -408,6 +411,15 @@
       <Filter>src\kernel\linker</Filter>
     </ClCompile>
     <ClCompile Include="..\src\kernel\procperm.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\vga.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\fs\file.c">
+      <Filter>src\kernel\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\syscall.c">
       <Filter>src\kernel</Filter>
     </ClCompile>
   </ItemGroup>
@@ -554,9 +566,6 @@
     <None Include="..\src\kernel\sched\sync\signal_v.c.inl">
       <Filter>src\kernel\sched\sync</Filter>
     </None>
-    <None Include="..\src\kernel\sched\sync\signal-impl.c.inl">
-      <Filter>src\kernel\sched\sync</Filter>
-    </None>
     <None Include="..\src\kernel\sched\sync\closelock.c.inl">
       <Filter>src\kernel\sched\sync</Filter>
     </None>
@@ -587,9 +596,6 @@
     <None Include="..\src\kernel\fs\fs-generic-superblock.c.inl">
       <Filter>src\kernel\fs</Filter>
     </None>
-    <None Include="..\src\kernel\fs\file.c.inl">
-      <Filter>src\kernel\fs</Filter>
-    </None>
     <None Include="..\src\kernel\fs\fs-blockfile.c.inl">
       <Filter>src\kernel\fs</Filter>
     </None>
@@ -598,36 +604,6 @@
     </None>
     <None Include="..\src\kernel\fs\fs-dirent-rmobj.inl">
       <Filter>src\kernel\fs</Filter>
-    </None>
-    <None Include="..\src\kernel\syscall\syscall-kfd.c.inl">
-      <Filter>src\kernel\syscall</Filter>
-    </None>
-    <None Include="..\src\kernel\syscall\syscall-kfs.c.inl">
-      <Filter>src\kernel\syscall</Filter>
-    </None>
-    <None Include="..\src\kernel\syscall\syscall-kmem.c.inl">
-      <Filter>src\kernel\syscall</Filter>
-    </None>
-    <None Include="..\src\kernel\syscall\syscall-kproc.c.inl">
-      <Filter>src\kernel\syscall</Filter>
-    </None>
-    <None Include="..\src\kernel\syscall\syscall-ktask.c.inl">
-      <Filter>src\kernel\syscall</Filter>
-    </None>
-    <None Include="..\src\kernel\syscall\syscall-ktime.c.inl">
-      <Filter>src\kernel\syscall</Filter>
-    </None>
-    <None Include="..\src\kernel\syscall\syscall-mod.c.inl">
-      <Filter>src\kernel\syscall</Filter>
-    </None>
-    <None Include="..\src\kernel\syscall\syscall-nt.c.inl">
-      <Filter>src\kernel\syscall</Filter>
-    </None>
-    <None Include="..\src\kernel\syscall\syscall-unix.c.inl">
-      <Filter>src\kernel\syscall</Filter>
-    </None>
-    <None Include="..\src\kernel\syscall\syscall-generic.c.inl">
-      <Filter>src\kernel\syscall</Filter>
     </None>
     <None Include="..\src\kernel\arch\x86\linker.ld">
       <Filter>src\kernel\arch\x86</Filter>
@@ -677,6 +653,21 @@
     </None>
     <None Include="..\src\kernel\shm-mmap-impl.c.inl">
       <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\sync\sigset.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
+    <None Include="..\src\kernel\shm-syscall.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\proc-syscall.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\task-syscall.c.inl">
+      <Filter>src\kernel\sched</Filter>
+    </None>
+    <None Include="..\src\kernel\sched\proc-mod-syscall.c.inl">
+      <Filter>src\kernel\sched</Filter>
     </None>
   </ItemGroup>
 </Project>

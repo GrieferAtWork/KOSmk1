@@ -104,6 +104,10 @@
 #include "compiler-nonansi.h"
 #endif /* !Ansi... */
 
+#ifdef __CHECKER__
+#include "compiler-sparse.h"
+#endif
+
 #ifndef __i386__
 #undef __fastcall
 #endif
@@ -277,6 +281,18 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #   define __NO_attribute_thread
 #   define __attribute_thread /* nothing */
 #endif
+#ifndef __attribute_section
+#   define __NO_attribute_section
+#   define __attribute_section(name) /* nothing */
+#endif
+#ifndef __attribute_aligned_a
+#define __NO_attribute_aligned_a
+#define __attribute_aligned_a(x) /* nothing */
+#endif /* !__attribute_aligned_a */
+#ifndef __attribute_aligned_c
+#define __NO_attribute_aligned_c
+#define __attribute_aligned_c(x) /* nothing */
+#endif /* !__attribute_aligned_c */
 
 // Visibility attributes
 #ifndef __PE__
@@ -312,9 +328,6 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #ifndef __private
 #   define __NO_private
 #   define __private /* nothing */
-#endif
-#ifndef __struct_fwd
-#   define __struct_fwd(T) struct T
 #endif
 
 
@@ -408,42 +421,81 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #define __NOCLAIM_END
 
 
-#ifndef __physicaladdr
-#define __physicaladdr /* Physical memory address. */
+#ifndef __aligned
+#define __aligned(n)    /* Attribute for pointer/integral: Must be aligned by 'n' */
 #endif
-#ifndef __virtualaddr
-#define __virtualaddr  /* Physical memory address. */
+#ifndef __user
+#define __user          /* Attribute for pointer: User-space virtual memory address. */
 #endif
-
-#define __aligned(n)    /* Attribute for pointer: Must be aligned by 'n' */
-#define __user          __virtualaddr
-#define __kernel        __physicaladdr
+#ifndef __kernel
+#define __kernel        /* Attribute for pointer: Physical memory address. */
+#endif
+#ifndef __percpu
+#define __percpu        /* Attribute for pointer: Per-cpu variable. */
+#endif
+#ifndef __rcu
+#define __rcu           /* Attribute for pointer: Something about networks... (ignore for now) */
+#endif
+#ifndef __ref
 #define __ref           /* Attribute for a pointer: If non-NULL, this is a reference; indicates reference storage/transfer. */
-#define __atomic        /* Attribute for members: Access is atomic. */
-#define __cleanup(expr) /* Attribute for a return value: Caller must execute 'expr' to clean up. */
-#define __nomp          /* Attribute for functions: (NO)(M)ulti(P)rocessing: Function is not thread-mp. */
-
-// Attribute for function: The caller must ensure that 'ktask_iscrit()' protection is enabled.
-// >> Failure to do so may result in a memory/resource leak when a different task terminates the calling.
-// NOTE: User-level code has no ability to guard itself from being terminated,
-//       meaning that this attribute is only meant to self-document kernel usage-rules.
-// HINT: To ensure this protected, functions marked with this may assert this state
-//       by simply inserting 'assert(ktask_iscrit())' at the start of their block.
-#define __crit          /* Attribute for functions: Requires a critical context. */
-
-#ifndef ktask_iscrit
-#ifdef __INTELLISENSE__
-__DECL_BEGIN
-//////////////////////////////////////////////////////////////////////////
-// Returns true if the calling task is
-// protected from sporadically being terminated.
-extern int ktask_iscrit(void);
-__DECL_END
-#elif defined(__KERNEL__) && !defined(__ASSEMBLY__)
-__DECL_BEGIN extern int ktask_iscrit __P((void)); __DECL_END
-#else
-#   define ktask_iscrit() 1 /*< Satisfy assertions. */
 #endif
-#endif /* !ktask_iscrit */
+#ifndef __atomic
+#define __atomic        /* Attribute for members: Access is atomic. */
+#endif
+#ifndef __nomp
+#define __nomp          /* Attribute for functions: (NO)(M)ulti(P)rocessing: Function is not thread-mp. */
+#endif
+#ifndef __crit
+/* Attribute for function: The caller must ensure that 'ktask_iscrit()' protection is enabled.
+ * >> Failure to do so may result in a memory/resource leak when a different task terminates the calling.
+ * NOTE: User-level code has no ability to guard itself from being terminated,
+ *       meaning that this attribute is only meant to self-document kernel usage-rules.
+ * HINT: To ensure this protected, functions marked with this may assert this state
+ *       by simply inserting 'assert(ktask_iscrit())' at the start of their block. */
+#define __crit          /* Attribute for functions: Requires a critical context. */
+#endif
+
+#ifndef __force
+#define __force           /* Attribute for types: Force casting between otherwise incompatible types. */
+#endif
+#ifndef __nocast
+#define __nocast          /* Attribute for types: Don't allow instance of this type to be casted. */
+#endif
+#ifndef __iomem
+#define __iomem           /* I/O-mapped memory. */
+#endif
+#ifndef __bitwise__
+#define __bitwise__       /* Attribute for integral types: Don't allow mixing with other types. */
+#endif
+#ifndef __chk_user_ptr
+#define __NO_chk_user_ptr 1
+#define __chk_user_ptr(x) (void)0
+#endif
+#ifndef __chk_io_ptr
+#define __NO_chk_io_ptr 1
+#define __chk_io_ptr(x)   (void)0
+#endif
+#ifndef __must_hold
+#define __NO_must_hold 1
+#define __must_hold(x)    /* Attribute for function: Calling this function requires the caller to hold a lock to 'x' */
+#define __acquires(x)     /* Attribute for function: Calling this function acquires a lock to 'x'. */
+#define __releases(x)     /* Attribute for function: Calling this function releases a lock to 'x'. */
+#define __acquire(x)      (void)0
+#define __release(x)      (void)0
+#define __cond_lock(x,c)  (c)
+#endif
+
+
+#ifndef __bitwise
+#ifdef __CHECK_ENDIAN__
+#   define __bitwise      __bitwise__
+#else
+#   define __bitwise
+#endif
+#endif /* !__bitwise */
+
+#ifdef __KERNEL__
+#include <kos/kernel/stdkernel.h>
+#endif
 
 #endif /* !__KOS_COMPILER_H__ */

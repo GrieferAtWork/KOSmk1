@@ -59,9 +59,9 @@ __DECL_BEGIN
 #define __SCHED_CALL
 #endif
 
-#define KOBJECT_MAGIC_CPU      0xC9D      // CPU
-#define KOBJECT_MAGIC_TASK     0x7A5F     // TASK
-#define KOBJECT_MAGIC_TASKLIST 0x7A5F7157 // TASKLIST
+#define KOBJECT_MAGIC_CPU      0xC9D      /*< CPU. */
+#define KOBJECT_MAGIC_TASK     0x7A5F     /*< TASK. */
+#define KOBJECT_MAGIC_TASKLIST 0x7A5F7157 /*< TASKLIST. */
 
 #define KTASK_STACK_SIZE_DEF   0x4000
 
@@ -81,6 +81,8 @@ struct kproc;
 #define KCPU_OFFSETOF_TSS       (KOBJECT_SIZEOFHEAD+4+__SIZEOF_POINTER__*2)
 
 #ifndef __ASSEMBLY__
+typedef __u8 kcpu_lock_t;
+typedef __u8 kcpu_flag_t; /*< Set of 'KCPU_FLAG_*'. */
 struct kcpu {
  KOBJECT_HEAD
 #define KCPU_LOCK_TASKS 0x01 /*< Lock for pending tasks.
@@ -89,28 +91,28 @@ struct kcpu {
 #define KCPU_LOCK_SLEEP 0x02 /*< Lock for sleeping tasks.
                                  When used in conjunction with 'KTASK_LOCK_STATE',
                                  this lock must be acquire second. */
- __atomic __u8       c_locks;
+ __atomic kcpu_lock_t c_locks;
 #define KCPU_FLAG_NONE  0x00
 #define KCPU_FLAG_NOIRQ 0x01 /*< [lock(KCPU_LOCK_TASKS)] Don't perform IRQ switching. */
-          __u8       c_flags;
-          __u8       c_padding[2];
- // NOTE: The following two describe a linked list of tasks, using 't_prev' and 't_next'.
- //       Note though, that tasks listed in 'c_current' wrap around, forming a
- //       ring buffer, while tasks listed in 'c_sleeping' don't, causing the
- //       list of sleeping tasks to end abruptly.
- // NOTE: References in these lists are exclusive, meaning
- //       that a task can only be referenced by through this.
- __ref struct ktask *c_current;  /*< [0..1][lock(KCPU_LOCK_TASKS)] Task scheduled to switch to next. */
- __ref struct ktask *c_sleeping; /*< [0..1][lock(KCPU_LOCK_SLEEP)] Task who's abstime will pass next. */
- struct ktss         c_tss;      /*< [lock(kcpu_self())] Per-CPU task state segment (required for syscalls). */
+          kcpu_flag_t c_flags; /*< Set of 'KCPU_FLAG_*'. */
+          __u8        c_padding[2];
+ /* NOTE: The following two describe a linked list of tasks, using 't_prev' and 't_next'.
+  *       Note though, that tasks listed in 'c_current' wrap around, forming a
+  *       ring buffer, while tasks listed in 'c_sleeping' don't, causing the
+  *       list of sleeping tasks to end abruptly.
+  * NOTE: References in these lists are exclusive, meaning
+  *       that a task can only be referenced by through this. */
+ __ref struct ktask  *c_current;  /*< [0..1][lock(KCPU_LOCK_TASKS)] Task scheduled to switch to next. */
+ __ref struct ktask  *c_sleeping; /*< [0..1][lock(KCPU_LOCK_SLEEP)] Task who's abstime will pass next. */
+ struct ktss          c_tss;      /*< [lock(kcpu_self())] Per-CPU task state segment (required for syscalls). */
 };
 
 
 #ifdef __INTELLISENSE__
-extern bool kcpu_islocked(struct kcpu *self, __u8 lock);
-extern bool kcpu_trylock(struct kcpu *self, __u8 lock);
-extern void kcpu_lock(struct kcpu *self, __u8 lock);
-extern void kcpu_unlock(struct kcpu *self, __u8 lock);
+extern bool kcpu_islocked(struct kcpu *self, kcpu_lock_t lock);
+extern bool kcpu_trylock(struct kcpu *self, kcpu_lock_t lock);
+extern void kcpu_lock(struct kcpu *self, kcpu_lock_t lock);
+extern void kcpu_unlock(struct kcpu *self, kcpu_lock_t lock);
 #else
 #define kcpu_islocked(self,lock)  ((katomic_load((self)->c_locks)&(lock))!=0)
 #define kcpu_trylock(self,lock)   ((katomic_fetchor((self)->c_locks,lock)&(lock))==0)
@@ -155,9 +157,9 @@ extern struct kcpu  __kcpu_zero;
 #define kcpu_zero() (&__kcpu_zero)
 #endif
 
-// NOTE: 'unlocked2' expects the caller to hold 'KCPU_LOCK_TASKS' and 'KCPU_LOCK_SLEEP',
-//       whereas 'unlocked' only expects them to be holding 'KCPU_LOCK_SLEEP'
-// WARNING: 'unlocked' may temporarily release the 'KCPU_LOCK_SLEEP' lock.
+/* NOTE: 'unlocked2' expects the caller to hold 'KCPU_LOCK_TASKS' and 'KCPU_LOCK_SLEEP',
+ *       whereas 'unlocked' only expects them to be holding 'KCPU_LOCK_SLEEP'
+ * WARNING: 'unlocked' may temporarily release the 'KCPU_LOCK_SLEEP' lock. */
 extern __nonnull((1,2)) void kcpu_ticktime_unlocked2(struct kcpu *__restrict self, struct timespec const *__restrict now);
 extern __nonnull((1)) void kcpu_ticknow_unlocked2(struct kcpu *__restrict self);
 #if KCPU_LOCK_SLEEP != KCPU_LOCK_TASKS
@@ -204,19 +206,19 @@ kcpu_unschedulesleep_unlocked(struct kcpu *__restrict self,
 #ifndef __ASSEMBLY__
 __COMPILER_PACK_PUSH(1)
 struct __packed ktaskregisters {
- // The structure located at the top of any suspended/pending task
- // >> After creating a new task using one of the 'ktask_new*' functions,
- //    one instance of this structure must be pushed on the task's stack
- //    using the 'ktask_stackpush_sp_unlocked' function before it may be launched by
- //    calling 'ktask_resume_k'.
+ /* The structure located at the top of any suspended/pending task
+  * >> After creating a new task using one of the 'ktask_new*' functions,
+  *    one instance of this structure must be pushed on the task's stack
+  *    using the 'ktask_stackpush_sp_unlocked' function before it may be launched by
+  *    calling 'ktask_resume_k'. */
 #if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
  __u16 ds,es,fs,gs;
 #else
  __u16 ds,__padding;
 #endif
  __uintptr_t edi,esi,ebp,ebx,edx,ecx,eax;
- // NOTE: The layout of everything below this point
- //       is defined by the CPU (s.a.: 'iret')
+ /* NOTE: The layout of everything below this point
+  *       is defined by the CPU (s.a.: 'iret') */
 union __packed {
  __uintptr_t eip;
  void       *returnaddr;
@@ -227,7 +229,7 @@ union __packed {
 };
 struct __packed ktaskregisters3 {
  struct ktaskregisters base;
- // ring-3 only:
+ /* ring-3 only: */
  __uintptr_t useresp,ss;
 };
 __COMPILER_PACK_POP
@@ -252,7 +254,8 @@ struct ktasksigslot {
 
 #ifndef __ASSEMBLY__
 struct ktasksig {
- // NOTE: When both are needed, 'KTASK_LOCK_SIGCHAIN' must be locked before 'KSIGNAL_LOCK_WAIT'
+ /* NOTE: When both are needed, 'KTASK_LOCK_SIGCHAIN'
+  * must be locked before 'KSIGNAL_LOCK_WAIT' */
  struct ktasksig    *ts_next; /*< [0..1][owned] Next set of signal slots. */
  struct ktasksigslot ts_sigs[KTASK_SIGBUFSIZE];
 };
@@ -288,24 +291,9 @@ ktasksig_newslot(struct ktasksig *__restrict self);
 extern __wunused __nonnull((1,2)) kerrno_t
 ktasksig_addsig_locked(struct ktasksig *__restrict self,
                        struct ksignal *__restrict sig);
-#ifdef __INTELLISENSE__
 extern __wunused __nonnull((1)) kerrno_t
-ktasksig_addsigs_andunlock(struct ktasksig *__restrict self, __size_t sigc,
-                           struct ksignal *const *__restrict sigv);
-#else
-#define ktasksig_addsigs_andunlock(self,sigc,sigv) \
- __xblock({ kerrno_t __error = KE_OK;\
-            struct ktasksig *const __self = (self);\
-            struct ksignal *const *__iter,*const *__end;\
-            __end = (__iter = (sigv))+(sigc);\
-            for (; __iter != __end; ++__iter) {\
-             if __likely(KE_ISOK(__error)) __error = ktasksig_addsig_locked(__self,*__iter);\
-             ksignal_unlock_c(*__iter,KSIGNAL_LOCK_WAIT);\
-            }\
-            __xreturn __error;\
- })
-
-#endif
+ktasksig_addsigs_andunlock(struct ktasksig *__restrict self,
+                           struct ksigset const *signals);
 #endif /* !__ASSEMBLY__ */
 
 
@@ -316,7 +304,7 @@ ktasksig_addsigs_andunlock(struct ktasksig *__restrict self, __size_t sigc,
 
 #ifndef __ASSEMBLY__
 struct ktasklist {
- KOBJECT_HEAD // Unreferenced list of tasks.
+ KOBJECT_HEAD /* Unreferenced list of tasks. */
  __size_t       t_freep; /*< Index hinting at a possible free slot. */
  __size_t       t_taska; /*< Allocated vector size. */
  struct ktask **t_taskv; /*< [0..1][0..t_childa][owned] Vector of tasks. (Index if a task is stored somewhere in said task) */
@@ -566,27 +554,27 @@ extern struct timespec __kernel_boot_time;
 #endif /* !__ASSEMBLY__ */
 
 
-// NOTE: The 'KTASK_PRIORITY_SUSPENDED' priority differs
-//       from how 'ktask_suspend_k/ktask_resume_k' operate.
-//       Unlike ~actually~ suspending a task, setting
-//       its priority to suspended will not unschedule the
-//       task, and the return value of ktask_issuspended
-//       will remain unaffected.
-//    -> The advantage of this is, that a priority-suspended
-//       task will remain visible in any kind of process listing,
-//       acting as though it was still running.
-//    -> The disadvantage is, that this kind of suspension is
-//       not recursive, once set doesn't allow reverting to
-//       any former value, as well as it not being suitable
-//       for suspending a task in order to perform operations
-//       such as manipulating its stack.
-//       Also note, that since the task will remain scheduled,
-//       a minuscule portion of CPU cycles are spend skipping
-//       this task during scheduling.
-// WARNING: If the only task of any cup has its priority set to
-//          'KTASK_PRIORITY_SUSPENDED', it will actually be
-//          re-scheduling with whatever code running inside
-//          being executed.
+/* NOTE: The 'KTASK_PRIORITY_SUSPENDED' priority differs
+ *       from how 'ktask_suspend_k/ktask_resume_k' operate.
+ *       Unlike ~actually~ suspending a task, setting
+ *       its priority to suspended will not unschedule the
+ *       task, and the return value of ktask_issuspended
+ *       will remain unaffected.
+ *    -> The advantage of this is, that a priority-suspended
+ *       task will remain visible in any kind of process listing,
+ *       acting as though it was still running.
+ *    -> The disadvantage is, that this kind of suspension is
+ *       not recursive, once set doesn't allow reverting to
+ *       any former value, as well as it not being suitable
+ *       for suspending a task in order to perform operations
+ *       such as manipulating its stack.
+ *       Also note, that since the task will remain scheduled,
+ *       a minuscule portion of CPU cycles are spend skipping
+ *       this task during scheduling.
+ * WARNING: If the only task of any cup has its priority set to
+ *          'KTASK_PRIORITY_SUSPENDED', it will actually be
+ *          re-scheduling with whatever code running inside
+ *          being executed. */
 #define KTASK_PRIORITY_SUSPENDED (-32767-1)
 #define KTASK_PRIORITY_DEF          0
 #define KTASK_PRIORITY_REALTIME    32767
@@ -662,6 +650,39 @@ extern struct timespec __kernel_boot_time;
 #endif
 
 #ifndef __ASSEMBLY__
+
+typedef __u8 ktask_state_t; /*< One of 'KTASK_STATE_*' */
+#define KTASK_STATE_RUNNING    0x00 /*< Task is currently running. */
+#define KTASK_STATE_SUSPENDED  0x01 /*< Task is suspended by use of ktask_suspend_k(), or was created suspended. */
+#define KTASK_STATE_TERMINATED 0x03 /*< Task has finished, or was terminated (NOTE: Setting this state may not be reverted). */
+#define KTASK_STATE_WAITING    0x11 /*< Task is queued to wake on a locking primitive. */
+#define KTASK_STATE_WAITINGTMO 0x10 /*< Task is queued to wake on a locking primitive, or time out after a given amount of time has passed. (NOTE: Task is still scheduled) */
+#define KTASK_STATE_ISACTIVE(state)   ((state)==KTASK_STATE_RUNNING)
+#define KTASK_STATE_ISWAITING(state) (((state)&0x10)!=0)
+#define KTASK_STATE_HASCPU(state)    (((state)&0x01)==0) /*< Task is associated with an explicit CPU */
+
+typedef __u8 ktask_lock_t; /*< Set of 'KTASK_LOCK_*'. */
+#define KTASK_LOCK_STATE    0x01
+#define KTASK_LOCK_SIGCHAIN 0x02
+#define KTASK_LOCK_CHILDREN 0x04
+#define KTASK_LOCK_TLS      0x08
+#define KTASK_LOCK_SIGVAL   0x10
+#ifdef __DEBUG__
+#define KTASK_LOCK_RELEASEDATA 0x80 /*< Debug-only safeguard to make sure releasing data is synchronized. */
+#endif
+
+typedef __u8 ktask_flag_t;
+#define KTASK_FLAG_NONE       0x00
+#define KTASK_FLAG_USERTASK   0x01 /*< [const] This task is running in ring 3. */
+#define KTASK_FLAG_OWNSUSTACK 0x02 /*< [const] t_ustackvp is free'd upon task destruction (Requires the 'KTASK_FLAG_USERTASK' flag). */
+#define KTASK_FLAG_MALLKSTACK 0x04 /*< [const] The kernel stack is allocated through malloc, instead of mmap (NOTE: Only allowed for kernel tasks; aka. when 'KTASK_FLAG_USERTASK' isn't set). */
+#define KTASK_FLAG_CRITICAL   0x08 /*< [lock(r:KTASK_LOCK_STATE|ktask_self();w:KTASK_LOCK_STATE)] This task is currently running critical code, and may not be terminated directly. */
+#define KTASK_FLAG_TIMEDOUT   0x10 /*< [lock(KTASK_LOCK_STATE)] The task timed out. */
+#define KTASK_FLAG_ALARMED    0x20 /*< [lock(KTASK_LOCK_STATE)] The task may be running, but a 't_abstime' describes a user-defined alarm. */
+#define KTASK_FLAG_WASINTR    0x40 /*< [lock(KTASK_LOCK_STATE)] An interrupt signal was send to a critical task (While set, the signal is still pending). */
+#define KTASK_FLAG_NOINTR     0x80 /*< [lock(r:KTASK_LOCK_STATE|ktask_self();w:KTASK_LOCK_STATE)] Don't send KE_INTR errors to this task when it gets terminated while inside a critical block. */
+
+
 struct ktask {
  KOBJECT_HEAD
  /* Address of the task's stack end.
@@ -680,41 +701,16 @@ struct ktask {
                                              NOTE: This pointer is __always__ mapped with 'kproc_getpagedir(t_proc)' */
  struct kpagedir const       *t_epd;    /*< [1..1][lock(this == ktask_self())] The effective page directory used user-kernel address translation. */
  __u32                        t_refcnt; /*< Reference counter. */
- __u8                         t_locks;  /*< Task locks (Set of 'KTASK_LOCK_*'). */
-#define KTASK_LOCK_STATE    0x01
-#define KTASK_LOCK_SIGCHAIN 0x02
-#define KTASK_LOCK_CHILDREN 0x04
-#define KTASK_LOCK_TLS      0x08
-#define KTASK_LOCK_SIGVAL   0x10
-#ifdef __DEBUG__
-#define KTASK_LOCK_RELEASEDATA 0x80 /*< Debug-only safeguard to make sure releasing data is synchronized. */
-#endif
+ ktask_lock_t                 t_locks;  /*< Task locks (Set of 'KTASK_LOCK_*'). */
  /* NOTE: When the task is not scheduled (t_cpu == NULL), its state must be any of
   *       'KTASK_STATE_SUSPENDED', 'KTASK_STATE_TERMINATED' or 'KTASK_STATE_WAITING'
   *       This condition can quickly be checked using 'KTASK_STATE_HASCPU()'
   *       Note though, that 'KTASK_STATE_WAITINGTMO' does not fall under this category
   *       as it will remain scheduled on a CPU that will be responsible for waking it
   *       at a later point in time. */
- __atomic __u8                t_state;    /*< [lock(KTASK_LOCK_STATE)] State of the task (atomic read). */
-#define KTASK_STATE_RUNNING    0x00 /*< Task is currently running. */
-#define KTASK_STATE_SUSPENDED  0x01 /*< Task is suspended by use of ktask_suspend_k(), or was created suspended. */
-#define KTASK_STATE_TERMINATED 0x03 /*< Task has finished, or was terminated (NOTE: Setting this state may not be reverted). */
-#define KTASK_STATE_WAITING    0x11 /*< Task is queued to wake on a locking primitive. */
-#define KTASK_STATE_WAITINGTMO 0x10 /*< Task is queued to wake on a locking primitive, or time out after a given amount of time has passed. (NOTE: Task is still scheduled) */
-#define KTASK_STATE_ISACTIVE(state)   ((state)==KTASK_STATE_RUNNING)
-#define KTASK_STATE_ISWAITING(state) (((state)&0x10)!=0)
-#define KTASK_STATE_HASCPU(state)    (((state)&0x01)==0) /*< Task is associated with an explicit CPU */
- __u8                         t_newstate; /*< [lock(KTASK_LOCK_STATE)] New state to switch to at the end of a critical block/after resuming from suspension. */
- __u8                         t_flags;    /*< [const] Task flags (Set of 'KTASK_FLAG_*'). */
-#define KTASK_FLAG_NONE       0x00
-#define KTASK_FLAG_USERTASK   0x01 /*< [const] This task is running in ring 3. */
-#define KTASK_FLAG_OWNSUSTACK 0x02 /*< [const] t_ustackvp is free'd upon task destruction (Requires the 'KTASK_FLAG_USERTASK' flag). */
-#define KTASK_FLAG_MALLKSTACK 0x04 /*< [const] The kernel stack is allocated through malloc, instead of mmap (NOTE: Only allowed for kernel tasks; aka. when 'KTASK_FLAG_USERTASK' isn't set). */
-#define KTASK_FLAG_CRITICAL   0x08 /*< [lock(r:KTASK_LOCK_STATE|ktask_self();w:KTASK_LOCK_STATE)] This task is currently running critical code, and may not be terminated directly. */
-#define KTASK_FLAG_TIMEDOUT   0x10 /*< [lock(KTASK_LOCK_STATE)] The task timed out. */
-#define KTASK_FLAG_ALARMED    0x20 /*< [lock(KTASK_LOCK_STATE)] The task may be running, but a 't_abstime' describes a user-defined alarm. */
-#define KTASK_FLAG_WASINTR    0x40 /*< [lock(KTASK_LOCK_STATE)] An interrupt signal was send to a critical task (While set, the signal is still pending). */
-#define KTASK_FLAG_NOINTR     0x80 /*< [lock(r:KTASK_LOCK_STATE|ktask_self();w:KTASK_LOCK_STATE)] Don't send KE_INTR errors to this task when it gets terminated while inside a critical block. */
+ __atomic ktask_state_t       t_state;    /*< [lock(KTASK_LOCK_STATE)] State of the task (atomic read). */
+ ktask_state_t                t_newstate; /*< [lock(KTASK_LOCK_STATE)] New state to switch to at the end of a critical block/after resuming from suspension. */
+ ktask_flag_t                 t_flags;    /*< [lock(KTASK_LOCK_STATE)] Task flags (Set of 'KTASK_FLAG_*'). */
  void                        *t_exitcode; /*< [?..?][lock(KTASK_LOCK_STATE)] Exitcode of the task (non-locked & read-only after termination). NOTE: This must not necessarily be a pointer! */
  struct kcpu                 *t_cpu;      /*< [0..1][lock(KTASK_LOCK_STATE)] CPU Hosting the task (Only non-NULL if the state implies 'KTASK_STATE_HASCPU'). */
  __ref struct ktask          *t_prev;     /*< [?..1][lock(t_cpu:KCPU_LOCK_TASKS|KCPU_LOCK_SLEEP)] Previous sleeping/pending task (Only used if a cpu is present). */
@@ -758,16 +754,16 @@ struct ktask {
 };
 
 #ifdef __INTELLISENSE__
-extern __wunused __nonnull((1)) __u8 ktask_getstate(struct ktask const *__restrict self);
+extern __wunused __nonnull((1)) ktask_state_t ktask_getstate(struct ktask const *__restrict self);
 extern __wunused __nonnull((1)) bool ktask_isusertask(struct ktask const *__restrict self);
 extern __wunused __nonnull((1)) bool ktask_issuspended(struct ktask const *__restrict self);
 extern __wunused __nonnull((1)) bool ktask_isterminated(struct ktask const *__restrict self);
 extern __wunused __nonnull((1)) bool ktask_iswaiting(struct ktask const *__restrict self);
 extern __wunused __nonnull((1)) bool ktask_isactive(struct ktask const *__restrict self);
-extern __wunused __nonnull((1)) bool ktask_islocked(struct ktask const *__restrict self, __u8 lock);
-extern __wunused __nonnull((1)) bool ktask_trylock(struct ktask *__restrict self, __u8 lock);
-extern           __nonnull((1)) void ktask_lock(struct ktask *__restrict self, __u8 lock);
-extern           __nonnull((1)) void ktask_unlock(struct ktask *__restrict self, __u8 lock);
+extern __wunused __nonnull((1)) bool ktask_islocked(struct ktask const *__restrict self, ktask_lock_t lock);
+extern __wunused __nonnull((1)) bool ktask_trylock(struct ktask *__restrict self, ktask_lock_t lock);
+extern           __nonnull((1)) void ktask_lock(struct ktask *__restrict self, ktask_lock_t lock);
+extern           __nonnull((1)) void ktask_unlock(struct ktask *__restrict self, ktask_lock_t lock);
 extern __wunused __nonnull((1)) struct kproc *ktask_getproc(struct ktask const *__restrict self);
 extern __wunused __nonnull((1)) __size_t ktask_getustacksize(struct ktask const *__restrict self);
 extern __wunused __nonnull((1)) __size_t ktask_getkstacksize(struct ktask const *__restrict self);
@@ -795,45 +791,48 @@ __local KOBJECT_DEFINE_DECREF(ktask_decref,struct ktask,t_refcnt,kassert_ktask,k
 #endif /* !__ASSEMBLY__ */
 
 
-// Immediately switch to the scheduled task
-//  - Interpreted as 'KTASK_RESCHEDULE_HINT_NEXT' if 'newcpu' isn't the host CPU
-//  - Note, that the scheduler may choose to switch CPUs at any point,
-//    meaning that calling 'ktask_reschedule(...,kcpu_self(),KTASK_RESCHEDULE_HINT_CURRENT)'
-//    does not guaranty that the task will be switched to immediately.
+/* Immediately switch to the scheduled task
+ *  - Interpreted as 'KTASK_RESCHEDULE_HINT_NEXT' if 'newcpu' isn't the host CPU
+ *  - Note, that the scheduler may choose to switch CPUs at any point,
+ *    meaning that calling 'ktask_reschedule(...,kcpu_self(),KTASK_RESCHEDULE_HINT_CURRENT)'
+ *    does not guaranty that the task will be switched to immediately. */
 #define KTASK_RESCHEDULE_HINT_CURRENT 0
-// Schedule the task to be executed early (after the next context switch)
+
+/* Schedule the task to be executed early (after the next context switch) */
 #define KTASK_RESCHEDULE_HINT_NEXT    1
-// Schedule the task to be executed late (after all other tasks have already run)
+
+/* Schedule the task to be executed late (after all other tasks have already run) */
 #define KTASK_RESCHEDULE_HINT_LAST    2
-// The default behavior is to schedule the task for execution last,
-// as this way usercode that constantly suspends/resumes a task
-// doesn't mess to badly with the scheduler by only with data
-// relatively far away from what will be executed next.
+
+/* The default behavior is to schedule the task for execution last,
+ * as this way usercode that constantly suspends/resumes a task
+ * doesn't mess to badly with the scheduler by only with data
+ * relatively far away from what will be executed next. */
 #define KTASK_RESCHEDULE_HINT_DEFAULT KTASK_RESCHEDULE_HINT_LAST
 
-// === Extended rescheduling flags stored in the hint argument ===
-// WARNING: These flags may not be included when sending a signal.
+/* === Extended rescheduling flags stored in the hint argument ===
+ * WARNING: These flags may not be included when sending a signal. */
 
-// Undo the state backup generated when suspending a task.
-// If this flag isn't set, re-scheduling of 'KTASK_STATE_SUSPENDED' tasks
-// is not allowed, and attempting to do so will (kind-of) fail with 'KS_BLOCKING'
-// >> This flag is required to handle the (not-really) re-scheduling
-//    or a suspended task receiving a signal, such that once it is no
-//    longer suspended, it will realize that the signal was send, causing
-//    the task to really be re-scheduled.
+/* Undo the state backup generated when suspending a task.
+ * If this flag isn't set, re-scheduling of 'KTASK_STATE_SUSPENDED' tasks
+ * is not allowed, and attempting to do so will (kind-of) fail with 'KS_BLOCKING'
+ * >> This flag is required to handle the (not-really) re-scheduling
+ *    or a suspended task receiving a signal, such that once it is no
+ *    longer suspended, it will realize that the signal was send, causing
+ *    the task to really be re-scheduled. */
 #define KTASK_RESCHEDULE_HINTFLAG_UNDOSUSPEND 0x1000
 
-// Inherit the given reference
-// NOTE: It will be consumed in all cases!
+/* Inherit the given reference
+ * NOTE: It will be consumed in all cases! */
 #define KTASK_RESCHEDULE_HINTFLAG_INHERITREF  0x2000
 
-// Unlock 'KTASK_LOCK_SIGVAL' after the task was re-scheduled,
-// at the same time the task's 'KTASK_LOCK_STATE' lock is released.
-// NOTE: The sigval lock is unlocked in all situations, even
-//       when the rescheduling call would have otherwise failed.
-// HINT: This flag can be defined as anything, but defining it
-//       as 'KTASK_LOCK_SIGVAL' both makes sense and allows
-//       for some minor optimizations down the line.
+/* Unlock 'KTASK_LOCK_SIGVAL' after the task was re-scheduled,
+ * at the same time the task's 'KTASK_LOCK_STATE' lock is released.
+ * NOTE: The sigval lock is unlocked in all situations, even
+ *       when the rescheduling call would have otherwise failed.
+ * HINT: This flag can be defined as anything, but defining it
+ *       as 'KTASK_LOCK_SIGVAL' both makes sense and allows
+ *       for some minor optimizations down the line. */
 #define KTASK_RESCHEDULE_HINTFLAG_UNLOCKSIGVAL KTASK_LOCK_SIGVAL
 
 
@@ -880,11 +879,12 @@ __local KOBJECT_DEFINE_DECREF(ktask_decref,struct ktask,t_refcnt,kassert_ktask,k
 //                        task was re-awakened due to an attempt at termination.
 //                        >> Not returned if the task is within a task-level nointr block
 //                        Only returned once, but can be reset.
-#define ktask_unschedule(self,newstate,arg) ktask_unschedule_ex(self,newstate,arg,0,NULL)
+#define ktask_unschedule(self,newstate,arg) ktask_unschedule_ex(self,newstate,arg,NULL)
 extern __wunused __nonnull((1)) kerrno_t __SCHED_CALL
-ktask_unschedule_ex(struct ktask *__restrict self, __u8 newstate, void *__restrict arg,
-                    __size_t sigc, struct ksignal *const *__restrict sigv);
-extern __nonnull((1)) void __SCHED_CALL ktask_unschedule_aftercrit(struct ktask *__restrict self);
+ktask_unschedule_ex(struct ktask *__restrict self, ktask_state_t newstate,
+                    void *__restrict arg, struct ksigset const *signals);
+extern __nonnull((1)) void __SCHED_CALL
+ktask_unschedule_aftercrit(struct ktask *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
 // Re-schedules a given task for execution
@@ -930,7 +930,6 @@ ktask_reschedule_ex_impl(struct ktask *__restrict self, int hint);
 // NOTE: The newly created task does not own the given PD
 // @param: flags: A set of 'KTASK_FLAG_*' flags.
 // @return: NULL: Not enough memory to allocate the task/stack
-
 extern __crit __wunused __nonnull((1,2)) __ref struct ktask *
 ktask_newkernel(struct ktask *__restrict parent, struct kproc *__restrict proc,
                 __size_t kstacksize, __u16 flags);
@@ -1038,7 +1037,7 @@ extern __wunused __nonnull((1))    kerrno_t ktask_setpriority(struct ktask *self
 extern __wunused __nonnull((1)) ktaskprio_t ktask_getpriority_k(struct ktask const *self);
 extern           __nonnull((1))        void ktask_setpriority_k(struct ktask *self, ktaskprio_t v);
 #else
-#define ktask_getpriority  ktask_getpriority_k
+#define ktask_getpriority(self)  ktask_getpriority_k(self)
 extern __wunused __nonnull((1))   kerrno_t ktask_setpriority(struct ktask *self, ktaskprio_t v);
 #define ktask_getpriority_k(self)   katomic_load((self)->t_setpriority)
 #define ktask_setpriority_k(self,v) katomic_store((self)->t_setpriority,v)
@@ -1103,24 +1102,24 @@ struct ktask *__ktask_cpuself_spin(void) {
  return result;
 }
 /* NOTE: 'NOIRQ_P' always evaluates at compile-time,
-         with the optimization potential being that while
-         inside a no-interrupt block, we know that our
-         current CPU won't change, meaning that we can
-         safely read our volatile c_current pointer, knowing
-         that no IRQ will fire to unschedule us, after which
-         some other task might re-schedule us on a different
-         CPU, thereby resulting in kcpu_self() no longer
-         pointing to what is really the current CPU. */
-/* NOTE: Must use a macro for this to take
-         advantage of compile-time nointerrupt. */
+ *       with the optimization potential being that while
+ *       inside a no-interrupt block, we know that our
+ *       current CPU won't change, meaning that we can
+ *       safely read our volatile c_current pointer, knowing
+ *       that no IRQ will fire to unschedule us, after which
+ *       some other task might re-schedule us on a different
+ *       CPU, thereby resulting in kcpu_self() no longer
+ *       pointing to what is really the current CPU.
+ * NOTE: Must use a macro for this to take
+ *       advantage of compile-time NOIRQ hints. */
 #define __ktask_cpuself() \
  (NOIRQ_P \
    ? __ktask_cpuself_volatile() \
    : __ktask_cpuself_spin())
 #else
 /* Interrupt-only ktask_self()-version.
-   We use this if we can't make predictions about
-   the nointerrupt state, so we'll just  */
+ * We use this if we can't make predictions about
+ * the nointerrupt state, so we'll just  */
 #define __ktask_cpuself() \
  __xblock({ register struct ktask *__tsr;\
             NOIRQ_BEGIN\
@@ -1197,7 +1196,7 @@ ktask_setalarm(struct ktask *__restrict self,
 extern __nonnull((1,2)) kerrno_t
 ktask_getalarm_k(struct ktask const *__restrict self,
                  struct timespec *__restrict abstime);
-#define ktask_getalarm ktask_getalarm_k
+#define ktask_getalarm(self,abstime) ktask_getalarm_k(self,abstime)
 
 //////////////////////////////////////////////////////////////////////////
 // Put a given task to sleep until a given time passes.
@@ -1227,9 +1226,9 @@ extern struct ktask __ktask_zero;
 extern struct ktask __ktask_hwirq;
 #endif
 
-// ========================
-//  Task statistics access
-// ========================
+/* ======================== */
+/*  Task statistics access  */
+/* ======================== */
 
 #if KCONFIG_HAVE_TASK_STATS
 #ifdef __INTELLISENSE__
@@ -1465,7 +1464,7 @@ extern int ktask_isnointr(void);
 //                        flag was set, and a blocking operation _may_ have been interrupted.
 //                        >> Use 'ktask_terminate*' instead or call 'ktask_join'
 //                           to wait for termination of commence.
-// @return: KE_ACCES:     [!*_k] The caller does not have the required access to modify this task.
+// @return: KE_ACCES:     [!*_k] The caller does not have the required permissions to modify this task.
 extern __nonnull((1)) kerrno_t _ktask_terminate_k(struct ktask *__restrict self, void *exitcode);
 extern __nonnull((1)) kerrno_t  ktask_terminate_k(struct ktask *__restrict self, void *exitcode);
 extern __nonnull((1)) kerrno_t _ktask_terminate(struct ktask *__restrict self, void *exitcode);
@@ -1579,7 +1578,7 @@ extern __wunused __nonnull((1)) void *
 ktask_gettls(struct ktask const *__restrict self,
              __ktls_t tlsid);
 #else
-#define ktask_gettls(self,tlsid) \
+#define __ktask_gettls_irqlock(self,tlsid) \
  __xblock({ void *__tgtres; struct ktask const *const __tgtself = (self);\
             kassert_ktask(__tgtself);\
             NOIRQ_BEGINLOCK(ktask_trylock((struct ktask *)__tgtself,KTASK_LOCK_TLS));\
@@ -1587,6 +1586,18 @@ ktask_gettls(struct ktask const *__restrict self,
             NOIRQ_ENDUNLOCK(ktask_unlock((struct ktask *)__tgtself,KTASK_LOCK_TLS));\
             __xreturn __tgtres;\
  })
+#define __ktask_gettls_deflock(self,tlsid) \
+ __xblock({ void *__tgtres; struct ktask const *const __tgtself = (self);\
+            kassert_ktask(__tgtself);\
+            ktask_lock((struct ktask *)__tgtself,KTASK_LOCK_TLS);\
+            __tgtres = ktlspt_get(&__tgtself->t_tls,tlsid);\
+            ktask_unlock((struct ktask *)__tgtself,KTASK_LOCK_TLS);\
+            __xreturn __tgtres;\
+ })
+#define ktask_gettls(self,tlsid) \
+ (KTASK_CRIT_P\
+  ? __ktask_gettls_deflock(self,tlsid)\
+  : __ktask_gettls_irqlock(self,tlsid))
 #endif
 
 //////////////////////////////////////////////////////////////////////////

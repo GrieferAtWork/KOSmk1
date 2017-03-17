@@ -27,6 +27,7 @@
 
 __DECL_BEGIN
 
+/* TODO: Only unlocked2 is ever used; Remove the other one! */
 #ifdef UNLOCKED2
 void kcpu_ticktime_unlocked2
 #else
@@ -52,7 +53,7 @@ void kcpu_ticktime_unlocked
           "A task not supposed to continue running should not be sleeping");
   if (__timespec_cmpge(now,&iter->t_abstime)) {
    KTASK_ONLEAVESLEEP_TM(iter,self,now);
-   // Re-schedule this task by transferring its reference
+   /* Re-schedule this task by transferring its reference. */
    iter->t_flags |= KTASK_FLAG_TIMEDOUT;
    katomic_store(iter->t_state,KTASK_STATE_RUNNING);
    if ((self->c_sleeping = iter->t_next) != NULL) {
@@ -61,8 +62,8 @@ void kcpu_ticktime_unlocked
    }
 #ifndef UNLOCKED2
    kcpu_unlock(self,KCPU_LOCK_SLEEP);
-   // NOTE: 'iter' is still held alive by the
-   //       reference we inherited from the sleeper list.
+   /* NOTE: 'iter' is still held alive by the
+    *       reference we inherited from the sleeper list. */
    kcpu_lock(self,KCPU_LOCK_TASKS);
 #endif
    assert(!iter->t_prev);

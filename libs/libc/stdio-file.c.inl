@@ -121,7 +121,7 @@ __public int getchar(void) {
  kerrno_t error = kaddist_genticket(&keyboard_input,&ticket);
  if __unlikely(KE_ISERR(error)) return error;
  do {
-  error = kaddist_vrecv(&keyboard_input,&ticket,&evt);
+  error = KTASK_DEADLOCK_INTENDED(kaddist_vrecv(&keyboard_input,&ticket,&evt));
  } while (KE_ISOK(error) && (!KEY_ISUTF8(evt.e_key) ||
                              !KEY_ISDOWN(evt.e_key)
           ));

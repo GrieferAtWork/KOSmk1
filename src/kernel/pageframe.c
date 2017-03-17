@@ -43,7 +43,25 @@
 #include <kos/arch/string.h>
 #endif
 
+#ifdef __karch_raw_memset_l
+#define MEMSET_LARGE(p,b,s) __karch_raw_memset_l(p,0x01010101ul*(b),(s)/4)
+#elif defined(__karch_raw_memset_w)
+#define MEMSET_LARGE(p,b,s) __karch_raw_memset_w(p,0x0101ul*(b),(s)/2)
+#else
+#define MEMSET_LARGE(p,b,s) memset(p,b,s)
+#endif
+
 __DECL_BEGIN
+
+#if KCONFIG_HAVE_DEBUG_PAGEFRAME_MEMSET
+static int debug_fillpageframe = 0;
+#define PAGEFRAME_PREPARE_ALLOC(p,pagecount) { if(!debug_fillpageframe) MEMSET_LARGE(p,0xBA,(pagecount)*PAGESIZE); }
+#define PAGEFRAME_PREPARE_FREE(p,pagecount)  { if(!debug_fillpageframe) MEMSET_LARGE(p,0xFE,(pagecount)*PAGESIZE); }
+#else
+#define PAGEFRAME_PREPARE_ALLOC(p,pagecount) (void)0
+#define PAGEFRAME_PREPARE_FREE(p,pagecount)  (void)0
+#endif
+
 
 __STATIC_ASSERT(sizeof(struct kpageframe) == PAGESIZE);
 
@@ -75,7 +93,7 @@ void raminfo_addregion(__u64 start, __u64 size) {
  native_start = (uintptr_t)start;
  native_size = (size_t)size;
 
- if (native_start < (uintptr_t)__kernel_end &&
+ if (native_start             < (uintptr_t)__kernel_end &&
      native_start+native_size > (uintptr_t)__kernel_begin) {
   size_t temp;
   if ((uintptr_t)__kernel_begin >= native_start) {
@@ -132,10 +150,14 @@ void kernel_initialize_raminfo(void) {
  size_t             cmdline_page_c;
  char   cmdline_safe_v[3*sizeof(void *)];
  size_t cmdline_safe_c;
+ k_syslogf(KLOG_INFO,"[init] Raminfo...\n");
+#if KCONFIG_HAVE_DEBUG_PAGEFRAME_MEMSET
+ ++debug_fillpageframe;
+#endif
  memset(&__kpagedir_kernel,0,sizeof(__kpagedir_kernel));
- /* TODO: Now that we can emulate realmode, we could
-  *       have a fallback for detecting our own memory... */
  if (__grub_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
+  /* TODO: Now that we can emulate realmode, we could
+   *       have a fallback for detecting our own memory... */
   k_syslogf(KLOG_ERROR,"KOS Must be booted with a multiboot-compatible bootloader (e.g.: grub)\n");
   goto nocmdline;
  }
@@ -247,9 +269,46 @@ nocmdline:
   * failed because the region of memory in question
   * was allocated as part of the commandline. */
  x64_reserve_realmode_bootstrap();
+#if KCONFIG_HAVE_DEBUG_PAGEFRAME_MEMSET
+ --debug_fillpageframe;
+#endif
 }
 
 
+__crit __wunused __malloccall __kernel __pagealigned
+struct kpageframe *KPAGEFRAME_CALL __kpageframe_alloc_one(void) {
+ /* Special optimization for allocating a single pageframe.
+  * NOTE: This function is used to implicitly optimize
+  *       allocation of page directories and page tables. */
+ struct kpageframe *result;
+ kpagealloc_lock();
+ if __likely((result = first_free_page) != PAGEFRAME_NIL) {
+  assert(result->pff_size);
+  if __likely(result->pff_size != 1) {
+   /* Split the page. */
+   first_free_page = result+1;
+   first_free_page->pff_prev = PAGEFRAME_NIL;
+   first_free_page->pff_next = result->pff_next;
+   first_free_page->pff_size = result->pff_size-1;
+   if (result->pff_next != PAGEFRAME_NIL) {
+    result->pff_next->pff_prev = first_free_page;
+   }
+  } else {
+   /* First page frame is now empty (move on to the next). */
+   first_free_page = result->pff_next;
+   if (first_free_page != PAGEFRAME_NIL) {
+    first_free_page->pff_prev = PAGEFRAME_NIL;
+   }
+  }
+  kpagealloc_unlock();
+  PAGEFRAME_PREPARE_ALLOC(result,1);
+ } else {
+  kpagealloc_unlock();
+  k_syslogf(KLOG_ERROR,"OUT-OF-MEMORY when trying to allocate 1 pageframe\n");
+  tb_print();
+ }
+ return result;
+}
 
 
 __crit __wunused __malloccall __pagealigned struct kpageframe *KPAGEFRAME_CALL
@@ -298,6 +357,7 @@ kpageframe_allocat(__pagealigned struct kpageframe *__restrict start, size_t n_p
 #endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
     assert(!first_free_page || first_free_page->pff_prev == PAGEFRAME_NIL);
     kpagealloc_unlock();
+    PAGEFRAME_PREPARE_ALLOC(start,n_pages);
     return start;
    }
   } else {
@@ -327,6 +387,7 @@ kpageframe_free(__kernel __pagealigned struct kpageframe *__restrict start,
  assertf(start+n_pages > start,
          "Overflow in the given free region: start @%p; end @%p",
          start,start+n_pages);
+ PAGEFRAME_PREPARE_FREE(start,n_pages);
  kpagealloc_lock();
  if __unlikely(first_free_page == PAGEFRAME_NIL) {
   /* Special case: First free region. */

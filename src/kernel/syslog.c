@@ -23,22 +23,26 @@
 #ifndef __KOS_KERNEL_SYSLOG_C__
 #define __KOS_KERNEL_SYSLOG_C__ 1
 
+#include <alloca.h>
+#include <format-printer.h>
+#include <kos/attr.h>
+#include <kos/kernel/fs/file.h>
+#include <kos/kernel/linker.h>
+#include <kos/kernel/proc.h>
+#include <kos/kernel/serial.h>
+#include <kos/kernel/shm.h>
+#include <kos/kernel/syslog.h>
+#include <kos/kernel/syslog_io.h>
+#include <kos/kernel/time.h>
+#include <kos/kernel/tty.h>
+#include <kos/errno.h>
+#include <kos/syslog.h>
+#include <kos/timespec.h>
+#include <malloc.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <limits.h>
-#include <format-printer.h>
-#include <kos/syslog.h>
-#include <kos/kernel/syslog.h>
-#include <kos/kernel/serial.h>
-#include <kos/kernel/fs/file.h>
-#include <kos/kernel/proc.h>
-#include <kos/kernel/shm.h>
-#include <kos/kernel/time.h>
-#include <kos/kernel/linker.h>
-#include <kos/timespec.h>
-#include <kos/attr.h>
 #include <stdio.h>
-#include <alloca.h>
 
 __DECL_BEGIN
 
@@ -52,12 +56,110 @@ __DECL_BEGIN
 #define KLOGFORMAT_TAGSTR_2   "]"
 
 
+struct syslog_printer {
+ struct syslog_printer *sp_next;    /*< [0..1] Next printer. */
+ psyslogprinter         sp_printer; /*< [1..1] Printer callback. */
+ void                  *sp_closure; /*< [?..?] Callback closure. */
+};
 
-__nomp void k_writesyslog(int level, char const *msg, __size_t msg_max) {
+static __atomic int printers_lock = 0;
+static struct syslog_printer *printers[KLOG_COUNT] = {NULL,};
+#define PRINTERS_ACQUIRE   KTASK_SPIN(katomic_cmpxch(printers_lock,0,1))
+#define PRINTERS_RELEASE   katomic_store(printers_lock,0)
+
+__crit kerrno_t
+__ksyslog_addprinter_c(int level, psyslogprinter printer, void *closure) {
+ struct syslog_printer **chain,*entry;
+ KTASK_CRIT_MARK
+ assert(level >= 0 && level < KLOG_COUNT);
+ kassertbyte(printer);
+ entry = omalloc(struct syslog_printer);
+ if __unlikely(!entry) return KE_NOMEM;
+ chain = &printers[level];
+ entry->sp_printer = printer;
+ entry->sp_closure = closure;
+ PRINTERS_ACQUIRE;
+ entry->sp_next = *chain;
+ (*chain) = entry;
+ PRINTERS_RELEASE;
+ return KE_OK;
+}
+__crit kerrno_t
+__ksyslog_delprinter_c(int level, psyslogprinter printer) {
+ struct syslog_printer **chain,*entry;
+ KTASK_CRIT_MARK
+ assert(level >= 0 && level < KLOG_COUNT);
+ kassertbyte(printer);
+ chain = &printers[level];
+ PRINTERS_ACQUIRE;
+ while ((entry = *chain) != NULL) {
+  if (entry->sp_printer == printer) {
+   /* Unlink the entry */
+   *chain = entry->sp_next;
+   PRINTERS_RELEASE;
+   free(entry);
+   return KE_OK;
+  }
+  chain = &entry->sp_next;
+ }
+ PRINTERS_RELEASE;
+ return KS_UNCHANGED;
+}
+
+__local void
+ksyslog_invoke_printers(int level, char const *msg, size_t msg_max) {
+ struct syslog_printer **chain,*start,*iter;
+ assert(level >= 0 && level < KLOG_COUNT);
+ KTASK_CRIT_BEGIN
+ chain = &printers[level];
+ PRINTERS_ACQUIRE;
+ start = *chain;
+ *chain = NULL;
+ PRINTERS_RELEASE;
+ if (start) {
+  iter = start;
+  do (*iter->sp_printer)(level,msg,msg_max,iter->sp_closure);
+  while ((iter = iter->sp_next) != NULL);
+  PRINTERS_ACQUIRE;
+  if __unlikely(*chain) {
+   iter = *chain;
+   while (iter->sp_next) iter = iter->sp_next;
+   iter->sp_next = start;
+  } else {
+   *chain = start;
+  }
+  PRINTERS_RELEASE;
+ }
+ KTASK_CRIT_END
+}
+
+
+
+__nomp void k_writesyslog(int level, char const *msg, size_t msg_max) {
  /* TODO: Do something more with this... */
  (void)level;
  serial_printn(SERIAL_01,msg,msg_max);
+ ksyslog_invoke_printers(level,msg,msg_max);
 }
+
+static void
+tty_syslog(int __unused(level),
+           char const *msg, size_t msg_max,
+           void *__unused(closure)) {
+ tty_printn(msg,msg_max);
+}
+
+void ksyslog_addtty(void) {
+ int level;
+ for (level = 0; level != KLOG_COUNT; ++level)
+  ksyslog_addprinter(level,&tty_syslog,NULL);
+}
+void ksyslog_deltty(void) {
+ int level;
+ for (level = 0; level != KLOG_COUNT; ++level)
+  ksyslog_delprinter(level,&tty_syslog);
+}
+
 
 struct syslog_callback_data {
  int    level;
@@ -113,7 +215,7 @@ static void print_file_name(int level, struct kfile *file) {
 }
 
 
-void k_dosyslog_prefixfile(int level, struct kfile *file, char const *s, __size_t maxlen) {
+void k_dosyslog_prefixfile(int level, struct kfile *file, char const *s, size_t maxlen) {
  k_dosyslog(level,(psyslogprefix)&print_file_name,file,s,maxlen);
 }
 struct printf_prefixfile_data {
@@ -136,6 +238,21 @@ void k_dosyslogf_prefixfile(int level, struct kfile *file, char const *__restric
  va_start(args,format);
  format_vprintf(&syslog_callback_prefixfile,&data,format,args);
  va_end(args);
+}
+
+__DECL_END
+
+
+#include <kos/kernel/syscall.h>
+__DECL_BEGIN
+
+KSYSCALL_DEFINE3(kerrno_t,k_syslog,int,level,__user char const *,s,size_t,maxlen) {
+ struct kproc *caller = kproc_self();
+ int allowed_level = kprocperm_getlogpriv(kproc_getperm(caller));
+ if __unlikely(level < allowed_level) return KE_ACCES;     /* You're not allowed to log like this! */
+ if __unlikely(k_sysloglevel < level) return KS_UNCHANGED; /* Your log level is currently disabled. */
+ if __unlikely(level >= KLOG_COUNT)   return KE_NOSYS;     /* That's not a valid level. */
+ return k_dosyslog_u(caller,level,s,maxlen);
 }
 
 __DECL_END

@@ -115,6 +115,3 @@
 #ifndef __compiler_unreachable
 #define __compiler_unreachable() /* nothing */
 #endif
-#ifndef __struct_fwd
-#define __struct_fwd(T) /* nothing */
-#endif

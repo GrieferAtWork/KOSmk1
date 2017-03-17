@@ -25,13 +25,14 @@
 
 #include <kos/config.h>
 #include <kos/compiler.h>
+#include <kos/syslog.h>
 #include <kos/kernel/fpu.h>
 #include <kos/kernel/task.h>
 
 __DECL_BEGIN
 
-__crit void kernel_initialize_fpu(void) {
- KTASK_CRIT_MARK
+void kernel_initialize_fpu(void) {
+ k_syslogf(KLOG_INFO,"[init] FPU...\n");
  // TODO: Seems like QEMU already initializes this for us...
  //    >> Now how can I test to figure out how this is done?
 }

@@ -1,2 +1,6 @@
 bigfile.h
 *.img
+hdd/bin/*
+hdd/boot/kos_kernel.bin
+hdd/lib/*
+hdd/usr/lib/*

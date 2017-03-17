@@ -27,6 +27,7 @@
 #ifdef __DEBUG__
 #include <assert.h>
 #include <kos/assert.h>
+#include <kos/atomic.h>
 #include <kos/compiler.h>
 #include <kos/syslog.h>
 #include <stdarg.h>
@@ -93,36 +94,39 @@ __public void __libc_unreachable_d(__LIBC_DEBUG_PARAMS) {
 #endif
 }
 
-__public __noinline __noreturn
-void __assertion_failedf(__LIBC_DEBUG_PARAMS_ char const *expr,
-                         unsigned int skip, char const *fmt, ...) {
+/*  */
+static __atomic int in_assert = 0;
+
+static __noinline /*__noreturn*/
+void __assertion_failedxvf(__LIBC_DEBUG_X_PARAMS_ char const *expr,
+                           unsigned int skip, char const *fmt, va_list args)
+{
+ if (!katomic_cmpxch(in_assert,0,1)) return;
 #ifdef __KERNEL__
  karch_irq_disable();
-#ifdef __x86__ // (Light) blue screen!
+#ifdef __x86__ /* (Light) blue screen! */
  tty_x86_setcolors(vga_entry_color(VGA_COLOR_WHITE,VGA_COLOR_LIGHT_BLUE));
 #endif
  tty_clear();
- //serial_print(SERIAL_01,"\n");
+ /*serial_print(SERIAL_01,"\n");*/
 #endif
  ASSERT_PRINTF("===================================================\n"
                "    Assertion failed:\n");
- if (__LIBC_DEBUG_FILE || __LIBC_DEBUG_FUNC) {
+ if (__LIBC_DEBUG_X_FILE || __LIBC_DEBUG_X_FUNC) {
   ASSERT_PRINTF("    " KDEBUG_SOURCEPATH_PREFIX "%s(%d) : %s : %s\n"
-               ,__LIBC_DEBUG_FILE,__LIBC_DEBUG_LINE,__LIBC_DEBUG_FUNC,expr);
+               ,__LIBC_DEBUG_X_FILE,__LIBC_DEBUG_X_LINE
+               ,__LIBC_DEBUG_X_FUNC,expr);
  } else {
   ASSERT_PRINTF("    %s\n",expr);
  }
  ASSERT_PRINTF("===================================================\n");
  if (fmt) {
-  va_list args;
-  va_start(args,fmt);
   ASSERT_VPRINTF(fmt,args);
-  va_end(args);
   ASSERT_PRINTF("\n");
  }
  ASSERT_PRINTF("===================================================\n");
 #ifdef __DEBUG__
- tb_printex(skip+1);
+ tb_printex(skip+2);
 #endif
 #ifdef __KERNEL__
  {
@@ -139,6 +143,32 @@ void __assertion_failedf(__LIBC_DEBUG_PARAMS_ char const *expr,
 #endif
 }
 
+__public __noinline /*__noreturn*/
+void __assertion_failedf(__LIBC_DEBUG_PARAMS_ char const *expr,
+                         unsigned int skip, char const *fmt, ...) {
+ va_list args;
+ va_start(args,fmt);
+ {
+#ifdef __DEBUG__
+  struct __libc_debug dbg = {__LIBC_DEBUG_FILE,__LIBC_DEBUG_LINE,__LIBC_DEBUG_FUNC};
+  __assertion_failedxvf(&dbg,expr,skip,fmt,args);
+#else
+  __assertion_failedxvf(NULL,expr,skip,fmt,args);
+#endif
+ }
+ va_end(args);
+}
+__public __noinline /*__noreturn*/
+void __assertion_failedxf(__LIBC_DEBUG_X_PARAMS_ char const *expr,
+                          unsigned int skip, char const *fmt, ...) {
+ va_list args;
+ va_start(args,fmt);
+ __assertion_failedxvf(__LIBC_DEBUG_X_FWD_ expr,skip,fmt,args);
+ va_end(args);
+}
+
+
+
 #ifdef __KERNEL__
 #ifdef KLOG_RAW
 #   define PANIC_PRINTF(...)           (k_syslogf(KLOG_RAW,__VA_ARGS__),tty_printf(__VA_ARGS__))
@@ -148,8 +178,9 @@ void __assertion_failedf(__LIBC_DEBUG_PARAMS_ char const *expr,
 #   define PANIC_VPRINTF(format,args) (serial_vprintf(SERIAL_01,format,args),tty_vprintf(format,args))
 #endif
 void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *__restrict fmt, ...) {
+ if (!katomic_cmpxch(in_assert,0,1)) return;
  karch_irq_disable();
-#ifdef __x86__ // (Light) red screen!
+#ifdef __x86__ /* (Light) red screen! */
  tty_x86_setcolors(vga_entry_color(VGA_COLOR_WHITE,VGA_COLOR_LIGHT_RED));
 #endif
  tty_clear();
@@ -184,6 +215,7 @@ void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *__restrict fmt, ...) {
 #endif
 
 
+
 #if UINT32_MAX == UINTPTR_MAX
 #define STACK_CHK_GUARD 0xe2dee396
 #else
@@ -193,6 +225,11 @@ void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *__restrict fmt, ...) {
 __public uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
 __public __noreturn __noinline void __stack_chk_fail(void) {
  __assertion_failedf(NULL,-1,NULL,"STACK VIOLATION",1,NULL);
+#ifdef __KERNEL__
+ arch_hang();
+#else
+ abort();
+#endif
 }
 
 

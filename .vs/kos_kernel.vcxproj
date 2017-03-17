@@ -69,9 +69,14 @@
     <ClInclude Include="..\include\kos\kernel\shm.h" />
     <ClInclude Include="..\include\kos\kernel\signal.h" />
     <ClInclude Include="..\include\kos\kernel\signal_v.h" />
+    <ClInclude Include="..\include\kos\kernel\sigset.h" />
     <ClInclude Include="..\include\kos\kernel\socket.h" />
     <ClInclude Include="..\include\kos\kernel\spinlock.h" />
+    <ClInclude Include="..\include\kos\kernel\stdkernel.h" />
+    <ClInclude Include="..\include\kos\kernel\syscall.h" />
+    <ClInclude Include="..\include\kos\kernel\syscall_list.h" />
     <ClInclude Include="..\include\kos\kernel\syslog.h" />
+    <ClInclude Include="..\include\kos\kernel\syslog_io.h" />
     <ClInclude Include="..\include\kos\kernel\task.h" />
     <ClInclude Include="..\include\kos\kernel\time.h" />
     <ClInclude Include="..\include\kos\kernel\tls.h" />
@@ -82,8 +87,6 @@
     <ClInclude Include="..\src\kernel\linker\linker-DWARF.h" />
     <ClInclude Include="..\src\kernel\linker\linker-elf32.h" />
     <ClInclude Include="..\src\kernel\linker\linker-pe32.h" />
-    <ClInclude Include="..\src\kernel\syscall\syscall-common.h" />
-    <ClInclude Include="..\src\kernel\syscall\syscall-groups.h" />
     <ClInclude Include="..\src\misc\font2_8x16.h" />
     <ClInclude Include="..\src\misc\histd_8x8.h" />
     <ClInclude Include="..\src\misc\textbits.h" />
@@ -95,6 +98,7 @@
     <ClCompile Include="..\src\kernel\fdman.c" />
     <ClCompile Include="..\src\kernel\fpu.c" />
     <ClCompile Include="..\src\kernel\fs\fat.c" />
+    <ClCompile Include="..\src\kernel\fs\file.c" />
     <ClCompile Include="..\src\kernel\fs\fs.c" />
     <ClCompile Include="..\src\kernel\fs\vfs-dev.c" />
     <ClCompile Include="..\src\kernel\fs\vfs-proc.c" />
@@ -123,12 +127,13 @@
     <ClCompile Include="..\src\kernel\shm.c" />
     <ClCompile Include="..\src\kernel\socket.c" />
     <ClCompile Include="..\src\kernel\string.c" />
-    <ClCompile Include="..\src\kernel\syscall\syscall.c" />
+    <ClCompile Include="..\src\kernel\syscall.c" />
     <ClCompile Include="..\src\kernel\sysconf.c" />
     <ClCompile Include="..\src\kernel\syslog.c" />
     <ClCompile Include="..\src\kernel\test\test.c" />
     <ClCompile Include="..\src\kernel\time.c" />
     <ClCompile Include="..\src\kernel\tty.c" />
+    <ClCompile Include="..\src\kernel\vga.c" />
     <ClCompile Include="..\src\main.c" />
   </ItemGroup>
   <ItemGroup>
@@ -155,7 +160,6 @@
     <None Include="..\src\kernel\fs\fat-internal-init.c.inl" />
     <None Include="..\src\kernel\fs\fat-internal-rw.c.inl" />
     <None Include="..\src\kernel\fs\fat-internal.c.inl" />
-    <None Include="..\src\kernel\fs\file.c.inl" />
     <None Include="..\src\kernel\fs\fs-blockfile.c.inl" />
     <None Include="..\src\kernel\fs\fs-dirent-mkobj.inl" />
     <None Include="..\src\kernel\fs\fs-dirent-rmobj.inl" />
@@ -183,7 +187,9 @@
     <None Include="..\src\kernel\sched\proc-fork.c.inl" />
     <None Include="..\src\kernel\sched\proc-initkernel.c.inl" />
     <None Include="..\src\kernel\sched\proc-insmod.c.inl" />
+    <None Include="..\src\kernel\sched\proc-mod-syscall.c.inl" />
     <None Include="..\src\kernel\sched\proc-pid.c.inl" />
+    <None Include="..\src\kernel\sched\proc-syscall.c.inl" />
     <None Include="..\src\kernel\sched\proc-tasks.c.inl" />
     <None Include="..\src\kernel\sched\sync\addist-recv.c.inl" />
     <None Include="..\src\kernel\sched\sync\addist.c.inl" />
@@ -194,12 +200,13 @@
     <None Include="..\src\kernel\sched\sync\mutex.c.inl" />
     <None Include="..\src\kernel\sched\sync\rwlock.c.inl" />
     <None Include="..\src\kernel\sched\sync\sem.c.inl" />
-    <None Include="..\src\kernel\sched\sync\signal-impl.c.inl" />
     <None Include="..\src\kernel\sched\sync\signal.c.inl" />
     <None Include="..\src\kernel\sched\sync\signal_v.c.inl" />
+    <None Include="..\src\kernel\sched\sync\sigset.c.inl" />
     <None Include="..\src\kernel\sched\task-attr.c.inl" />
     <None Include="..\src\kernel\sched\task-recursive.c.inl" />
     <None Include="..\src\kernel\sched\task-sigchain.c.inl" />
+    <None Include="..\src\kernel\sched\task-syscall.c.inl" />
     <None Include="..\src\kernel\sched\task-timetick.c.inl" />
     <None Include="..\src\kernel\sched\task-usercheck.c.inl" />
     <None Include="..\src\kernel\sched\task-util.c.inl" />
@@ -208,18 +215,9 @@
     <None Include="..\src\kernel\shm-ldt.c.inl" />
     <None Include="..\src\kernel\shm-map.c.inl" />
     <None Include="..\src\kernel\shm-mmap-impl.c.inl" />
+    <None Include="..\src\kernel\shm-syscall.c.inl" />
     <None Include="..\src\kernel\shm-translate.c.inl" />
     <None Include="..\src\kernel\socket-packet.c.inl" />
-    <None Include="..\src\kernel\syscall\syscall-generic.c.inl" />
-    <None Include="..\src\kernel\syscall\syscall-kfd.c.inl" />
-    <None Include="..\src\kernel\syscall\syscall-kfs.c.inl" />
-    <None Include="..\src\kernel\syscall\syscall-kmem.c.inl" />
-    <None Include="..\src\kernel\syscall\syscall-kproc.c.inl" />
-    <None Include="..\src\kernel\syscall\syscall-ktask.c.inl" />
-    <None Include="..\src\kernel\syscall\syscall-ktime.c.inl" />
-    <None Include="..\src\kernel\syscall\syscall-mod.c.inl" />
-    <None Include="..\src\kernel\syscall\syscall-nt.c.inl" />
-    <None Include="..\src\kernel\syscall\syscall-unix.c.inl" />
     <None Include="..\src\kernel\syslog-write.c.inl" />
     <None Include="..\src\kernel\tty-print.c.inl" />
   </ItemGroup>

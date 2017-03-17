@@ -31,7 +31,7 @@ __crit struct kpageframe *KPAGEFRAME_CALL
 #ifdef TRYALLOC
 kpageframe_tryalloc(__size_t n_pages, __size_t *did_alloc_pages)
 #else
-kpageframe_alloc(__size_t n_pages)
+__kpageframe_alloc_many(__size_t n_pages)
 #endif
 {
  struct kpageframe *iter,*split;
@@ -46,7 +46,7 @@ kpageframe_alloc(__size_t n_pages)
 #endif
  k_syslogf(KLOG_TRACE,"Allocating %Iu pages\n",n_pages);
 #ifdef TRYALLOC
- winner = PAGENIL;
+ winner = (struct kpageframe *)PAGENIL;
 #endif
  kpagealloc_lock();
  iter = first_free_page;
@@ -88,6 +88,11 @@ enditer:
 #endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
    assert(!first_free_page || first_free_page->pff_prev == PAGENIL);
    kpagealloc_unlock();
+#ifdef TRYALLOC
+   PAGEFRAME_PREPARE_ALLOC(iter,*did_alloc_pages);
+#else
+   PAGEFRAME_PREPARE_ALLOC(iter,n_pages);
+#endif
    return iter;
   }
 #ifdef TRYALLOC
@@ -111,9 +116,9 @@ enditer:
  }
 #endif
  /* Not page available with enough memory --> OUT-OF-MEMORY */
- k_syslogf(KLOG_ERROR,"OUT-OF-MEMORY when trying to allocate %Iu pageframes\n_pages",n_pages);
+ k_syslogf(KLOG_ERROR,"OUT-OF-MEMORY when trying to allocate %Iu pageframes\n",n_pages);
  tb_print();
- return PAGENIL;
+ return (struct kpageframe *)PAGENIL;
 }
 
 #ifdef TRYALLOC

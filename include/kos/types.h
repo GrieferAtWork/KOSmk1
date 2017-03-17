@@ -95,12 +95,12 @@ typedef ____INTELLISENE_integer<4321,__u32> __be32;
 typedef ____INTELLISENE_integer<1234,__u64> __le64;
 typedef ____INTELLISENE_integer<4321,__u64> __be64;
 #else
-typedef __u16 __le16;
-typedef __u16 __be16;
-typedef __u32 __le32;
-typedef __u32 __be32;
-typedef __u64 __le64;
-typedef __u64 __be64;
+typedef __u16 __bitwise __le16;
+typedef __u16 __bitwise __be16;
+typedef __u32 __bitwise __le32;
+typedef __u32 __bitwise __be32;
+typedef __u64 __bitwise __le64;
+typedef __u64 __bitwise __be64;
 #endif
 
 #ifndef __SIZEOF_POINTER__

@@ -202,4 +202,46 @@ struct kfiletype kpipewriter_type = {
 
 __DECL_END
 
+
+#include <kos/kernel/proc.h>
+#include <kos/kernel/syscall.h>
+#include <kos/kernel/fd.h>
+
+__DECL_BEGIN
+
+KSYSCALL_DEFINE_EX3(c,kerrno_t,kfd_pipe,__user int *,pipefd,
+                    int,flags,size_t,max_size) {
+ kerrno_t error; struct kpipe *pipe;
+ struct kproc *proc_self = kproc_self();
+ struct kfdentry entry; int kernel_pipefd[2];
+ KTASK_CRIT_MARK
+ pipe = kpipe_new(max_size);
+ if __unlikely(!pipe) return KE_NOMEM;
+ entry.fd_file = (struct kfile *)kpipefile_newreader(pipe,NULL);
+ if __unlikely(!entry.fd_file) { error = KE_NOMEM; goto end_pipe; }
+ entry.fd_type = KFDTYPE_FILE;
+ entry.fd_flag = flags;
+ error = kproc_insfd_inherited(proc_self,&kernel_pipefd[0],&entry);
+ if __unlikely(KE_ISERR(error)) { kfdentry_quit(&entry); goto end_pipe; }
+ entry.fd_file = (struct kfile *)kpipefile_newwriter(pipe,NULL);
+ if __unlikely(!entry.fd_file) { error = KE_NOMEM; goto err_pipe0; }
+ entry.fd_type = KFDTYPE_FILE;
+ entry.fd_flag = flags;
+ error = kproc_insfd_inherited(proc_self,&kernel_pipefd[1],&entry);
+ if __unlikely(KE_ISERR(error)) { kfdentry_quit(&entry); goto err_pipe0; }
+ /* File descriptors were created! */
+ if __unlikely(copy_to_user(pipefd,kernel_pipefd,sizeof(kernel_pipefd))) {
+  error = KE_FAULT;
+/*err_pipe1:*/
+  kproc_closefd(proc_self,kernel_pipefd[1]);
+  goto err_pipe0;
+ }
+ goto end_pipe;
+err_pipe0: kproc_closefd(proc_self,kernel_pipefd[0]);
+end_pipe:  kinode_decref((struct kinode *)pipe);
+ return error;
+}
+
+__DECL_END
+
 #endif /* !__KOS_KERNEL_PIPE_C__ */

@@ -50,12 +50,12 @@
 __DECL_BEGIN
 
 __crit __ref struct ktask *
-ktask_newctxex_suspended(struct ktask *parent, struct kproc *__restrict ctx,
+ktask_newctxex_suspended(struct ktask *parent, struct kproc *__restrict proc,
                          void *(*main)(void *), void *closure,
                          size_t stacksize, __u32 flags) {
 __COMPILER_PACK_PUSH(1)
  struct __packed {
-  // Mockup of how the task's stack will look like
+  /* Mockup of how the task's stack will look like. */
   struct ktaskregisters regs;
   void (*return_address)(void);
   void  *closure_value;
@@ -65,9 +65,9 @@ __COMPILER_PACK_POP
  __ref struct ktask *result;
  KTASK_CRIT_MARK
  kassert_ktask(parent);
- kassert_kproc(ctx);
+ kassert_kproc(proc);
  kassertbyte(main);
- result = ktask_newkernel(parent,ctx,stacksize,flags);
+ result = ktask_newkernel(parent,proc,stacksize,flags);
  if __unlikely(!result) return NULL;
  memset(&stack,0,sizeof(stack));
  stack.regs.cs       = KSEG_KERNEL_CODE;
@@ -93,11 +93,11 @@ __COMPILER_PACK_POP
  return result;
 }
 __crit __ref struct ktask *
-ktask_newctxex(struct ktask *parent, struct kproc *__restrict ctx,
+ktask_newctxex(struct ktask *parent, struct kproc *__restrict proc,
                void *(*main)(void *), void *closure, size_t stacksize, __u32 flags) {
  __ref struct ktask *result;
  KTASK_CRIT_MARK
- result = ktask_newctxex_suspended(parent,ctx,main,closure,stacksize,flags);
+ result = ktask_newctxex_suspended(parent,proc,main,closure,stacksize,flags);
  if __unlikely(!result) return NULL;
  if __unlikely(KE_ISERR(ktask_resume_k(result))) { ktask_decref(result); result = NULL; }
  return result;
@@ -130,7 +130,7 @@ ktask_newex(void *(*main)(void *), void *closure,
 kerrno_t _ktask_terminate_k(struct ktask *__restrict self, void *exitcode) {
  kerrno_t error; kassert_ktask(self);
  error = ktask_unschedule(self,KTASK_STATE_TERMINATED,exitcode);
- // We don't care if the task wasn't unscheduled because it was waiting
+ /* We don't care if the task wasn't unscheduled because it was waiting. */
  if (error == KS_UNCHANGED) error = KE_OK;
  return error;
 }
@@ -138,15 +138,15 @@ kerrno_t ktask_terminate_k(struct ktask *__restrict self, void *exitcode) {
  kerrno_t error;
  error = _ktask_terminate_k(self,exitcode);
  if __unlikely(error == KS_BLOCKING) {
-  // TODO: We should have special handling here for joining
-  //       a freshly terminated, critical, but suspended task.
-  //    >> If we don't there might be a deadlock when there's
-  //       not another task to resume the one we just terminated.
+  /* TODO: We should have special handling here for joining
+   *       a freshly terminated, critical, but suspended task.
+   *    >> If we don't there might be a deadlock when there's
+   *       not another task to resume the one we just terminated. */
   assertf(self != ktask_self(),
           "If you want to terminate yourself while being "
           "inside a critical block, use _ktask_terminate_k!\n"
           "That way, you'll be terminated once you leave the block.");
-  // Wait for a critical task to terminate
+  /* Wait for a critical task to terminate. */
   ktask_join(self,NULL);
   error = KE_OK;
  }
@@ -174,10 +174,10 @@ __ktask_terminate_r(struct ktask *__restrict self,
  kerrno_t error; struct ktask *child;
  size_t i; int found_running;
  KTASK_CRIT_MARK
- // This is really hacky, and might appear like a bad solution,
- // but in actuality it does the job quite well!
- // >> Basically: Recursively terminate all tasks until all
- //    that's left are zombies, or nothing is left all-together.
+ /* This is really hacky, and might appear like a bad solution,
+  * but in actuality it does the job quite well!
+  * >> Basically: Recursively terminate all tasks until all
+  *    that's left are zombies, or nothing is left all-together. */
  ktask_lock(self,KTASK_LOCK_CHILDREN);
  while (self->t_children.t_taska) {
   found_running = 0;
@@ -185,11 +185,11 @@ __ktask_terminate_r(struct ktask *__restrict self,
    if ((child = self->t_children.t_taskv[i]) != NULL &&
        (!proc || child->t_proc == proc) &&
        __likely(KE_ISOK(ktask_incref(child)))) {
-    // TODO: Error handling when can't incref child
+    /* TODO: Error handling when can't incref child. */
     ktask_unlock(self,KTASK_LOCK_CHILDREN);
     error = __ktask_terminate_r(child,caller,exitcode,proc,flags);
     if (error == KS_BLOCKING) {
-     // Join a child task currently executing a critical operation
+     /* Join a child task currently executing a critical operation. */
      if (child != caller) {
       found_running = 1;
       ktask_join(child,NULL);
@@ -204,20 +204,20 @@ __ktask_terminate_r(struct ktask *__restrict self,
   }
   if (!found_running) break;
  }
- // NOTE: Normally, we'd have to be concerned about the following
- //       line of code creating a deadlock, as we are still locking
- //       'KTASK_LOCK_CHILDREN'.
- //       But because 'self' quite simply has to remain alive during
- //       this process (the implicit reference owned by the caller),
- //       we are safe because the only point where a terminating
- //       task attempts to lock 'KTASK_LOCK_CHILDREN', is within
- //       the deallocation destruction, which is only invoked once
- //       the task's reference counter hits ZERO.
- //       Technically speaking, the only situation in which a task
- //       terminate can offer a task that will also be destructed
- //       by the terminator is the ktask_terminate(ktask_self())
- //       scenario, which for us is covered by the caller running
- //       all of this from within a critical block.
+ /* NOTE: Normally, we'd have to be concerned about the following
+  *       line of code creating a deadlock, as we are still locking
+  *       'KTASK_LOCK_CHILDREN'.
+  *       But because 'self' quite simply has to remain alive during
+  *       this process (the implicit reference owned by the caller),
+  *       we are safe because the only point where a terminating
+  *       task attempts to lock 'KTASK_LOCK_CHILDREN', is within
+  *       the deallocation destruction, which is only invoked once
+  *       the task's reference counter hits ZERO.
+  *       Technically speaking, the only situation in which a task
+  *       terminate can offer a task that will also be destructed
+  *       by the terminator is the ktask_terminate(ktask_self())
+  *       scenario, which for us is covered by the caller running
+  *       all of this from within a critical block. */
  error = __ktask_terminate_s(self,exitcode,caller,flags);
  ktask_unlock(self,KTASK_LOCK_CHILDREN);
  return error;
@@ -236,8 +236,8 @@ kerrno_t ktask_terminateex_k(struct ktask *__restrict self,
  } else {
   error = __ktask_terminate_s(self,exitcode,caller,mode);
  }
- // If we have terminated ktask_self(), the following line will kill us
  KTASK_NOINTR_END
+ /* If we have terminated ktask_self(), the following line will kill us. */
  KTASK_CRIT_END
  return error;
 }
@@ -278,10 +278,12 @@ kerrno_t ktask_suspend_k(struct ktask *__restrict self) {
  } while (!katomic_cmpxch(self->t_suspended,oldcounter,oldcounter+1));
  if (!oldcounter) {
   kerrno_t error;
-  // NOTE: 'KS_UNCHANGED' might be returned if another task was still in the scheduler
-  //       of resuming the task after it had been suspended previously.
-  //       In that case, try again.
-  //       If, on the other hand, the task was terminated, 'KE_DESTROYED' would be returned
+  /* NOTE: 'KS_UNCHANGED' might be returned if another task
+   *       was still in the scheduler of resuming the task
+   *       after it had been suspended previously.
+   *       In that case, try again.
+   *       If, on the other hand, the task was terminated,
+   *       'KE_DESTROYED' would be returned. */
   while ((error = ktask_unschedule(self,KTASK_STATE_SUSPENDED,NULL)) == KS_UNCHANGED) ktask_yield();
   return error;
  }
@@ -296,11 +298,12 @@ kerrno_t ktask_resume_k(struct ktask *__restrict self) {
  } while (!katomic_cmpxch(self->t_suspended,oldcounter,oldcounter-1));
  if (oldcounter == 1) {
   kerrno_t error;
-  // NOTE: 'KS_UNCHANGED' might be returned if another task was still in the scheduler
-  //       of suspending the task after it had been running previously.
-  //       In that case, try again.
-  //       If, on the other hand, the task was terminated, 'KE_DESTROYED' would be returned
-  // NOTE: We must only allow waking the task if 
+  /* NOTE: 'KS_UNCHANGED' might be returned if another
+   *       task was still in the scheduler of suspending
+   *       the task after it had been running previously.
+   *       In that case, try again.
+   *       If, on the other hand, the task was terminated,
+   *       'KE_DESTROYED' would be returned. */
   while ((error = ktask_reschedule_ex(self,kcpu_leastload(),
    KTASK_RESCHEDULE_HINTFLAG_UNDOSUSPEND|
    KTASK_RESCHEDULE_HINT_DEFAULT)) == KS_UNCHANGED) ktask_yield();
@@ -325,7 +328,7 @@ kerrno_t ktask_join(struct ktask *__restrict self,
  kassert_ktask(self);
  kassertobjnull(exitcode);
  if ((error = ktask_tryjoin(self,exitcode)) == KE_WOULDBLOCK) {
-  // The given task is still running (wait for it)
+  /* The given task is still running (wait for it) */
   error = ksignal_recv(&self->t_joinsig);
   if (error == KE_OK || error == KE_DESTROYED) {
    assertf(ktask_isterminated(self)
@@ -381,9 +384,9 @@ void ktask_stackpush_sp_unlocked(struct ktask *__restrict self,
                                  void const *__restrict p, size_t s) {
  void *dest; kassert_ktask(self); kassertmem(p,s);
  assert(ktask_issuspended(self));
- // NOTE: The actual value of 't_esp' may not be translatable if
- //       it is located just out-of-bounds of a whole page (aka. fully aligned)
- //    >> So we must only assert that the new ESP if in bounds!
+ /* NOTE: The actual value of 't_esp' may not be translatable if
+  *       it is located just out-of-bounds of a whole page (aka. fully aligned)
+  *    >> So we must only assert that the new ESP if in bounds! */
  assertf((uintptr_t)self->t_esp > s,"Overflow");
  dest = kpagedir_translate(self->t_userpd,(void *)((uintptr_t)self->t_esp-s));
  assertf(dest,"ESP Pointer is not mapped to any page");
@@ -417,7 +420,7 @@ ktask_setnameex_ck(struct ktask *__restrict self,
  kassert_ktask(self);
  if __unlikely((dupname = strndup(name,maxlen)) == NULL) return KE_NOMEM;
  if __likely(katomic_cmpxch(self->t_name,NULL,dupname)) return KE_OK;
- // A name had already been set
+ /* A name had already been set. */
  free(dupname);
  return KE_EXISTS;
 }
@@ -524,7 +527,7 @@ size_t ktasklist_insert(struct ktasklist *self, struct ktask *task) {
   for (result = 0; result < self->t_freep; ++result)
    if (!self->t_taskv[result]) goto foundfree;
  }
- // Must allocate a new slot
+ /* Must allocate a new slot. */
  result = self->t_taska;
  newsize = result ? (result*3)/2 : 2;
  if __unlikely(newsize <= result) newsize = result+1;
@@ -536,7 +539,7 @@ size_t ktasklist_insert(struct ktasklist *self, struct ktask *task) {
  self->t_taskv = newvec;
 foundfree:
  self->t_freep = result+1;
-//found:
+/*found:*/
  assert(result < self->t_taska);
  assert(!self->t_taskv[result]);
  self->t_taskv[result] = task;
@@ -552,7 +555,7 @@ struct ktask *ktasklist_erase(struct ktasklist *self, size_t index) {
  for (newsize = index+1; newsize != self->t_taska; ++newsize) {
   if (self->t_taskv[newsize]) { self->t_freep = index; return result; }
  }
- newsize = index; // Clean up some unused memory
+ newsize = index; /* Clean up some unused memory. */
  while (newsize && !self->t_taskv[newsize-1]) --newsize;
  if (!newsize) {
   free(self->t_taskv);

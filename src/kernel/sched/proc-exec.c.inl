@@ -152,7 +152,9 @@ kproc_exec(struct kshlib *__restrict exec_main,
  //    have to worry about failing to allocate a new one below.
  // >> This also gives user-level code more control by allowing them
  //    to specify a custom stack to be used for exec-ed processes.
- kshm_unmap_unlocked(kproc_getshm(self),NULL,((size_t)caller_thread->t_ustackvp)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
+ kshm_unmap_unlocked(kproc_getshm(self),NULL,
+                    ((size_t)caller_thread->t_ustackvp)/PAGESIZE,
+                     KSHMUNMAP_FLAG_NONE);
  kshm_unmap_unlocked(kproc_getshm(self),
                     (void *)((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz),
                     ((uintptr_t)0-((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz))/PAGESIZE,

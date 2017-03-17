@@ -27,7 +27,7 @@
 #include <kos/kernel/task.h>
 #include <kos/kernel/proc.h>
 
-// Task operations that perform permission check
+/* Task operations that perform permission check. */
 __DECL_BEGIN
 
 kerrno_t _ktask_terminate(struct ktask *__restrict self, void *exitcode) {

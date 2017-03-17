@@ -33,8 +33,8 @@ __crit kerrno_t kpagedir_remap
 __crit kerrno_t kpagedir_map
 #endif
 (struct kpagedir *__restrict self,
- __physicaladdr void const *phys,
- __virtualaddr void const *virt,
+ __kernel void const *phys,
+ __user void const *virt,
  size_t pages, kpageflag_t flags) {
  x86_pde *pde; x86_pte *begin,*iter,*end; size_t pdenusing;
  KTASK_CRIT_MARK

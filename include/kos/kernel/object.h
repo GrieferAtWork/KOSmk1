@@ -93,13 +93,18 @@ __DECL_BEGIN
 #define KOBJECT_DEFINE_INCREF_D KOBJECT_DEFINE_INCREF
 #define KOBJECT_DEFINE_DECREF_D KOBJECT_DEFINE_DECREF
 #else
+#ifdef KTASK_CRIT_MARK
+#   define __KOBJECT_ASSERT_ISCRIT  KTASK_CRIT_MARK
+#else /* KTASK_CRIT_MARK */
 #ifndef ktask_iscrit
 extern int ktask_iscrit(void);
-#endif
+#endif /* !ktask_iscrit */
+#   define __KOBJECT_ASSERT_ISCRIT  assert(ktask_iscrit());
+#endif /* !KTASK_CRIT_MARK */
 #define KOBJECT_DEFINE_INCREF(funname,T,refcnt_member,kassert) \
  KOBJECT_DECLARE_INCREF(funname,T) {\
   typedef __typeof__(((T *)0)->refcnt_member) __Tref;\
-  __Tref __refcnt; assert(ktask_iscrit()); kassert(__self); do {\
+  __Tref __refcnt; __KOBJECT_ASSERT_ISCRIT kassert(__self); do {\
    __refcnt = katomic_load(__self->refcnt_member);\
    assertf(__refcnt != 0,#funname "(%p) on dead " #T " object",__self);\
    if __unlikely(__refcnt == (__Tref)-1) return KE_OVERFLOW;\
@@ -109,7 +114,7 @@ extern int ktask_iscrit(void);
 #define KOBJECT_DEFINE_TRYINCREF(funname,T,refcnt_member,kassert) \
  KOBJECT_DECLARE_INCREF(funname,T) {\
   typedef __typeof__(((T *)0)->refcnt_member) __Tref;\
-  __Tref __refcnt; assert(ktask_iscrit()); kassert(__self); do {\
+  __Tref __refcnt; __KOBJECT_ASSERT_ISCRIT kassert(__self); do {\
    __refcnt = katomic_load(__self->refcnt_member);\
    if __unlikely(!__refcnt) return KE_DESTROYED;\
    if __unlikely(__refcnt == (__Tref)-1) return KE_OVERFLOW;\
@@ -120,7 +125,7 @@ extern int ktask_iscrit(void);
  KOBJECT_DECLARE_DECREF(funname,T) {\
   typedef __typeof__(((T *)0)->refcnt_member) __Tref;\
   extern void destroy_funname(T *);\
-  __Tref __refcnt; assert(ktask_iscrit()); kassert(__self);\
+  __Tref __refcnt; __KOBJECT_ASSERT_ISCRIT kassert(__self);\
   __refcnt = katomic_decfetch(__self->refcnt_member);\
   assertf(__refcnt != (__Tref)-1,#funname "(%p) on dead " #T " object",__self);\
   if __unlikely(!__refcnt) destroy_funname(__self);\
@@ -128,7 +133,7 @@ extern int ktask_iscrit(void);
 #define KOBJECT_DEFINE_INCREF_D(funname,T,refcnt_member,kassert) \
  KOBJECT_DECLARE_INCREF(funname,T) {\
   typedef __typeof__(((T *)0)->refcnt_member) __Tref;\
-  __Tref __refcnt; assert(ktask_iscrit()); kassert(__self); do {\
+  __Tref __refcnt; __KOBJECT_ASSERT_ISCRIT kassert(__self); do {\
    __refcnt = katomic_load(__self->refcnt_member);\
    assertf(__refcnt != 0,#funname "(%p) on dead " #T " object",__self);\
    if __unlikely(__refcnt == (__Tref)-1) return KE_OVERFLOW;\
@@ -140,7 +145,7 @@ extern int ktask_iscrit(void);
  KOBJECT_DECLARE_DECREF(funname,T) {\
   typedef __typeof__(((T *)0)->refcnt_member) __Tref;\
   extern void destroy_funname(T *);\
-  __Tref __refcnt; assert(ktask_iscrit()); kassert(__self);\
+  __Tref __refcnt; __KOBJECT_ASSERT_ISCRIT kassert(__self);\
   __refcnt = katomic_decfetch(__self->refcnt_member);\
   assertf(__refcnt != (__Tref)-1,#funname "(%p) on dead " #T " object",__self);\
   if __unlikely(!__refcnt) destroy_funname(__self);\

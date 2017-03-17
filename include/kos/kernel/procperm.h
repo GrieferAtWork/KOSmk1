@@ -37,9 +37,8 @@ __DECL_BEGIN
 #define KOBJECT_MAGIC_PROCPERM  0x960C9E53 /*< PROCPERM. */
 #define kassert_kprocperm(self) kassert_object(self,KOBJECT_MAGIC_PROCPERM)
 
-__struct_fwd(ktask);
-
 #ifndef __ASSEMBLY__
+struct ktask;
 struct kprocperm {
  KOBJECT_HEAD
 union{struct{
