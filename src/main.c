@@ -237,6 +237,7 @@ void kernel_main(void) {
  kernel_initialize_serial();
  kernel_initialize_raminfo(); /*< NOTE: Also initializes arguments/environ. */
  ksyslog_addtty();
+ kernel_initialize_syslog();
  kernel_initialize_realmode();
  kernel_initialize_interrupts();
  kernel_initialize_gdt();
@@ -265,7 +266,7 @@ void kernel_main(void) {
 #undef RUN
  //test_taskstat();
  //test_write_file();
- test_vga();
+ //test_vga();
  run_init();
 
  ksyslog_deltty();

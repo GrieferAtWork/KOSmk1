@@ -43,6 +43,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 __DECL_BEGIN
 
@@ -162,9 +163,9 @@ void ksyslog_deltty(void) {
 
 
 struct syslog_callback_data {
- int    level;
+ int           level;
  psyslogprefix print_prefix;
- void  *closure;
+ void         *closure;
 };
 static int syslog_callback(char const *msg, size_t msg_max, void *data) {
  k_dosyslog(((struct syslog_callback_data *)data)->level,
@@ -200,6 +201,34 @@ char const *k_sysloglevel_mnemonic(int level) {
   case KLOG_TRACE : return "#T";
   case KLOG_INSANE: return "#S";
  }
+}
+int k_sysloglevel_fromstring(char const *name) {
+ if (!name) return -1;
+ if (*name == '#') ++name;
+ switch (*name) {
+  case 'e': case 'E': return KLOG_ERROR;
+  case 'w': case 'W': return KLOG_WARN;
+  case 'm': case 'M': return KLOG_MSG;
+  case 'i': case 'I': return KLOG_INFO;
+  case 'd': case 'D': return KLOG_DEBUG;
+  case 't': case 'T': return KLOG_TRACE;
+  case 's': case 'S': return KLOG_INSANE;
+  case '\0': return -1;
+  default: break;
+ }
+ if (*name >= '0' && *name <= '9')
+  return atoi(name);
+ return -1;
+}
+
+void kernel_initialize_syslog(void) {
+ int new_level;
+ char *env_level           = getenv("LOGLEVEL");
+ if (!env_level) env_level = getenv("LOGLV");
+ if (!env_level) return;
+ new_level = k_sysloglevel_fromstring(env_level);
+ if (new_level != -1) k_sysloglevel = new_level;
+ else k_syslogf(KLOG_ERROR,"Invalid $LOGLEVEL content: %q\n",env_level);
 }
 
 

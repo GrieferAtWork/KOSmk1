@@ -34,6 +34,10 @@
 #ifdef __KOS_HAVE_UNIXSYSCALL
 #include <linux/syscall.h>
 #endif
+#if KCONFIG_HAVE_SYSCALL_TRACE
+#include <ctype.h>
+#include <alloca.h>
+#endif
 
 __DECL_BEGIN
 
@@ -48,8 +52,68 @@ void kernel_initialize_syscall(void) {
 #endif
 }
 
-#ifdef __DEBUG__
-void __ksyscall_enter_d(struct ksyscall_d *entry) {
+#if KCONFIG_HAVE_SYSCALL_TRACE
+#define SYSCALL_TRACE_LEVEL  KLOG_TRACE
+
+/* Blacklist of syscalls not to log:
+ * - 'kmem_validate' is called a lot when mall generates tracebacks.
+ * - Logging 'k_syslog' would defeat the point, since it's already about logging. */
+#define SYSCALL_SHOULDTRACE(callid) \
+ ((callid) != SYS_kmem_validate && \
+  (callid) != SYS_k_syslog)
+
+static void print_arg(char const *type, const char const *name, __uintptr_t value) {
+ struct fmt_map { char const *type_name; char const *printf_name; };
+ static struct fmt_map const map[] = {
+  {"char const *","%~q"}, /*< Userspace string. */
+  {"void const *","%p"},
+  {"void *","%p"},
+#if __SIZEOF_POINTER__ >= 8
+  {"__u64","%#.16I64x"},
+  {"__s64","%I64d"},
+#endif
+  {"__u32","%#.8I32x"},
+  {"__u16","%#.4I16x"},
+  {"__u8","%#.2I8x"},
+  {"__s32","%I32d"},
+  {"__s16","%I16d"},
+  {"__s8","%I8d"},
+  {"size_t","%Iu"},
+  {"ssize_t","%Id"},
+  {"unsigned int","%u"},
+  {"unsigned","%u"},
+  {"unsigned long","%lu"},
+  {"long","%ld"},
+  {"int","%d"},
+#if __SIZEOF_POINTER__ == 4
+  {NULL,"%#.8Ix"},
+#elif __SIZEOF_POINTER__ == 8
+  {NULL,"%#.16Ix"},
+#elif __SIZEOF_POINTER__ == 2
+  {NULL,"%#.4Ix"},
+#else
+#error FIXME
+#endif
+ };
+ size_t typelen;
+ struct fmt_map const *iter = map;
+ while (*type && isspace(*type)) ++type;
+ typelen = strlen(type);
+ while (typelen && isspace(type[typelen-1])) --typelen;
+ while (iter->type_name && strncmp(iter->type_name,type,typelen) != 0) ++iter;
+ if (name) {
+  typelen = strnlen(type,typelen);
+  k_dosyslog(SYSCALL_TRACE_LEVEL,NULL,NULL,type,typelen);
+  if (typelen && (type[typelen-1] != '*' &&
+                  type[typelen-1] != '.')
+      ) k_dosyslog(SYSCALL_TRACE_LEVEL,NULL,NULL," ",1);
+  k_dosyslog(SYSCALL_TRACE_LEVEL,NULL,NULL,name,(size_t)-1);
+  k_dosyslog(SYSCALL_TRACE_LEVEL,NULL,NULL," = ",(size_t)-1);
+ }
+ k_dosyslogf(SYSCALL_TRACE_LEVEL,NULL,NULL,iter->printf_name,value);
+}
+
+void __ksyscall_enter_d(struct kirq_registers *__restrict regs, struct ksyscall_d *entry) {
  struct ktask *caller = ktask_self();
  assertf(!(caller->t_flags&KTASK_FLAG_NOINTR)
          ,"Nointerrupt task attempted to enter syscall %q (%Iu)"
@@ -59,13 +123,28 @@ void __ksyscall_enter_d(struct ksyscall_d *entry) {
          ,entry->sc_name,entry->sc_id);
  katomic_incfetch(entry->sc_inside);
  katomic_incfetch(entry->sc_total);
- if (entry->sc_id != SYS_kmem_validate /* Boooriiing! */
-     ) {
-  k_syslogf(KLOG_TRACE,"[syscall] Calling %q (%Iu)\n",
-            entry->sc_name,entry->sc_id);
+ if (k_sysloglevel >= SYSCALL_TRACE_LEVEL &&
+     SYSCALL_SHOULDTRACE(entry->sc_id)) {
+  uintptr_t *args = (uintptr_t *)alloca(entry->sc_argc*sizeof(uintptr_t));
+  uintptr_t *iter,*end;
+  char const *const *name,*const *type;
+  switch (entry->sc_argc) {
+   default: if (copy_from_user(args+3,(__user void *)regs->regs.ebp,(entry->sc_argc-3)*sizeof(uintptr_t))) memset(args+3,0,(entry->sc_argc-3)*sizeof(uintptr_t));
+   case 3:  args[2] = regs->regs.edx;
+   case 2:  args[1] = regs->regs.ecx;
+   case 1:  args[0] = regs->regs.ebx;
+  }
+  k_dosyslogf(SYSCALL_TRACE_LEVEL,NULL,NULL,"[syscall] Calling %Iu:%s(",entry->sc_id,entry->sc_name);
+  end = (iter = args)+entry->sc_argc;
+  name = entry->sc_namev,type = entry->sc_typev;
+  for (; iter != end; ++iter,++type,++name) {
+   if (iter != args) k_dosyslog(SYSCALL_TRACE_LEVEL,NULL,NULL,", ",2);
+   print_arg(*type,*name,*iter);
+  }
+  k_dosyslog(SYSCALL_TRACE_LEVEL,NULL,NULL,")\n",2);
  }
 }
-void __ksyscall_leave_d(struct ksyscall_d *entry) {
+void __ksyscall_leave_d(struct kirq_registers *__restrict regs, struct ksyscall_d *entry) {
  struct ktask *caller = ktask_self();
  katomic_decfetch(entry->sc_inside);
  assertf(!(caller->t_flags&KTASK_FLAG_NOINTR)
@@ -74,6 +153,14 @@ void __ksyscall_leave_d(struct ksyscall_d *entry) {
  assertf(!(caller->t_flags&KTASK_FLAG_CRITICAL)
          ,"Critical usertask attempted to leave syscall %q (%Iu)"
          ,entry->sc_name,entry->sc_id);
+#if 0
+ if (k_sysloglevel >= SYSCALL_TRACE_LEVEL &&
+     SYSCALL_SHOULDTRACE(entry->sc_id)) {
+  k_dosyslog(SYSCALL_TRACE_LEVEL,NULL,NULL," -> ",4);
+  print_arg(entry->sc_type,NULL,regs->regs.eax);
+  k_dosyslog(SYSCALL_TRACE_LEVEL,NULL,NULL,"\n",1);
+ }
+#endif
 }
 #endif
 

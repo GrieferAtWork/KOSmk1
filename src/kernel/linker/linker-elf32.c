@@ -194,8 +194,8 @@ kshlib_elf32_load_symtable(struct kshlib *__restrict self, Elf32_Shdr const *__r
    else if (bind == STB_WEAK) symtbl = &self->sh_weaksym;
    else goto sym_next;
    k_syslogf_prefixfile(KLOG_INSANE,elf_file,"[ELF] SYMBOL: %s %s: %p\n"
-                       ,bind == STB_GLOBAL ? "__global" :
-                        bind == STB_LOCAL ? "__local" :
+                       ,bind == STB_GLOBAL ? "__public" :
+                        bind == STB_LOCAL ? "__private" :
                         bind == STB_WEAK ? "__weak" : ""
                        ,name,(uintptr_t)sym_iter->st_value);
    sym = ksymbol_new(name);

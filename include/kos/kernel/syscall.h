@@ -56,8 +56,8 @@ struct ksyscall_d {
                                 *           noreturn, this value must not be trusted. */
 };
 #define __KSYSCALL_INITTAIL ,0,0
-extern void __ksyscall_enter_d(struct ksyscall_d *entry);
-extern void __ksyscall_leave_d(struct ksyscall_d *entry);
+extern void __ksyscall_enter_d(struct kirq_registers *__restrict regs, struct ksyscall_d *entry);
+extern void __ksyscall_leave_d(struct kirq_registers *__restrict regs, struct ksyscall_d *entry);
 #define __ksyscall_enter_d __ksyscall_enter_d
 #define __ksyscall_leave_d __ksyscall_leave_d
 #endif /* KCONFIG_HAVE_SYSCALL_TRACE */
@@ -75,18 +75,18 @@ extern void __ksyscall_leave_d(struct ksyscall_d *entry);
 
 
 #if defined(__ksyscall_enter_d) && defined(KSYSCALL_PREEMPT)
-#define ksyscall_enter_d(x) KSYSCALL_PREEMPT __ksyscall_enter_d(x)
+#define ksyscall_enter_d         KSYSCALL_PREEMPT __ksyscall_enter_d
 #elif defined(__ksyscall_enter_d)
-#define ksyscall_enter_d    __ksyscall_enter_d
+#define ksyscall_enter_d         __ksyscall_enter_d
 #elif defined(KSYSCALL_PREEMPT)
-#define ksyscall_enter_d(x) KSYSCALL_PREEMPT
+#define ksyscall_enter_d(regs,x) KSYSCALL_PREEMPT
 #else
-#define ksyscall_enter_d(x) /* nothing */
+#define ksyscall_enter_d(regs,x) /* nothing */
 #endif
 #ifdef __ksyscall_leave_d
-#define ksyscall_leave_d    __ksyscall_leave_d
+#define ksyscall_leave_d         __ksyscall_leave_d
 #else
-#define ksyscall_leave_d(x) /* nothing */
+#define ksyscall_leave_d(regs,x) /* nothing */
 #endif
 
 
@@ -149,7 +149,7 @@ for (local i: util::range(MAX_ARGS)) {
   for (local j: util::range(i)) {
     print "  __STATIC_ASSERT(sizeof(type"+(j+1)+") <= __SIZEOF_POINTER__);\\";
   }
-  print "  ksyscall_enter_d(&sysdbg_##name);\\";
+  print "  ksyscall_enter_d(regs,&sysdbg_##name);\\";
   print "  __KSYSCALL_ENTER(flags)\\";
   const first_missing_arg = 3;
   local register_arguments = util::min(i,first_missing_arg);
@@ -175,40 +175,40 @@ for (local i: util::range(MAX_ARGS)) {
   print ");\\";
   print "  }\\";
   print "  __KSYSCALL_LEAVE(flags)\\";
-  print "  ksyscall_leave_d(&sysdbg_##name);\\";
+  print "  ksyscall_leave_d(regs,&sysdbg_##name);\\";
   print " }";
 }
 ]]]*/
 #define KIDSYSCALL_WRAPPER0(flags,type,name,id) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
   __STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
-  ksyscall_enter_d(&sysdbg_##name);\
+  ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
    regs->regs.eax = (__uintptr_t)sysimpl_##name(__KSYSCALL_REGISTER_ARG0(flags));\
   }\
   __KSYSCALL_LEAVE(flags)\
-  ksyscall_leave_d(&sysdbg_##name);\
+  ksyscall_leave_d(regs,&sysdbg_##name);\
  }
 #define KIDSYSCALL_WRAPPER1(flags,type,name,id,type1,arg1) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
   __STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
-  ksyscall_enter_d(&sysdbg_##name);\
+  ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
    regs->regs.eax = (__uintptr_t)sysimpl_##name(__KSYSCALL_REGISTER_ARG(flags)\
                                                 (type1)regs->regs.ebx);\
   }\
   __KSYSCALL_LEAVE(flags)\
-  ksyscall_leave_d(&sysdbg_##name);\
+  ksyscall_leave_d(regs,&sysdbg_##name);\
  }
 #define KIDSYSCALL_WRAPPER2(flags,type,name,id,type1,arg1,type2,arg2) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
   __STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
-  ksyscall_enter_d(&sysdbg_##name);\
+  ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
    regs->regs.eax = (__uintptr_t)sysimpl_##name(__KSYSCALL_REGISTER_ARG(flags)\
@@ -216,7 +216,7 @@ for (local i: util::range(MAX_ARGS)) {
                                                ,(type2)regs->regs.ecx);\
   }\
   __KSYSCALL_LEAVE(flags)\
-  ksyscall_leave_d(&sysdbg_##name);\
+  ksyscall_leave_d(regs,&sysdbg_##name);\
  }
 #define KIDSYSCALL_WRAPPER3(flags,type,name,id,type1,arg1,type2,arg2,type3,arg3) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
@@ -224,7 +224,7 @@ for (local i: util::range(MAX_ARGS)) {
   __STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
-  ksyscall_enter_d(&sysdbg_##name);\
+  ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
    regs->regs.eax = (__uintptr_t)sysimpl_##name(__KSYSCALL_REGISTER_ARG(flags)\
@@ -233,7 +233,7 @@ for (local i: util::range(MAX_ARGS)) {
                                                ,(type3)regs->regs.edx);\
   }\
   __KSYSCALL_LEAVE(flags)\
-  ksyscall_leave_d(&sysdbg_##name);\
+  ksyscall_leave_d(regs,&sysdbg_##name);\
  }
 #define KIDSYSCALL_WRAPPER4(flags,type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
@@ -242,7 +242,7 @@ for (local i: util::range(MAX_ARGS)) {
   __STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type4) <= __SIZEOF_POINTER__);\
-  ksyscall_enter_d(&sysdbg_##name);\
+  ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
    __uintptr_t stackargs[1];\
@@ -256,7 +256,7 @@ for (local i: util::range(MAX_ARGS)) {
                                                ,(type4)stackargs[0]);\
   }\
   __KSYSCALL_LEAVE(flags)\
-  ksyscall_leave_d(&sysdbg_##name);\
+  ksyscall_leave_d(regs,&sysdbg_##name);\
  }
 #define KIDSYSCALL_WRAPPER5(flags,type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
@@ -266,7 +266,7 @@ for (local i: util::range(MAX_ARGS)) {
   __STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type4) <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type5) <= __SIZEOF_POINTER__);\
-  ksyscall_enter_d(&sysdbg_##name);\
+  ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
    __uintptr_t stackargs[2];\
@@ -281,7 +281,7 @@ for (local i: util::range(MAX_ARGS)) {
                                                ,(type5)stackargs[1]);\
   }\
   __KSYSCALL_LEAVE(flags)\
-  ksyscall_leave_d(&sysdbg_##name);\
+  ksyscall_leave_d(regs,&sysdbg_##name);\
  }
 #define KIDSYSCALL_WRAPPER6(flags,type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
@@ -292,7 +292,7 @@ for (local i: util::range(MAX_ARGS)) {
   __STATIC_ASSERT(sizeof(type4) <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type5) <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type6) <= __SIZEOF_POINTER__);\
-  ksyscall_enter_d(&sysdbg_##name);\
+  ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
    __uintptr_t stackargs[3];\
@@ -308,7 +308,7 @@ for (local i: util::range(MAX_ARGS)) {
                                                ,(type6)stackargs[2]);\
   }\
   __KSYSCALL_LEAVE(flags)\
-  ksyscall_leave_d(&sysdbg_##name);\
+  ksyscall_leave_d(regs,&sysdbg_##name);\
  }
 #define KIDSYSCALL_WRAPPER7(flags,type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6,type7,arg7) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
@@ -320,7 +320,7 @@ for (local i: util::range(MAX_ARGS)) {
   __STATIC_ASSERT(sizeof(type5) <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type6) <= __SIZEOF_POINTER__);\
   __STATIC_ASSERT(sizeof(type7) <= __SIZEOF_POINTER__);\
-  ksyscall_enter_d(&sysdbg_##name);\
+  ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
    __uintptr_t stackargs[4];\
@@ -337,7 +337,7 @@ for (local i: util::range(MAX_ARGS)) {
                                                ,(type7)stackargs[3]);\
   }\
   __KSYSCALL_LEAVE(flags)\
-  ksyscall_leave_d(&sysdbg_##name);\
+  ksyscall_leave_d(regs,&sysdbg_##name);\
  }
 //[[[end]]]
 

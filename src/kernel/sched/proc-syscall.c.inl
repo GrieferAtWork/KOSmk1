@@ -319,7 +319,6 @@ end:
  return KE_OK;
 }
 
-/*< _syscall4(kerrno_t,kproc_enumenv,int,self,char *,buf,size_t,bufsize,size_t *,reqsize); */
 KSYSCALL_DEFINE4(kerrno_t,kproc_enumenv,int,self,
                  __user char *,buf,size_t,bufsize,
                  __user size_t *,reqsize) {
@@ -371,7 +370,6 @@ end:
 }
 
 
-/*< _syscall4(kerrno_t,kproc_enumenv,int,self,char *,buf,size_t,bufsize,size_t *,reqsize); */
 KSYSCALL_DEFINE4(kerrno_t,kproc_getcmd,int,procfd,
                  __user char *,buf,size_t,bufsize,
                  __user size_t *,reqsize) {

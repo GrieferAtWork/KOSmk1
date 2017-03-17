@@ -90,8 +90,7 @@ format_vprintf __P((pformatprinter __printer, void *__closure,
 // return should successively yield a character at a time from
 // some kind of input source.
 //  - If 'SCANNER' returns non-zero, scanning aborts and that value is returned.
-//  - In addition, one of the error codes below may be returned,
-//    indicating an unexpected character, or conversion error.
+//    Otherwise, the function returns the amount of successfully parsed arguments.
 //  - The user may use 'SCANNER' to track the last read character to get
 //    additional information about what character caused the scan to fail.
 //  - The given 'SCANNER' should indicate EOF by setting '*ch' to a negative value

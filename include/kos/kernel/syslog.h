@@ -77,7 +77,7 @@ extern void k_syslog_prefixfile(int level, struct kfile *file, char const *s, __
 extern void k_syslogf_prefixfile(int level, struct kfile *file, char const *__restrict format, ...);
 extern void k_vsyslogf_prefixfile(int level, struct kfile *file, char const *__restrict format, va_list args);
 #else
-#define k_syslog(level,s,maxlen)   (k_sysloglevel>=(level)?k_dosyslog(level,s,maxlen,NULL,NULL):(void)0)
+#define k_syslog(level,s,maxlen)   (k_sysloglevel>=(level)?k_dosyslog(level,NULL,NULL,s,maxlen):(void)0)
 #define k_syslogf(level,...)       (k_sysloglevel>=(level)?k_dosyslogf(level,NULL,NULL,__VA_ARGS__):(void)0)
 #define k_vsyslogf(level,fmt,args) (k_sysloglevel>=(level)?k_dovsyslogf(level,NULL,NULL,fmt,args):(void)0)
 #define k_syslog_prefixfile(level,file,s,maxlen)      (k_sysloglevel>=(level)?k_dosyslog_prefixfile(level,file,s,maxlen):(void)0)
@@ -88,6 +88,17 @@ extern void k_vsyslogf_prefixfile(int level, struct kfile *file, char const *__r
 //////////////////////////////////////////////////////////////////////////
 // Return the mnemonic prefix for a given log level (e.g.: 'KLOG_ERROR' -> "#E")
 extern __wunused __retnonnull char const *k_sysloglevel_mnemonic(int level);
+
+//////////////////////////////////////////////////////////////////////////
+// Returns a syslog level from a given string that may either be:
+//  - A case-insensitive mnemomnic for a syslog with the an optional '#' prefix
+//  - An unsigned integer describing a valid syslog level.
+// @return: -1: Invalid syslog level name.
+extern __wunused int k_sysloglevel_fromstring(char const *name);
+
+//////////////////////////////////////////////////////////////////////////
+// Look at the 'LOGLV'/'LOGLEVEL' environment variable and initialize 'k_sysloglevel' accordingly.
+extern void kernel_initialize_syslog(void);
 
 //////////////////////////////////////////////////////////////////////////
 // Do actual, raw syslog output on a given syslog level.

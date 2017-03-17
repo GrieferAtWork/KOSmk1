@@ -51,7 +51,9 @@
 
 /* Include functionality to trace system calls,
  * as well information on their arguments and names. */
-#define KCONFIG_HAVE_SYSCALL_TRACE  defined(__DEBUG__)
+#ifdef __DEBUG__
+#define KCONFIG_HAVE_SYSCALL_TRACE  1
+#endif
 
 /* NOTE: Special size optimizations may be performed for bit sizes fitting
  *       inside of 'KSIGNAL_USERBITS' (16) (s.a.: <kos/kernel/signal.h>) */

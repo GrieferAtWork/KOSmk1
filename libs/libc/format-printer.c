@@ -43,6 +43,7 @@
 #include <sys/types.h>
 #ifdef __KERNEL__
 #include <kos/atomic.h>
+#include <kos/kernel/serial.h>
 #include <kos/kernel/paging.h>
 #include <kos/kernel/util/string.h>
 #endif
@@ -218,6 +219,9 @@ flag_next: /* Flags */
      case ' ': flags |= PRINTF_FLAG_SPACE;   goto flag_next;
      case '#': flags |= PRINTF_FLAG_PREFIX;  goto flag_next;
      case '0': flags |= PRINTF_FLAG_PADZERO; goto flag_next;
+#ifdef PRINTF_FLAG_VIRTUAL
+     case '~': flags |= PRINTF_FLAG_VIRTUAL; goto flag_next;
+#endif
      default: break;
     }
     /* Width */
@@ -408,7 +412,7 @@ def_length:
 #endif /* PRINTF_EXTENSION_QUOTESTRING */
       arg = va_arg(args,char const *);
 #if PRINTF_EXTENSION_VIRTUALPTR
-      if (flags&PRINTF_FLAG_VIRTUAL && arg) {
+      if ((flags&PRINTF_FLAG_VIRTUAL) && arg) {
        if __likely(ch == 's') {
         error = format_userprint(printer,closure,arg,
                                 (flags&PRINTF_FLAG_HASPREC) ? precision : (size_t)-1);
@@ -423,7 +427,9 @@ def_length:
       {
 #ifdef PRINTF_EXTENSION_NULLSTRING
        if __unlikely(!arg) arg = PRINTF_EXTENSION_NULLSTRING;
-#endif /* PRINTF_EXTENSION_NULLSTRING */
+#else /* PRINTF_EXTENSION_NULLSTRING */
+       assert(arg);
+#endif /* !PRINTF_EXTENSION_NULLSTRING */
 #if PRINTF_EXTENSION_QUOTESTRING
        if __likely(ch == 's') {
         print(arg,(flags&PRINTF_FLAG_HASPREC) ? precision : (size_t)-1);
