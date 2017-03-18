@@ -314,6 +314,50 @@ kprocenv_putenv_c(struct kprocenv *__restrict self,
 }
 
 __crit kerrno_t
+kprocenv_prepend_argv(struct kprocenv *__restrict self, __size_t argc,
+                      char const __kernel *const __kernel *argv) {
+ size_t total_memreq;
+ char const *const *iter,*const *end;
+ char **new_argv,**argv_iter,*newarg; size_t new_argc;
+ KTASK_CRIT_MARK
+ kassert_kprocenv(self);
+ if __unlikely(!argc) return KE_OK;
+ total_memreq = argc*sizeof(char *);
+ end = (iter = argv)+argc;
+ for (; iter != end; ++iter) total_memreq += (strlen(*iter)+1)*sizeof(char);
+ total_memreq += self->pe_memcur;
+ /* Make sure we're allowed to add these additional arguments. */
+ if (total_memreq < self->pe_memcur ||
+     total_memreq > self->pe_memmax) return KE_ACCES;
+ /* We're allowed to. - Go ahead and do so! */
+ new_argc = self->pe_argc+argc;
+ new_argv = (char **)realloc(self->pe_argv,new_argc*sizeof(char *));
+ if __unlikely(!new_argv) return KE_NOMEM;
+ /* Shift the old argv vector. */
+ memmove(new_argv+argc,new_argv,self->pe_argc*sizeof(char *));
+ iter = argv,argv_iter = new_argv;
+ for (; iter != end; ++iter,++argv_iter) {
+  /* Copy the argument and paste it into the vector. */
+  newarg = strdup(*iter);
+  if __unlikely(!newarg) goto err;
+  *argv_iter = newarg;
+ }
+ assert(argv_iter == new_argv+argc);
+ self->pe_argc   = new_argc;
+ self->pe_argv   = new_argv;
+ self->pe_memcur = total_memreq;
+ return KE_OK;
+err:
+ while (argv_iter != new_argv) free(*--argv_iter);
+ memmove(new_argv,new_argv+argc,self->pe_argc*sizeof(char *));
+ self->pe_argv = new_argv;
+ new_argv = (char **)realloc(new_argv,self->pe_argc*sizeof(char *));
+ if (new_argv) self->pe_argv = new_argv;
+ return KE_NOMEM;
+}
+
+
+__crit kerrno_t
 kprocenv_setargv_c(struct kprocenv *__restrict self, size_t max_argc,
                    char const __kernel *const __kernel *argv,
                    size_t const __kernel *max_arglenv) {

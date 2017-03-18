@@ -112,6 +112,7 @@
     <ClCompile Include="..\src\kernel\linker\linker-elf32.c" />
     <ClCompile Include="..\src\kernel\linker\linker-pe32.c" />
     <ClCompile Include="..\src\kernel\linker\linker-relocate.c" />
+    <ClCompile Include="..\src\kernel\linker\linker-shebang.c" />
     <ClCompile Include="..\src\kernel\linker\linker.c" />
     <ClCompile Include="..\src\kernel\pageframe.c" />
     <ClCompile Include="..\src\kernel\paging.c" />

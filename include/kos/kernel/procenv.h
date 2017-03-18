@@ -167,6 +167,17 @@ kprocenv_putenv_c(struct kprocenv *__restrict self,
 
 
 //////////////////////////////////////////////////////////////////////////
+// Copy and prepend all arguments from the given
+// ARGV vector to the provided procenv SELF.
+// >> This function is used to implement shebang executables.
+// @return: KE_OK:    Arguments were successfully set.
+// @return: KE_ACCES: The total amount of argument bytes exceeds what is allowed.
+// @return: KE_NOMEM: Not enough memory to complete the operation.
+extern __crit __nonnull((1)) kerrno_t
+kprocenv_prepend_argv(struct kprocenv *__restrict self, __size_t argc,
+                      char const __kernel *const __kernel *argv);
+
+//////////////////////////////////////////////////////////////////////////
 // Fill process arguments from the given arguments.
 // WARNING: The caller must ensure that the argument vector was empty
 // @param: arglenv: An optional argc-long vector of size_t, describing

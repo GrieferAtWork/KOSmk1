@@ -37,17 +37,17 @@ __DECL_BEGIN
 
 #ifdef SKIP_MEMORY
 __crit kerrno_t
-kiobuf_skip_c(struct kiobuf *__restrict self,
-              size_t bufsize, size_t *__restrict rsize, kioflag_t mode)
+__kiobuf_skip_c(struct kiobuf *__restrict self,
+                size_t bufsize, size_t *__restrict rsize, kioflag_t mode)
 #elif defined(USER_MEMORY)
 __crit kerrno_t
-__kiobuf_user_read_c(struct kiobuf *__restrict self, __user void *buf,
-                     size_t bufsize, __kernel size_t *__restrict rsize,
-                     kioflag_t mode)
+__kiobuf_user_read_c_impl(struct kiobuf *__restrict self, __user void *buf,
+                          size_t bufsize, __kernel size_t *__restrict rsize,
+                          kioflag_t mode)
 #else
 __crit kerrno_t
-kiobuf_read_c(struct kiobuf *__restrict self, void *__restrict buf,
-              size_t bufsize, size_t *__restrict rsize, kioflag_t mode)
+__kiobuf_read_c(struct kiobuf *__restrict self, void *__restrict buf,
+                size_t bufsize, size_t *__restrict rsize, kioflag_t mode)
 #endif
 {
  size_t max_read_linear,max_read,destsize;

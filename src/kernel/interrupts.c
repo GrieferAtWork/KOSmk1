@@ -51,6 +51,7 @@
 __DECL_BEGIN
 
 #define C(x) x(void)
+extern
 void C(isr0), C(isr1), C(isr2), C(isr3), C(isr4), C(isr5), C(isr6), C(isr7)
     ,C(isr8), C(isr9), C(isr10),C(isr11),C(isr12),C(isr13),C(isr14),C(isr15)
     ,C(isr16),C(isr17),C(isr18),C(isr19),C(isr20),C(isr21),C(isr22),C(isr23)
@@ -209,7 +210,7 @@ print_error(char const *__restrict data,
 
 void
 kshmbranch_print(struct kshmbranch *__restrict branch,
-             uintptr_t addr_semi, unsigned int level);
+                 uintptr_t addr_semi, unsigned int level);
 
 
 void __kirq_default_handler(struct kirq_registers *regs) {

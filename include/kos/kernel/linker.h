@@ -43,12 +43,10 @@ struct kshlib;
 
 #define KOBJECT_MAGIC_SYMTABLE   0x5F47AB7E /*< SYMTABLE. */
 #define KOBJECT_MAGIC_SHLIB      0x5471B    /*< SHLIB. */
-#define KOBJECT_MAGIC_EXECUTABLE 0xE7CE     /*< EXE. */
 
 #define kassert_ksymtable(self)   kassert_object(self,KOBJECT_MAGIC_SYMTABLE)
 #define kassert_kshlib(self)      kassert_refobject(self,sh_refcnt,KOBJECT_MAGIC_SHLIB)
 #define kassert_kreloc(self)      kassertobj(self)
-#define kassert_kexecutable(self) kassert_object(self,KOBJECT_MAGIC_EXECUTABLE)
 
 #define KSYM_INVALID ((ksymaddr_t)-1)
 #ifndef __ksymaddr_t_defined
@@ -417,6 +415,45 @@ kshliblist_append_inherited(struct kshliblist *__restrict self,
                             __ref struct kshlib *__restrict lib);
 
 
+
+#define K_SHEBANG_MAXCMDLINE 4096 /*< Max amount of bytes allowed for use as a commandline. */
+
+struct ksbargs {
+ /* Shebang additional arguments.
+  * KOS supports multiple arguments as opposed to the standardized single-argument,
+  * supporting the use of either "" or '' to group arguments together.
+  * Following standard conventions, the absolute path of the script file
+  * (if visible to the caller, following 'KATTR_FS_PATHNAME' rules) is appended
+  * as its own argument, followed by any remaining arguments.
+  * Note, that Shebang scripts may _NOT_ be loaded as shared libraries. */
+ __size_t sb_argc; /*< Amount of optional arguments (including interpreter name). */
+ char   **sb_argv; /*< [1..1][owned][0..sb_argc][owned] Vector of optional arguments. */
+};
+
+//////////////////////////////////////////////////////////////////////////
+// Initialize the given shebang optional arguments.
+// NOTES:
+//  - This function is capable of parsing '' and "".
+//    With the ability of using both, you are able to
+//    include either quotes in the resulting commandline:
+//    >> #!/bin/echo "You've got to be kidding me"
+//    >> #!/bin/echo 'And then he said "This is SPARTA!"'
+//  - The passed text should describe everything after
+//    '#!' and before the associated linefeed/EOF.
+//  - Unresolved (missing) quotation marks are silently
+//    ignored and implicitly terminated at the end.
+// @return: KE_OK:    Successfully initialized Shebang arguments.
+// @return: KE_NOMEM: Not enough available memory.
+// @return: KE_INVAL: An invalid (non-printable ctype.h:isprint)
+//                    character was encountered within the given text.
+//              NOTE: This does not affect space (ctype.h:isspace) characters.
+extern __wunused kerrno_t
+ksbargs_init(struct ksbargs *__restrict self,
+             char const *__restrict text, size_t textsize);
+extern void ksbargs_quit(struct ksbargs *__restrict self);
+
+
+
 struct kshlib {
  /* Shared library/cached executable controller object
   * NOTE: At this point, shared libs and exe-s (aka. binaries) are the same thing.
@@ -427,6 +464,7 @@ struct kshlib {
  __ref struct kfile     *sh_file;       /*< [1..1] Open file to this shared library (Used to retrieve library name/path). */
  kmodkind_t              sh_flags;      /*< Shared library kind & flags. */
  __size_t                sh_cidx;       /*< [lock(kslcache_lock)] Cache index (set to (size_t)-1 when not cached). */
+union{struct{
  struct ksymtable        sh_publicsym;  /*< Hash-table of public symbols (exported by this shared library). */
  struct ksymtable        sh_weaksym;    /*< Hash-table of weak symbols (exported by this shared library). */
  struct ksymtable        sh_privatesym; /*< Hash-table of private symbols (for addr2line, etc.). */
@@ -435,6 +473,10 @@ struct kshlib {
  struct kreloc           sh_reloc;      /*< Relocation information. */
  struct kshlib_callbacks sh_callbacks;  /*< Special callbacks recognized by the linker. */
  struct kaddr2linelist   sh_addr2line;  /*< Address->line technologies. */
+};struct{ /* KMODKIND_SHEBANG */
+ __ref struct kshlib    *sh_sb_ref;     /*< [1..1][const] Reference to the binary referenced by the given shebang script. */
+ struct ksbargs          sh_sb_args;    /*<  */
+};};
 };
 
 __local KOBJECT_DEFINE_INCREF(kshlib_incref,struct kshlib,sh_refcnt,kassert_kshlib);
@@ -457,6 +499,9 @@ kshlib_elf32_new(struct kshlib **__restrict result,
 extern __crit __wunused __nonnull((1,2)) kerrno_t
 kshlib_pe32_new(struct kshlib **__restrict result,
                 struct kfile *__restrict pe_file);
+extern __crit __wunused __nonnull((1,2)) kerrno_t
+kshlib_shebang_new(struct kshlib **__restrict result,
+                   struct kfile *__restrict sb_file);
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the symbol address of a given file address.

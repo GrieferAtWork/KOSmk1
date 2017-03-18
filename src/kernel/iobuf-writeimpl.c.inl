@@ -29,12 +29,12 @@ __DECL_BEGIN
 
 #ifdef USER_MEMORY
 __crit kerrno_t
-__kiobuf_user_write_c(struct kiobuf *__restrict self, __user void const *buf,
-                      size_t bufsize, __kernel size_t *__restrict wsize, kioflag_t mode)
+__kiobuf_user_write_c_impl(struct kiobuf *__restrict self, __user void const *buf,
+                           size_t bufsize, __kernel size_t *__restrict wsize, kioflag_t mode)
 #else
 __crit kerrno_t
-kiobuf_write_c(struct kiobuf *__restrict self, void const *buf,
-               size_t bufsize, size_t *__restrict wsize, kioflag_t mode)
+__kiobuf_write_c(struct kiobuf *__restrict self, void const *buf,
+                 size_t bufsize, size_t *__restrict wsize, kioflag_t mode)
 #endif
 {
  size_t max_write;
@@ -61,12 +61,12 @@ buffer_is_full:
    /* Don't wait if we've already read something and are
     * only supposed to block for the first chunk of data. */
    if (*wsize && (mode&(KIO_BLOCKFIRST|KIO_BLOCKALL)) == KIO_BLOCKFIRST) goto end;
-   /* Wait until at there is at least something to read
-    * NOTE: The following like essentially performs what a
-    *       condition variable calls its wait-operation. */
    //printf("WAIT ON FULL BUFFER (r:%p w:%p b:%p e:%p)\n",
    //       self->ib_rpos,self->ib_wpos,self->ib_buffer,
    //       self->ib_buffer+self->ib_size);
+   /* Wait until at there is at least something to read
+    * NOTE: The following code essentially performs what a
+    *       condition variable calls its wait-operation. */
    error = ksignal_recvc(&self->ib_nfull,krwlock_endwrite(&self->ib_rwlock));
    if __unlikely(KE_ISERR(error)) goto end_always;
    goto again;
@@ -76,7 +76,8 @@ buffer_is_full:
  if (max_write < bufsize) {
   byte_t *new_buffer;
   size_t read_pos,write_pos,new_buffer_size;
-  /* Difficult case: Check if we can reallocate the buffer to be large enough */
+  /* Difficult case: Check if we can reallocate the buffer to be large
+   *                 enough, while respecting the buffer's 'ib_maxsize'. */
   read_pos = (size_t)(self->ib_rpos-self->ib_buffer);
   write_pos = (size_t)(self->ib_wpos-self->ib_buffer);
   new_buffer_size = self->ib_size+(bufsize-max_write);
@@ -87,8 +88,14 @@ buffer_is_full:
   if (new_buffer_size != self->ib_size) {
    new_buffer = (byte_t *)realloc(self->ib_buffer,new_buffer_size);
    if __unlikely(!new_buffer) { error = KE_NOMEM; goto end; }
+#if KIOBUF_ZERO_UNUSED_BUFFER
+   /* ZERO-initialize newly allocated memory. */
+   memset(new_buffer+self->ib_size,0,
+          new_buffer_size-self->ib_size);
+#endif
    self->ib_buffer = new_buffer;
    self->ib_size = new_buffer_size;
+   /* Be careful to preserve the an empty-buffer state. */
    self->ib_rpos = new_buffer+((self->ib_rpos == bufend) ? new_buffer_size : read_pos);
    self->ib_wpos = new_buffer+write_pos;
    bufend = new_buffer+new_buffer_size;
@@ -146,6 +153,7 @@ end_ok:
 end:
  if (*wsize) {
   assert(bufend == self->ib_buffer+self->ib_size);
+  assert(self->ib_rpos <= bufend);
   if (self->ib_rpos == bufend
 #if 0
       /* Technically, we'd only need to set the r-pointer if

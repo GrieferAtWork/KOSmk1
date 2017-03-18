@@ -115,3 +115,9 @@
 #ifndef __compiler_unreachable
 #define __compiler_unreachable() /* nothing */
 #endif
+
+#undef __DECL_BEGIN
+#undef __DECL_END
+#define __DECL_BEGIN  /* never anything! */
+#define __DECL_END    /* never anything! */
+

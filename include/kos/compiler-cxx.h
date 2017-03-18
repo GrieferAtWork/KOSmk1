@@ -144,3 +144,8 @@
 
 #define __CXX_DECL_BEGIN
 #define __CXX_DECL_END
+
+#ifndef __DECL_BEGIN
+#define __DECL_BEGIN  extern "C" {
+#define __DECL_END    }
+#endif

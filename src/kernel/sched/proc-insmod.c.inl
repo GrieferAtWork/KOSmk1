@@ -361,6 +361,9 @@ kproc_insmod_unlocked(struct kproc *__restrict self,
                       kmodid_t *module_id) {
  kerrno_t error;
  KTASK_CRIT_MARK
+ /* Make sure that this module can be loaded as a library.
+  * >> This can fail if it's actually something like a shebang script. */
+ if __unlikely(!KMODKIND_ISLIB(KMODKIND_KIND(module->sh_flags))) return KE_NOBIN;
  error = kproc_insmod_unlocked_impl(self,module,module_id);
  if __likely(error == KE_OK) {
   // NOTE: Newly loaded modules must be relocated

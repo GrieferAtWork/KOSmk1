@@ -247,7 +247,7 @@ typedef __u32 kmodkind_t;
 
 /* Module kind flags & utilities. */
 #define KMODFLAG_NONE       0x00000000
-#define KMODFLAG_BINARY     0x00000100 /*< FLAG: Module is a binary. */
+#define KMODFLAG_BINARY     0x00000100 /*< FLAG: Module is a binary (NOTE: Not set for scripts, such as shebang). */
 #define KMODFLAG_FIXED      0x00000200 /*< FLAG: The module has no relocation information and must be loaded to a fixed address. */
 #define KMODFLAG_PREFFIXED  0x00000400 /*< FLAG: The module prefers being loaded to a fixed address (base = NULL), but is capable of being relocated elsewhere. */
 #define KMODFLAG_CANEXEC    0x00000800 /*< FLAG: The module can be executed (NOTE: ). */
@@ -257,11 +257,13 @@ typedef __u32 kmodkind_t;
 #define KMODKIND_KIND(x)  ((x)&KMODKIND_KMASK)
 #define KMODKIND_FLAGS(x) ((x)&KMODKIND_FMASK)
 
-/* Module technologies. */
+/* Module technologies. (NOTE: All of these are implemented and working!) */
 #define KMODKIND_UNKNOWN    0 /*< Unknown binary type (May safely be used for error-cases). */
 #define KMODKIND_ELF32      1 /*< ELF-32 (.../.so) binary/shared library. */
 #define KMODKIND_PE32       2 /*< PE-32 (.exe/.dll) binary/shared library. */
+#define KMODKIND_SHEBANG 0x80 /*< Shebang ('#!'-style script file). (Used internally) */
 #define KMODKIND_KERNEL  0xff /*< Exclusively used by the kernel itself. */
+#define KMODKIND_ISLIB(x) (!((x)&0x80)) /*< The library can be loaded by 'mod_open'. - Does not affect 'exec()' */
 
 #ifndef __kmodinfo_defined
 #define __kmodinfo_defined 1

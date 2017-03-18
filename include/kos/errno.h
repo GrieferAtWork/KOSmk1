@@ -76,6 +76,7 @@ typedef int kerrno_t;
 #define KE_WRITABLE    (-34) /*< ERROR: The SHM mapping associated with an EIP during a root-fork is mapped as writable. */
 #define KE_CHANGED     (-35) /*< ERROR: A file or a specific area of memory was changed. */
 #define KE_SYNTAX      (-36) /*< ERROR: Syntax/usage error. */
+#define KE_NOBIN       (-37) /*< ERROR: Not a binary file (returned by mod_open if the file is a shebang script). */
 
 // NOTE: Signal codes should not be considered errors.
 //       They tell the caller about some special state a given object may be in,

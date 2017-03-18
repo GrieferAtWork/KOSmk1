@@ -78,3 +78,12 @@
 #define __STATIC_ASSERT(expr) \
  extern __attribute_unused int __compiler_UNIQUE(sassert)[!!(expr)?1:-1]
 #endif
+
+#ifndef __compiler_pragma
+#define __compiler_pragma __pragma
+#endif
+
+#ifndef __COMPILER_PACK_PUSH
+#define __COMPILER_PACK_PUSH(n) __pragma(pack(push,n))
+#define __COMPILER_PACK_POP     __pragma(pack(pop))
+#endif

@@ -42,8 +42,9 @@ struct slloader {
 };
 
 static struct slloader slloaders[] = {
- /* ELF32 */{&kshlib_elf32_new,{ELFMAG0,ELFMAG1,ELFMAG2,ELFMAG3},4},
- /* PE-32 */{&kshlib_pe32_new,{PE_DOSHEADER_MAGIC_1,PE_DOSHEADER_MAGIC_2},2},
+ /* ELF32   */{&kshlib_elf32_new,  {ELFMAG0,ELFMAG1,ELFMAG2,ELFMAG3},4},
+ /* PE-32   */{&kshlib_pe32_new,   {PE_DOSHEADER_MAGIC_1,PE_DOSHEADER_MAGIC_2},2},
+ /* Shebang */{&kshlib_shebang_new,{'#','!'},2},
  {NULL,{0,},0}, // Sentinal
 };
 

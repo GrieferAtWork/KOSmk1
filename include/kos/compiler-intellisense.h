@@ -42,3 +42,11 @@
 #ifndef __asm_volatile__
 #define __asm_volatile__  __asm__
 #endif
+
+#ifndef __compiler_pragma
+#define __compiler_pragma       __pragma
+#endif
+#ifndef __COMPILER_PACK_PUSH
+#define __COMPILER_PACK_PUSH(n) __pragma(pack(push,n))
+#define __COMPILER_PACK_POP     __pragma(pack(pop))
+#endif

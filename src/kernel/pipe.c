@@ -164,18 +164,26 @@ kpipefile_write(struct kpipefile *__restrict self,
                           KIO_BLOCKFIRST|KIO_NONE);
 }
 static kerrno_t
-kpipefile_seek(struct kpipefile *__restrict self, off_t off,
-               int whence, __kernel pos_t *__restrict newpos) {
+kpipefile_flush(struct kpipefile *__restrict self) {
+ return kiobuf_flush(&self->pr_pipe->p_iobuf);
+}
+static kerrno_t
+kpipefile_rseek(struct kpipefile *__restrict self, off_t off,
+                int whence, __kernel pos_t *__restrict newpos) {
  kerrno_t error; size_t did_skip;
- if __unlikely(whence != SEEK_CUR || off < 0) return KE_NOSYS;
- error = kiobuf_skip(&self->pr_pipe->p_iobuf,(size_t)off,&did_skip,
-                     KIO_BLOCKNONE|KIO_NONE);
+ if __unlikely(whence != SEEK_CUR) return KE_NOSYS;
+ error = kiobuf_rseek(&self->pr_pipe->p_iobuf,(ssize_t)off,&did_skip);
  if (__likely(KE_ISOK(error)) && newpos) *newpos = (pos_t)did_skip;
  return error;
 }
 static kerrno_t
-kpipefile_flush(struct kpipefile *__restrict self) {
- return kiobuf_flush(&self->pr_pipe->p_iobuf);
+kpipefile_wseek(struct kpipefile *__restrict self, off_t off,
+                int whence, __kernel pos_t *__restrict newpos) {
+ kerrno_t error; size_t did_skip;
+ if __unlikely(whence != SEEK_CUR) return KE_NOSYS;
+ error = kiobuf_wseek(&self->pr_pipe->p_iobuf,(ssize_t)off,&did_skip);
+ if (__likely(KE_ISOK(error)) && newpos) *newpos = (pos_t)did_skip;
+ return error;
 }
 
 
@@ -184,20 +192,19 @@ struct kfiletype kpipesuper_type = {
  .ft_quit  = (void(*)(struct kfile *__restrict))&kpipefile_quit,
  .ft_read  = (kerrno_t(*)(struct kfile *__restrict,void *__restrict,size_t,size_t *__restrict))&kpipefile_read,
  .ft_write = (kerrno_t(*)(struct kfile *__restrict,void const *__restrict,size_t,size_t *__restrict))&kpipefile_write,
- .ft_seek  = (kerrno_t(*)(struct kfile *__restrict,off_t,int,pos_t *__restrict))&kpipefile_seek,
 };
 struct kfiletype kpipereader_type = {
  .ft_size = sizeof(struct kpipefile),
  .ft_quit = (void(*)(struct kfile *__restrict))&kpipefile_quit,
  .ft_read = (kerrno_t(*)(struct kfile *__restrict,void *__restrict,size_t,size_t *__restrict))&kpipefile_read,
- .ft_seek = (kerrno_t(*)(struct kfile *__restrict,off_t,int,pos_t *__restrict))&kpipefile_seek,
+ .ft_seek = (kerrno_t(*)(struct kfile *__restrict,off_t,int,pos_t *__restrict))&kpipefile_rseek,
 };
 struct kfiletype kpipewriter_type = {
  .ft_size  = sizeof(struct kpipefile),
  .ft_quit  = (void(*)(struct kfile *__restrict))&kpipefile_quit,
  .ft_write = (kerrno_t(*)(struct kfile *__restrict,void const *__restrict,size_t,size_t *__restrict))&kpipefile_write,
- /* TODO: ft_seek with a SEEK_CUR & negative offset: Take back written data if it hasn't been read yet. */
  .ft_flush = (kerrno_t(*)(struct kfile *__restrict))&kpipefile_flush,
+ .ft_seek  = (kerrno_t(*)(struct kfile *__restrict,off_t,int,pos_t *__restrict))&kpipefile_wseek,
 };
 
 __DECL_END
@@ -236,10 +243,12 @@ KSYSCALL_DEFINE_EX3(c,kerrno_t,kfd_pipe,__user int *,pipefd,
   kproc_closefd(proc_self,kernel_pipefd[1]);
   goto err_pipe0;
  }
- goto end_pipe;
-err_pipe0: kproc_closefd(proc_self,kernel_pipefd[0]);
-end_pipe:  kinode_decref((struct kinode *)pipe);
+end_pipe:
+ kinode_decref((struct kinode *)pipe);
  return error;
+err_pipe0:
+ kproc_closefd(proc_self,kernel_pipefd[0]);
+ goto end_pipe;
 }
 
 __DECL_END

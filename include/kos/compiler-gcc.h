@@ -239,3 +239,13 @@
 #endif
 
 #define __COMPILER_HAVE_TYPEOF
+
+#ifndef __compiler_pragma
+#define __PRIVATE_COMPILER_PRAGMA(x) _Pragma(#x)
+#define __compiler_pragma(x) __PRIVATE_COMPILER_PRAGMA(x)
+#endif
+
+#ifndef __COMPILER_PACK_PUSH
+#define __COMPILER_PACK_PUSH(n) __compiler_pragma(pack(push,n))
+#define __COMPILER_PACK_POP     _Pragma("pack(pop)")
+#endif

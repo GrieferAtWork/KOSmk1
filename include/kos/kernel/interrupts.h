@@ -83,26 +83,19 @@ struct __packed kirq_userregisters {
 struct __packed kirq_registers {
  /* User-mapped registers address (usually part of kernel stack) */
  __user struct kirq_userregisters *userregs;
- /* User-set page directory (usually equal to 'kpagedir_user()') */
+ /* User-set page directory (usually equal to the SHM pagedir of the calling process) */
  __kernel struct kpagedir         *usercr3;
  /* NOTE: The following 'regs' object is what the
   *       above 'userregs' user-memory pointer maps to.
-  *    >> The registers in 'regs' may be modified
-  *       freely and upon IRQ return will be applied.
-  * WARNING: 'userregs' may be changed, but if so, registers
-  *          will be popped from its new location instead
-  *          of that described by the 'regs' below.
+  *    >> The registers in 'regs' may be modified freely
+  *       and changes will be applied upon IRQ return.
+  * WARNING: The 'userregs' pointer may be changed as well, but if
+  *          so, registers will be popped from its new location
+  *          instead of that described by the 'regs' below.
   *       >> The kernel is therefor responsible to ensure
   *          that upon changing 'userregs', the new value describes
   *          a valid user pointer pointing at another instance
-  *          of a 'kirq_userregisters' structure.
-  * WARNING: While inside an interrupt handle, paging will be
-  *          disabled, though the user-space page directory
-  *          is still set in the CR3 register.
-  *       >> Unless the kernel is attempting to perform a
-  *          context switch (which should really just be left
-  *          to the scheduler), the CR3 register must be
-  *          set to the page directory of the new task as well. */
+  *          of a 'kirq_userregisters' structure. */
  struct kirq_userregisters         regs;
 };
 __COMPILER_PACK_POP
@@ -242,13 +235,13 @@ RUNTIME_REGION_DEFINE(NOIRQ);
 //       >> kmutex_unlock(&lock);
 //       >> NOIRQ_END
 //    -- Do this instead:
-//       >> ktask_crt_begin();
+//       >> KTASK_CRIT_BEGIN
 //       >> // OK: The calling task will not be terminated while
 //       >> //     still locking this, or any other mutex.
 //       >> kmutex_lock(&lock);
 //       >> do_something();
 //       >> kmutex_unlock(&lock);
-//       >> NOIRQ_END
+//       >> KTASK_CRIT_END
 #if KCONFIG_HAVE_IRQ
 #ifdef CONFIG_COMPILETIME_NOINTERRUPT_OPTIMIZATIONS
 #define NOIRQ_BEGIN                         REGION_ENTER(NOIRQ,!karch_irq_enabled,karch_irq_disable)
@@ -302,30 +295,6 @@ RUNTIME_REGION_DEFINE(NOIRQ);
             NOIRQ_END\
             (void)0;\
  })
-
-#if 0 /* DELETE ME */
-#define NOIRQ_BEGINLOCK_VOLATILE(ob,readvolatile,trylock,unlock) \
- { __u32 __nistored = karch_irq_enabled();\
-  (ob) = (readvolatile);\
-  if (__nistored) for (;;) {\
-   karch_irq_disable();\
-   while (!(trylock)) {\
-    volatile int __spinner = 10000;\
-    karch_irq_enable();\
-    if (ktask_tryyield() != KE_OK) while (__spinner--);\
-    karch_irq_disable();\
-   }\
-   if __likely(ob == readvolatile) break;\
-   /* Volatile memory has changed while we we're interrupting. */\
-   unlock; karch_irq_enable(); ob = readvolatile;\
-  } else {\
-   /* TODO: This must succeed first-try on single-core config. */\
-   while (!(trylock));\
-  }
-#if 0
-} /* Fix side-bar highlighting in visual studio */
-#endif
-#endif
 
 #else
 #define NOIRQ_BEGIN                 {

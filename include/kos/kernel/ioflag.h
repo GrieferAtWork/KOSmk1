@@ -41,8 +41,8 @@ typedef __u8 kioflag_t;
 #define KIO_BLOCKALL   0x03 /*< Block until the entirety of the provided buffer is filled/written (implies behavior of 'KIO_BLOCKFIRST'). */
 #define KIO_NONE       0x00 /*< This flag does nothing... */
 #define KIO_PEEK       0x10 /*< Don't advance the read/write-pointer. */
-#define KIO_QUICKMOVE  0x20 /*< Don't restart the read/write process if another task read the same data (May lead to data being read/written more than once).
-                                NOTE: This flag may not have any effect in locking I/O interfaces incapable of performing true asynchronous reads/writes. */
+#define KIO_QUICKMOVE  0x20 /*< Don't restart the read/write process if another task operated on the same data (May lead to data being read/written more than once).
+                             *  NOTE: This flag may not have any effect in locking I/O interfaces incapable of performing true asynchronous reads/writes. */
 
 __DECL_END
 

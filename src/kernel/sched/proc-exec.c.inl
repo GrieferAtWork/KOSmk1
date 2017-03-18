@@ -123,21 +123,33 @@ kproc_exec(struct kshlib *__restrict exec_main,
          "exec() can't handle KE_INTR-style interrupts.\n"
          "Call this function from within a ktask_crit_begin_nointr()-block.");
  assertf(self != kproc_kernel(),"Can't exec in kernel process.");
- if __unlikely(!(exec_main->sh_flags&KMODFLAG_CANEXEC))
-  return KE_NOEXEC; // No entry point found
- // Create an environment, based on what is described by the given arguments.
+ if __unlikely(!(exec_main->sh_flags&KMODFLAG_CANEXEC)) {
+  return KE_NOEXEC; /* No entry point found */
+ }
+
+ /* Create an environment, based on what is described by the given arguments. */
  error = kprocenv_init_from_execargs(&newenv,self->p_environ.pe_memmax,
                                      args,args_members_are_kernel);
  if __unlikely(KE_ISERR(error)) return error;
 
+ /* Handle shebang binary:
+  * >> Recursively prepend additional shebang
+  *    arguments and search for the actual binary. */
+ while (KMODKIND_KIND(exec_main->sh_flags) == KMODKIND_SHEBANG) {
+  error = kprocenv_prepend_argv(&newenv,            exec_main->sh_sb_args.sb_argc,
+                               (char const *const *)exec_main->sh_sb_args.sb_argv);
+  if __unlikely(KE_ISERR(error)) { kprocenv_quit(&newenv); return error; }
+  exec_main = exec_main->sh_sb_ref;
+ }
+
  if ((root = kproc_getroottask(self)) != NULL) {
-  // Terminate all threads in the current process, except for the calling one.
+  /* Terminate all threads in the current process, except for the calling one. */
   ktask_terminateex_k(root,NULL,KTASKOPFLAG_RECURSIVE|
                       KTASKOPFLAG_ASYNC|KTASKOPFLAG_NOCALLER);
   ktask_decref(root);
  }
- // NOTE: The process should not be a zombie at this point,
- //       as we (being a critical task) are still alive.
+ /* NOTE: The process should not be a zombie at this point,
+  *       as we (being a critical task) are still alive. */
  error = kproc_locks(self,KPROC_LOCK_MODS|KPROC_LOCK_TLSMAN|KPROC_LOCK_ENVIRON);
  assertf(KE_ISOK(error),"Why did this fail? %d",error);
  error = krwlock_beginwrite(&self->p_shm.s_lock);
@@ -146,12 +158,12 @@ kproc_exec(struct kshlib *__restrict exec_main,
  kproc_delmods(self);
  assert(!self->p_modules.pms_moda);
 
- // Delete all user-level memory task, but exclude the tab
- // associated with the user-stack of the calling thread.
- // >> This way, we can simply re-use its stack and don't
- //    have to worry about failing to allocate a new one below.
- // >> This also gives user-level code more control by allowing them
- //    to specify a custom stack to be used for exec-ed processes.
+ /* Delete all user-level memory task, but exclude the tab
+  * associated with the user-stack of the calling thread.
+  * >> This way, we can simply re-use its stack and don't
+  *    have to worry about failing to allocate a new one below.
+  * >> This also gives user-level code more control by allowing them
+  *    to specify a custom stack to be used for exec-ed processes. */
  kshm_unmap_unlocked(kproc_getshm(self),NULL,
                     ((size_t)caller_thread->t_ustackvp)/PAGESIZE,
                      KSHMUNMAP_FLAG_NONE);
@@ -174,6 +186,9 @@ kproc_exec(struct kshlib *__restrict exec_main,
  assertf(KE_ISOK(error),"Why did this fail? %d",error);
  kfdman_close_cloexec(&self->p_fdman);
  kproc_unlock(self,KPROC_LOCK_FDMAN);
+
+ /* Make sure we're not loading a shebang script. */
+ assert(KMODKIND_KIND(exec_main->sh_flags) != KMODKIND_SHEBANG);
 
  // Load the given module into the current process.
  // TODO: Everything that could potentially fail about this

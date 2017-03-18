@@ -39,6 +39,12 @@
 
 __DECL_BEGIN
 
+/* Fill unused buffer space with ZEROes during allocation
+ * to prevent random data from being leaked into userspace. */
+#ifndef KIOBUF_ZERO_UNUSED_BUFFER
+#define KIOBUF_ZERO_UNUSED_BUFFER 1
+#endif
+
 /* An I/O Buffer for one-directional read/write.
  * >> Specially designed to be written to from
  *    something like an interrupt handler, while
@@ -84,24 +90,25 @@ extern void kiobuf_init(struct kiobuf *__restrict self);
 extern void kiobuf_init_ex(struct kiobuf *__restrict self, __size_t maxsize);
 
 //////////////////////////////////////////////////////////////////////////
-// Destructs a given I/O buffer
+// Destructs a given I/O buffer.
 extern __crit void kiobuf_quit(struct kiobuf *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
-// Closes a given I/O buffer
+// Closes a given I/O buffer, causing most
+// (if not all) succeeding function calls to fail.
 // @return: KE_OK:        The I/O buffer was successfully closed.
 // @return: KS_UNCHANGED: The I/O buffer was already closed.
 extern __crit kerrno_t kiobuf_close(struct kiobuf *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
-// Resets a given I/O buffer
+// Resets a given I/O buffer after it was closed.
 // @return: KE_OK:        The I/O buffer was successfully reset.
 // @return: KS_UNCHANGED: The I/O buffer was not closed.
 extern __crit kerrno_t kiobuf_reset(struct kiobuf *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
-// Discards all unread data from the given I/O
-// buffer, returning the amount of bytes unqueued.
+// Discards all unread data from the given I/O.
+// buffer, returning the amount of bytes removed.
 // @return: 0 : No unread data available, or the given buffer was closed.
 // @return: * : Amount of bytes successfully discarded (Written latest)
 extern __size_t kiobuf_discard(struct kiobuf *__restrict self);
@@ -167,11 +174,11 @@ extern __size_t kiobuf_discard(struct kiobuf *__restrict self);
 // @return: KE_OK:        The I/O interrupt was performed.
 // @return: KS_EMPTY:     The I/O interrupt was scheduled.
 // @return: KE_DESTROYED: The given U/O buffer was closed.
-extern __nonnull((1)) kerrno_t kiobuf_interrupt_c(struct kiobuf *__restrict self);
 #ifdef __INTELLISENSE__
 extern __nonnull((1)) kerrno_t kiobuf_interrupt(struct kiobuf *__restrict self);
 #else
-#define kiobuf_interrupt(self) KTASK_CRIT(kiobuf_interrupt_c(self))
+extern __crit __nonnull((1)) kerrno_t __kiobuf_interrupt_c(struct kiobuf *__restrict self);
+#define kiobuf_interrupt(self) KTASK_CRIT(__kiobuf_interrupt_c(self))
 #endif
 
 //////////////////////////////////////////////////////////////////////////
@@ -179,13 +186,6 @@ extern __nonnull((1)) kerrno_t kiobuf_interrupt(struct kiobuf *__restrict self);
 // NOTE: Setting the maximum size does not retroactively shrink an already allocated buffer.
 // @return: KE_OK:        The size was successfully read/written
 // @return: KE_DESTROYED: The given I/O buffer was closed.
-__local __wunused __nonnull((1,2)) kerrno_t
-kiobuf_getmaxsize_c(struct kiobuf *__restrict self,
-                    __size_t *__restrict result);
-__local __wunused __nonnull((1)) kerrno_t
-kiobuf_setmaxsize_c(struct kiobuf *__restrict self,
-                    __size_t value,
-                    __size_t *__restrict old_value);
 #ifdef __INTELLISENSE__
 extern __wunused __nonnull((1,2)) kerrno_t
 kiobuf_getmaxsize(struct kiobuf *__restrict self,
@@ -195,10 +195,15 @@ kiobuf_setmaxsize(struct kiobuf *__restrict self,
                   __size_t value,
                   __size_t *__restrict old_value);
 #else
-#define kiobuf_getmaxsize(self,result) \
- KTASK_CRIT(kiobuf_getmaxsize_c(self,result))
-#define kiobuf_setmaxsize(self,value,old_value) \
- KTASK_CRIT(kiobuf_setmaxsize_c(self,value,old_value))
+__local __crit __wunused __nonnull((1,2)) kerrno_t
+__kiobuf_getmaxsize_c(struct kiobuf *__restrict self,
+                      __size_t *__restrict result);
+__local __crit __wunused __nonnull((1)) kerrno_t
+__kiobuf_setmaxsize_c(struct kiobuf *__restrict self,
+                      __size_t value,
+                      __size_t *__restrict old_value);
+#define kiobuf_getmaxsize(self,result)          KTASK_CRIT(__kiobuf_getmaxsize_c(self,result))
+#define kiobuf_setmaxsize(self,value,old_value) KTASK_CRIT(__kiobuf_setmaxsize_c(self,value,old_value))
 #endif
 
 
@@ -210,14 +215,14 @@ kiobuf_setmaxsize(struct kiobuf *__restrict self,
 //          the moment this function returns.
 // @return: KE_OK:        The size was successfully stored in '*result'.
 // @return: KE_DESTROYED: The given I/O buffer was closed.
-__local __crit __wunused __nonnull((1,2)) kerrno_t kiobuf_getrsize_c(struct kiobuf const *__restrict self, __size_t *__restrict result);
-__local __crit __wunused __nonnull((1,2)) kerrno_t kiobuf_getwsize_c(struct kiobuf const *__restrict self, __size_t *__restrict result);
 #ifdef __INTELLISENSE__
 extern __wunused __nonnull((1,2)) kerrno_t kiobuf_getrsize(struct kiobuf const *__restrict self, __size_t *__restrict result);
 extern __wunused __nonnull((1,2)) kerrno_t kiobuf_getwsize(struct kiobuf const *__restrict self, __size_t *__restrict result);
 #else
-#define kiobuf_getrsize(self,result) KTASK_CRIT(kiobuf_getrsize_c(self,result))
-#define kiobuf_getwsize(self,result) KTASK_CRIT(kiobuf_getwsize_c(self,result))
+__local __crit __wunused __nonnull((1,2)) kerrno_t __kiobuf_getrsize_c(struct kiobuf const *__restrict self, __size_t *__restrict result);
+__local __crit __wunused __nonnull((1,2)) kerrno_t __kiobuf_getwsize_c(struct kiobuf const *__restrict self, __size_t *__restrict result);
+#define kiobuf_getrsize(self,result) KTASK_CRIT(__kiobuf_getrsize_c(self,result))
+#define kiobuf_getwsize(self,result) KTASK_CRIT(__kiobuf_getwsize_c(self,result))
 #endif
 
 
@@ -233,65 +238,62 @@ extern __wunused __nonnull((1,2)) kerrno_t kiobuf_getwsize(struct kiobuf const *
 //                and not allowed to grow anymore.
 //              - The given 'write_size' was ZERO(0)
 // @return: * : Amount of bytes that were reserved.
-extern __nonnull((1)) __size_t
-kiobuf_reserve_c(struct kiobuf *__restrict self,
-                 __size_t write_size);
 #ifdef __INTELLISENSE__
 extern __nonnull((1)) __size_t
 kiobuf_reserve(struct kiobuf *__restrict self,
                __size_t write_size);
 #else
+extern __crit __nonnull((1)) __size_t
+__kiobuf_reserve_c(struct kiobuf *__restrict self, __size_t write_size);
 #define kiobuf_reserve(self,write_size) \
- KTASK_CRIT(kiobuf_reserve_c(self,write_size))
+ KTASK_CRIT(__kiobuf_reserve_c(self,write_size))
 #endif
 
 
 //////////////////////////////////////////////////////////////////////////
-// Try to release memory by flushing unused buffer memory.
+// Try to release memory by flushing unused buffer data.
 // @return: KE_OK:        The size was successfully read/written.
 // @return: KE_DESTROYED: The given I/O buffer was closed.
 // @return: KE_NOMEM:     Failed to re-allocate the buffer.
 // @return: KS_UNCHANGED: No memory was released.
-extern __nonnull((1)) kerrno_t kiobuf_flush_c(struct kiobuf *__restrict self);
 #ifdef __INTELLISENSE__
 extern __nonnull((1)) kerrno_t kiobuf_flush(struct kiobuf *__restrict self);
 #else
-#define kiobuf_flush(self) KTASK_CRIT(kiobuf_flush_c(self))
+extern __crit __nonnull((1)) kerrno_t __kiobuf_flush_c(struct kiobuf *__restrict self);
+#define kiobuf_flush(self) KTASK_CRIT(__kiobuf_flush_c(self))
 #endif
 
 //////////////////////////////////////////////////////////////////////////
 // Read/Write generic memory to/from a given I/O buffer.
 // @param: mode:        Block configuration to use.
 // @param: rsize|wsize: Amount of bytes transferred after a success call.
-// @return: KE_OK:        Up to 'bufsize' bytes were transferred (exact size is stored in '*rsize' / '*wsize')
+// @return: KE_OK:        Up to 'bufsize' bytes were transferred (exact amount is stored in '*rsize' / '*wsize')
 // @return: KE_DESTROYED: The given I/O buffer was closed.
 // @return: KE_FAULT:     [kiobuf_user_*] A given pointer was faulty.
 // @return: KE_TIMEDOUT:  [!KIO_BLOCKNONE] A timeout previously set using alarm() has expired.
 // @return: KE_INTR:      [!KIO_BLOCKNONE] The calling thread was interrupted.
-// @return: KS_EMPTY:     [kiobuf_read&KIO_BLOCKFIRST] The I/O buffer was interrupted using 'kiobuf_interrupt' ('*rsize' is set to ZERO(0)).
-// NOTE: [kiobuf_write] Neither the 'KIO_PEEK', nor the 'KIO_QUICKMOVE' flag is supported.
-extern __wunused __nonnull((1,4)) kerrno_t kiobuf_read_c(struct kiobuf *__restrict self, void *buf, __size_t bufsize, __size_t *__restrict rsize, kioflag_t mode);
-extern __wunused __nonnull((1,4)) kerrno_t kiobuf_write_c(struct kiobuf *__restrict self, void const *buf, __size_t bufsize, __size_t *__restrict wsize, kioflag_t mode);
+// @return: KS_EMPTY:     [kiobuf_{user_}read&KIO_BLOCKFIRST] The I/O buffer was interrupted using 'kiobuf_interrupt' ('*rsize' is set to ZERO(0)).
+// NOTE: [kiobuf_{user_}write] Neither the 'KIO_PEEK', nor the 'KIO_QUICKMOVE' flag is supported.
 #ifdef __INTELLISENSE__
 extern __wunused __nonnull((1,4)) kerrno_t kiobuf_read(struct kiobuf *__restrict self, void *buf, __size_t bufsize, __size_t *__restrict rsize, kioflag_t mode);
 extern __wunused __nonnull((1,4)) kerrno_t kiobuf_write(struct kiobuf *__restrict self, void const *buf, __size_t bufsize, __size_t *__restrict wsize, kioflag_t mode);
 extern __wunused __nonnull((1,4)) kerrno_t kiobuf_user_read(struct kiobuf *__restrict self, void *buf, __size_t bufsize, __size_t *__restrict rsize, kioflag_t mode);
 extern __wunused __nonnull((1,4)) kerrno_t kiobuf_user_write(struct kiobuf *__restrict self, void const *buf, __size_t bufsize, __size_t *__restrict wsize, kioflag_t mode);
-extern __wunused __nonnull((1,4)) kerrno_t kiobuf_user_read_c(struct kiobuf *__restrict self, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict rsize, kioflag_t mode);
-extern __wunused __nonnull((1,4)) kerrno_t kiobuf_user_write_c(struct kiobuf *__restrict self, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize, kioflag_t mode);
 #else
-extern __wunused __nonnull((1,4)) kerrno_t __kiobuf_user_read_c(struct kiobuf *__restrict self, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict rsize, kioflag_t mode);
-extern __wunused __nonnull((1,4)) kerrno_t __kiobuf_user_write_c(struct kiobuf *__restrict self, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize, kioflag_t mode);
-#define kiobuf_user_read_c(self,buf,bufsize,rsize,mode) \
- (KTASK_ISKEPD_P ? kiobuf_read_c(self,buf,bufsize,rsize,mode)\
-          : __kiobuf_user_read_c(self,buf,bufsize,rsize,mode))
-#define kiobuf_user_write_c(self,buf,bufsize,wsize,mode) \
- (KTASK_ISKEPD_P ? kiobuf_write_c(self,buf,bufsize,wsize,mode)\
-          : __kiobuf_user_write_c(self,buf,bufsize,wsize,mode))
-#define kiobuf_read(self,buf,bufsize,rsize,mode)       KTASK_CRIT(kiobuf_read_c(self,buf,bufsize,rsize,mode))
-#define kiobuf_write(self,buf,bufsize,wsize,mode)      KTASK_CRIT(kiobuf_write_c(self,buf,bufsize,wsize,mode))
-#define kiobuf_user_read(self,buf,bufsize,rsize,mode)  KTASK_CRIT(kiobuf_user_read_c(self,buf,bufsize,rsize,mode))
-#define kiobuf_user_write(self,buf,bufsize,wsize,mode) KTASK_CRIT(kiobuf_user_write_c(self,buf,bufsize,wsize,mode))
+extern __crit __wunused __nonnull((1,4)) kerrno_t __kiobuf_read_c(struct kiobuf *__restrict self, void *buf, __size_t bufsize, __size_t *__restrict rsize, kioflag_t mode);
+extern __crit __wunused __nonnull((1,4)) kerrno_t __kiobuf_write_c(struct kiobuf *__restrict self, void const *buf, __size_t bufsize, __size_t *__restrict wsize, kioflag_t mode);
+extern __crit __wunused __nonnull((1,4)) kerrno_t __kiobuf_user_read_c_impl(struct kiobuf *__restrict self, __user void *buf, __size_t bufsize, __kernel __size_t *__restrict rsize, kioflag_t mode);
+extern __crit __wunused __nonnull((1,4)) kerrno_t __kiobuf_user_write_c_impl(struct kiobuf *__restrict self, __user void const *buf, __size_t bufsize, __kernel __size_t *__restrict wsize, kioflag_t mode);
+#define __kiobuf_user_read_c(self,buf,bufsize,rsize,mode) \
+ (KTASK_ISKEPD_P ? __kiobuf_read_c(self,buf,bufsize,rsize,mode)\
+       : __kiobuf_user_read_c_impl(self,buf,bufsize,rsize,mode))
+#define __kiobuf_user_write_c(self,buf,bufsize,wsize,mode) \
+ (KTASK_ISKEPD_P ? __kiobuf_write_c(self,buf,bufsize,wsize,mode)\
+       : __kiobuf_user_write_c_impl(self,buf,bufsize,wsize,mode))
+#define kiobuf_read(self,buf,bufsize,rsize,mode)       KTASK_CRIT(__kiobuf_read_c(self,buf,bufsize,rsize,mode))
+#define kiobuf_write(self,buf,bufsize,wsize,mode)      KTASK_CRIT(__kiobuf_write_c(self,buf,bufsize,wsize,mode))
+#define kiobuf_user_read(self,buf,bufsize,rsize,mode)  KTASK_CRIT(__kiobuf_user_read_c(self,buf,bufsize,rsize,mode))
+#define kiobuf_user_write(self,buf,bufsize,wsize,mode) KTASK_CRIT(__kiobuf_user_write_c(self,buf,bufsize,wsize,mode))
 #endif
 
 
@@ -301,23 +303,96 @@ extern __wunused __nonnull((1,4)) kerrno_t __kiobuf_user_write_c(struct kiobuf *
 // @param: mode:  One of 'KIOBUF_MODE_*'+set of 'KIOBUF_FLAG_*'
 // @return: KE_OK:        Up to 'max_skip' bytes were successfully skipped.
 // @return: KE_DESTROYED: The given I/O buffer was closed.
-extern __wunused __nonnull((1,3)) kerrno_t
-kiobuf_skip_c(struct kiobuf *__restrict self, __size_t max_skip,
-              __size_t *__restrict skipped_bytes, kioflag_t mode);
+// @return: KE_TIMEDOUT:  [!KIO_BLOCKNONE] A timeout previously set using alarm() has expired.
+// @return: KE_INTR:      [!KIO_BLOCKNONE] The calling thread was interrupted.
+// @return: KS_EMPTY:     [KIO_BLOCKFIRST] The I/O buffer was interrupted using 'kiobuf_interrupt' ('*rsize' is set to ZERO(0)).
 #ifdef __INTELLISENSE__
 extern __wunused __nonnull((1,3)) kerrno_t
 kiobuf_skip(struct kiobuf *__restrict self, __size_t max_skip,
             __size_t *__restrict skipped_bytes, kioflag_t mode);
 #else
+extern __wunused __nonnull((1,3)) kerrno_t
+__kiobuf_skip_c(struct kiobuf *__restrict self, __size_t max_skip,
+                __size_t *__restrict skipped_bytes, kioflag_t mode);
 #define kiobuf_skip(self,max_skip,skipped_bytes,mode) \
- KTASK_CRIT(kiobuf_skip_c(self,max_skip,skipped_bytes,mode))
+ KTASK_CRIT(__kiobuf_skip_c(self,max_skip,skipped_bytes,mode))
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Attempt to recover previously read data, but not yet overwritten data.
+// WARNING: Due to internal data management and automatic GC cleanup,
+//          this function _NEVER_ guaranties being able to recover _ANYTHING_.
+// WARNING: It is impossible for an I/O buffer to differentiate between
+//          memory that is being re-used, and memory that was newly allocated
+//          for use in a buffer. For that reason, it is possible to ~recover~
+//          memory that didn't actually contain previously read data, but
+//          instead contain ZERO-initialized memory, as per convention
+//          to prevent random, free data (potentially containing unencrypted
+//          passwords or the like) from being leaked to user space.
+//       >> Keep in mind that you can unread more than what was actually read!
+// @param: unread_bytes:  Amount of bytes unwritten after a success call.
+// @param: max_unread:    Max amount of bytes to unread.
+// @return: KE_OK:        Up to 'max_unread' bytes were successfully unread.
+// @return: KE_DESTROYED: The given I/O buffer was closed.
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,3)) kerrno_t
+kiobuf_unread(struct kiobuf *__restrict self, __size_t max_read,
+              __size_t *__restrict unread_bytes);
+#else
+extern __crit __wunused __nonnull((1,3)) kerrno_t
+__kiobuf_unread_c(struct kiobuf *__restrict self, __size_t max_unread,
+                  __size_t *__restrict unread_bytes);
+#define kiobuf_unread(self,max_unread,unread_bytes) \
+ KTASK_CRIT(__kiobuf_unread_c(self,max_unread,unread_bytes))
+#endif
+
+
+//////////////////////////////////////////////////////////////////////////
+// Take back previously written, but not yet read bytes.
+// WARNING: Due to race conditions, as well as cache optimizations,
+//          this function _NEVER_ guaranties being able to undo _ANYTHING_.
+// @param: unwritten_bytes: Amount of bytes unwritten after a success call.
+// @param: max_unwrite:     Max amount of bytes to unwrite.
+// @return: KE_OK:          Up to 'max_unwrite' bytes were successfully unwritten.
+// @return: KE_DESTROYED:   The given I/O buffer was closed.
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,3)) kerrno_t
+kiobuf_unwrite(struct kiobuf *__restrict self, __size_t max_unwrite,
+               __size_t *__restrict unwritten_bytes);
+#else
+extern __crit __wunused __nonnull((1,3)) kerrno_t
+__kiobuf_unwrite_c(struct kiobuf *__restrict self, __size_t max_unwrite,
+                   __size_t *__restrict unwritten_bytes);
+#define kiobuf_unwrite(self,max_unwrite,unwritten_bytes) \
+ KTASK_CRIT(__kiobuf_unwrite_c(self,max_unwrite,unwritten_bytes))
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Seek the r/w pointer within validated restrictions, internally
+// calling 'kiobuf_skip', 'kiobuf_unread' and 'kiobuf_unwrite'.
+// >> These functions can be used to implement a SEEK_CUR-style seek() callback
+//    for pipes and PTY devices, as well as other I/O-buffer-based objects.
+// @kiobuf_rseek: off < 0: Call 'kiobuf_unread' to move the r-pointer backwards (fill '*diff' with the amount of unread bytes).
+// @kiobuf_rseek: off > 0: Call 'kiobuf_skip' to move the r-pointer forwards (uses 'KIO_BLOCKNONE'; fill '*diff' with the amount of skipped bytes).
+// @kiobuf_wseek: off < 0: Call 'kiobuf_unwrite' to move the w-pointer backwards (fill '*diff' with the amount of unwritten bytes).
+// @kiobuf_wseek: off > 0: Fill '*diff' with '0' and return KE_OK.
+// @return: KE_OK:        The operation was successful.
+// @return: KE_DESTROYED: The given I/O buffer was closed.
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,3)) kerrno_t kiobuf_rseek(struct kiobuf *__restrict self, __ssize_t off, __size_t *diff);
+extern __wunused __nonnull((1,3)) kerrno_t kiobuf_wseek(struct kiobuf *__restrict self, __ssize_t off, __size_t *diff);
+#else
+extern __crit __wunused __nonnull((1,3)) kerrno_t __kiobuf_rseek_c(struct kiobuf *__restrict self, __ssize_t off, __size_t *diff);
+extern __crit __wunused __nonnull((1,3)) kerrno_t __kiobuf_wseek_c(struct kiobuf *__restrict self, __ssize_t off, __size_t *diff);
+#define kiobuf_rseek(self,off,diff) KTASK_CRIT(__kiobuf_rseek_c(self,off,diff))
+#define kiobuf_wseek(self,off,diff) KTASK_CRIT(__kiobuf_wseek_c(self,off,diff))
 #endif
 
 
 #ifndef __INTELLISENSE__
 __local __crit kerrno_t
-kiobuf_getmaxsize_c(struct kiobuf *__restrict self,
-                    __size_t *__restrict result) {
+__kiobuf_getmaxsize_c(struct kiobuf *__restrict self,
+                      __size_t *__restrict result) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kiobuf(self); kassertobj(result);
@@ -328,9 +403,9 @@ kiobuf_getmaxsize_c(struct kiobuf *__restrict self,
  return error;
 }
 __local __crit kerrno_t
-kiobuf_setmaxsize_c(struct kiobuf *__restrict self,
-                    __size_t value,
-                    __size_t *__restrict old_value) {
+__kiobuf_setmaxsize_c(struct kiobuf *__restrict self,
+                      __size_t value,
+                      __size_t *__restrict old_value) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kiobuf(self); kassertobj(old_value);
@@ -342,8 +417,8 @@ kiobuf_setmaxsize_c(struct kiobuf *__restrict self,
  return error;
 }
 __local __crit kerrno_t
-kiobuf_getrsize_c(struct kiobuf const *__restrict self,
-                  __size_t *__restrict result) {
+__kiobuf_getrsize_c(struct kiobuf const *__restrict self,
+                    __size_t *__restrict result) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kiobuf(self); kassertobj(result);
@@ -355,8 +430,8 @@ kiobuf_getrsize_c(struct kiobuf const *__restrict self,
  return error;
 }
 __local __crit kerrno_t
-kiobuf_getwsize_c(struct kiobuf const *__restrict self,
-                  __size_t *__restrict result) {
+__kiobuf_getwsize_c(struct kiobuf const *__restrict self,
+                    __size_t *__restrict result) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kiobuf(self); kassertobj(result);

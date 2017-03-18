@@ -483,20 +483,23 @@ kaddr2linelist_exec(struct kaddr2linelist const *__restrict self,
 
 
 
-
-
 //////////////////////////////////////////////////////////////////////////
 // === kshlib ===
 void kshlib_destroy(struct kshlib *__restrict self) {
  kassert_object(self,KOBJECT_MAGIC_SHLIB);
  kshlibcache_dellib(self);
- kaddr2linelist_quit(&self->sh_addr2line);
- kreloc_quit(&self->sh_reloc);
- ksecdata_quit(&self->sh_data);
- ksymtable_quit(&self->sh_privatesym);
- ksymtable_quit(&self->sh_weaksym);
- ksymtable_quit(&self->sh_publicsym);
- kshliblist_quit(&self->sh_deps);
+ if (KMODKIND_KIND(self->sh_flags) == KMODKIND_SHEBANG) {
+  kshlib_decref(self->sh_sb_ref);
+  ksbargs_quit(&self->sh_sb_args);
+ } else {
+  kaddr2linelist_quit(&self->sh_addr2line);
+  kreloc_quit(&self->sh_reloc);
+  ksecdata_quit(&self->sh_data);
+  ksymtable_quit(&self->sh_privatesym);
+  ksymtable_quit(&self->sh_weaksym);
+  ksymtable_quit(&self->sh_publicsym);
+  kshliblist_quit(&self->sh_deps);
+ }
  kfile_decref(self->sh_file);
  free(self);
 }
@@ -544,7 +547,7 @@ struct kshlib __kshlib_kernel = {
  /* sh_refcnt                        */0xffff,
  /* sh_file                          */&kshlibkernel_file,
  /* sh_flags                         */KMODFLAG_FIXED|KMODFLAG_LOADED|KMODFLAG_CANEXEC|KMODKIND_KERNEL,
- /* sh_cidx                          */(size_t)-1,
+ /* sh_cidx                          */(size_t)-1,{{
  /* sh_publicsym                     */KSYMTABLE_INIT,
  /* sh_weaksym                       */KSYMTABLE_INIT,
  /* sh_privatesym                    */KSYMTABLE_INIT, /*< TODO: Add all kernel symbols to this for debugging information. */
@@ -568,7 +571,7 @@ struct kshlib __kshlib_kernel = {
  /* sh_callbacks.slc_fini_array_c    */0},
  /* sh_addr2line                     */{
  /* sh_addr2line.a2ll_techc          */0,
- /* sh_addr2line.a2ll_techv          */NULL}
+ /* sh_addr2line.a2ll_techv          */NULL}}}
 };
 
 __crit kerrno_t

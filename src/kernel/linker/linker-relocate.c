@@ -20,8 +20,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_KERNEL_LINKER_RELOCATE_C_INL__
-#define __KOS_KERNEL_LINKER_RELOCATE_C_INL__ 1
+#ifndef __KOS_KERNEL_LINKER_RELOCATE_C__
+#define __KOS_KERNEL_LINKER_RELOCATE_C__ 1
 
 #include <kos/kernel/linker.h>
 #include <kos/kernel/shm.h>
@@ -374,4 +374,4 @@ void kreloc_exec(struct kreloc *__restrict self,
 
 __DECL_END
 
-#endif /* !__KOS_KERNEL_LINKER_RELOCATE_C_INL__ */
+#endif /* !__KOS_KERNEL_LINKER_RELOCATE_C__ */

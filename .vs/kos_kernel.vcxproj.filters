@@ -422,6 +422,9 @@
     <ClCompile Include="..\src\kernel\syscall.c">
       <Filter>src\kernel</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\kernel\linker\linker-shebang.c">
+      <Filter>src\kernel\linker</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\src\kernel\dev\storage-ata-rwlba.c.inl">

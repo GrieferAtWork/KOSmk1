@@ -38,31 +38,9 @@
 #define __has_attribute(x) 0
 #endif
 
-#ifdef __ASSEMBLY__
-#   define __DECL_BEGIN  /* never anything! */
-#   define __DECL_END    /* never anything! */
-#elif defined(__cplusplus)
-#   define __DECL_BEGIN  extern "C" {
-#   define __DECL_END    }
-#else
-#   define __DECL_BEGIN
-#   define __DECL_END
-#endif
 #if __has_feature(__tpp_pragma_push_macro__) || defined(_MSC_VER)\
  || (defined(__TPP_VERSION__) && __TPP_VERSION__ == 103) /* Before "__has_feature" */
 #   define __COMPILER_HAVE_PRAGMA_PUSH_MACRO
-#endif
-
-#if defined(_MSC_VER) || defined(__INTELLISENSE__)
-#   define __COMPILER_PACK_PUSH(n) __pragma(pack(push,n))
-#   define __COMPILER_PACK_POP     __pragma(pack(pop))
-#endif
-
-#ifndef __COMPILER_PACK_PUSH
-#   define __COMPILER_PACK_PUSH(n) /* nothing */
-#endif
-#ifndef __COMPILER_PACK_POP
-#   define __COMPILER_PACK_POP
 #endif
 
 #ifdef __TPP_EVAL /*< TPP FTW! */
@@ -114,6 +92,16 @@
 
 #define __NO_float128
 
+#ifndef __DECL_BEGIN
+#define __DECL_BEGIN /* nothing */
+#define __DECL_END   /* nothing */
+#endif
+
+#ifndef __COMPILER_PACK_PUSH
+#define __COMPILER_PACK_PUSH(n) /* nothing */
+#define __COMPILER_PACK_POP     /* nothing */
+#endif
+
 #ifndef __GCC_VERSION
 #ifdef __GNUC__
 #ifndef __GNUC_MINOR__
@@ -138,11 +126,9 @@
 #   define __compiler_assume(expr) (void)0
 #endif
 #ifndef __compiler_ARRAYSIZE
-#   define __NO_compiler_ARRAYSIZE
 #   define __compiler_ARRAYSIZE(x)  (sizeof(x)/sizeof(*(x)))
 #endif
 #ifndef __compiler_STRINGSIZE
-#   define __NO_compiler_STRINGSIZE
 #   define __compiler_STRINGSIZE(x) (__compiler_ARRAYSIZE(x)-1)
 #endif
 #ifndef __compiler_ALIAS
@@ -174,9 +160,9 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #   define __NO_attribute_vaformat
 #   define __attribute_vaformat(func,fmt_idx,varargs_idx) /* nothing */
 #elif !defined(__STDC_PURE__)
-// KOS adds a few extensions to printf-style functions.
-// >> And since we actually want to use them, hide the
-//    fact that it's a printf-function from GCC.
+/* KOS adds a few extensions to printf-style functions.
+ * >> And since we actually want to use them, hide the
+ *    fact that it's a printf-function from GCC. */
 #   undef  __attribute_vaformat
 #   define __attribute_vaformat(func,fmt_idx,varargs_idx) /* nothing */
 #endif
@@ -294,7 +280,7 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #define __attribute_aligned_c(x) /* nothing */
 #endif /* !__attribute_aligned_c */
 
-// Visibility attributes
+/* Visibility attributes */
 #ifndef __PE__
 #ifdef __public
 #ifndef __export
@@ -411,7 +397,7 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #endif
 
 /* Marks a region of code containing only, or partially code
- * neither written, nor claimed by my (GrieferAtWork).
+ * neither written, nor claimed by me (GrieferAtWork).
  * NOTE: These should be read as recursive, with every region
  *       started with '__NOCLAIM_BEGIN(*)' ending at the associated
  *       '__NOCLAIM_END', where everything '__NOCLAIM_BEGIN' has
@@ -440,10 +426,10 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #define __ref           /* Attribute for a pointer: If non-NULL, this is a reference; indicates reference storage/transfer. */
 #endif
 #ifndef __atomic
-#define __atomic        /* Attribute for members: Access is atomic. */
+#define __atomic        /* Attribute for member/global variables: Access is atomic. */
 #endif
 #ifndef __nomp
-#define __nomp          /* Attribute for functions: (NO)(M)ulti(P)rocessing: Function is not thread-mp. */
+#define __nomp          /* Attribute for functions: (NO)(M)ulti(P)rocessing: Function is not thread-safe. */
 #endif
 #ifndef __crit
 /* Attribute for function: The caller must ensure that 'ktask_iscrit()' protection is enabled.
@@ -456,16 +442,16 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #endif
 
 #ifndef __force
-#define __force           /* Attribute for types: Force casting between otherwise incompatible types. */
+#define __force         /* Attribute for types: Force casting between otherwise incompatible types. */
 #endif
 #ifndef __nocast
-#define __nocast          /* Attribute for types: Don't allow instance of this type to be casted. */
+#define __nocast        /* Attribute for types: Don't allow instance of this type to be casted. */
 #endif
 #ifndef __iomem
-#define __iomem           /* I/O-mapped memory. */
+#define __iomem         /* I/O-mapped memory. */
 #endif
 #ifndef __bitwise__
-#define __bitwise__       /* Attribute for integral types: Don't allow mixing with other types. */
+#define __bitwise__     /* Attribute for integral types: Don't allow mixing with other types. */
 #endif
 #ifndef __chk_user_ptr
 #define __NO_chk_user_ptr 1

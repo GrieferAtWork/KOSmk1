@@ -127,10 +127,6 @@ __local KOBJECT_DEFINE_DECREF(kproc_decref,struct kproc,p_refcnt,kassert_kproc,k
 extern struct kproc __kproc_kernel;
 #define kproc_kernel()  (&__kproc_kernel)
 
-#define kpagedir_user()            kproc_getpagedir(kproc_self())
-#define kpagedir_ismappedu_ro(p,s) kpagedir_ismappedex_b(kpagedir_user(),p,s,PAGEDIR_FLAG_USER,PAGEDIR_FLAG_USER)
-#define kpagedir_ismappedu_rw(p,s) kpagedir_ismappedex_b(kpagedir_user(),p,s,PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE,PAGEDIR_FLAG_USER|PAGEDIR_FLAG_READ_WRITE)
-
 //////////////////////////////////////////////////////////////////////////
 // Create a new root task context (with all permissions enabled)
 extern __crit __ref struct kproc *kproc_newroot(void);
