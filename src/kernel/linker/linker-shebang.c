@@ -118,6 +118,33 @@ void ksbargs_quit(struct ksbargs *__restrict self) {
 }
 
 
+kerrno_t
+ksbargs_prepend(struct ksbargs *__restrict self,
+                size_t argc, char const *const *__restrict argv) {
+ char **new_argv,**iter,**end;
+ size_t new_argc;
+ kassertobj(self);
+ if (!argc) return KE_OK;
+ new_argc = self->sb_argc+argc;
+ new_argv = (char **)realloc(self->sb_argv,new_argc*sizeof(char *));
+ if __unlikely(!new_argv) return KE_NOMEM;
+ memmove(new_argv+argc,new_argv,self->sb_argc*sizeof(char *));
+ end = (iter = new_argv)+argc;
+ for (; iter != end; ++iter,++argv) {
+  if __unlikely((*iter = strdup(*argv)) == NULL) goto err;
+ }
+ self->sb_argc = new_argc;
+ self->sb_argv = new_argv;
+ return KE_OK;
+err:
+ while (iter != new_argv) free(*--iter);
+ memmove(new_argv,new_argv+argc,self->sb_argc*sizeof(char *));
+ self->sb_argv = new_argv;
+ new_argv = (char **)realloc(new_argv,self->sb_argc*sizeof(char *));
+ if (new_argv) self->sb_argv = new_argv;
+ return KE_NOMEM;
+}
+
 
 __crit kerrno_t
 kshlib_shebang_new(struct kshlib **__restrict result,
@@ -173,8 +200,19 @@ kshlib_shebang_new(struct kshlib **__restrict result,
                        &reslib->sh_sb_ref,KTASK_EXEC_FLAG_RESOLVEEXT);
  if __unlikely(KE_ISERR(error)) goto err_args;
 
- /* TODO: While the loaded library is a shebang script, try to recursively
-  *       merge optional arguments to speed up later invokation during exec(). */
+ /* While the referenced library is a shebang script, try to recursively
+  * merge optional arguments to speed up later invokation during exec(). */
+ while (KMODKIND_KIND(reslib->sh_sb_ref->sh_flags) == KMODKIND_SHEBANG) {
+  struct kshlib *myref = reslib->sh_sb_ref;
+  /* Prepend all arguments. - If this fails,
+   * simply ignore the error and stop collapsing. */
+  if __unlikely(KE_ISERR(ksbargs_prepend(&reslib->sh_sb_args,
+                         myref->sh_sb_args.sb_argc,
+                        (char const *const *)myref->sh_sb_args.sb_argv))) break;
+  /* Replace the current shebang reference with the underlying one. */
+  reslib->sh_sb_ref = myref->sh_sb_ref;
+  kshlib_decref(myref);
+ }
 
  /* OK! Everything's checking out. - We've loaded the Shebang script! */
  reslib->sh_flags |= KMODFLAG_LOADED;

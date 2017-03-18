@@ -39,6 +39,7 @@
 #include <kos/kernel/fs/fs.h>
 
 #include "linker-DWARF.h"
+#include <kos/kernel/syslog.h>
 
 __DECL_BEGIN
 
@@ -810,7 +811,7 @@ kshlib_openlib(char const *__restrict name, size_t namemax,
  kerrno_t error; struct kfspathenv env;
  env.env_root = NULL;
  if __likely(KE_ISOK(error = kfspathenv_inituser(&env))) {
-  if (namemax && KFS_ISSEP(name[0])) {
+  if (namemax && (KFS_ISSEP(name[0]) || name[0] == '.')) {
    /* Absolute library path (open directly in respect to chroot-prisons). */
    error = kshlib_openfileenv(&env,name,namemax,result,0);
   } else {
@@ -866,7 +867,8 @@ kshlib_openexe(char const *__restrict name, size_t namemax,
  char *env_path,*env_pathext;
  size_t env_path_size,env_pathext_size;
  if __unlikely(KE_ISERR(error = kfspathenv_inituser(&env))) return error;
- if (!(flags&KTASK_EXEC_FLAG_SEARCHPATH) || (namemax && KFS_ISSEP(name[0]))) {
+ if (!(flags&KTASK_EXEC_FLAG_SEARCHPATH) ||
+      (namemax && (KFS_ISSEP(name[0]) || name[0] == '.'))) {
   /* Absolute executable path (open directly in respect to chroot-prisons). */
   error = kshlib_openfileenv(&env,name,namemax,result,1);
  } else {

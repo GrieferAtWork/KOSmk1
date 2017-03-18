@@ -935,28 +935,27 @@ kdirent_walklast(struct kfspathenv const *__restrict env,
  while (iter != end && *iter && !KFS_ISSEP(*iter)) ++iter;
  part.dn_size = (size_t)(iter-part.dn_name);
  while (part.dn_size && isspace(part.dn_name[part.dn_size-1])) --part.dn_size;
- switch (part.dn_size) {
-  case 2: if (part.dn_name[1] != '.') break;
-  case 1: if (part.dn_name[0] != '.') break;
-   /* Special directory '.' or '..'. */
-   lastpart->dn_hash = 0;
-   lastpart->dn_size = 0;
-   lastpart->dn_name = NULL;
-   if (part.dn_size == 1 || env->env_root == env->env_cwd) {
-    /* Reference to own directory / attempt to surpass
-     * the selected filesystem root is denied. */
-    return kdirent_incref(*newroot = env->env_cwd);
-   }
-   /* If this fails, 'env_root' can't be reached from 'env_cwd'. */
-   kassert_kdirent(env->env_cwd->d_parent);
-   /* Permission to visible parent directory is granted. */
-   return kdirent_incref(*newroot = env->env_cwd->d_parent);
-  default: break;
- }
-
  kdirentname_refreshhash(&part);
  if (iter == end || !*iter) {
   /* Single-part pathname. */
+  switch (part.dn_size) {
+   case 2: if (part.dn_name[1] != '.') break;
+   case 1: if (part.dn_name[0] != '.') break;
+    /* Special directory '.' or '..'. */
+    lastpart->dn_hash = 0;
+    lastpart->dn_size = 0;
+    lastpart->dn_name = NULL;
+    if (part.dn_size == 1 || env->env_root == env->env_cwd) {
+     /* Reference to own directory / attempt to surpass
+      * the selected filesystem root is denied. */
+     return kdirent_incref(*newroot = env->env_cwd);
+    }
+    /* If this fails, 'env_root' can't be reached from 'env_cwd'. */
+    kassert_kdirent(env->env_cwd->d_parent);
+    /* Permission to visible parent directory is granted. */
+    return kdirent_incref(*newroot = env->env_cwd->d_parent);
+   default: break;
+  }
   error = kdirent_incref(*newroot = env->env_cwd);
  } else {
   struct kdirent *usedroot,*newusedroot;
@@ -981,7 +980,7 @@ kdirent_walklast(struct kfspathenv const *__restrict env,
   }
   *newroot = usedroot; /* Inherit reference. */
  }
- *lastpart = part;
+ memcpy(lastpart,&part,sizeof(struct kdirentname));
  return error;
 }
 __crit kerrno_t

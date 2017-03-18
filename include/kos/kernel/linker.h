@@ -452,6 +452,15 @@ ksbargs_init(struct ksbargs *__restrict self,
              char const *__restrict text, size_t textsize);
 extern void ksbargs_quit(struct ksbargs *__restrict self);
 
+//////////////////////////////////////////////////////////////////////////
+// Prepend all arguments from the given argc|argv vector to self,
+// creating strdup()-copies of all strings in the given vector.
+// @return: KE_OK:    Successfully initialized Shebang arguments.
+// @return: KE_NOMEM: Not enough available memory.
+extern __wunused kerrno_t
+ksbargs_prepend(struct ksbargs *__restrict self,
+                __size_t argc, char const *const *__restrict argv);
+
 
 
 struct kshlib {
