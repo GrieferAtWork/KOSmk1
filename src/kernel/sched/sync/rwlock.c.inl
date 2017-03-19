@@ -401,7 +401,7 @@ krwlock_timeoutbeginread(struct krwlock *__restrict self,
  KTASK_CRIT_MARK
  kassert_krwlock(self);
  kassertobj(timeout);
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
 #if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
  return __krwlock_timedbeginread_d(self,&abstime,1);
@@ -501,7 +501,7 @@ krwlock_timeoutbeginwrite(struct krwlock *__restrict self,
  KTASK_CRIT_MARK
  kassert_krwlock(self);
  kassertobj(timeout);
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
 #if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
  return __krwlock_timedbeginwrite_d(self,&abstime,1);
@@ -702,7 +702,7 @@ krwlock_atomic_timeoutupgrade(struct krwlock *__restrict self,
  struct timespec abstime;
  KTASK_CRIT_MARK
  kassert_krwlock(self);
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
 #if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
  return __krwlock_atomic_timedupgrade_d(self,&abstime,1);
@@ -797,7 +797,7 @@ krwlock_timeoutupgrade(struct krwlock *__restrict self,
  struct timespec abstime;
  KTASK_CRIT_MARK
  kassert_krwlock(self);
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
 #if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
  return __krwlock_timedupgrade_d(self,&abstime,1);

@@ -209,7 +209,7 @@ kerrno_t kddist_vtimeoutrecv(struct kddist *__restrict self,
                              struct timespec const *__restrict timeout,
                              void *__restrict buf) {
  struct timespec abstime;
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return kddist_vtimedrecv(self,&abstime,buf);
 }
@@ -246,7 +246,7 @@ kerrno_t kddist_vtimeoutrecv_unregistered(struct kddist *__restrict self,
                                           struct timespec const *__restrict timeout,
                                           void *__restrict buf) {
  struct timespec abstime;
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return kddist_vtimedrecv_unregistered(self,&abstime,buf);
 }
@@ -300,7 +300,7 @@ ssize_t kddist_vtimeoutsend(struct kddist *__restrict self,
                             struct timespec const *__restrict timeout,
                             void *__restrict buf, size_t bufsize) {
  struct timespec abstime;
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return kddist_vtimedsend(self,&abstime,buf,bufsize);
 }
@@ -443,7 +443,7 @@ _kddist_timeoutbeginsend_c_maybeunlock(struct kddist *__restrict self,
                                        struct timespec const *__restrict timeout) {
  struct timespec abstime;
  KTASK_CRIT_MARK
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return _kddist_timedbeginsend_c_maybeunlock(self,&abstime);
 }

@@ -121,13 +121,13 @@ void stress_malloc(void) {
  size_t i;
  size_t n_allocs = 1024*4;
  size_t alloc_each = 4097;
- ktime_getnoworcpu(&start);
+ ktime_getnow(&start);
  allocs = (void **)malloc(n_allocs*sizeof(void *));
  for (i = 0; i < n_allocs; ++i) allocs[i] = malloc(alloc_each);
- ktime_getnoworcpu(&before_free);
+ ktime_getnow(&before_free);
  for (i = 0; i < n_allocs; ++i) free(allocs[i]);
  free(allocs);
- ktime_getnoworcpu(&stop);
+ ktime_getnow(&stop);
  __timespec_sub(&stop,&before_free);
  __timespec_sub(&before_free,&start);
  printf("MALLOC TIME: %I32u.%ld\n",stop.tv_sec,stop.tv_nsec);
@@ -215,23 +215,6 @@ void test_vga(void) {
  realmode_interrupt(BIOS_INTNO_VGA,&regs);
 }
 
-void cpu_test(void) {
- struct timespec tmnow;
- struct timespec timeout = {0,100000000l};
- struct timespec abstime;
- ktime_getnow(&abstime);
- for (;;) {
-  assert(karch_irq_enabled());
-  __timespec_add(&abstime,&timeout);
-  //ktask_abssleep(ktask_self(),&abstime);
-  ktask_sleep(ktask_self(),&timeout);
-  __evalexpr(ktime_getnow(&tmnow));
-  //printf("Sleep: %d:%ld\n",abstime.tv_sec,abstime.tv_nsec);
-  printf("Time:  %d:%ld\n",tmnow.tv_sec,tmnow.tv_nsec);
- }
-}
-
-
 void kernel_main(void) {
 
  // TODO: Parse explicit environ input in exec
@@ -248,7 +231,8 @@ void kernel_main(void) {
  //       own versions of copy_to_user/copy_from_user/copy_in_user!
  // HINT: The way exec does it now is how it's safe to do.
 
- kernel_initialize_cmos();
+ kernel_initialize_time();
+ kernel_initialize_hpet();
  kernel_initialize_tty();
  kernel_initialize_serial();
  kernel_initialize_raminfo(); /*< NOTE: Also initializes arguments/environ. */
@@ -267,10 +251,6 @@ void kernel_main(void) {
  kernel_initialize_syscall();
  kernel_initialize_vga();
  assert(!karch_irq_enabled());
- karch_irq_enable();
-
- //k_sysloglevel = KLOG_TRACE;
- //ktask_suspend(ktask_self());
 
 #define RUN(x) extern void x(void); x()
  //RUN(test_interrupts);
@@ -283,7 +263,6 @@ void kernel_main(void) {
  //test_taskstat();
  //test_write_file();
  //test_vga();
- //cpu_test();
  run_init();
 
  ksyslog_deltty();

@@ -133,7 +133,7 @@ kerrno_t ksockdev_timeoutpollframe_t(struct ksockdev *__restrict self, __be16 et
                                      struct ketherframe **__restrict frame,
                                      struct timespec const *__restrict timeout) {
  struct timespec abstime;
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return ksockdev_timedpollframe_t(self,ether_type,frame,&abstime);
 }

@@ -37,7 +37,7 @@ static hstamp_t emulated_hp_val = 0;
 static hstamp_t emulated_hp_read(void) { return emulated_hp_val; }
 static hstamp_t emulated_hp_next(void) { return emulated_hp_val++; }
 
-struct hpet const ktime_hpet_emulated = {
+struct khpet const khpet_emulated = {
  &emulated_hp_next,
  &emulated_hp_read,
  "emulated",
@@ -46,7 +46,7 @@ struct hpet const ktime_hpet_emulated = {
 
 #ifdef __x86__
 static hstamp_t x86rdtsc_hp_read(void) { return x86_rdtsc(); }
-struct hpet const ktime_hpet_x86rdtsc = {
+struct khpet const khpet_x86rdtsc = {
  &x86rdtsc_hp_read,
  &x86rdtsc_hp_read,
  "x86.rdtsc",

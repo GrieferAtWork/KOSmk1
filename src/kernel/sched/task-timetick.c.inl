@@ -99,7 +99,7 @@ void kcpu_ticknow_unlocked
 #endif
 (struct kcpu *__restrict self) {
  struct timespec now;
- ktime_getnoworcpu(&now);
+ ktime_getnow(&now);
 #ifdef UNLOCKED2
  kcpu_ticktime_unlocked2(self,&now);
 #else

@@ -109,7 +109,7 @@ __crit kerrno_t F(kmmutex_timeoutlock)(struct kmmutex *__restrict self,
  KTASK_CRIT_MARK
  kassert_kmmutex(self);
  kassertobj(timeout);
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return F(kmmutex_timedlock)(self,&abstime,F(lock));
 }

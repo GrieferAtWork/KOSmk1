@@ -264,7 +264,7 @@ kerrno_t ktask_sleep(struct ktask *__restrict self,
  struct timespec abstime;
  kassert_ktask(self);
  kassertobj(timeout);
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return ktask_abssleep(self,&abstime);
 }
@@ -365,7 +365,7 @@ kerrno_t ktask_timeoutjoin(struct ktask *__restrict self,
  kassert_ktask(self);
  kassertobj(timeout);
  kassertobjnull(exitcode);
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return ktask_timedjoin(self,&abstime,exitcode);
 }

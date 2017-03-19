@@ -932,8 +932,12 @@ __public unsigned int alarm(unsigned int seconds) {
  struct timespec newalarm;
  struct timespec oldalarm;
  kerrno_t error;
+#ifdef __KERNEL__
+ ktime_getnow(&abstime);
+#else
  error = ktime_getnow(&abstime);
  if __unlikely(KE_ISERR(error)) goto err;
+#endif
  newalarm = abstime;
  newalarm.tv_sec += seconds;
  error = ktask_setalarm(ktask_self(),&newalarm,&oldalarm);
@@ -952,8 +956,12 @@ __public __useconds_t ualarm(__useconds_t value, __useconds_t interval) {
  struct timespec oldalarm;
  kerrno_t error;
  if (interval) { __set_errno(ENOSYS); return 0; }
+#ifdef __KERNEL__
+ ktime_getnow(&abstime);
+#else
  error = ktime_getnow(&abstime);
  if __unlikely(KE_ISERR(error)) goto err;
+#endif
  newalarm = abstime;
  newalarm.tv_sec += value/1000000;
  newalarm.tv_nsec += (value%1000000)*1000;
@@ -971,12 +979,21 @@ err:
 
 
 __public unsigned int sleep(unsigned int seconds) {
+#ifdef __KERNEL__
+ struct timespec abstime,newtime;
+ ktime_getnow(&abstime);
+ abstime.tv_sec += seconds;
+ if __unlikely(KE_ISERR(ktask_abssleep(ktask_self(),&abstime))) return seconds;
+ ktime_getnow(&newtime);
+ return newtime.tv_sec-(abstime.tv_sec-seconds);
+#else
  struct timespec abstime,newtime;
  if __unlikely(KE_ISERR(ktime_getnow(&abstime))) return seconds;
  abstime.tv_sec += seconds;
  if __unlikely(KE_ISERR(ktask_abssleep(ktask_self(),&abstime))) return seconds;
  if __unlikely(KE_ISERR(ktime_getnow(&newtime))) return 0;
  return newtime.tv_sec-(abstime.tv_sec-seconds);
+#endif
 }
 
 __public int usleep(__useconds_t useconds) {

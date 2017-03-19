@@ -193,7 +193,7 @@ _ksignal_timeoutrecv_andunlock_c(struct ksignal *signal,
  kassert_ksignal(signal);
  assert(ksignal_islocked(signal,KSIGNAL_LOCK_WAIT));
  kassertobj(timeout);
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return _ksignal_timedrecv_andunlock_c(signal,&abstime);
 }

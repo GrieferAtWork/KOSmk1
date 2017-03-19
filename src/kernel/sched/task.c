@@ -530,7 +530,7 @@ extern void ktask_schedule(struct scheddata *state) {
   static int curr = 0;
   static struct timespec lasttime;
   struct timespec tm;
-  ktime_getnoworcpu(&tm);
+  ktime_getnow(&tm);
   ++curr;
   if (tm.tv_sec != lasttime.tv_sec) {
    k_syslogf(KLOG_TRACE,"QUANTUM after %d\n",curr);
@@ -1432,7 +1432,7 @@ ktask_unschedule_ex(struct ktask *__restrict self, ktask_state_t newstate,
 #if 1 /* Check for passed timeout. */
  if (newstate == KTASK_STATE_WAITINGTMO) {
   struct timespec tmnow;
-  ktime_getnoworcpu(&tmnow);
+  ktime_getnow(&tmnow);
   if (__timespec_cmpge(&tmnow,(struct timespec *)arg)) {
    error = KE_TIMEDOUT;
    goto end;
@@ -1443,7 +1443,7 @@ ktask_unschedule_ex(struct ktask *__restrict self, ktask_state_t newstate,
   if (newstate == KTASK_STATE_WAITING) {
    struct timespec tmnow;
    self->t_flags &= ~(KTASK_FLAG_ALARMED);
-   ktime_getnoworcpu(&tmnow);
+   ktime_getnow(&tmnow);
    /* Check for special case: The given timeout has already passed. */
    if (__timespec_cmpge(&tmnow,&self->t_abstime)) {
     error = KE_TIMEDOUT;
@@ -1758,7 +1758,7 @@ ktask_unschedule_aftercrit(struct ktask *__restrict self) {
   case KTASK_STATE_WAITINGTMO:
    /* Check if the timeout has already passed
     * >> This way we can skip having to unschedule the task. */
-   ktime_getnoworcpu(&now);
+   ktime_getnow(&now);
    if (__timespec_cmpge(&now,&self->t_abstime)) {
     self->t_flags |= KTASK_FLAG_TIMEDOUT;
     break;
@@ -1852,7 +1852,7 @@ ktask_reschedule_ex_impl(struct ktask *__restrict self, int hint)
       goto wasterm;
      { struct timespec now;
      case KTASK_STATE_WAITINGTMO:
-      ktime_getnoworcpu(&now);
+      ktime_getnow(&now);
       if (__timespec_cmpge(&now,&self->t_abstime)) {
        self->t_flags |= KTASK_FLAG_TIMEDOUT;
       } else {
@@ -1936,7 +1936,7 @@ do_resched:
      defined(KTASK_ONLEAVEQUANTUM_NEEDTM)) > 1
     {
      struct timespec tmnow;
-     ktime_getnoworcpu(&tmnow);
+     ktime_getnow(&tmnow);
      KTASK_ONRESCHEDULE_TM(self,newcpu,&tmnow);
      KTASK_ONLEAVEQUANTUM_TM(caller,newcpu,&tmnow);
      KTASK_ONENTERQUANTUM_TM(self,newcpu,&tmnow);
@@ -2042,7 +2042,7 @@ kerrno_t ktask_tryyield(void) {
     defined(KTASK_ONENTERQUANTUM_NEEDTM)
   {
    struct timespec tmnow;
-   ktime_getnoworcpu(&tmnow);
+   ktime_getnow(&tmnow);
    KTASK_ONLEAVEQUANTUM_TM(oldtask,cpuself,&tmnow);
    KTASK_ONENTERQUANTUM_TM(cpuself->c_current,cpuself,&tmnow);
   }

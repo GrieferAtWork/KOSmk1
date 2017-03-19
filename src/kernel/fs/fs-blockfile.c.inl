@@ -237,9 +237,8 @@ err_buffer: free(self->bf_buffer); goto err_dirent;
   /* Update the file's last access time
    * NOTE: If this operation fails, silently ignore the error */
   union kinodeattr attr; attr.ia_time.a_id = KATTR_FS_ATIME;
-  if __likely(KE_ISOK(ktime_getnow(&attr.ia_time.tm_time))) {
-   __evalexpr(kinode_kernel_setattr(inode,1,&attr));
-  }
+  ktime_getnow(&attr.ia_time.tm_time);
+  __evalexpr(kinode_kernel_setattr(inode,1,&attr));
  }
  return KE_OK;
 }

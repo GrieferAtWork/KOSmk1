@@ -170,7 +170,7 @@ kcloselock_timeoutclose(struct kcloselock *__restrict self,
  KTASK_CRIT_MARK
  kassert_kcloselock(self);
  kassertobj(timeout);
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return kcloselock_timedclose(self,&abstime);
 }

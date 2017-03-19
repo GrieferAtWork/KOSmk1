@@ -41,7 +41,11 @@ __DECL_BEGIN
 
 __public time_t time(time_t *t) {
  struct timespec result;
+#ifdef __KERNEL__
+ ktime_getnow(&result);
+#else
  if __unlikely(KE_ISERR(ktime_getnow(&result))) result.tv_sec = 0;
+#endif
  if (t) *t = result.tv_sec;
  return result.tv_sec;
 }
@@ -135,6 +139,24 @@ __public extern time_t mktime(struct tm *tm) {
 
 __public int nanosleep(struct timespec const *req,
                        struct timespec *rem) {
+#ifdef __KERNEL__
+ struct timespec abstime;
+ kerrno_t error;
+ ktime_getnow(&abstime);
+ __timespec_add(&abstime,req);
+ error = ktask_abssleep(ktask_self(),&abstime);
+ if (error == KE_INTR) {
+  *rem = abstime;
+  ktime_getnow(&abstime);
+  if __unlikely(__timespec_cmplo(rem,&abstime)) goto norem;
+  __timespec_sub(rem,&abstime);
+ } else {
+norem:
+  rem->tv_nsec = 0;
+  rem->tv_sec = 0;
+ }
+ return error;
+#else
  struct timespec abstime;
  kerrno_t error;
  error = ktime_getnow(&abstime);
@@ -157,6 +179,7 @@ norem:
   return -1;
  }
  return 0;
+#endif
 }
 
 
@@ -216,11 +239,15 @@ __public int utime(const char *file, struct utimbuf const *file_times) {
   attrib[1].ia_time.tm_time.tv_sec = file_times->modtime;
   attrib[1].ia_time.tm_time.tv_nsec = 0;
  } else {
+#ifdef __KERNEL__
+  ktime_getnow(&attrib[0].ia_time.tm_time);
+#else
   error = ktime_getnow(&attrib[0].ia_time.tm_time);
   if __unlikely(KE_ISERR(error)) {
    __set_errno(-error);
    return -1;
   }
+#endif
   attrib[1].ia_time.tm_time = attrib[0].ia_time.tm_time;
  }
  error = setattr(fd,KATTR_FS_ATTRS,attrib,sizeof(attrib));

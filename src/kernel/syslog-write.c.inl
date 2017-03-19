@@ -120,7 +120,7 @@ void k_dosyslog(int level, psyslogprefix print_prefix,
 do_cache_prefix:
       {
 #if KLOGFORMAT_PREFIXTIME
-       struct timespec tmnow; ktime_getnoworcpu(&tmnow);
+       struct timespec tmnow; ktime_getnow(&tmnow);
 #endif
 #ifdef USER
        struct kshlib *root_lib = kproc_getrootexe(caller);

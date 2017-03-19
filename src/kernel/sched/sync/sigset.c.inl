@@ -181,7 +181,7 @@ _ksigset_timeoutrecvs_andunlock_c(struct ksigset const *__restrict self,
  struct timespec abstime;
  KTASK_CRIT_MARK
  kassertobj(timeout);
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return _ksigset_timedrecvs_andunlock_c(self,&abstime);
 }

@@ -92,6 +92,7 @@
     <ClInclude Include="..\src\misc\textbits.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\kernel\cmos.c" />
     <ClCompile Include="..\src\kernel\debug.c" />
     <ClCompile Include="..\src\kernel\dev\device.c" />
     <ClCompile Include="..\src\kernel\dev\socket.c" />
@@ -221,6 +222,7 @@
     <None Include="..\src\kernel\socket-packet.c.inl" />
     <None Include="..\src\kernel\syslog-write.c.inl" />
     <None Include="..\src\kernel\time-hpet.c.inl" />
+    <None Include="..\src\kernel\time-rtc.c.inl" />
     <None Include="..\src\kernel\tty-print.c.inl" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

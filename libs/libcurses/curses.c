@@ -1200,7 +1200,7 @@ __public int curs_set(int visibility) {
 
 __public int napms(int ms) {
  struct timespec abstime;
- if (KE_ISERR(ktime_getnoworcpu(&abstime))) return ERR;
+ if (KE_ISERR(ktime_getnow(&abstime))) return ERR;
  abstime.tv_nsec += (ms%1000)*1000000;
  abstime.tv_sec  += (ms/1000);
  while (abstime.tv_nsec >= 1000000000) {

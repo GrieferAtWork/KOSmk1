@@ -425,6 +425,9 @@
     <ClCompile Include="..\src\kernel\linker\linker-shebang.c">
       <Filter>src\kernel\linker</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\kernel\cmos.c">
+      <Filter>src\kernel</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\src\kernel\dev\storage-ata-rwlba.c.inl">
@@ -673,6 +676,9 @@
       <Filter>src\kernel\sched</Filter>
     </None>
     <None Include="..\src\kernel\time-hpet.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
+    <None Include="..\src\kernel\time-rtc.c.inl">
       <Filter>src\kernel</Filter>
     </None>
   </ItemGroup>

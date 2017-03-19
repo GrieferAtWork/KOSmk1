@@ -98,7 +98,7 @@ kerrno_t ksem_timoutwait(struct ksem *__restrict self,
  struct timespec abstime;
  kassert_ksem(self);
  kassertobj(timeout);
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return ksem_timedwait(self,&abstime);
 }

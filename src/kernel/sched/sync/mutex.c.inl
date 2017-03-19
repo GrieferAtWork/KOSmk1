@@ -174,7 +174,7 @@ kmutex_timeoutlock(struct kmutex *__restrict self,
  KTASK_CRIT_MARK
  kassert_kmutex(self);
  kassertobj(timeout);
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return kmutex_timedlock(self,&abstime);
 }

@@ -109,9 +109,9 @@ void kernel_initialize_process(void) {
  __kproc_kernel.p_threads.t_taska = 1;
  __kproc_kernel.p_threads.t_taskv[0] = ktask_zero();
 #if KCONFIG_HAVE_TASK_STATS_START
- ktime_getnoworcpu(&ktask_zero()->t_stats.ts_abstime_start);
+ ktime_getnow(&ktask_zero()->t_stats.ts_abstime_start);
 #else
- ktime_getnoworcpu(&__kernel_boot_time);
+ ktime_getnow(&__kernel_boot_time);
 #endif
  __kproc_kernel.p_threads.t_freep = 1;
  assert(__kproc_kernel.p_pid == 0);

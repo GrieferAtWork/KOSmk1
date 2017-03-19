@@ -244,6 +244,7 @@ RUNTIME_REGION_DEFINE(NOIRQ);
 //       >> KTASK_CRIT_END
 #if KCONFIG_HAVE_IRQ
 #ifdef CONFIG_COMPILETIME_NOINTERRUPT_OPTIMIZATIONS
+#define NOIRQ_MARK                          REGION_MARK(NOIRQ,!karch_irq_enabled)
 #define NOIRQ_BEGIN                         REGION_ENTER(NOIRQ,!karch_irq_enabled,karch_irq_disable)
 #define NOIRQ_END                           REGION_LEAVE(NOIRQ,karch_irq_enable)
 #define NOIRQ_BREAK                         REGION_BREAK(NOIRQ,karch_irq_enable)
@@ -266,6 +267,7 @@ RUNTIME_REGION_DEFINE(NOIRQ);
  COMPILER_REGION_ENTER_LOCK_VOLATILE(NOIRQ,!karch_irq_enabled,karch_irq_disable,\
                                      karch_irq_enable,ob,readvolatile,trylock,unlock)
 #else
+#define NOIRQ_MARK                          RUNTIME_REGION_MARK(NOIRQ,!karch_irq_enabled)
 #define NOIRQ_BEGIN                         RUNTIME_REGION_ENTER(NOIRQ,!karch_irq_enabled,karch_irq_disable)
 #define NOIRQ_END                           RUNTIME_REGION_LEAVE(NOIRQ,karch_irq_enable)
 #define NOIRQ_BREAK                         RUNTIME_REGION_BREAK(NOIRQ,karch_irq_enable)
@@ -297,6 +299,7 @@ RUNTIME_REGION_DEFINE(NOIRQ);
  })
 
 #else
+#define NOIRQ_MARK                  /* nothing */
 #define NOIRQ_BEGIN                 {
 #define NOIRQ_END                   ;}
 #define NOIRQ_BREAK                 ;

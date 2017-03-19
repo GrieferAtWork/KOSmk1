@@ -479,7 +479,7 @@ extern void ktaskstat_init(struct ktaskstat *self);
 #define ktaskstat_init(self) \
  __xblock({ struct ktaskstat *const __ktsself = (self);\
             memset(__ktsself,0,sizeof(struct ktaskstat));\
-            ktime_getnoworcpu(&__ktsself->ts_abstime_start);\
+            ktime_getnow(&__ktsself->ts_abstime_start);\
             (void)0;\
  })
 #else
@@ -515,20 +515,20 @@ extern void ktaskstat_on_leavesleep(struct ktaskstat *self);
 #if KCONFIG_HAVE_TASK_STATS_QUANTUM
 __local void ktaskstat_on_enterquantum_tm(struct ktaskstat *self, struct timespec const *tmnow) { __ktaskstat_on_entertm(ts_reltime_run,ts_abstime_quantum_start) }
 __local void ktaskstat_on_leavequantum_tm(struct ktaskstat *self, struct timespec const *tmnow) { __ktaskstat_on_leavetm(ts_reltime_run,ts_abstime_quantum_start) }
-__local void ktaskstat_on_enterquantum(struct ktaskstat *self) { struct timespec tmnow; ktime_getnoworcpu(&tmnow); ktaskstat_on_enterquantum_tm(self,&tmnow); }
-__local void ktaskstat_on_leavequantum(struct ktaskstat *self) { struct timespec tmnow; ktime_getnoworcpu(&tmnow); ktaskstat_on_leavequantum_tm(self,&tmnow); }
+__local void ktaskstat_on_enterquantum(struct ktaskstat *self) { struct timespec tmnow; ktime_getnow(&tmnow); ktaskstat_on_enterquantum_tm(self,&tmnow); }
+__local void ktaskstat_on_leavequantum(struct ktaskstat *self) { struct timespec tmnow; ktime_getnow(&tmnow); ktaskstat_on_leavequantum_tm(self,&tmnow); }
 #endif
 #if KCONFIG_HAVE_TASK_STATS_NOSCHED
 __local void ktaskstat_on_reschedule_tm(struct ktaskstat *self, struct timespec const *tmnow) { __ktaskstat_on_entertm(ts_reltime_nosched,ts_abstime_nosched) }
 __local void ktaskstat_on_unschedule_tm(struct ktaskstat *self, struct timespec const *tmnow) { __ktaskstat_on_leavetm(ts_reltime_nosched,ts_abstime_nosched) }
-__local void ktaskstat_on_reschedule(struct ktaskstat *self) { struct timespec tmnow; ktime_getnoworcpu(&tmnow); ktaskstat_on_reschedule_tm(self,&tmnow); }
-__local void ktaskstat_on_unschedule(struct ktaskstat *self) { struct timespec tmnow; ktime_getnoworcpu(&tmnow); ktaskstat_on_unschedule_tm(self,&tmnow); }
+__local void ktaskstat_on_reschedule(struct ktaskstat *self) { struct timespec tmnow; ktime_getnow(&tmnow); ktaskstat_on_reschedule_tm(self,&tmnow); }
+__local void ktaskstat_on_unschedule(struct ktaskstat *self) { struct timespec tmnow; ktime_getnow(&tmnow); ktaskstat_on_unschedule_tm(self,&tmnow); }
 #endif
 #if KCONFIG_HAVE_TASK_STATS_SLEEP
 __local void ktaskstat_on_entersleep_tm(struct ktaskstat *self, struct timespec const *tmnow) { __ktaskstat_on_entertm(ts_reltime_sleep,ts_abstime_sleep) }
 __local void ktaskstat_on_leavesleep_tm(struct ktaskstat *self, struct timespec const *tmnow) { __ktaskstat_on_leavetm(ts_reltime_sleep,ts_abstime_sleep) }
-__local void ktaskstat_on_entersleep(struct ktaskstat *self) { struct timespec tmnow; ktime_getnoworcpu(&tmnow); ktaskstat_on_entersleep_tm(self,&tmnow); }
-__local void ktaskstat_on_leavesleep(struct ktaskstat *self) { struct timespec tmnow; ktime_getnoworcpu(&tmnow); ktaskstat_on_leavesleep_tm(self,&tmnow); }
+__local void ktaskstat_on_entersleep(struct ktaskstat *self) { struct timespec tmnow; ktime_getnow(&tmnow); ktaskstat_on_entersleep_tm(self,&tmnow); }
+__local void ktaskstat_on_leavesleep(struct ktaskstat *self) { struct timespec tmnow; ktime_getnow(&tmnow); ktaskstat_on_leavesleep_tm(self,&tmnow); }
 #endif
 #undef __ktaskstat_on_entertm
 #undef __ktaskstat_on_leavetm

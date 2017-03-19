@@ -294,7 +294,7 @@ _kaddist_vtimeoutrecv_andunlock(struct kaddist *__restrict self,
                                 void *__restrict buf) {
  KTASK_CRIT_MARK
  struct timespec abstime;
- ktime_getnoworcpu(&abstime);
+ ktime_getnow(&abstime);
  __timespec_add(&abstime,timeout);
  return _kaddist_vtimedrecv_andunlock(self,ticket,&abstime,buf);
 }

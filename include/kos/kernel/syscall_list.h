@@ -33,7 +33,9 @@
 /*[[[deemon
 #include <file>
 #include <util>
+#include <fs>
 
+fs::chdir(fs::path::head(__FILE__));
 local syscalls = [];
 for (local l: file.open("../syscallno.h","r")) {
   local name,id;
@@ -108,7 +110,7 @@ print "#endif /" "* SYSCALL_PAD *" "/";
 /*     29|0x001d */ SYSCALL(kfs_hrdlink)
 /*     30|0x001e */ SYSCALL(ktime_getnow)
 /*     31|0x001f */ SYSCALL(ktime_setnow)
-/*     32|0x0020 */ SYSCALL_NULL
+/*     32|0x0020 */ SYSCALL(ktime_htick)
 /*     33|0x0021 */ SYSCALL(kmem_map)
 /*     34|0x0022 */ SYSCALL(kmem_unmap)
 /*     35|0x0023 */ SYSCALL(kmem_validate)
@@ -164,14 +166,14 @@ print "#endif /" "* SYSCALL_PAD *" "/";
 /*     85|0x0055 */ SYSCALL(kmod_sym)
 /*     86|0x0056 */ SYSCALL(kmod_info)
 /*     87|0x0057 */ SYSCALL(kmod_syminfo)
+/*     88|0x0058 */ SYSCALL(ktime_hfreq)
 #undef SYSCALL_COUNT
-#define SYSCALL_COUNT 88
+#define SYSCALL_COUNT 89
 #ifdef SYSCALL_PAD
 #undef SYSCALL_TOTAL
 #undef SYSCALL_IDBITS
 #define SYSCALL_TOTAL  128
 #define SYSCALL_IDBITS 7
-/*     88|0x0058 */ SYSCALL_PAD
 /*     89|0x0059 */ SYSCALL_PAD
 /*     90|0x005a */ SYSCALL_PAD
 /*     91|0x005b */ SYSCALL_PAD
