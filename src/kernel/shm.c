@@ -1308,7 +1308,6 @@ search_again:
     ? ((root->sb_map_max-addr_max)/PAGESIZE) : start_page);
    if __likely(KE_ISOK(kshmbranch_unmap_portion(proot,pd,start_page,unmap_pages,addr_semi))) {
     result += unmap_pages;
-    goto search_again;
    } else {
     /* This is kind-of bad, but hopefully no one will notice...
      * todo: maybe add a syslog for this? */
@@ -1997,6 +1996,7 @@ kshmbranch_touchall_unlocked(struct kshm *__restrict self,
  uintptr_t new_semi;
  unsigned int new_level;
  kassert_kshm(self);
+ assert(self->s_pd != kpagedir_kernel());
  assert(krwlock_iswritelocked(&self->s_lock));
  kassertobj(proot);
  root = *proot;
@@ -2741,6 +2741,34 @@ ktranslator_copyfromuser(struct ktranslator *__restrict self,
  while ((ksrc = ktranslator_exec(self,src,bytes,&copy_max,0)) != NULL) {
   assert(copy_max <= bytes);
   memcpy(dst,ksrc,copy_max);
+  if ((bytes -= copy_max) == 0) break;
+  *(uintptr_t *)&dst += copy_max;
+  *(uintptr_t *)&src += copy_max;
+ }
+ return bytes;
+}
+size_t
+ktranslator_copyinuser_w(struct ktranslator *__restrict self,
+                         __user void *dst, __user void const *src,
+                         size_t bytes) {
+ size_t max_dst,max_src; __kernel void *kdst,*ksrc;
+ while ((kdst = ktranslator_wexec(self,dst,bytes,&max_dst)) != NULL &&
+        (ksrc = ktranslator_exec(self,src,max_dst,&max_src,0)) != NULL) {
+  memcpy(kdst,ksrc,max_src);
+  if ((bytes -= max_src) == 0) break;
+  *(uintptr_t *)&dst += max_src;
+  *(uintptr_t *)&src += max_src;
+ }
+ return bytes;
+}
+size_t
+ktranslator_copytouser_w(struct ktranslator *__restrict self,
+                         __user void *dst, __kernel void const *src,
+                         size_t bytes) {
+ size_t copy_max; __kernel void *kdst;
+ while ((kdst = ktranslator_wexec(self,dst,bytes,&copy_max)) != NULL) {
+  assert(copy_max <= bytes);
+  memcpy(kdst,src,copy_max);
   if ((bytes -= copy_max) == 0) break;
   *(uintptr_t *)&dst += copy_max;
   *(uintptr_t *)&src += copy_max;
