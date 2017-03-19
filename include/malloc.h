@@ -107,7 +107,7 @@ __DECL_BEGIN
 #elif defined(__i386__) && __SIZEOF_POINTER__ >= 4
 #   define __ATTRIBUTE_ALIGNED_PAGE __attribute_aligned_c(4096)
 #else
-#   define __ATTRIBUTE_ALIGNED_PAGE    
+#   define __ATTRIBUTE_ALIGNED_PAGE /* nothing */
 #endif
 #if __SIZEOF_POINTER__ == 8
 #   define __ATTRIBUTE_ALIGNED_DEFAULT __attribute_aligned_c(16)
@@ -116,7 +116,7 @@ __DECL_BEGIN
 #elif __SIZEOF_POINTER__ == 2
 #   define __ATTRIBUTE_ALIGNED_DEFAULT __attribute_aligned_c(4)
 #else
-#   define __ATTRIBUTE_ALIGNED_DEFAULT
+#   define __ATTRIBUTE_ALIGNED_DEFAULT /* nothing */
 #endif
 
 #ifndef __MALLOC_C__

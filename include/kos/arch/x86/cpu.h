@@ -20,31 +20,26 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_TIME_H__
-#define __KOS_TIME_H__ 1
+#ifndef __KOS_ARCH_X86_CPU_H__
+#define __KOS_ARCH_X86_CPU_H__ 1
 
-#include <kos/config.h>
-
-#ifndef __NO_PROTOTYPES
 #include <kos/compiler.h>
-#include <kos/syscall.h>
-#include <kos/errno.h>
+#include <kos/endian.h>
+#include <kos/kernel/types.h>
 
-#ifdef __KERNEL__
-#include <kos/kernel/time.h>
-#endif
 
 __DECL_BEGIN
 
-struct timespec;
 
-#ifndef __KERNEL__
-__local _syscall1(kerrno_t,ktime_getnow,struct timespec *,ptm);
-__local _syscall1(kerrno_t,ktime_setnow,struct timespec *,ptm);
-#endif /* !__KERNEL__ */
+__forcelocal __u64 x86_rdtsc(void) {
+ register __u32 lo,hi;
+ __asm__("rdtsc\n" : "=a" (lo), "=d" (hi) : : "memory");
+ return (__u64)lo | ((__u64)hi << 32);
+}
+
+
+
 
 __DECL_END
 
-#endif
-
-#endif /* !__KOS_TIME_H__ */
+#endif /* !__KOS_ARCH_X86_CPU_H__ */

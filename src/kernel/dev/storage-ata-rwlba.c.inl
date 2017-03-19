@@ -33,6 +33,7 @@ __DECL_BEGIN
 #endif
 
 
+
 #ifdef LBA48
 static kerrno_t __katadev_pio48_readlba
 #else
@@ -95,7 +96,7 @@ static kerrno_t __katadev_pio28_readlba
   iter += KATA_SECTORSIZE/sizeof(__u16);
  }
  *readsectors = (size_t)seci;
- kata_sleep(bus);
+ //kata_sleep(bus);
 end:
  NOIRQ_END
  return error;

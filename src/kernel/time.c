@@ -32,19 +32,205 @@
 #include <stdio.h>
 #include <sys/io.h>
 #include <time.h>
+#ifdef __x86__
+#include <kos/arch/x86/cpuid.h>
+#endif
 
 __DECL_BEGIN
 
-kerrno_t ktime_getnow(struct timespec *__restrict tmnow) {
+
+/* CMOS/RTC time when time was last synced.
+ * This is the base value when calculating actual time. */
+static time_t timer_time = 0;
+
+/* Time tick when the last synced second started
+ * This is the HPET base value describing its ticks when 'timer_time'. */
+static hstamp_t timer_ticklast = 0;
+
+/* Amount of ticks per second as read from the active HPET.
+ * NOTE: Is ZERO(0) when no data has been collected yet. */
+hstamp_t timer_tickfreq = 0;
+
+/* Set the timer's tick frequency to the given value. */
+#define SET_TICKFREQ(f) (timer_tickfreq = (f))
+
+
+struct hpet ktime_hpet = {NULL,NULL,NULL};
+
+void kernel_initialize_time(void) {
  struct cmostime cmtime;
- kerrno_t error;
- kassertobj(tmnow);
- error = cmos_getnow(&cmtime);
- if (error == KE_OK) {
-  tmnow->tv_sec = cmostime_to_time(&cmtime);
-  tmnow->tv_nsec = 0;
+#ifdef __x86__
+ if (x86_cpufeatures()&X86_CPUFEATURE_TSC) {
+  /* Can use the X86 rdtsc counter. */
+  memcpy(&ktime_hpet,&ktime_hpet_x86rdtsc,sizeof(struct hpet));
+  goto has_hpet;
  }
- return error;
+#endif
+
+ /* Fallback: Use an emulated HPET timer if there's no other option. */
+ memcpy(&ktime_hpet,&ktime_hpet_emulated,sizeof(struct hpet));
+ goto has_hpet;
+has_hpet:
+ cmos_getnow(&cmtime);
+ timer_ticklast = (*ktime_hpet.hp_next)();
+ timer_time     = cmostime_to_time(&cmtime);
+}
+
+
+#define KTIME_DYNAMIC_SYNC 0 /* TODO: This doesn't work correctly. */
+
+/* High precision timers & sub-second sleep function */
+void ktime_irqtick(void) {
+ /* In seconds: Stability threshold to autoconfigure 'timer_delay'
+  *             against and try to align IRQ time with.
+  * Defining this as something other than ONE(1) is possible, but may degrade precision. */
+#define TIMER_FREQ_STABILITY 1
+#if KTIME_DYNAMIC_SYNC
+ /* Current resync delay:
+  *  - In IRQ ticks
+  *  - Tries to align itself to fire every 'TIMER_FREQ_STABILITY' seconds.
+  * >> This could be considered as IRQ_TICKS_PER_SECOND. */
+ static unsigned long timer_delay = 8;
+ /* Monotonically increasing IRQ timer used to track how IRQ
+  * ticks have passed since boot. This value is only used to
+  * fire CMOS/RTC sync code every 'timer_delay' IRQ ticks,
+  * meaning it doesn't matter when this rolls over. */
+ static unsigned long timer_irq   = 7;
+ /* Special synchronization variable used to align 'timer_time' with
+  * full seconds, thus preventing seemingly random jumps through time
+  * whenever the CMOS/RTC clock jumps, but 'timer_delay' is not ZERO.
+  * With that in mind, this variable is also used to align get
+  * 'timer_delay' being able to mod 'timer_irq' into ZERO(0) with the
+  * event of the CMOS/RTC clock just having changed its time.
+  * >> It automatically adjusts itself to reduce
+  *    CMOS/RTC lookups to the minimum amount required. */
+ static unsigned long timer_sync  = 20;
+ /* When calculating a new frequency during clock sync,
+  * compare the old frequency against the new.
+  * If the difference is greater than this value, it is likely that
+  * the timer clock isn't aligned to full seconds, which then is
+  * handled by increasing 'timer_sync' to align itself to full
+  * seconds for a duration of 3 seconds in IRQ ticks. */
+ static hstamp_t timer_avgdiff     = 0;
+ static hstamp_t timer_avgdiff_min = 0;
+ static hstamp_t timer_avgdiff_max = 0;
+#endif /* KTIME_DYNAMIC_SYNC */
+ hstamp_t time = (*ktime_hpet.hp_next)();
+ /* Called at the start of a preemption IRQ. */
+#if KTIME_DYNAMIC_SYNC
+ if (!(++timer_irq % timer_delay) ||
+      (timer_sync && timer_sync--))
+#endif /* KTIME_DYNAMIC_SYNC */
+ {
+  /* Resync the timer. */
+  unsigned int passed_second;
+  struct cmostime cmtime;
+  time_t newtime;
+  cmos_getnow(&cmtime);
+  newtime = cmostime_to_time(&cmtime);
+  /* Figure out how many seconds have passed since the last sync. */
+  passed_second = newtime-timer_time;
+  if (passed_second >= TIMER_FREQ_STABILITY) {
+   hstamp_t new_freq;
+#if KTIME_DYNAMIC_SYNC
+   hstamp_t freq_diff;
+   if (passed_second > TIMER_FREQ_STABILITY &&
+       timer_delay > 1 &&
+     !(timer_irq % timer_delay)) { --timer_delay; timer_irq = 0; }
+#endif /* KTIME_DYNAMIC_SYNC */
+   /* Make sure that at least some discernible time has passed */
+   timer_time     = newtime;
+   /* Calculate the new frequency, based on how much time has passed. */
+   new_freq  = (time-timer_ticklast);
+   new_freq /= passed_second;
+   if __unlikely(!new_freq) new_freq = 1; /* Prevent illegal frequencies. */
+#if KTIME_DYNAMIC_SYNC
+   if (timer_tickfreq) {
+    /* Automatically sync with seconds if the new frequency greatly differs from the old.
+     * While all the other code is used to automatically adjust tick frequency to full seconds,
+     * this code */
+    freq_diff = new_freq < timer_tickfreq ? timer_tickfreq-new_freq : new_freq-timer_tickfreq;
+    if (freq_diff > timer_avgdiff_max) {
+     /* Sync with full seconds for the duration of three full ticks.
+      * 3 was chosen to make it very likely that we'll be able to hit at
+      * least one jump in seconds, even if the last one just occurred and the
+      * IRQ frequency will increase before the. */
+     timer_sync = timer_delay*TIMER_FREQ_STABILITY*3;
+     //printf("[TIME] Begin syncing seconds for %lu IRQ ticks after "
+     //                     "unacceptable freq diff of %I64u > %I64u\n",
+     //          timer_sync,freq_diff,timer_avgdiff);
+     /* Define a frequency differential threshold that lazily
+      * adjusts itself to slow changes in frequencies. */
+     if __unlikely(!timer_avgdiff) {
+      timer_avgdiff = freq_diff;
+      goto update_avgdiff2;
+     } else {
+      goto update_avgdiff;
+     }
+    } else if (freq_diff < timer_avgdiff_min) {
+update_avgdiff:
+     timer_avgdiff = (timer_avgdiff+freq_diff)/2;
+update_avgdiff2:
+     /* Take the average between the old frequency different and
+      * the new one, then add a threshold of +1.5 to it. */
+     timer_avgdiff_min = timer_avgdiff/2;
+     timer_avgdiff_max = (timer_avgdiff*3)/2;
+    }
+   }
+#endif /* KTIME_DYNAMIC_SYNC */
+   /* Actually set the new frequency. */
+#if 1
+   SET_TICKFREQ(new_freq);
+#else
+   /* Make frequency changes be lazy. */
+   if (timer_tickfreq) new_freq = (new_freq+timer_tickfreq)/2;
+   SET_TICKFREQ(new_freq);
+#endif
+   /* Update the last  */
+   timer_ticklast = time;
+  }
+#if KTIME_DYNAMIC_SYNC
+  else if (!(timer_irq % timer_delay)) {
+   ++timer_delay;
+   timer_irq = 0;
+  }
+#endif /* KTIME_DYNAMIC_SYNC */
+ }
+}
+
+kerrno_t ktime_getnow(struct timespec *__restrict tmnow) {
+ hstamp_t ticks_passed;
+ NOIRQ_BEGIN
+ if __likely(timer_tickfreq) {
+  tmnow->tv_sec  = timer_time;
+  ticks_passed   = (*ktime_hpet.hp_read)()-timer_ticklast;
+  /* Figure out the amount of nanoseconds that have passed. */
+  ticks_passed  *= UINT64_C(1000000000);
+  ticks_passed  /= timer_tickfreq;
+  tmnow->tv_sec += ticks_passed / 1000000000l;
+  tmnow->tv_nsec = ticks_passed % 1000000000l;
+ } else {
+  /* Special case: Timer isn't configured yet. */
+  struct cmostime cmtime;
+  kassertobj(tmnow);
+  tmnow->tv_sec  = KE_ISOK(cmos_getnow(&cmtime)) ? cmostime_to_time(&cmtime) : 0;
+  tmnow->tv_nsec = 0;
+#if 1
+  if (tmnow->tv_sec > timer_time) {
+   hstamp_t currtick = (*ktime_hpet.hp_read)();
+   unsigned int passed_second = tmnow->tv_sec-timer_time;
+   /* We can calculate initial frequency data. */
+   ticks_passed  = (currtick-timer_ticklast);
+   ticks_passed /= passed_second;
+   if __unlikely(!ticks_passed) ticks_passed = 1; /* Prevent illegal frequencies. */
+   SET_TICKFREQ(ticks_passed);
+   timer_time     = tmnow->tv_sec;
+   timer_ticklast = currtick;
+  }
+#endif
+ }
+ NOIRQ_END
+ return KE_OK;
 }
 kerrno_t ktime_setnow_k(struct timespec const *__restrict tmnow) {
  struct cmostime cmtime;
@@ -57,16 +243,8 @@ kerrno_t ktime_setnow(struct timespec const *__restrict tmnow) {
  return ktime_setnow_k(tmnow);
 }
 
-void ktime_getcpu(struct timespec *__restrict tmcpu) {
- kassertobj(tmcpu);
- /* TODO: Required for timeouts used by 'KTASK_STATE_WAITINGTMO' */
- tmcpu->tv_nsec = 0;
- tmcpu->tv_sec = 0;
-}
-
-
 void ktime_getnoworcpu(struct timespec *__restrict tmval) {
- if (ktime_getnow(tmval) != KE_OK) ktime_getcpu(tmval);
+ __evalexpr(ktime_getnow(tmval));
 }
 
 
@@ -87,10 +265,10 @@ static __u8 cmos_regb;
 #   define cmos_setregister(reg,v) (outb(CMOS_IOPORT_CODE,reg),outb(v,CMOS_IOPORT_DATA))
 #endif
 
-
 void kernel_initialize_cmos(void) {
+ cmos_regb      = cmos_getregister(CMOS_REGISTER_B);
+ kernel_initialize_time();
  k_syslogf(KLOG_INFO,"[init] CMOS...\n");
- cmos_regb = cmos_getregister(CMOS_REGISTER_B);
 }
 
 time_t cmostime_to_time(struct cmostime const *__restrict cmtime) {
@@ -237,6 +415,10 @@ kerrno_t cmos_setnow(struct cmostime const *__restrict tmnow) {
 
 __DECL_END
 
+#ifndef __INTELLISENSE__
+#include "time-hpet.c.inl"
+#endif
+
 
 #include <kos/kernel/proc.h>
 #include <kos/kernel/syscall.h>
@@ -263,13 +445,7 @@ KSYSCALL_DEFINE1(kerrno_t,ktime_setnow,__user struct timespec *,ptm) {
  return error;
 }
 
-KSYSCALL_DEFINE1(kerrno_t,ktime_getcpu,struct timespec *,ptm) {
- struct timespec tmnow;
- ktime_getcpu(&tmnow);
- if __unlikely(copy_to_user(ptm,&tmnow,sizeof(tmnow))) return KE_FAULT;
- return KE_OK;
-}
-
 __DECL_END
+
 
 #endif /* !__KOS_KERNEL_TIME_C__ */

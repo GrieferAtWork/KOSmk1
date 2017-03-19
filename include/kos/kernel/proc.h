@@ -635,11 +635,11 @@ kproc_insmod_single_unlocked(struct kproc *__restrict self,
 extern __crit __wunused __nonnull((1,2,3)) kerrno_t
 kproc_insmod_unlocked(struct kproc *__restrict self,
                       struct kshlib *__restrict module,
-                      kmodid_t *module_id);
+                      kmodid_t *__restrict module_id);
 extern __crit __wunused __nonnull((1,2,3)) kerrno_t
 kproc_insmod_c(struct kproc *__restrict self,
                struct kshlib *__restrict module,
-               kmodid_t *module_id);
+               kmodid_t *__restrict module_id);
 #define kproc_insmod(self,module,module_id) \
  KTASK_CRIT(kproc_insmod_c(self,module,module_id))
 

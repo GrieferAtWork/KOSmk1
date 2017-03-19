@@ -1256,12 +1256,31 @@ struct ktranslator {
 // @return: KE_DESTROYED: The associated SHM was closed.
 #ifdef __INTELLISENSE__
 extern __crit kerrno_t ktranslator_init(struct ktranslator *__restrict self, struct ktask *__restrict caller);
+extern __crit kerrno_t ktranslator_init_shm(struct ktranslator *__restrict self, struct kshm *__restrict shm);
 extern __crit void     ktranslator_quit(struct ktranslator *__restrict self);
 #else
 #define ktranslator_init(self,caller) \
  (/*KTASK_ISKEPD_P   ? (__ktranslator_init_kepd(self),KE_OK) :*/\
   KTASK_ISNOINTR_P ?  __ktranslator_init_nointr(self,caller)\
                    :  __ktranslator_init_intr(self,caller))
+__local __crit kerrno_t
+ktranslator_init_shm(struct ktranslator *__restrict self,
+                     struct kshm *__restrict shm) {
+ kerrno_t error = KE_OK;
+ KTASK_CRIT_MARK
+ kassertobj(self);
+ kassert_kshm(shm);
+ self->t_shm = shm;
+ if ((self->t_epd = shm->s_pd) == kpagedir_kernel()) {
+  self->t_flags = KTRANSLATOR_FLAG_KEPD;
+ } else {
+  self->t_flags = KTRANSLATOR_FLAG_LOCK|KTRANSLATOR_FLAG_SEPD;
+  KTASK_NOINTR_BEGIN
+  error = krwlock_beginread(&self->t_shm->s_lock);
+  KTASK_NOINTR_END
+ }
+ return error;
+}
 __local __crit kerrno_t
 __ktranslator_init_intr(struct ktranslator *__restrict self,
                         struct ktask *__restrict caller);
@@ -1343,6 +1362,8 @@ __ktranslator_wexec_impl(struct ktranslator *__restrict self,
 extern __size_t ktranslator_copyinuser(struct ktranslator *__restrict self, __user void *dst, __user void const *src, __size_t bytes);
 extern __size_t ktranslator_copytouser(struct ktranslator *__restrict self, __user void *dst, __kernel void const *src, __size_t bytes);
 extern __size_t ktranslator_copyfromuser(struct ktranslator *__restrict self, __kernel void *dst, __user void const *src, __size_t bytes);
+extern __size_t ktranslator_copyinuser_w(struct ktranslator *__restrict self, __user void *dst, __user void const *src, __size_t bytes);
+extern __size_t ktranslator_copytouser_w(struct ktranslator *__restrict self, __user void *dst, __kernel void const *src, __size_t bytes);
 
 
 

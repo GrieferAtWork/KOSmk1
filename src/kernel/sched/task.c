@@ -513,14 +513,18 @@ struct kcpu *kcpu_leastload(void) {
  __asm_volatile__("lldt %0\n" : : "g" (x))
 
 
+extern void ktime_irqtick(void);
 __local kerrno_t kcpu_rotate_unlocked(struct kcpu *__restrict self);
 extern void ktask_schedule(struct scheddata *state) {
  /* IRQ Task scheduling callback.
   * WARNING: This function is called without
   *          an up-to-date ktask_self() value! */
- struct kcpu *cpuself = kcpu_self();
+ struct kcpu *cpuself;
  struct ktask *prevtask,*currtask;
+ /* Auto-calibrate the timer. */
+ ktime_irqtick();
  /*serial_printf(SERIAL_01,".");*/
+ cpuself = kcpu_self();
 #if 0
  {
   static int curr = 0;
@@ -1425,6 +1429,16 @@ ktask_unschedule_ex(struct ktask *__restrict self, ktask_state_t newstate,
   error = KE_DESTROYED;
   goto end;
  }
+#if 1 /* Check for passed timeout. */
+ if (newstate == KTASK_STATE_WAITINGTMO) {
+  struct timespec tmnow;
+  ktime_getnoworcpu(&tmnow);
+  if (__timespec_cmpge(&tmnow,(struct timespec *)arg)) {
+   error = KE_TIMEDOUT;
+   goto end;
+  }
+ }
+#endif
  if __unlikely(self->t_flags&KTASK_FLAG_ALARMED) {
   if (newstate == KTASK_STATE_WAITING) {
    struct timespec tmnow;
@@ -1441,6 +1455,7 @@ ktask_unschedule_ex(struct ktask *__restrict self, ktask_state_t newstate,
    self->t_flags &= ~(KTASK_FLAG_ALARMED);
   }
  }
+
  /* Check for special case: State didn't change/waiting --> waiting. */
  if (self->t_state == newstate || (
   KTASK_STATE_ISWAITING(self->t_state) &&

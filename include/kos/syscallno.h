@@ -62,7 +62,6 @@ __DECL_BEGIN
 
 #define SYS_ktime_getnow  30 /*< _syscall1(kerrno_t,ktime_getnow,struct timespec *,ptm); */
 #define SYS_ktime_setnow  31 /*< _syscall1(kerrno_t,ktime_setnow,struct timespec *,ptm); */
-#define SYS_ktime_getcpu  32 /*< _syscall1(kerrno_t,ktime_getcpu,struct timespec *,ptm); */
 
 #define SYS_kmem_map      33 /*< _syscall6(void *,kmem_map,void *,hint,size_t,length,int,prot,int,flags,int,fd,__u64,offset); */
 #define SYS_kmem_unmap    34 /*< _syscall2(kerrno_t,kmem_unmap,void *,addr,size_t,length); */

@@ -39,7 +39,8 @@ void kernel_initialize_vga(void) {
  __u8 v = inb_p(VGA_MIS_R);
  if (!(v&VGA_MIS_COLOR)) outb(VGA_MIS_W,v|VGA_MIS_COLOR);
 
- //VBE_DISPI_LFB_PHYSICAL_ADDRESS;
+ /* Disable the hardware cursor. */
+ vga_wcrt(VGA_CRTC_CURSOR_START,0x20);
 }
 
 

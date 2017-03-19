@@ -33,6 +33,46 @@
 
 __DECL_BEGIN
 
+typedef __u64 hstamp_t;
+struct hpet {
+ /* Low-level high-precision timer. */
+ hstamp_t  (*hp_next)(void);  /*< [1..1] Same as 'read', but for emulated timers, increment the counter. */
+ hstamp_t  (*hp_read)(void);  /*< [1..1] Read and return the current timer value. */
+ char const *hp_name;         /*< [1..1] Timer name. */
+};
+
+extern struct hpet const ktime_hpet_emulated; /*< Emulated (fallback) timer. */
+#ifdef __x86__
+extern struct hpet const ktime_hpet_x86rdtsc; /*< X86 cpu timer using 'rdtsc'. */
+#endif
+
+
+/* Current high-precision timer (Set once during boot; read-only post-initialization). */
+extern struct hpet ktime_hpet;
+
+#ifdef __INTELLISENSE__
+//////////////////////////////////////////////////////////////////////////
+// Return the system's current high-performance time/frequency.
+// WARNING: The high-performance frequency is quite volatile
+//          and should not be relied upon to never change.
+// @return: * : [ktime_htick] A constantly incrementing value that may be used to high-precision timings.
+// @return: * : [ktime_hfreq] A constantly incrementing value that may be used to high-precision timings.
+extern hstamp_t ktime_htick(void);
+extern hstamp_t ktime_hfreq(void);
+#else
+extern hstamp_t timer_tickfreq;
+#define ktime_htick()  (*ktime_hpet.hp_read)()
+#define ktime_hfreq()    NOIRQ_EVAL(timer_tickfreq)
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Highly intelligent function to automatically sync & align the timer time with
+// CMOS/RTC time, while adding additional precision to the current system time
+// using a previously configured HPET through 'ktime_hpet'.
+// WARNING: This function should not be called randomly, but instead should
+//          itself be called periodically, such as during IRQ preemption.
+extern void ktime_irqtick(void);
+
 
 struct timespec;
 
@@ -45,12 +85,6 @@ struct timespec;
 extern __wunused __nonnull((1)) kerrno_t ktime_getnow(struct timespec *__restrict tmnow);
 extern __wunused __nonnull((1)) kerrno_t ktime_setnow(struct timespec const *__restrict tmnow);
 extern __wunused __nonnull((1)) kerrno_t ktime_setnow_k(struct timespec const *__restrict tmnow);
-
-//////////////////////////////////////////////////////////////////////////
-// Returns a cpu-based type with some undefined offset in the past.
-// This time can still be assumed to run constant, though it may
-// or may not match the current RTC time.
-extern __nonnull((1)) void ktime_getcpu(struct timespec *__restrict tmcpu);
 
 //////////////////////////////////////////////////////////////////////////
 // Returns some sort of constant time
@@ -81,15 +115,11 @@ extern __nonnull((2)) void time_to_cmostime(__time_t t, struct cmostime *__restr
 #define CMOS_REGISTERB_FLAG_NOBCD 0x04 /*< When set, CMOS time is in decimal format. */
 #define CMOS_REGISTERB_FLAG_24H   0x02 /*< When set, CMOS hours uses a 24-hour format. */
 
-extern __wunused __nonnull((1)) kerrno_t cmos_getnow(struct cmostime *__restrict tmnow);
-extern __wunused __nonnull((1)) kerrno_t cmos_setnow(struct cmostime const *__restrict tmnow);
+extern __nonnull((1)) kerrno_t cmos_getnow(struct cmostime *__restrict tmnow);
+extern __nonnull((1)) kerrno_t cmos_setnow(struct cmostime const *__restrict tmnow);
 
 extern void kernel_initialize_cmos(void);
-
-
-#define HZ  256 /*< Jiffies per second. */
-extern __attribute__((__section__(".data"))) __u64 volatile __jiffies64;
-#define jiffies64   katomic_load(__jiffies64)
+extern void kernel_initialize_time(void);
 
 __DECL_END
 #endif /* !__ASSEMBLY__ */

@@ -174,8 +174,6 @@ void test_vga(void) {
  regs.al = BIOS_VGA_MODE_GFX_320x200x256;
  realmode_interrupt(BIOS_INTNO_VGA,&regs);
 
- kernel_initialize_vga();
-
  unsigned pitch = 320;
  unsigned sx = 320;
  unsigned sy = 200;
@@ -217,6 +215,23 @@ void test_vga(void) {
  realmode_interrupt(BIOS_INTNO_VGA,&regs);
 }
 
+void cpu_test(void) {
+ struct timespec tmnow;
+ struct timespec timeout = {0,100000000l};
+ struct timespec abstime;
+ ktime_getnow(&abstime);
+ for (;;) {
+  assert(karch_irq_enabled());
+  __timespec_add(&abstime,&timeout);
+  //ktask_abssleep(ktask_self(),&abstime);
+  ktask_sleep(ktask_self(),&timeout);
+  __evalexpr(ktime_getnow(&tmnow));
+  //printf("Sleep: %d:%ld\n",abstime.tv_sec,abstime.tv_nsec);
+  printf("Time:  %d:%ld\n",tmnow.tv_sec,tmnow.tv_nsec);
+ }
+}
+
+
 void kernel_main(void) {
 
  // TODO: Parse explicit environ input in exec
@@ -233,6 +248,7 @@ void kernel_main(void) {
  //       own versions of copy_to_user/copy_from_user/copy_in_user!
  // HINT: The way exec does it now is how it's safe to do.
 
+ kernel_initialize_cmos();
  kernel_initialize_tty();
  kernel_initialize_serial();
  kernel_initialize_raminfo(); /*< NOTE: Also initializes arguments/environ. */
@@ -244,14 +260,14 @@ void kernel_main(void) {
  kernel_initialize_paging();
  kernel_initialize_keyboard();
  kernel_initialize_fpu();
- kernel_initialize_cmos();
  kernel_initialize_copyonwrite();
  kernel_initialize_process();
  kernel_initialize_filesystem();
  kernel_initialize_vfs();
  kernel_initialize_syscall();
+ kernel_initialize_vga();
  assert(!karch_irq_enabled());
- //karch_irq_enable();
+ karch_irq_enable();
 
  //k_sysloglevel = KLOG_TRACE;
  //ktask_suspend(ktask_self());
@@ -267,6 +283,7 @@ void kernel_main(void) {
  //test_taskstat();
  //test_write_file();
  //test_vga();
+ //cpu_test();
  run_init();
 
  ksyslog_deltty();

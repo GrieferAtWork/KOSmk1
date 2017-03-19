@@ -143,7 +143,7 @@ err_appname: strcpy(appname,"??" "?");
 #if KLOGFORMAT_PREFIXTIME
        sprintf(tmbuf,KLOGFORMAT_TAGSTR_1 "%.6I32u.%.6ld"
                KLOGFORMAT_TAGSTR_2 KLOGFORMAT_TAGSTR_1,
-               tmnow.tv_sec,tmnow.tv_nsec);
+               tmnow.tv_sec,tmnow.tv_nsec/1000l);
 #endif
        mnemonic = k_sysloglevel_mnemonic(level);
       }

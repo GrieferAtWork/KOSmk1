@@ -67,7 +67,11 @@ static struct kidtpointer gdt = {0,0};
 #endif
 
 /* Do we need special memory for this? */
-static struct ksegment gdt_segments[GDT_MAX_ENTRIES];
+static struct ksegment gdt_segments[GDT_MAX_ENTRIES]
+#ifdef __GNUC__
+ __attribute__((__aligned__(16))) 
+#endif
+;
 #endif
 
 static struct kspinlock gdt_lock = KSPINLOCK_INIT;

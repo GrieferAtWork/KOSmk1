@@ -136,6 +136,7 @@ void keyboard_sendscan(kbscan_t scan) {
   case KEY_CAPSLOCK          : kb_state ^=  (KBSTATE_CAPSLOCK);   set_led(LED_CAPSLOCK,  kb_state&KBSTATE_CAPSLOCK);   break;
   case KEY_NUMLOCK           : kb_state ^=  (KBSTATE_NUMLOCK);    set_led(LED_NUMLOCK,   kb_state&KBSTATE_NUMLOCK);    break;
   case KEY_SCROLLLOCK        : kb_state ^=  (KBSTATE_SCROLLLOCK); set_led(LED_SCROLLLOCK,kb_state&KBSTATE_SCROLLLOCK); break;
+  case KEY_F(12)             : tb_print(); break;
   default: break;
  }
 

@@ -302,7 +302,7 @@ kproc_delmod_single_unlocked(struct kproc *__restrict self,
 static __crit kerrno_t
 kproc_insmod_unlocked_impl(struct kproc *__restrict self,
                            struct kshlib *__restrict module,
-                           kmodid_t *module_id) {
+                           kmodid_t *__restrict module_id) {
  struct kshlib **iter,**end; kerrno_t error;
  kmodid_t *depids,*depids_iter;
  KTASK_CRIT_MARK
@@ -358,7 +358,7 @@ kproc_modrelocate(struct kproc *self,
 __crit kerrno_t
 kproc_insmod_unlocked(struct kproc *__restrict self,
                       struct kshlib *__restrict module,
-                      kmodid_t *module_id) {
+                      kmodid_t *__restrict module_id) {
  kerrno_t error;
  KTASK_CRIT_MARK
  /* Make sure that this module can be loaded as a library.
@@ -369,6 +369,7 @@ kproc_insmod_unlocked(struct kproc *__restrict self,
   // NOTE: Newly loaded modules must be relocated
   //       after they've all been inserted, in order
   //       to properly link global (__public) variables.
+  k_syslogf_prefixfile(KLOG_DEBUG,module->sh_file,"[insmod] Relocating module\n");
   kproc_modrelocate(self,*module_id,*module_id);
  }
  return error;
@@ -402,7 +403,7 @@ kproc_delmod_unlocked(struct kproc *__restrict self,
 __crit kerrno_t
 kproc_insmod_c(struct kproc *__restrict self,
                struct kshlib *__restrict module,
-               kmodid_t *module_id) {
+               kmodid_t *__restrict module_id) {
  kerrno_t error;
  KTASK_CRIT_MARK
  kassert_kproc(self);

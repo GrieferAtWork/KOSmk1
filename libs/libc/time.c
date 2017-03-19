@@ -41,7 +41,7 @@ __DECL_BEGIN
 
 __public time_t time(time_t *t) {
  struct timespec result;
- ktime_getnoworcpu(&result);
+ if __unlikely(KE_ISERR(ktime_getnow(&result))) result.tv_sec = 0;
  if (t) *t = result.tv_sec;
  return result.tv_sec;
 }
@@ -137,23 +137,14 @@ __public int nanosleep(struct timespec const *req,
                        struct timespec *rem) {
  struct timespec abstime;
  kerrno_t error;
-#ifdef __KERNEL__
- ktime_getnoworcpu(&abstime);
-#else
- error = ktime_getnoworcpu(&abstime);
- if __likely(KE_ISOK(error))
-#endif
- {
+ error = ktime_getnow(&abstime);
+ if __likely(KE_ISOK(error)) {
   __timespec_add(&abstime,req);
   error = ktask_abssleep(ktask_self(),&abstime);
  }
  if (error == KE_INTR) {
   *rem = abstime;
-#ifdef __KERNEL__
-  ktime_getnoworcpu(&abstime);
-#else
-  if __unlikely(KE_ISERR(ktime_getnoworcpu(&abstime))) goto norem;
-#endif
+  if __unlikely(KE_ISERR(ktime_getnow(&abstime))) goto norem;
   if __unlikely(__timespec_cmplo(rem,&abstime)) goto norem;
   __timespec_sub(rem,&abstime);
  } else {
@@ -225,7 +216,7 @@ __public int utime(const char *file, struct utimbuf const *file_times) {
   attrib[1].ia_time.tm_time.tv_sec = file_times->modtime;
   attrib[1].ia_time.tm_time.tv_nsec = 0;
  } else {
-  error = ktime_getnoworcpu(&attrib[0].ia_time.tm_time);
+  error = ktime_getnow(&attrib[0].ia_time.tm_time);
   if __unlikely(KE_ISERR(error)) {
    __set_errno(-error);
    return -1;

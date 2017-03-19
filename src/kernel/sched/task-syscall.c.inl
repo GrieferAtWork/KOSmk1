@@ -33,6 +33,7 @@
 #include <kos/kernel/linker.h>
 #include <kos/kernel/fs/file.h>
 #include <stddef.h>
+#include <kos/syslog.h>
 
 __DECL_BEGIN
 

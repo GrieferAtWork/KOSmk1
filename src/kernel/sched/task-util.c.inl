@@ -255,8 +255,9 @@ kerrno_t ktask_pause(struct ktask *__restrict self) {
 }
 kerrno_t ktask_abssleep(struct ktask *__restrict self,
                         struct timespec const *__restrict abstime) {
- kassert_ktask(self); kassertobj(abstime);
- return ktask_unschedule(self,KTASK_STATE_WAITINGTMO,(void *)abstime);
+ kassert_ktask(self);
+ kassertobj(abstime);
+ return KTASK_DEADLOCK_INTENDED(ktask_unschedule(self,KTASK_STATE_WAITINGTMO,(void *)abstime));
 }
 kerrno_t ktask_sleep(struct ktask *__restrict self,
                      struct timespec const *__restrict timeout) {

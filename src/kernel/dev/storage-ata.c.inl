@@ -53,14 +53,32 @@ void kata_sleep(katabus_t bus) {
 
 kerrno_t kata_poll(katabus_t bus, __u8 mask, __u8 state) {
  __u8 status;
- //kata_sleep(bus);
- do {
+//#define TIMEOUT   100000
+#ifdef TIMEOUT
+ register unsigned int timeout = TIMEOUT;
+#endif
+ for (;;) {
   status = inb(ATA_IOPORT_STATUS(bus));
   if (status & ATA_STATUS_ERR) {
    k_syslogf(KLOG_ERROR,"[DISK][ATA] ERR received while polling (flags = 0x%I8x)\n",status);
    return KE_DEVICE;
   }
- } while ((status & mask) != state);
+  if ((status & mask) == state) break;
+#ifdef TIMEOUT
+  if (!--timeout) return KE_DEVICE;
+#endif
+  //k_syslogf(KLOG_INFO,"[DISK][ATA] Waiting for devive (x: %.2I8x; m: %.2I8x; s: %.2I8x)\n",
+  //          status,mask,state);
+  //kata_sleep(bus);
+ }
+#if 1
+#ifdef TIMEOUT
+ if (timeout != TIMEOUT) {
+  k_syslogf(KLOG_INFO,"[DISK][ATA] Waited for device %u ticks\n",
+            TIMEOUT-timeout);
+ }
+#endif
+#endif
  return KE_OK;
 }
 

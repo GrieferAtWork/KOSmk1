@@ -932,12 +932,8 @@ __public unsigned int alarm(unsigned int seconds) {
  struct timespec newalarm;
  struct timespec oldalarm;
  kerrno_t error;
-#ifdef __KERNEL__
- ktime_getnoworcpu(&abstime);
-#else
- error = ktime_getnoworcpu(&abstime);
+ error = ktime_getnow(&abstime);
  if __unlikely(KE_ISERR(error)) goto err;
-#endif
  newalarm = abstime;
  newalarm.tv_sec += seconds;
  error = ktask_setalarm(ktask_self(),&newalarm,&oldalarm);
@@ -956,12 +952,8 @@ __public __useconds_t ualarm(__useconds_t value, __useconds_t interval) {
  struct timespec oldalarm;
  kerrno_t error;
  if (interval) { __set_errno(ENOSYS); return 0; }
-#ifdef __KERNEL__
- ktime_getnoworcpu(&abstime);
-#else
- error = ktime_getnoworcpu(&abstime);
+ error = ktime_getnow(&abstime);
  if __unlikely(KE_ISERR(error)) goto err;
-#endif
  newalarm = abstime;
  newalarm.tv_sec += value/1000000;
  newalarm.tv_nsec += (value%1000000)*1000;
@@ -980,29 +972,16 @@ err:
 
 __public unsigned int sleep(unsigned int seconds) {
  struct timespec abstime,newtime;
-#ifdef __KERNEL__
- ktime_getnoworcpu(&abstime);
- abstime.tv_sec += seconds;
- ktask_abssleep(ktask_self(),&abstime);
- ktime_getnoworcpu(&newtime);
-#else
- if __unlikely(KE_ISERR(ktime_getnoworcpu(&abstime))) return seconds;
+ if __unlikely(KE_ISERR(ktime_getnow(&abstime))) return seconds;
  abstime.tv_sec += seconds;
  if __unlikely(KE_ISERR(ktask_abssleep(ktask_self(),&abstime))) return seconds;
- if __unlikely(KE_ISERR(ktime_getnoworcpu(&newtime))) return 0;
-#endif
+ if __unlikely(KE_ISERR(ktime_getnow(&newtime))) return 0;
  return newtime.tv_sec-(abstime.tv_sec-seconds);
 }
 
 __public int usleep(__useconds_t useconds) {
  struct timespec abstime;
-#ifdef __KERNEL__
- ktime_getnoworcpu(&abstime);
- abstime.tv_sec += useconds/1000000;
- abstime.tv_nsec += (useconds%1000000)*1000;
- return ktask_abssleep(ktask_self(),&abstime);
-#else
- kerrno_t error = ktime_getnoworcpu(&abstime);
+ kerrno_t error = ktime_getnow(&abstime);
  if __unlikely(KE_ISERR(error)) goto err;
  abstime.tv_sec += useconds/1000000;
  abstime.tv_nsec += (useconds%1000000)*1000;
@@ -1010,6 +989,9 @@ __public int usleep(__useconds_t useconds) {
  if __unlikely(KE_ISERR(error)) goto err;
  return 0;
 err:
+#ifdef __CONFIG_MIN_BSS__
+ return error;
+#else
  __set_errno(-error);
  return -1;
 #endif

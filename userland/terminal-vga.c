@@ -275,7 +275,7 @@ static void blink_cur(void) {
  CURSOR_UNLOCK
 }
 static void *cursor_blink_threadmain(void *__unused(closure)) {
- for (;;) { sleep(1); blink_cur(); }
+ for (;;) { usleep(300000); blink_cur(); }
  return NULL;
 }
 static void invert_all(void) {

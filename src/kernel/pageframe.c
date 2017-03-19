@@ -70,8 +70,9 @@ static struct kpageframe *first_free_page = PAGEFRAME_NIL;
 #if KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED
 static size_t total_allocated_pages = 0; /*< Total amount of allocated pages. */
 #endif /* KCONFIG_HAVE_PAGEFRAME_COUNT_ALLOCATED */
-#define kpagealloc_lock()   kspinlock_lock(&kpagealloc_lockno)
-#define kpagealloc_unlock() kspinlock_unlock(&kpagealloc_lockno)
+#define kpagealloc_lock()    kspinlock_lock(&kpagealloc_lockno)
+#define kpagealloc_trylock() kspinlock_trylock(&kpagealloc_lockno)
+#define kpagealloc_unlock()  kspinlock_unlock(&kpagealloc_lockno)
 
 
 void raminfo_addregion(__u64 start, __u64 size) {
@@ -603,7 +604,7 @@ kpageframe_isfreepage(__kernel void const *p, size_t s) {
  struct kpageframe *iter;
  uintptr_t begin,end;
  end = (begin = (uintptr_t)p)+s;
- kpagealloc_lock();
+ if (kpagealloc_trylock() != KE_OK) return 0; /* Prevent deadlocks in rare, recursive situations. */
  iter = first_free_page;
  while (iter != PAGEFRAME_NIL) {
   assert((iter->pff_prev == PAGEFRAME_NIL) || iter->pff_prev < iter);

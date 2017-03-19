@@ -672,5 +672,8 @@
     <None Include="..\src\kernel\sched\proc-mod-syscall.c.inl">
       <Filter>src\kernel\sched</Filter>
     </None>
+    <None Include="..\src\kernel\time-hpet.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
   </ItemGroup>
 </Project>

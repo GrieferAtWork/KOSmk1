@@ -48,7 +48,7 @@ __public int task_pause(task_t task) { return task_abssleep(task,NULL); }
 __public int task_sleep(task_t task, struct timespec *__restrict timeout) {
  struct timespec abstime; kerrno_t error;
  kassertobj(timeout);
- error = ktime_getnoworcpu(&abstime);
+ error = ktime_getnow(&abstime);
  if __likely(KE_ISOK(error)) {
   __timespec_add(&abstime,timeout);
   return task_abssleep(task,&abstime);
@@ -67,7 +67,7 @@ __public int task_setalarm(task_t task, struct timespec const *__restrict timeou
  struct timespec abstime; int error;
  kassertobjnull(timeout);
  if (!timeout) return task_setabsalarm(task,NULL);
- error = ktime_getnoworcpu(&abstime);
+ error = ktime_getnow(&abstime);
  if __unlikely(KE_ISERR(error)) { __set_errno(-error); return -1; }
  __timespec_add(&abstime,timeout);
  return task_setabsalarm(task,&abstime);
@@ -77,7 +77,7 @@ __public int task_getalarm(task_t task, struct timespec *__restrict timeout) {
  kassertobj(timeout);
  error = task_getabsalarm(task,&abstime);
  if __likely(error == 0) {
-  error = ktime_getnoworcpu(&tmnow);
+  error = ktime_getnow(&tmnow);
   if __unlikely(KE_ISERR(error)) { __set_errno(-error); return -1; }
   __timespec_sub(&abstime,&tmnow);
   *timeout = abstime;
@@ -98,7 +98,7 @@ __public int task_getabsalarm(task_t task, struct timespec *__restrict abstime) 
  error = ktask_getalarm(task,abstime);
  if __likely(KE_ISOK(error)) {
   if (error == KE_OK) return 0;
-  error = ktime_getnoworcpu(abstime);
+  error = ktime_getnow(abstime);
   if __likely(KE_ISOK(error)) return 0;
  }
  __set_errno(-error);
@@ -197,7 +197,7 @@ __public int task_timedjoin(task_t self, struct timespec const *__restrict absti
 __public int task_timoutjoin(task_t self, struct timespec const *__restrict timeout,
                              void **exitcode) {
  struct timespec abstime; kerrno_t error;
- error = ktime_getnoworcpu(&abstime);
+ error = ktime_getnow(&abstime);
  if __likely(KE_ISOK(error)) {
   __timespec_add(&abstime,timeout);
   return task_timedjoin(self,&abstime,exitcode);
@@ -457,7 +457,7 @@ __public int proc_timedjoin(proc_t proc, struct timespec const *__restrict absti
 __public int proc_timoutjoin(proc_t proc, struct timespec const *__restrict timeout,
                              uintptr_t *exitcode) {
  struct timespec abstime; kerrno_t error;
- error = ktime_getnoworcpu(&abstime);
+ error = ktime_getnow(&abstime);
  if __likely(KE_ISOK(error)) {
   __timespec_add(&abstime,timeout);
   return proc_timedjoin(proc,&abstime,exitcode);

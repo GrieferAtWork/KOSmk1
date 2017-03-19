@@ -125,7 +125,7 @@ static void move(void) {
 
 static int mover_thread = -1;
 static void *mover_threadmain(void *closure) {
- struct timespec tmo = {1,0};
+ struct timespec tmo = {0,10000000l};
  for (;;) {
   task_sleep(task_self(),&tmo);
   move();

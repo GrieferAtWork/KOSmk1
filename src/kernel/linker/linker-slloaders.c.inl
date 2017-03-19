@@ -41,11 +41,13 @@ struct slloader {
  __size_t  sl_magicsz; /*< Use magic size. */
 };
 
+
+/* Binary formats recognized by KOS. */
 static struct slloader slloaders[] = {
  /* ELF32   */{&kshlib_elf32_new,  {ELFMAG0,ELFMAG1,ELFMAG2,ELFMAG3},4},
  /* PE-32   */{&kshlib_pe32_new,   {PE_DOSHEADER_MAGIC_1,PE_DOSHEADER_MAGIC_2},2},
  /* Shebang */{&kshlib_shebang_new,{'#','!'},2},
- {NULL,{0,},0}, // Sentinal
+ {NULL,{0,},0}, /* Sentinel */
 };
 
 __crit kerrno_t kshlib_new(struct kshlib **__restrict result,
@@ -56,9 +58,9 @@ __crit kerrno_t kshlib_new(struct kshlib **__restrict result,
  KTASK_CRIT_MARK
  error = kfile_kernel_read(exe_file,magic,sizeof(magic),&magic_max);
  if __unlikely(KE_ISERR(error)) return error;
- error = kfile_seek(exe_file,-(__off_t)sizeof(magic),SEEK_CUR,NULL); // rewind the file.
+ error = kfile_seek(exe_file,-(__off_t)sizeof(magic),SEEK_CUR,NULL); /* rewind the file. */
  if __unlikely(KE_ISERR(error)) return error;
- // Search for a loader matching the recognized magic.
+ /* Search for a loader matching the recognized magic. */
  while (loader->sl_callback) {
   if (magic_max >= loader->sl_magicsz &&
       memcmp(magic,loader->sl_magic,loader->sl_magicsz) == 0

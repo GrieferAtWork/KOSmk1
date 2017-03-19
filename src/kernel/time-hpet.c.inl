@@ -20,31 +20,40 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_TIME_H__
-#define __KOS_TIME_H__ 1
+#ifndef __KOS_KERNEL_TIME_HPET_C_INL__
+#define __KOS_KERNEL_TIME_HPET_C_INL__ 1
 
-#include <kos/config.h>
-
-#ifndef __NO_PROTOTYPES
 #include <kos/compiler.h>
-#include <kos/syscall.h>
-#include <kos/errno.h>
-
-#ifdef __KERNEL__
+#include <kos/config.h>
 #include <kos/kernel/time.h>
+#ifdef __x86__
+#include <kos/arch/x86/cpu.h>
 #endif
 
 __DECL_BEGIN
 
-struct timespec;
 
-#ifndef __KERNEL__
-__local _syscall1(kerrno_t,ktime_getnow,struct timespec *,ptm);
-__local _syscall1(kerrno_t,ktime_setnow,struct timespec *,ptm);
-#endif /* !__KERNEL__ */
+static hstamp_t emulated_hp_val = 0;
+static hstamp_t emulated_hp_read(void) { return emulated_hp_val; }
+static hstamp_t emulated_hp_next(void) { return emulated_hp_val++; }
+
+struct hpet const ktime_hpet_emulated = {
+ &emulated_hp_next,
+ &emulated_hp_read,
+ "emulated",
+};
+
+
+#ifdef __x86__
+static hstamp_t x86rdtsc_hp_read(void) { return x86_rdtsc(); }
+struct hpet const ktime_hpet_x86rdtsc = {
+ &x86rdtsc_hp_read,
+ &x86rdtsc_hp_read,
+ "x86.rdtsc",
+};
+#endif
+
 
 __DECL_END
 
-#endif
-
-#endif /* !__KOS_TIME_H__ */
+#endif /* !__KOS_KERNEL_TIME_HPET_C_INL__ */

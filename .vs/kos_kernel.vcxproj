@@ -220,6 +220,7 @@
     <None Include="..\src\kernel\shm-translate.c.inl" />
     <None Include="..\src\kernel\socket-packet.c.inl" />
     <None Include="..\src\kernel\syslog-write.c.inl" />
+    <None Include="..\src\kernel\time-hpet.c.inl" />
     <None Include="..\src\kernel\tty-print.c.inl" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
