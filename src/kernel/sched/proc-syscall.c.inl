@@ -136,7 +136,7 @@ KSYSCALL_DEFINE_EX2(cr,kerrno_t,kproc_tlsalloc,
   error = ktranslator_init(&trans,caller);
   if __unlikely(KE_ISERR(error)) goto err_region;
   while ((kdst = kshmregion_translate_fast(region,region_address,&max_dst)) != NULL &&
-         (ksrc = ktranslator_exec(&trans,template_,max_dst,&max_src,0)) != NULL) {
+         (ksrc = ktranslator_exec(&trans,template_,min(max_dst,template_size),&max_src,0)) != NULL) {
    memcpy(kdst,ksrc,max_src);
    if ((template_size -= max_src) == 0) break;
    region_address           += max_src;

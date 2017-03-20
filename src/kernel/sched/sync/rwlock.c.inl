@@ -540,6 +540,9 @@ __crit kerrno_t
 krwlock_endwrite(struct krwlock *__restrict self) {
  KTASK_CRIT_MARK
  kassert_krwlock(self);
+#if !KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
+ assert(krwlock_iswritelocked(self));
+#endif
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  krwlock_debug_delwriter(self,1);
  /* Signal waiting read tasks */

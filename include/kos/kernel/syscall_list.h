@@ -148,8 +148,8 @@ print "#endif /" "* SYSCALL_PAD *" "/";
 /*     67|0x0043 */ SYSCALL(kproc_openfd2)
 /*     68|0x0044 */ SYSCALL(kproc_barrier)
 /*     69|0x0045 */ SYSCALL(kproc_openbarrier)
-/*     70|0x0046 */ SYSCALL_NULL
-/*     71|0x0047 */ SYSCALL_NULL
+/*     70|0x0046 */ SYSCALL(kproc_tlsalloc)
+/*     71|0x0047 */ SYSCALL(kproc_tlsfree)
 /*     72|0x0048 */ SYSCALL_NULL
 /*     73|0x0049 */ SYSCALL(kproc_enumpid)
 /*     74|0x004a */ SYSCALL(kproc_openpid)

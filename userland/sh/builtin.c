@@ -132,33 +132,33 @@ int builtin_exit(int argc, char *argv[]) {
 }
 
 
-#include <mod.h>
-#include <traceback.h>
+#include <proc.h>
+#include <kos/syslog.h>
+
+static ptrdiff_t offset;
+
+static void *thread_test(void *closure) {
+ k_syslogf(KLOG_ERROR,"thread #2: tls_addr = %p\n",tls_addr);
+ k_syslogf(KLOG_ERROR,"thread #2: %q\n",(char *)(tls_addr+offset));
+ memset(tls_addr+offset,0,strlen((char *)(tls_addr+offset)));
+ return closure;
+}
 
 int builtin_color(int argc, char *argv[]) {
-#if 0
- mod_t md;
- //md = mod_open("/bin/pe-test",MOD_OPEN_NONE);
- md = mod_open("/usr/lib/pe-lib.dll",MOD_OPEN_NONE);
- void (*callback)(void);
- if (md == MOD_ERR) perror("mod_open");
+#if 1
+ static char const template_[] = "\xAA\xAA\xAA\xAATLS TEMPLATE STRING";
+ offset = tls_alloc(template_,sizeof(template_));
+ if (!offset) perror("tls_alloc");
  else {
-  *(void **)&callback = mod_sym(md,"exported_function");
-  if (!callback) perror("mod_sym");
-  else (*callback)();
-  mod_close(md);
+  int t;
+  k_syslogf(KLOG_ERROR,"offset = %Id\n",offset);
+  k_syslogf(KLOG_ERROR,"thread #1: tls_addr = %p\n",tls_addr);
+  k_syslogf(KLOG_ERROR,"thread #1: %q\n",(char *)(tls_addr+offset));
+  t = task_newthread(&thread_test,NULL,TASK_NEWTHREAD_DEFAULT);
+  if (t == -1) perror("task_newthread");
+  else task_join(t,NULL),close(t);
+  if (tls_free(offset) == -1) perror("tls_free");
  }
- tb_print();
-#elif 1
- __u16 ds,es,fs,gs;
- __asm_volatile__("movw %%ds, %0\n" : "=r" (ds) : : "memory");
- __asm_volatile__("movw %%es, %0\n" : "=r" (es) : : "memory");
- __asm_volatile__("movw %%fs, %0\n" : "=r" (fs) : : "memory");
- __asm_volatile__("movw %%gs, %0\n" : "=r" (gs) : : "memory");
- printf("DS = %#.4I16x\n",ds);
- printf("ES = %#.4I16x\n",es);
- printf("FS = %#.4I16x\n",fs);
- printf("GS = %#.4I16x\n",gs);
 
 #else
  dprintf(STDOUT_FILENO,

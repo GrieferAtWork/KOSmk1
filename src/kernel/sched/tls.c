@@ -50,14 +50,14 @@ void ktlsman_init(struct ktlsman *__restrict self) {
  self->tls_all_pages = KUTHREAD_PAGESIZE;
 }
 void ktlsman_quit(struct ktlsman *__restrict self) {
- struct ktlsmapping *iter,*next;
+ struct ktlsmapping *iter,*prev;
  kassert_ktlsman(self);
  iter = self->tls_hiend;
  while (iter) {
-  next = iter->tm_prev;
+  prev = iter->tm_prev;
   kshmregion_decref_full(iter->tm_region);
   free(iter);
-  iter = next;
+  iter = prev;
  }
 }
 
@@ -110,11 +110,13 @@ ktlsman_insmapping_inherited(struct ktlsman *__restrict self,
    if ((prev_mapping = old_mapping->tm_prev) == NULL) break;
    assert(prev_mapping->tm_pages);
    assert(prev_mapping->tm_offset <= old_mapping->tm_offset);
-   assert(prev_mapping->tm_offset+prev_mapping->tm_pages <= old_mapping->tm_offset);
-   free_pages = (size_t)(old_mapping->tm_offset-(prev_mapping->tm_offset+prev_mapping->tm_pages));
+   assert(prev_mapping->tm_offset+prev_mapping->tm_pages*PAGESIZE <= old_mapping->tm_offset);
+   free_pages = (size_t)(old_mapping->tm_offset-
+                        (prev_mapping->tm_offset+
+                         prev_mapping->tm_pages*PAGESIZE))/PAGESIZE;
    if (free_pages >= mapping->tm_pages) {
     /* We're in business! - Link the new mapping. */
-    mapping->tm_offset   = prev_mapping->tm_offset+prev_mapping->tm_pages;
+    mapping->tm_offset   = prev_mapping->tm_offset+prev_mapping->tm_pages*PAGESIZE;
     old_mapping->tm_prev = mapping;
     mapping->tm_prev     = prev_mapping;
     return;
@@ -124,15 +126,16 @@ ktlsman_insmapping_inherited(struct ktlsman *__restrict self,
   /* Special case: Prepend before 'old_mapping'. */
   assert(!old_mapping->tm_prev); /*< Sanity check. */
   mapping->tm_prev     =  NULL;
-  mapping->tm_offset   =  old_mapping->tm_offset-mapping->tm_pages;
+  mapping->tm_offset   =  old_mapping->tm_offset-mapping->tm_pages*PAGESIZE;
   old_mapping->tm_prev =  mapping;
-  self->tls_map_pages  = -old_mapping->tm_offset;
+  self->tls_map_pages  = (size_t)(-mapping->tm_offset)/PAGESIZE;
   goto update_allpages;
  } else {
   /* Special case: First mapping. */
   assert(self->tls_map_pages == 0);
   assert(self->tls_all_pages == KUTHREAD_PAGESIZE);
-  mapping->tm_prev          = NULL;
+  mapping->tm_prev    = NULL;
+  mapping->tm_offset  = -(ktls_addr_t)(mapping->tm_pages*PAGESIZE);
   self->tls_hiend     = mapping;
   self->tls_map_pages = mapping->tm_pages;
 update_allpages:
@@ -207,16 +210,28 @@ kproc_remap_pt(struct kproc *__restrict self,
  assert(task->t_proc == self);
  assert(krwlock_iswritelocked(&self->p_shm.s_lock));
  assert(isaligned((uintptr_t)newbase,PAGEALIGN));
+ k_syslogf(KLOG_TRACE,"Mapping thread control block for %p:%I32d:%Iu:%s at %p\n",
+           task,task->t_proc->p_pid,task->t_tid,ktask_getname(task),newbase);
  error = kshm_mapfullregion_unlocked(&self->p_shm,newbase,task->t_tls.pt_uregion);
  if __unlikely(KE_ISERR(error)) return error;
  iter = self->p_tls.tls_hiend;
  while (iter) {
   assert(isaligned(iter->tm_offset,PAGEALIGN));
   assert(iter->tm_pages == iter->tm_region->sre_chunk.sc_pages);
+  k_syslogf(KLOG_TRACE,"Mapping TLS region at %p\n",(__user void *)((uintptr_t)newbase+iter->tm_offset));
   error = kshm_mapfullregion_unlocked(&self->p_shm,
                                      (__user void *)((uintptr_t)newbase+iter->tm_offset),
                                       iter->tm_region);
-  if __unlikely(KE_ISERR(error)) goto err;
+  if __unlikely(KE_ISERR(error)) {
+   k_syslogf(KLOG_ERROR,"Failed to remap TLS PT at %p (offset %Id): %d\n",
+            (__user void *)((uintptr_t)newbase+iter->tm_offset),iter->tm_offset,error);
+   kpagedir_print(self->p_shm.s_pd);
+   goto err;
+  }
+  assert(!iter->tm_prev ||
+         iter->tm_prev->tm_offset+
+         iter->tm_prev->tm_pages*PAGESIZE <=
+         iter->tm_offset);
   iter = iter->tm_prev;
  }
  return KE_OK;
@@ -271,11 +286,15 @@ kproc_tls_alloc_inherited(struct kproc *__restrict self,
   calling_task = ktask_self();
   error = krwlock_beginwrite(&self->p_shm.s_lock);
   if __unlikely(KE_ISERR(error)) goto err_threads;
-  for (; iter != end; ++iter) if ((task = *iter) != NULL) {
+  for (; iter != end; ++iter) if ((task = *iter) != NULL && ktask_isusertask(task)) {
    /* Map the region in all threads already existing. */
    block_address = (__user void *)((uintptr_t)task->t_tls.pt_uthread+
                                     mapping->tm_offset);
-   assert(isaligned((uintptr_t)block_address,PAGEALIGN));
+   assertf(isaligned((uintptr_t)block_address,PAGEALIGN)
+          ,"addr   = %p\n"
+           "offset = %Id\n"
+          ,block_address
+          ,mapping->tm_offset);
    /* Check for the simple case: When taking the existing thread-local block,
     *                            we don't have to relocate anything if the
     *                            pages used by the block are unused. */
@@ -299,7 +318,7 @@ relocate_tls:
      goto err_threads_iter;
     }
     new_uthread = (__pagealigned __user struct kuthread *)((uintptr_t)newbase+
-                                                                self->p_tls.tls_map_pages*PAGESIZE);
+                                                           self->p_tls.tls_map_pages*PAGESIZE);
     /* Step #2: Suspend the thread to make sure it's not attempting to
      *          access existing TLS data while we're relocating its vector.
      * NOTE: Make sure not to suspend ourselves! */
@@ -334,8 +353,8 @@ relocate_tls:
       task->t_tls.pt_uthread = new_uthread;
      }
      /* Encode and setup the new TLS segment. */
-     ksegment_encode(&new_segment,(uintptr_t)newbase,
-                     self->p_tls.tls_all_pages*PAGESIZE,SEG_DATA_PL3);
+     ksegment_encode(&new_segment,(uintptr_t)new_uthread,
+                     KUTHREAD_PAGESIZE*PAGESIZE,SEG_DATA_PL3);
      kshm_ldtset_unlocked(&self->p_shm,task->t_tls.pt_segid,&new_segment);
     }
     /* Resume execution of the task */
@@ -348,16 +367,18 @@ next_task:;
  }
  kproc_unlock(self,KPROC_LOCK_THREADS);
  *offset = mapping->tm_offset;
- krwlock_endwrite(&self->p_tls.tls_lock);
+ krwlock_endread(&self->p_tls.tls_lock);
  return KE_OK;
 err_threads_iter:
  /* Unmap the region in all threads it's already been mapped to. */
  while (iter != self->p_threads.t_taskv) {
   task = *--iter;
-  block_address = (__user void *)((uintptr_t)task->t_tls.pt_uthread+
-                                   mapping->tm_offset);
-  assert(isaligned((uintptr_t)block_address,PAGEALIGN));
-  kshm_unmapregion_unlocked(&self->p_shm,block_address,region);
+  if (task && ktask_isusertask(task)) {
+   block_address = (__user void *)((uintptr_t)task->t_tls.pt_uthread+
+                                    mapping->tm_offset);
+   assert(isaligned((uintptr_t)block_address,PAGEALIGN));
+   kshm_unmapregion_unlocked(&self->p_shm,block_address,region);
+  }
  }
 err_threads: kproc_unlock(self,KPROC_LOCK_THREADS);
 err_unlink:  ktlsman_delmapping(&self->p_tls,mapping);
@@ -441,7 +462,7 @@ kproc_tls_alloc_pt_unlocked(struct kproc *__restrict self,
                                    KPAGEDIR_MAPANY_HINT_TLS);
  if __unlikely(baseaddr == KPAGEDIR_FINDFREERANGE_ERR) { error = KE_NOSPC; goto err_region; }
  user_uthread = (__pagealigned __user struct kuthread *)((uintptr_t)baseaddr+
-                                                             self->p_tls.tls_map_pages*PAGESIZE);
+                                                          self->p_tls.tls_map_pages*PAGESIZE);
  assert(isaligned((uintptr_t)baseaddr,PAGEALIGN));
  assert(isaligned((uintptr_t)user_uthread,PAGEALIGN));
  /* Setup the uthread self-pointer. */
@@ -454,8 +475,8 @@ kproc_tls_alloc_pt_unlocked(struct kproc *__restrict self,
  error = kproc_remap_pt(self,task,user_uthread);
  if __unlikely(KE_ISERR(error)) goto err_region;
  /* OK! The TLS block is mapped just how it needs to be. - Time to create the TLS segment. */
- ksegment_encode(&tls_segment,(uintptr_t)baseaddr,
-                 self->p_tls.tls_all_pages*PAGESIZE,SEG_DATA_PL3);
+ ksegment_encode(&tls_segment,(uintptr_t)user_uthread,
+                 KUTHREAD_PAGESIZE*PAGESIZE,SEG_DATA_PL3);
  /* Now simply allocate a LDT segment. */
  task->t_tls.pt_segid = kshm_ldtalloc_unlocked(&self->p_shm,&tls_segment);
  if __unlikely(task->t_tls.pt_segid == KSEG_NULL) { error = KE_NOMEM; goto err_unmappt; }
