@@ -681,57 +681,6 @@ end_path:  if (default_arg0) free(default_arg0);
  return error;
 }
 
-KSYSCALL_DEFINE1(__user void *,ktask_gettls,__ktls_t,slot) {
- return ktask_gettls(ktask_self(),slot);
-}
-
-KSYSCALL_DEFINE_EX3(c,kerrno_t,ktask_settls,__ktls_t,slot,
-                    __user void *,value,
-                    __user void **,oldvalue) {
- kerrno_t error; void *kernel_oldvalue;
- KTASK_CRIT_MARK
- error = ktask_settls(ktask_self(),slot,value,
-                      oldvalue ? &kernel_oldvalue : NULL);
- if (__likely  (KE_ISOK(error)) && oldvalue &&
-     __unlikely(copy_to_user(oldvalue,&kernel_oldvalue,sizeof(kernel_oldvalue)))
-     ) error = KE_FAULT;
- return error;
-}
-
-KSYSCALL_DEFINE_EX2(c,__user void *,ktask_gettlsof,
-                    int,taskfd,__ktls_t,slot) {
- void *result; struct ktask *task;
- KTASK_CRIT_MARK
- if (taskfd == KFD_TASKSELF) return ktask_gettls(ktask_self(),slot);
- task = kproc_getfdtask(kproc_self(),taskfd);
- if __unlikely(!task) result = NULL;
- else {
-  result = ktask_accessgm(task) ? ktask_gettls(task,slot) : NULL;
-  ktask_decref(task);
- }
- return result;
-}
-
-KSYSCALL_DEFINE_EX4(c,kerrno_t,ktask_settlsof,int,taskfd,__ktls_t,slot,
-                    __user void *,value,__user void **,oldvalue) {
- kerrno_t error; struct ktask *task;
- void *kernel_oldvalue;
- KTASK_CRIT_MARK
- task = kproc_getfdtask(kproc_self(),taskfd);
- if __unlikely(!task) error = KE_BADF;
- else {
-  if (!ktask_accesssm(task)) error = KE_ACCES;
-  else {
-   error = ktask_settls(task,slot,value,oldvalue ? &kernel_oldvalue : NULL);
-   if (__likely  (KE_ISOK(error)) && oldvalue &&
-       __unlikely(copy_to_user(oldvalue,&kernel_oldvalue,sizeof(kernel_oldvalue)))
-       ) error = KE_FAULT;
-  }
-  ktask_decref(task);
- }
- return error;
-}
-
 __DECL_END
 
 #endif /* !__KOS_KERNEL_SCHED_TASK_SYSCALL_C_INL__ */

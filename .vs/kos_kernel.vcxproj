@@ -79,6 +79,7 @@
     <ClInclude Include="..\include\kos\kernel\syslog_io.h" />
     <ClInclude Include="..\include\kos\kernel\task.h" />
     <ClInclude Include="..\include\kos\kernel\time.h" />
+    <ClInclude Include="..\include\kos\kernel\tls-perthread.h" />
     <ClInclude Include="..\include\kos\kernel\tls.h" />
     <ClInclude Include="..\include\kos\kernel\tss.h" />
     <ClInclude Include="..\include\kos\kernel\tty.h" />
@@ -125,6 +126,7 @@
     <ClCompile Include="..\src\kernel\sched\proc.c" />
     <ClCompile Include="..\src\kernel\sched\sync\sync.c" />
     <ClCompile Include="..\src\kernel\sched\task.c" />
+    <ClCompile Include="..\src\kernel\sched\tls.c" />
     <ClCompile Include="..\src\kernel\serial.c" />
     <ClCompile Include="..\src\kernel\shm.c" />
     <ClCompile Include="..\src\kernel\socket.c" />
@@ -213,7 +215,6 @@
     <None Include="..\src\kernel\sched\task-usercheck.c.inl" />
     <None Include="..\src\kernel\sched\task-util.c.inl" />
     <None Include="..\src\kernel\sched\task_asm.S" />
-    <None Include="..\src\kernel\sched\tls.c.inl" />
     <None Include="..\src\kernel\shm-ldt.c.inl" />
     <None Include="..\src\kernel\shm-map.c.inl" />
     <None Include="..\src\kernel\shm-mmap-impl.c.inl" />

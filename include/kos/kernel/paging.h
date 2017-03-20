@@ -138,7 +138,7 @@ kpagedir_setflags(struct kpagedir *__restrict self,
 extern __nonnull((1)) __user void *
 kpagedir_findfreerange(struct kpagedir const *__restrict self,
                        __size_t pages, __user void const *hint);
-#define KPAGEDIR_FINDFREERANGE_ERR ((void *)(__uintptr_t)-1)
+#define KPAGEDIR_FINDFREERANGE_ERR ((__user void *)(__uintptr_t)-1)
 
 //////////////////////////////////////////////////////////////////////////
 // Map the given physical address range to the first available free virtual range
@@ -156,6 +156,7 @@ kpagedir_mapanyex(struct kpagedir *__restrict self, __kernel void const *phys,
 #define KPAGEDIR_MAPANY_HINT_UHEAP    ((void *)0x40000000) /*< User-space heap. */
 #define KPAGEDIR_MAPANY_HINT_USTACK   ((void *)0x80000000) /*< User-space stack. */
 #define KPAGEDIR_MAPANY_HINT_LIBS     ((void *)0xa0000000) /*< Shared libraries. */
+#define KPAGEDIR_MAPANY_HINT_TLS      ((void *)0xd0000000) /*< User-space TLS memory. */
 #define KPAGEDIR_MAPANY_HINT_KINTERN  ((void *)0xe0000000) /*< Various internal kernel-specific mappings (e.g.: LDT vectors). */
 #define KPAGEDIR_MAPANY_HINT_KSTACK   ((void *)0xf0000000) /*< Kernel-space stack. */
 

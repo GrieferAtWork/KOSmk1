@@ -178,8 +178,8 @@ typedef __uintptr_t      kshmregion_cluster_t;
 #define KSHMPART_OFFSETOF_PAGES  (__SIZEOF_POINTER__+KSHMREGION_PAGE_SIZEOF)
 #ifndef __ASSEMBLY__
 struct kshmpart {
- /* WARNING: Individual pages are only allocated when the reference counter of the associated chunk is non-ZERO. */
- /* TODO: When swapping gets, we'll have to add some kind of token system that can live here (union-style w/ sp_frame). */
+ /* WARNING: Individual pages are only allocated when the reference counter of the associated cluster is non-ZERO. */
+ /* TODO: When swap/file mappings get added, we'll have to add some kind of token system that can live here (union-style w/ sp_frame). */
  __pagealigned struct kpageframe *sp_frame; /*< [1..sp_pages][const] Physical starting address of this part. */
  kshmregion_page_t                sp_start; /*< [const] Page index of the start of this part (aka. 'sum(sp_pages)' of all preceding parts). */
  __size_t                         sp_pages; /*< [!0][const] Amount of linear pages associated with this part. */
@@ -249,8 +249,7 @@ struct kshmcluster {
 #define KSHMREGION_SIZEOF(clusterc)      KSHMREGION_OFFSETOF_CLUSTERV(clusterc)
 #ifndef __ASSEMBLY__
 struct kshmregion {
- /* NOTE: This structure is synchronized because it is fully atomic/singleton. */
- KOBJECT_HEAD
+ KOBJECT_HEAD /* NOTE: This structure is synchronized because it is fully atomic/singleton. */
  struct kshmchunk   sre_chunk;       /*< Associated chunks of data. */
  __atomic __size_t  sre_branches;    /*< Amount of different reference holders that this region is associated with (Used to ensure uniqueness of a region). */
  __atomic __size_t  sre_clustera;    /*< [!0] Allocated amount of clusters (When this hits ZERO(0), free the region controller structure). */
@@ -300,17 +299,18 @@ kshmregion_getphyspage(struct kshmregion *__restrict self,
 // Convenience wrapper around 'kshmregion_getphyspage'.
 // Automatically handles page alignment.
 extern __wunused __retnonnull __nonnull((1,3)) __kernel void *
-kshmregion_getphysaddr(struct kshmregion *__restrict self,
-                       kshmregion_addr_t address_offset,
-                       __size_t *__restrict max_bytes);
+kshmregion_translate_fast(struct kshmregion *__restrict self,
+                          kshmregion_addr_t address_offset,
+                          __size_t *__restrict max_bytes);
 
 //////////////////////////////////////////////////////////////////////////
-// Similar to 'kshmregion_getphysaddr', but simply returns NULL
+// Similar to 'kshmregion_translate_fast', but simply returns NULL
 // and sets '*max_bytes' to ZERO(0) for out-of-bounds indices.
 extern __wunused __nonnull((1,3)) __kernel void *
-kshmregion_getphysaddr_s(struct kshmregion *__restrict self,
-                         kshmregion_addr_t address_offset,
-                         __size_t *__restrict max_bytes);
+kshmregion_translate(struct kshmregion *__restrict self,
+                     kshmregion_addr_t address_offset,
+                     __size_t *__restrict max_bytes);
+
 
 struct kfile;
 //////////////////////////////////////////////////////////////////////////
@@ -402,6 +402,7 @@ extern __crit __wunused __malloccall __nonnull((1)) __ref struct kshmregion *
 kshmregion_hardcopy(struct kshmregion const *__restrict self,
                     kshmregion_page_t page_offset,
                     __size_t pages);
+#define kshmregion_fullcopy(self) kshmregion_hardcopy(self,0,(self)->sre_chunk.sc_pages)
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -434,6 +435,12 @@ extern __crit __wunused __malloccall __nonnull((1,2,3)) __ref struct kshmregion 
 kshmregion_extractpart(__ref struct kshmregion *__restrict self,
                        struct kshmcluster *cls_min,
                        struct kshmcluster *cls_max);
+
+//////////////////////////////////////////////////////////////////////////
+// Fill all memory within the given region with the given byte.
+extern __crit __nonnull((1)) void
+kshmregion_memset(__ref struct kshmregion *__restrict self, int byte);
+
 #endif /* !__ASSEMBLY__ */
 
 

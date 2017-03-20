@@ -35,8 +35,10 @@
 #include <kos/task.h>
 #include <kos/time.h>
 #include <kos/timespec.h>
+#include <kos/task-tls.h>
 #include <malloc.h>
 #include <proc.h>
+#include <stddef.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -471,7 +473,7 @@ proc_getflag(proc_t proc, kperm_flag_t flag) {
  perm_t perm; kerrno_t error;
  perm.p_name              = KPERM_NAME_FLAG;
  perm.p_data.d_flag_group = KPERM_FLAG_GETGROUP(flag);
- error = kproc_perm(proc,&perm,1,KPROC_CONF_MODE_GET);
+ error = kproc_perm(proc,&perm,1,KPROC_PERM_MODE_GET);
  if __unlikely(KE_ISERR(error)) { __set_errno(-error); return -1; }
  flag = KPERM_FLAG_GETMASK(flag);
  return (perm.p_data.d_flag_mask&flag)==flag;
@@ -482,7 +484,7 @@ proc_delflag(kperm_flag_t flag) {
  perm_t perm; kerrno_t error;
  perm.p_name        = KPERM_NAME_FLAG;
  perm.p_data.d_flag = flag;
- error = kproc_perm(kproc_self(),&perm,1,KPROC_CONF_MODE_XCH);
+ error = kproc_perm(kproc_self(),&perm,1,KPROC_PERM_MODE_XCH);
  if __unlikely(KE_ISERR(error)) { __set_errno(-error); return -1; }
  /* Check if any of the given flags were set before. */
  return (perm.p_data.d_flag_mask&KPERM_FLAG_GETMASK(flag)) != 0;
@@ -510,7 +512,7 @@ proc_getperm(proc_t proc, perm_t *__restrict buf,
              perm_name_t name) {
  kerrno_t error;
  buf->p_name = name;
- error = kproc_perm(proc,buf,1,KPROC_CONF_MODE_GET);
+ error = kproc_perm(proc,buf,1,KPROC_PERM_MODE_GET);
  if __unlikely(KE_ISERR(error)) {
   __set_errno(-error);
   return NULL;
@@ -529,32 +531,26 @@ proc_permex(proc_t proc, perm_t *__restrict buf,
  }
  return buf;
 }
-__public perm_t *proc_getpermex(proc_t proc, perm_t *__restrict buf, size_t permcount) { return proc_permex(proc,buf,permcount,KPROC_CONF_MODE_GET); }
-__public perm_t const *proc_setpermex(perm_t const *__restrict buf, size_t permcount) { return proc_permex(proc_self(),(perm_t *)buf,permcount,KPROC_CONF_MODE_SET); }
-__public perm_t *proc_xchpermex(perm_t *__restrict buf, size_t permcount) { return proc_permex(proc_self(),buf,permcount,KPROC_CONF_MODE_XCH); }
+__public perm_t *proc_getpermex(proc_t proc, perm_t *__restrict buf, size_t permcount) { return proc_permex(proc,buf,permcount,KPROC_PERM_MODE_GET); }
+__public perm_t const *proc_setpermex(perm_t const *__restrict buf, size_t permcount) { return proc_permex(proc_self(),(perm_t *)buf,permcount,KPROC_PERM_MODE_SET); }
+__public perm_t *proc_xchpermex(perm_t *__restrict buf, size_t permcount) { return proc_permex(proc_self(),buf,permcount,KPROC_PERM_MODE_XCH); }
 
 
-__public void *tls_get(tls_t slot) {
- return ktask_gettls(slot);
+__public ptrdiff_t tls_alloc(void const *template_, size_t size) {
+ kerrno_t error; ptrdiff_t result;
+ error = kproc_tlsalloc(template_,size,&result);
+ if __likely(KE_ISOK(error)) return result;
+ __set_errno(-error);
+ return 0;
 }
-__public int tls_set(tls_t slot, void *value) {
- kerrno_t error = ktask_settls(slot,value,NULL);
+__public int tls_free(ptrdiff_t offset) {
+ kerrno_t error;
+ error = kproc_tlsfree(offset);
  if __likely(KE_ISOK(error)) return 0;
  __set_errno(-error);
  return -1;
 }
-__public tls_t tls_alloc(void) {
- kerrno_t error; tls_t result;
- error = kproc_alloctls(&result);
- /* We assume that no process allowed to will
-  * ever allocate 2**32 tls handles... */
- if __likely(KE_ISOK(error)) return result;
- __set_errno(-error);
- return TLS_ERROR;
-}
-__public void tls_free(tls_t slot) {
- kproc_freetls(slot);
-}
+
 
 __DECL_END
 #endif

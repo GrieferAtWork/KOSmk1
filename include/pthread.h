@@ -218,10 +218,10 @@ extern pthread_id_np_t pthread_getthreadid_np(void);
 // WARNING: Any future implementation that will actually call 'destr_function',
 //          will be subject to the fact that task_terminate-ing a thread will
 //          not give that thread a chance to ever execute these destructors.
-extern int pthread_key_create(pthread_key_t *key, void (*destr_function)(void *));
-extern int pthread_key_delete(pthread_key_t key);
-extern void *pthread_getspecific(pthread_key_t key);
-extern int pthread_setspecific(pthread_key_t key, void const *pointer);
+// extern int pthread_key_create(pthread_key_t *key, void (*destr_function)(void *));
+// extern int pthread_key_delete(pthread_key_t key);
+// extern void *pthread_getspecific(pthread_key_t key);
+// extern int pthread_setspecific(pthread_key_t key, void const *pointer);
 
 
 

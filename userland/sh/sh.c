@@ -215,9 +215,6 @@ static struct option const longopts[] = {
  {NULL,0,NULL,0}
 };
 
-__attribute_thread int foo = 42;
-__attribute_thread int bar = 84;
-
 #define X "_/"
 #define _ "  "
 
@@ -229,6 +226,9 @@ static char const welcome[] =
 "\033[2K "    X X X X X _ X _ X _ _ X _ _ _ X _ _ _ X X "\n"
 "\033[2K"     _ X _ X _ _ X _ _ X _ _ X X X _ _ X X X _ "\n"
 "\033[m";
+
+__attribute_thread int foo = 42;
+__attribute_thread int bar = 84;
 
 int main(int argc, char *argv[]) {
  int error; struct rline *r; int optc;

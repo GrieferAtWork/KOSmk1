@@ -150,7 +150,7 @@ kproc_exec(struct kshlib *__restrict exec_main,
  }
  /* NOTE: The process should not be a zombie at this point,
   *       as we (being a critical task) are still alive. */
- error = kproc_locks(self,KPROC_LOCK_MODS|KPROC_LOCK_TLSMAN|KPROC_LOCK_ENVIRON);
+ error = kproc_locks(self,KPROC_LOCK_MODS|KPROC_LOCK_TLS|KPROC_LOCK_ENVIRON);
  assertf(KE_ISOK(error),"Why did this fail? %d",error);
  error = krwlock_beginwrite(&self->p_shm.s_lock);
  assertf(KE_ISOK(error),"Why did this fail? %d",error);
@@ -164,22 +164,28 @@ kproc_exec(struct kshlib *__restrict exec_main,
   *    have to worry about failing to allocate a new one below.
   * >> This also gives user-level code more control by allowing them
   *    to specify a custom stack to be used for exec-ed processes. */
- kshm_unmap_unlocked(kproc_getshm(self),NULL,
-                    ((size_t)caller_thread->t_ustackvp)/PAGESIZE,
-                     KSHMUNMAP_FLAG_NONE);
- kshm_unmap_unlocked(kproc_getshm(self),
-                    (void *)((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz),
-                    ((uintptr_t)0-((uintptr_t)caller_thread->t_ustackvp+caller_thread->t_ustacksz))/PAGESIZE,
-                     KSHMUNMAP_FLAG_NONE);
+ {
+  __user void *not1_begin,*not1_end;
+  __user void *not2_begin,*not2_end;
+  not1_begin = caller_thread->t_ustackvp;
+  not1_end   = (__user void *)((uintptr_t)not1_begin+caller_thread->t_ustacksz);
+  not2_begin = caller_thread->t_tls.pt_uthread;
+  not2_end   = (__user void *)((uintptr_t)not2_begin+KTLS_UTHREAD_PAGESIZE*PAGESIZE);
+  if (not1_begin > not2_begin) {
+   __user void *temp;
+   temp = not1_begin,not1_begin = not2_begin,not2_begin = temp;
+   temp = not1_end,  not1_end   = not2_end,  not2_end   = temp;
+  }
+  kshm_unmap_unlocked(kproc_getshm(self),NULL,((uintptr_t)not1_begin)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
+  kshm_unmap_unlocked(kproc_getshm(self),not1_end,((uintptr_t)not2_begin-(uintptr_t)not1_end)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
+  kshm_unmap_unlocked(kproc_getshm(self),not2_end,((uintptr_t)0-(uintptr_t)not2_end)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
+ }
  assertf(kpagedir_ismapped(kproc_getpagedir(self),caller_thread->t_ustackvp,
                            ceildiv(ktask_getustacksize(caller_thread),PAGESIZE)),
          "Be we explicitly excluded the user-stack...");
  assertf(kpagedir_ismapped(kproc_getpagedir(self),caller_thread->t_kstackvp,
                            ceildiv(ktask_getkstacksize(caller_thread),PAGESIZE)),
          "But the kernel stack should have been restricted...");
-
- // Clear TLS Variables (I don't know if we really need to do this, but it feels right...)
- ktlsman_clear(&self->p_tlsman);
 
  // Close all file descriptors marked with FD_CLOEXEC
  error = kproc_lock(self,KPROC_LOCK_FDMAN);
@@ -222,7 +228,7 @@ kproc_exec(struct kshlib *__restrict exec_main,
                      (uintptr_t)exec_main->sh_callbacks.slc_start;
  // Unlock all locks that we're still holding
  krwlock_endwrite(&self->p_shm.s_lock);
- kproc_unlocks(self,KPROC_LOCK_MODS|KPROC_LOCK_TLSMAN|KPROC_LOCK_ENVIRON);
+ kproc_unlocks(self,KPROC_LOCK_MODS|KPROC_LOCK_TLS|KPROC_LOCK_ENVIRON);
  return error;
 }
 

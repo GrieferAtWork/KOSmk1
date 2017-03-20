@@ -35,6 +35,7 @@
 #include <kos/kernel/procperm.h>
 #include <kos/kernel/procmodules.h>
 #include <kos/kernel/types.h>
+#include <kos/kernel/tls.h>
 #ifndef __KOS_KERNEL_SHM_H__
 #include <kos/kernel/shm.h>
 #endif
@@ -88,7 +89,7 @@ struct kproc {
 #define KPROC_LOCK_MODS    KMMUTEX_LOCK(0)
 #define KPROC_LOCK_FDMAN   KMMUTEX_LOCK(1)
 #define KPROC_LOCK_PERM    KMMUTEX_LOCK(2)
-#define KPROC_LOCK_TLSMAN  KMMUTEX_LOCK(3)
+#define KPROC_LOCK_TLS     KMMUTEX_LOCK(3)
 #define KPROC_LOCK_THREADS KMMUTEX_LOCK(4)
 #define KPROC_LOCK_ENVIRON KMMUTEX_LOCK(5)
  struct kmmutex       p_lock;     /*< Lock for the task context. */
@@ -97,7 +98,7 @@ struct kproc {
  struct kprocmodules  p_modules;  /*< [lock(KPROC_LOCK_MODS)] Shared libraries associated with this process. */
  struct kfdman        p_fdman;    /*< [lock(KPROC_LOCK_FDMAN)] File descriptor manager. */
  struct kprocperm     p_perm;     /*< [lock(KPROC_LOCK_PERM)] Process related, sandy limits / permissions. */
- struct ktlsman       p_tlsman;   /*< [lock(KPROC_LOCK_TLSMAN)] TLS identifiers. */
+ struct ktlsman       p_tls;      /*< [lock(KPROC_LOCK_TLS)] TLS identifiers. */
  struct ktasklist     p_threads;  /*< [lock(KPROC_LOCK_THREADS)] List of tasks using this context. */
  struct kprocenv      p_environ;  /*< [lock(KPROC_LOCK_ENVIRON)] Process environment variables. */
 };
@@ -473,22 +474,6 @@ extern __wunused __nonnull((1))       kerrno_t kproc_flushfd(struct kproc *__res
 #define kproc_truncfd(self,fd,size)                              KTASK_CRIT(kproc_truncfd_c(self,fd,size))
 #define kproc_flushfd(self,fd)                                   KTASK_CRIT(kproc_flushfd_c(self,fd))
 #endif
-
-//////////////////////////////////////////////////////////////////////////
-// Allocate/Free a TLS identifiers
-// @return: KE_DESTROYED: The given process was closed
-// @return: KE_NOMEM:     Not enough memory to allocate a new identifier
-// @return: KE_ACCES:     The process has reached its maximum amount of TLS identifiers
-extern __crit __wunused __nonnull((1,2)) kerrno_t kproc_alloctls_c(struct kproc *__restrict self, __ktls_t *__restrict result);
-extern __crit           __nonnull((1))       void kproc_freetls_c(struct kproc *__restrict self, __ktls_t slot);
-#ifdef __INTELLISENSE__
-extern __wunused __nonnull((1,2)) kerrno_t kproc_alloctls(struct kproc *__restrict self, __ktls_t *__restrict result);
-extern           __nonnull((1))       void kproc_freetls(struct kproc *__restrict self, __ktls_t slot);
-#else
-#define kproc_alloctls(self,result) KTASK_CRIT(kproc_alloctls_c(self,result))
-#define kproc_freetls(self,slot)    KTASK_CRIT(kproc_freetls_c(self,slot))
-#endif
-
 
 typedef kerrno_t (*penumenv)(char const *name, __size_t namesize, char const *value, __size_t valuesize, void *closure);
 typedef kerrno_t (*penumcmd)(char const *arg, void *closure);

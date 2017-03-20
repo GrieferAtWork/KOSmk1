@@ -88,7 +88,6 @@ typedef __u32 kperm_flag_t;
 #define KPERM_FLAG_SETPERM          KPERM_FLAG(0,0x0002) /*< Allow the process to set its own permissions (NOTE: When removed, will only affect the next call to 'kproc_perm'). */
 #define KPERM_FLAG_GETPERM_OTHER    KPERM_FLAG(0,0x0004) /*< Allow the process to read permissions of other processes (Requires 'KPERM_FLAG_GETPERM') (NOTE: When removed, will only affect the next call to 'kproc_perm'). */
 #define KPERM_FLAG_SETBARRIER       KPERM_FLAG(0,0x0010) /*< Allow the process to use 'kproc_barrier' for changing its task barrier. */
-#define KPERM_FLAG_GETBARRIER       KPERM_FLAG(0,0x0020) /*< Allow the process to use 'kproc_openbarrier' to open its barriers (WARNING: Can only be enforced when used with 'KPERM_FLAG_GETPARENT'). */
 
 /* Tasking/scheduler-related permission flags. */
 #define KPERM_FLAG_CANFORK          KPERM_FLAG(1,0x0001) /*< Allow calls to 'ktask_fork'. */
@@ -106,7 +105,7 @@ typedef __u32 kperm_flag_t;
 
 /* Filesystem/File descriptor-related permission flags. */
 #define KPERM_FLAG_CHROOT           KPERM_FLAG(3,0x0001) /*< Allow closing/reopening the KFD_ROOT special file descriptor (without this, KFD_ROOT is immutable). */
-#define KPERM_FLAG_CHDIR            KPERM_FLAG(3,0x0002) /*< Allow closing/reopening the KFD_CWD special file descriptor (without this, KFD_ROOT is immutable). */
+#define KPERM_FLAG_CHDIR            KPERM_FLAG(3,0x0002) /*< Allow closing/reopening the KFD_CWD special file descriptor (without this, KFD_CWD is immutable). */
 
 
 #define KPERM_MAXDATASIZE   (1 << 8) /*< Max size that the 'p_data' block of permissions can grow to. */
@@ -156,16 +155,16 @@ struct __packed {
 //    Also note that all permissions are designed only to be
 //    taken away, with no way of being returned to the caller.
 //  - Attempting to extend permissions normally aborts execution
-//    of the permissions buffer, unless 'KPROC_CONF_MODE_IGNORE'
+//    of the permissions buffer, unless 'KPROC_PERM_MODE_IGNORE'
 //    is set, in which case such attempts are silently ignored.
-//    NOTE: If mode is 'KPROC_CONF_MODE_XCH', the old permissions
+//    NOTE: If mode is 'KPROC_PERM_MODE_XCH', the old permissions
 //          value is still written to the 'p_data' area of the buffer.
 //  - The amount of permission elements in the given buffer is specified
 //    with the 'elem_count' argument, allowing you to modify any number
 //    of permissions with a single system call.
 //  - Attempting to set permissions not known to the kernel will
 //    either cause the function to terminate with 'KE_INVAL', or
-//    when the 'KPROC_CONF_MODE_UNKNOWN' flag was set in 'mode',
+//    when the 'KPROC_PERM_MODE_UNKNOWN' flag was set in 'mode',
 //    ignore that permission and continue processing more requests.
 //  - Attempting to get permissions/flags not known to the kernel will
 //    cause the kernel to overwrite the 'p_id' field of that permission
@@ -185,7 +184,7 @@ struct __packed {
 // >>   struct kperm p;
 // >>   p.p_name              = KPERM_NAME_FLAG;
 // >>   p.p_data.d_flag_group = KPERM_FLAG_GETGROUP(flag);
-// >>   error = kproc_perm(proc,&p,1,KPROC_CONF_MODE_GET);
+// >>   error = kproc_perm(proc,&p,1,KPROC_PERM_MODE_GET);
 // >>   if (KE_ISERR(error)) { errno = -error; return -1; }
 // >>   /* Extract the flag mask. */
 // >>   flag = KPERM_FLAG_GETMASK(flag);
@@ -202,7 +201,7 @@ struct __packed {
 // >>   p.p_data.d_flag = flag; /* Set the flags we want to remove, not those we want to keep! */
 // >>   /* Exchange permissions, so the callback will
 // >>    * return the old permissions of the group. */
-// >>   error = kproc_perm(proc,&p,1,KPROC_CONF_MODE_XCH);
+// >>   error = kproc_perm(proc,&p,1,KPROC_PERM_MODE_XCH);
 // >>   if (KE_ISERR(error)) { errno = -error; return -1; }
 // >>   /* Extract the flag mask. */
 // >>   flag = KPERM_FLAG_GETMASK(flag);
@@ -226,12 +225,12 @@ struct __packed {
 // >>   p[1].p_data.d_prio = +10;
 // >>   /* Set the new permissions (Two at once)
 // >>    * Ignore failure if we're already more restricted than -10..+10).
-// >>    * HINT: Use 'KPROC_CONF_MODE_XCH' to simultaniously extract the old permissions. */
-// >>   error = kproc_perm(proc,&p[0],2,KPROC_CONF_MODE_SET|KPROC_CONF_MODE_IGNORE);
+// >>    * HINT: Use 'KPROC_PERM_MODE_XCH' to simultaniously extract the old permissions. */
+// >>   error = kproc_perm(proc,&p[0],2,KPROC_PERM_MODE_SET|KPROC_PERM_MODE_IGNORE);
 // >>   if (KE_ISERR(error)) { errno = -error; return -1; }
 // >>   return 0;
 // >> }
-// NOTE: When using 'KPROC_CONF_MODE_GET' or 'KPROC_CONF_MODE_XCH' to
+// NOTE: When using 'KPROC_PERM_MODE_GET' or 'KPROC_PERM_MODE_XCH' to
 //       retrieve information about permissions, on input each entry of 'buf'
 //       contains the 'd_size' of the associated data block and implicitly
 //       inform the kernel where the next permission (if existing) can be
@@ -256,31 +255,31 @@ struct __packed {
 //       data blocks.
 // @param: procfd: A file descriptor for a process or task. When for a task, the associated process is used instead.
 // @return: KE_OK:        Successfully read/set/exchanged the given permissions.
-//                        NOTE: If 'KPROC_CONF_MODE_IGNORE' was set, some permissions
+//                        NOTE: If 'KPROC_PERM_MODE_IGNORE' was set, some permissions
 //                              may not have been set properly due to prior, more
 //                              restrictive permission modifications.
-// @return: KE_ACCESS:   [!(mode&KPROC_CONF_MODE_IGNORE) || (mode&0xf) != KPROC_CONF_MODE_GET]
-//                       [!caller_has_permission(KPERM_FLAG_GETPERM) && (mode&0xf) != KPROC_CONF_MODE_SET]
-//                       [!caller_has_permission(KPERM_FLAG_SETPERM) && (mode&0xf) != KPROC_CONF_MODE_GET]
+// @return: KE_ACCESS:   [!(mode&KPROC_PERM_MODE_IGNORE) || (mode&0xf) != KPROC_PERM_MODE_GET]
+//                       [!caller_has_permission(KPERM_FLAG_GETPERM) && (mode&0xf) != KPROC_PERM_MODE_SET]
+//                       [!caller_has_permission(KPERM_FLAG_SETPERM) && (mode&0xf) != KPROC_PERM_MODE_GET]
 //                        You are either not permitted to read permissions, change your own permissions,
 //                        or are attempting to modify the permissions of a process other than kproc_self().
-//                        NOTE: Even when 'KPROC_CONF_MODE_IGNORE' is set, this error may still
+//                        NOTE: Even when 'KPROC_PERM_MODE_IGNORE' is set, this error may still
 //                              be returned if you are not allowed to get/set permissions at all.
-// @return: KE_INVAL:    [!(mode&KPROC_CONF_MODE_UNKNOWN) && (mode&0xf) != KPROC_CONF_MODE_GET] Attempted to set an unknown permission.
+// @return: KE_INVAL:    [!(mode&KPROC_PERM_MODE_UNKNOWN) && (mode&0xf) != KPROC_PERM_MODE_GET] Attempted to set an unknown permission.
 // @return: KE_TIMEDOUT:  A blocking operation took place and timed out due to a prior call to ktask_setalarm()
 // @return: KE_DESTROYED: Either the given, or the calling process was destroyed.
 // @return: KE_BADF:      The given file descriptor is invalid or not a task/process.
 // @return: KE_FAULT:     The given buf or a part of it describes a faulty/unmapped area of memory.
-// @return: KE_BUFSIZE:  [(mode&0xf) != KPROC_CONF_MODE_GET] The 'p_size' field was of insufficient size.
+// @return: KE_BUFSIZE:  [(mode&0xf) != KPROC_PERM_MODE_GET] The 'p_size' field was of insufficient size.
 __local _syscall4(kerrno_t,kproc_perm,int,procfd,
-                  struct kperm /*const_if((mode&0xf) == KPROC_CONF_MODE_SET)*/ *,buf,
+                  struct kperm /*const_if((mode&0xf) == KPROC_PERM_MODE_SET)*/ *,buf,
                   __size_t,elem_count,int,mode);
 #endif /* !__NO_PROTOTYPES */
-#define KPROC_CONF_MODE_GET        0 /*< Read restrictions of a process. */
-#define KPROC_CONF_MODE_SET        1 /*< Write restrictions of a process (Only ever allowed if 'procfd' refers to 'kproc_self()'). */
-#define KPROC_CONF_MODE_XCH        2 /*< Exchange restrictions */
-#define KPROC_CONF_MODE_IGNORE  0x10 /*< FLAG: Ignore illegal attempts at extending permissions and continue parsing more requests. */
-#define KPROC_CONF_MODE_UNKNOWN 0x20 /*< FLAG: Ignore attempts at setting unknown permissions. */
+#define KPROC_PERM_MODE_GET        0 /*< Read restrictions of a process. */
+#define KPROC_PERM_MODE_SET        1 /*< Write restrictions of a process (Only ever allowed if 'procfd' refers to 'kproc_self()'). */
+#define KPROC_PERM_MODE_XCH        2 /*< Exchange restrictions */
+#define KPROC_PERM_MODE_IGNORE  0x10 /*< FLAG: Ignore illegal attempts at extending permissions and continue parsing more requests. */
+#define KPROC_PERM_MODE_UNKNOWN 0x20 /*< FLAG: Ignore attempts at setting unknown permissions. */
 
 
 __DECL_END

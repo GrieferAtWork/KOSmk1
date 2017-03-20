@@ -140,19 +140,19 @@ int pthread_getschedparam(pthread_t target_thread, int *policy,
 
 
 
-int pthread_key_create(pthread_key_t *key, void (*destr_function)(void *)) {
- if (destr_function != NULL) return -ENOSYS; // TODO
- return -kproc_alloctls(key);
-}
-int pthread_key_delete(pthread_key_t key) {
- return -kproc_freetls(key);
-}
-void *pthread_getspecific(pthread_key_t key) {
- return ktask_gettls(key);
-}
-int pthread_setspecific(pthread_key_t key, void const *pointer) {
- return ktask_settls(key,(void *)pointer,NULL);
-}
+// int pthread_key_create(pthread_key_t *key, void (*destr_function)(void *)) {
+//  if (destr_function != NULL) return -ENOSYS; // TODO
+//  return -kproc_alloctls(key);
+// }
+// int pthread_key_delete(pthread_key_t key) {
+//  return -kproc_freetls(key);
+// }
+// void *pthread_getspecific(pthread_key_t key) {
+//  return ktask_gettls(key);
+// }
+// int pthread_setspecific(pthread_key_t key, void const *pointer) {
+//  return ktask_settls(key,(void *)pointer,NULL);
+// }
 
 
 

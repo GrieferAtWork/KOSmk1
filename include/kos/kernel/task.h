@@ -31,7 +31,7 @@
 #include <kos/kernel/object.h>
 #include <kos/kernel/paging.h>
 #include <kos/kernel/sched_yield.h>
-#include <kos/kernel/tls.h>
+#include <kos/kernel/tls-perthread.h>
 #include <kos/kernel/tss.h>
 #include <kos/kernel/types.h>
 #include <kos/kernel/interrupts.h>
@@ -1568,59 +1568,6 @@ ktask_setnameex(struct ktask *__restrict self,
 extern __crit __wunused __nonnull((1,2)) kerrno_t
 ktask_setnameex_ck(struct ktask *__restrict self,
                    char const *__restrict name, __size_t maxlen);
-#endif
-
-//////////////////////////////////////////////////////////////////////////
-// Get the value of a TLS slot in the given task.
-// @return: NULL: Invalid/Uninitialized TLS slot
-#ifdef __INTELLISENSE__
-extern __wunused __nonnull((1)) void *
-ktask_gettls(struct ktask const *__restrict self,
-             __ktls_t tlsid);
-#else
-#define __ktask_gettls_irqlock(self,tlsid) \
- __xblock({ void *__tgtres; struct ktask const *const __tgtself = (self);\
-            kassert_ktask(__tgtself);\
-            NOIRQ_BEGINLOCK(ktask_trylock((struct ktask *)__tgtself,KTASK_LOCK_TLS));\
-            __tgtres = ktlspt_get(&__tgtself->t_tls,tlsid);\
-            NOIRQ_ENDUNLOCK(ktask_unlock((struct ktask *)__tgtself,KTASK_LOCK_TLS));\
-            __xreturn __tgtres;\
- })
-#define __ktask_gettls_deflock(self,tlsid) \
- __xblock({ void *__tgtres; struct ktask const *const __tgtself = (self);\
-            kassert_ktask(__tgtself);\
-            ktask_lock((struct ktask *)__tgtself,KTASK_LOCK_TLS);\
-            __tgtres = ktlspt_get(&__tgtself->t_tls,tlsid);\
-            ktask_unlock((struct ktask *)__tgtself,KTASK_LOCK_TLS);\
-            __xreturn __tgtres;\
- })
-#define ktask_gettls(self,tlsid) \
- (KTASK_CRIT_P\
-  ? __ktask_gettls_deflock(self,tlsid)\
-  : __ktask_gettls_irqlock(self,tlsid))
-#endif
-
-//////////////////////////////////////////////////////////////////////////
-// Set the value of a TLS slot in the given task.
-// >> An optional 'oldvalue' will be filled with the old TLS value when non-NULL.
-// @return: KE_OK:    The TLS value was successfully set.
-// @return: KE_INVAL: The given TLS identifier is invalid/free/unused.
-// @return: KS_FOUND: The given 'slot' was already allocated and a
-//                    potential previous value was overwritten.
-//                    NOTE: This does not mean that this was
-//                          the first time 'slot' was set.
-// @return: KE_NOMEM: The given 'slot' had yet to be set, and when attempting
-//                    to set it just now, the kernel failed to reallocate its
-//                    vector stored TLS values.
-extern __crit __wunused __nonnull((1)) kerrno_t
-ktask_settls_c(struct ktask *__restrict self, __ktls_t tlsid,
-               void *value, void **oldvalue);
-#ifdef __INTELLISENSE__
-extern __wunused __nonnull((1)) kerrno_t
-ktask_settls(struct ktask *__restrict self, __ktls_t tlsid,
-             void *value, void **oldvalue);
-#else
-#define ktask_settls(self,tlsid,value,oldvalue) KTASK_CRIT(ktask_settls_c(self,tlsid,value,oldvalue))
 #endif
 
 #if KCONFIG_HAVE_TASK_DEADLOCK_CHECK

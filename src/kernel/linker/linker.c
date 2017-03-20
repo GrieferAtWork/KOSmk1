@@ -230,7 +230,7 @@ kshmregion_loaddata(struct kshmregion *__restrict self,
  size_t maxbytes,copysize;
  __kernel void *addr; kerrno_t error;
  while (filesz) {
-  addr = kshmregion_getphysaddr_s(self,offset,&maxbytes);
+  addr = kshmregion_translate(self,offset,&maxbytes);
   copysize = min(maxbytes,filesz);
   offset += copysize,filesz -= copysize;
   error = kfile_kernel_readall(fp,addr,copysize);
@@ -238,7 +238,7 @@ kshmregion_loaddata(struct kshmregion *__restrict self,
   if __unlikely(!filesz) break;
  }
  /* Fill the rest with ZEROs */
- while ((addr = kshmregion_getphysaddr_s(self,offset,&maxbytes)) != NULL) {
+ while ((addr = kshmregion_translate(self,offset,&maxbytes)) != NULL) {
   memset(addr,0x00,maxbytes);
   offset += maxbytes;
  }
@@ -293,7 +293,7 @@ ksecdata_translate_ro(struct ksecdata const *__restrict self,
   && (kshmregion_getflags(iter->sls_region)&KSHMREGION_FLAG_READ)
 #endif
       ) {
-   return kshmregion_getphysaddr_s(iter->sls_region,addr-iter->sls_albase,maxsize);
+   return kshmregion_translate(iter->sls_region,addr-iter->sls_albase,maxsize);
   }
  }
  return NULL;
@@ -307,7 +307,7 @@ ksecdata_translate_rw(struct ksecdata *__restrict self,
   if (addr >= iter->sls_base
   &&  addr < iter->sls_base+iter->sls_size
   && (kshmregion_getflags(iter->sls_region)&KSHMREGION_FLAG_WRITE)) {
-   return kshmregion_getphysaddr_s(iter->sls_region,addr-iter->sls_albase,maxsize);
+   return kshmregion_translate(iter->sls_region,addr-iter->sls_albase,maxsize);
   }
  }
  return NULL;

@@ -291,6 +291,9 @@
     <ClInclude Include="..\include\kos\kernel\syscall_list.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\tls-perthread.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.c">
@@ -428,6 +431,9 @@
     <ClCompile Include="..\src\kernel\cmos.c">
       <Filter>src\kernel</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\kernel\sched\tls.c">
+      <Filter>src\kernel\sched</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\src\kernel\dev\storage-ata-rwlba.c.inl">
@@ -531,9 +537,6 @@
       <Filter>src\kernel\sched</Filter>
     </None>
     <None Include="..\src\kernel\sched\task-util.c.inl">
-      <Filter>src\kernel\sched</Filter>
-    </None>
-    <None Include="..\src\kernel\sched\tls.c.inl">
       <Filter>src\kernel\sched</Filter>
     </None>
     <None Include="..\src\kernel\sched\proc-attr.c.inl">

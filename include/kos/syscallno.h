@@ -94,10 +94,6 @@ __DECL_BEGIN
 #define SYS_ktask_fork         58 /*< _syscall2(kerrno_t,ktask_fork,uintptr_t *,childfd_or_exitcode,__u32,flags); */
 #define SYS_ktask_exec         59 /*< _syscall4(kerrno_t,ktask_exec,char const *,path,__size_t,pathmax,struct kexecargs const *,args,__u32,flags); */
 #define SYS_ktask_fexec        60 /*< _syscall3(kerrno_t,ktask_fexec,int,fd,struct kexecargs const *,args,__u32,flags); */
-#define SYS_ktask_gettls       61 /*< _syscall1(void *,ktask_gettls,ktls_t,slot); */
-#define SYS_ktask_settls       62 /*< _syscall3(kerrno_t,ktask_settls,ktls_t,slot,void *,value,void **,oldvalue); */
-#define SYS_ktask_gettlsof     63 /*< _syscall2(void *,ktask_gettlsof,int,self,ktls_t,slot); */
-#define SYS_ktask_settlsof     64 /*< _syscall4(kerrno_t,ktask_settlsof,int,self,ktls_t,slot,void *,value,void **,oldvalue); */
 
 #define SYS_kproc_enumfd       65  /*< _syscall4(kerrno_t,kproc_enumfd,int,self,int *__restrict,fdv,size_t,fdc,size_t *,reqfdc); */
 #define SYS_kproc_openfd       66  /*< _syscall3(int,kproc_openfd,int,self,int,fd,int,flags); */
@@ -107,9 +103,8 @@ __DECL_BEGIN
 #define SYS_kproc_openroot     SYS_ktask_openroot               /*< _syscall1(int,kproc_openroot,int,self); */
 #define SYS_kproc_openthread   SYS_ktask_openchild              /*< _syscall2(int,kproc_openthread,int,self,ktid_t,tid); */
 #define SYS_kproc_enumthreads  SYS_ktask_enumchildren           /*< _syscall4(kerrno_t,kproc_enumthreads,int,self,ktid_t *__restrict,idv,size_t,idc,size_t *,reqidc); */
-#define SYS_kproc_alloctls     70 /*< _syscall1(kerrno_t,kproc_alloctls,ktls_t *,result); */
-#define SYS_kproc_freetls      71 /*< _syscall1(kerrno_t,kproc_freetls,ktls_t,slot); */
-#define SYS_kproc_enumtls      72 /*< _syscall4(kerrno_t,kproc_enumtls,int,self,ktls_t *__restrict,tlsv,size_t,tlsc,size_t *,reqtlsc); */
+#define SYS_kproc_tlsalloc     70 /*< _syscall2(kerrno_t,kproc_tlsalloc,void const *,template_,size_t,template_size) && return:(ecx=tls_offset); */
+#define SYS_kproc_tlsfree      71 /*< _syscall1(kerrno_t,kproc_tlsfree,__ptrdiff_t,tls_offset); */
 #define SYS_kproc_enumpid      73 /*< _syscall3(kerrno_t,kproc_enumpid,__pid_t *__restrict,pidv,size_t,pidc,size_t *,reqpidc); */
 #define SYS_kproc_openpid      74 /*< _syscall1(int,kproc_openpid,__pid_t,pid); */
 #define SYS_kproc_getpid       75 /*< _syscall1(__pid_t,kproc_getpid,int,self); */

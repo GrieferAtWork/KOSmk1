@@ -85,40 +85,6 @@ kproc_enumthreads_c(struct kproc const *__restrict self,
  return 0;
 }
 
-
-__crit kerrno_t
-kproc_alloctls_c(struct kproc *__restrict self,
-                 __ktls_t *__restrict result) {
- kerrno_t error;
- KTASK_CRIT_MARK
- kassert_kproc(self);
- error = kproc_lock(self,KPROC_LOCK_TLSMAN);
- if __unlikely(KE_ISERR(error)) return error;
- error = ktlsman_alloctls(&self->p_tlsman,result);
- kproc_unlock(self,KPROC_LOCK_TLSMAN);
- return error;
-}
-__crit void kproc_freetls_c(struct kproc *__restrict self,
-                            __ktls_t slot) {
- struct ktask **iter,**end,*elem;
- kerrno_t lockerror;
- KTASK_CRIT_MARK
- kassert_kproc(self);
- lockerror = kmmutex_locks(&self->p_lock,KPROC_LOCK_TLSMAN|KPROC_LOCK_THREADS);
- // NOTE: A closed process should not have any TLS slots, but lets be safe...
- ktlsman_freetls(&self->p_tlsman,slot);
- end = (iter = self->p_threads.t_taskv)+self->p_threads.t_taska;
- for (; iter != end; ++iter) if ((elem = *iter) != NULL) {
-  ktask_lock(elem,KTASK_LOCK_TLS);
-  ktlspt_del(&elem->t_tls,slot);
-  ktask_unlock(elem,KTASK_LOCK_TLS);
- }
- if __likely(KE_ISOK(lockerror)) {
-  kmmutex_unlocks(&self->p_lock,KPROC_LOCK_TLSMAN|KPROC_LOCK_THREADS);
- }
-}
-
-
 __DECL_END
 
 #endif /* !__KOS_KERNEL_SCHED_PROC_TASKS_C_INL__ */

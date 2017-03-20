@@ -26,191 +26,141 @@
 #include <kos/config.h>
 #ifdef __KERNEL__
 #include <kos/kernel/object.h>
+#include <kos/kernel/paging.h>
+#include <kos/kernel/rwlock.h>
+#include <kos/kernel/tls-perthread.h>
 #include <kos/types.h>
 #include <stdint.h>
 #include <malloc.h>
 
+/* Task/Thread local storage */
+
 __DECL_BEGIN
 
-#define KOBJECT_MAGIC_TLSMAN 0x77522A5 // TLSMAN
-#define KOBJECT_MAGIC_TLSPT  0x77597   // TLSPT
+#define KOBJECT_MAGIC_TLSMAN 0x77522A5 /*< TLSMAN */
 
 #ifndef __ASSEMBLY__
 #define kassert_ktlsman(self) kassert_object(self,KOBJECT_MAGIC_TLSMAN)
-#define kassert_ktlspt(self)  kassert_object(self,KOBJECT_MAGIC_TLSPT)
 
-#define KTLS_LOGICAL_MAXIMUM  SIZE_MAX
-
-// Task local storage
+struct ktlsmapping {
+ struct ktlsmapping       *tm_prev;   /*< [0..1][lock(:tls_lock)][owned] TLS mapping with a lower offset than this. */
+ __ref struct kshmregion  *tm_region; /*< [1..1][const] Region of memory. */
+ __pagealigned ktls_addr_t tm_offset; /*< [const] Offset of this mapping from the TLS register (lowest address). */
+ __size_t                  tm_pages;  /*< [!0][const][== tm_region->sre_chunk.sc_pages] Mirror of the total page counter in tm_region. */
+};
 
 struct ktlsman {
- // TLS Manager, stored by a task context
+ /* TLS Manager (per-process)
+  * NOTE: When both 'tls_lock' (write-mode), as well as the associated
+  *       process's 'KPROC_LOCK_THREADS' lock are required to be held,
+  *       'tls_lock' (write-mode) must be acquired first. */
  KOBJECT_HEAD
- __size_t tls_cnt;   /*< Current amount of TLS ids in use. */
- __size_t tls_max;   /*< Max amount of allowed TLS ids. */
- __size_t tls_usedc; /*< Highest valid TLS index+1. */
- __u8    *tls_usedv; /*< [0..tls_usedc/8][owned] Bit-vector masking valid TLS ids. */
- __size_t tls_free;  /*< Hint towards a free TLS slot (may not actually be valid). */
+ struct krwlock      tls_lock;      /*< Lock for this TLS manager. */
+ struct ktlsmapping *tls_hiend;     /*< [lock(tls_lock)][owned] High-address end of the TLS mapping chain. */
+ __size_t            tls_map_pages; /*< [lock(tls_lock)] Total amount of pages required for TLS mappings. */
+ __size_t            tls_all_pages; /*< [lock(tls_lock)] Total size (in pages) of continuous, unused user address space required to map this chain in SHM (Including any required for 'struct ktls_uthread'). */
 };
 #define KTLSMAN_INITROOT \
- {KOBJECT_INIT(KOBJECT_MAGIC_TLSMAN) 0,KTLS_LOGICAL_MAXIMUM,0,NULL,0}
+ {KOBJECT_INIT(KOBJECT_MAGIC_TLSMAN) KRWLOCK_INIT,NULL,0,KTLS_UTHREAD_PAGESIZE}
 
-#ifdef __INTELLISENSE__
-extern void ktlsman_initroot(struct ktlsman *__restrict self);
+//////////////////////////////////////////////////////////////////////////
+// Initialize/Finalize a given TLS manager.
+extern void ktlsman_init(struct ktlsman *__restrict self);
 extern void ktlsman_quit(struct ktlsman *__restrict self);
-extern void ktlsman_clear(struct ktlsman *__restrict self);
-#else
-#define ktlsman_initroot(self) \
- __xblock({ struct ktlsman *const __ktlsself = (self);\
-            kobject_init(__ktlsself,KOBJECT_MAGIC_TLSMAN);\
-            __ktlsself->tls_cnt   = 0;\
-            __ktlsself->tls_max   = KTLS_LOGICAL_MAXIMUM;\
-            __ktlsself->tls_usedc = 0;\
-            __ktlsself->tls_usedv = NULL;\
-            __ktlsself->tls_free  = 0;\
-            (void)0;\
- })
-#define ktlsman_quit(self)  free((self)->tls_usedv)
-#define ktlsman_clear(self) \
- __xblock({ struct ktlsman *const __ktlsself = (self);\
-            free(__ktlsself->tls_usedv);\
-            __ktlsself->tls_cnt   = 0;\
-            __ktlsself->tls_usedc = 0;\
-            __ktlsself->tls_usedv = NULL;\
-            __ktlsself->tls_free  = 0;\
-            (void)0;\
- })
-#endif
 
+
+struct ktlspt;
+struct kproc;
+struct kshmregion;
 
 //////////////////////////////////////////////////////////////////////////
 // Initializes a given TLS Manager as the copy of another.
-// @return: KE_NOMEM: Not enough memory to complete the operation
-extern kerrno_t ktlsman_initcopy(struct ktlsman *self, struct ktlsman const *right);
-
-//////////////////////////////////////////////////////////////////////////
-// Allocates a new TLS identifier
-// @return: KE_OK:    A new slot was allowed and '*result' was filled with it.
-// @return: KS_FOUND: An free slot was reused (NOT AN ERROR)
-// @return: KE_NOMEM: Not enough memory available to complete the operation.
-// @return: KE_ACCES: Too many TLS ids.
+// @return: KE_OK:    Successfully initialized the given TLS manager.
+// @return: KE_NOMEM: Not enough memory to complete the operation.
 extern __wunused __nonnull((1,2)) kerrno_t
-ktlsman_alloctls(struct ktlsman *__restrict self,
-                 __ktls_t *__restrict result);
+ktlsman_initcopy(struct ktlsman *__restrict self,
+                 struct ktlsman const *__restrict right);
 
 //////////////////////////////////////////////////////////////////////////
-// Frees a previously allocated TLS identifier
-// NOTE: The caller is responsible for invalidating the
-//       given slot in all tasks that may have used it prior.
-extern void ktlsman_freetls(struct ktlsman *__restrict self, __ktls_t slot);
+// Allocate/Free space of sufficient size for a given SHM region.
+// Using COW semantics, upon success that region will be mapped in
+// all tasks (threads) in the given process at the returned offset.
+// >> Since COW is used, the actual physical TLS data is only copied
+//    once any thread begins writing to the associated pages.
+// NOTE: Memory stored in the given region is used as a template.
+// NOTE: During remapping, the TLS vector of some threads might not
+//       be possible to be extended. - In such cases, those threads
+//       are suspended momentarily, and their LDT register is updated
+//       to reflect some relocated mapping.
+// @param: offset: Upon success, the offset from the TLS segment is stored here.
+//                 In most situations, that offset is then re-used during relocations to
+//                 allow the associated binary to talk with variables in its TLS segment.
+// @param: page_alignment: Multi-page alignment. - Can be used to align the region by more than one page. (Must not be ZERO(0))
+// @return: KE_OK:         Successfully allocated a new TLS memory region and mapped it into all threads.
+// @return: KE_NOMEM:      Not enough available memory to create required mappings.
+// @return: KE_NOSPC:      Failed to locate enough unused address ranges to map the region in all existing threads.
+// @return: KE_OVERFLOW:   A reference counter would have overflown.
+// @return: KE_INTR:       The calling process was interrupted.
+// @return: KE_DESTROYED:  The TLS manager or thread list of the given process was closed.
+extern __crit __wunused __nonnull((1,2,3)) kerrno_t
+kproc_tls_alloc_inherited(struct kproc *__restrict self,
+                          __ref struct kshmregion *__restrict region,
+                          ktls_addr_t *__restrict offset);
+extern __crit __wunused __nonnull((1,2,3)) kerrno_t
+kproc_tls_alloc(struct kproc *__restrict self,
+                struct kshmregion *__restrict region,
+                ktls_addr_t *__restrict offset);
 
 //////////////////////////////////////////////////////////////////////////
-// Returns true (non-ZERO) if the given slot is valid.
-extern int ktlsman_validtls(struct ktlsman const *__restrict self, __ktls_t slot);
-#endif /* !__ASSEMBLY__ */
-
-
-#define KTLSPT_SIZEOF        (KOBJECT_SIZEOFHEAD+__SIZEOF_SIZE_T__+__SIZEOF_POINTER__)
-#define KTLSPT_OFFSETOF_VECC (KOBJECT_SIZEOFHEAD)
-#define KTLSPT_OFFSETOF_VECV (KOBJECT_SIZEOFHEAD+__SIZEOF_SIZE_T__)
-
-#ifndef __ASSEMBLY__
-struct ktlspt {
- KOBJECT_HEAD
- // TLS Per-task data block, found stored in each task
- __size_t tpt_vecc; /*< Allocated TLS vector size. */
- void   **tpt_vecv; /*< [?..?][0..tpt_vecc] Vector of TLS values (index == tls-id). */
-};
-#define KTLSPT_INIT {KOBJECT_INIT(KOBJECT_MAGIC_TLSPT) 0,NULL}
-
-
+// Free a given SHM region previously allocated as TLS memory.
+// Upon success, the region will be unmapped from all running threads.
+// @return: KE_OK:    Successfully unmapped the given region.
+// @return: KE_NOENT: The given region was not mapped.
 extern __crit __nonnull((1,2)) kerrno_t
-ktlspt_initcopy(struct ktlspt *__restrict self,
-                struct ktlspt const *__restrict right);
+kproc_tls_free_region(struct kproc *__restrict self,
+                      struct kshmregion *__restrict region);
+extern __crit __nonnull((1)) kerrno_t
+kproc_tls_free_offset(struct kproc *__restrict self,
+                      ktls_addr_t offset);
 
-#ifdef __INTELLISENSE__
-//////////////////////////////////////////////////////////////////////////
-// Initialize/Finalize a given TLS per-task data block.
-extern __nonnull((1)) void ktlspt_init(struct ktlspt *__restrict self);
-extern __nonnull((1)) void ktlspt_quit(struct ktlspt *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
-// Clear all stored TLS values.
-extern __nonnull((1)) void ktlspt_clear(struct ktlspt *__restrict self);
-#else
-#define ktlspt_init(self) \
- __xblock({ struct ktlspt *const __ktself = (self);\
-            kobject_init(__ktself,KOBJECT_MAGIC_TLSPT);\
-            __ktself->tpt_vecc = 0;\
-            __ktself->tpt_vecv = NULL;\
-            (void)0;\
- })
-#define ktlspt_quit(self) \
- __xblock({ struct ktlspt *const __ktself = (self);\
-            kassert_ktlspt(__ktself);\
-            free(__ktself->tpt_vecv);\
-            (void)0;\
- })
-#define ktlspt_clear(self) \
- __xblock({ struct ktlspt *const __ktself = (self);\
-            kassert_ktlspt(__ktself);\
-            free(__ktself->tpt_vecv);\
-            __ktself->tpt_vecv = NULL;\
-            __ktself->tpt_vecc = 0;\
-            (void)0;\
- })
-#endif
-
-
-#ifdef __INTELLISENSE__
-//////////////////////////////////////////////////////////////////////////
-// Returns the value associated with a given slot.
-// >> Returns NULL for uninitialized slots.
-// >> NOTE: Since there should be no situation in which
-//          a caller should care whether or not a given
-//          TLS id is invalid or just uninitialized, this
-//          system isn't even capable of differenciating.
-// @return: NULL: The given slot is either invalid, or uninitialized.
-extern __wunused __nonnull((1)) void *
-ktlspt_get(struct ktlspt const *__restrict self,
-           __ktls_t slot);
-#else
-#define ktlspt_get(self,slot) \
- __xblock({ struct ktlspt const *const __ktself = (self);\
-            __ktls_t const __ktslot = (slot);\
-            __xreturn __ktslot < __ktself->tpt_vecc ? __ktself->tpt_vecv[__ktslot] : NULL;\
- })
-
-#endif
+// Allocate an LDT entry for the given task and bind all existing TLS mappings.
+// The caller is expected to hold a lock to:
+//   - self->p_shm.s_lock   (write-lock)
+//   - self->p_tls.tls_lock (read-lock)
+// Upon success, the 'task->t_tls' object is initialized and the
+// caller may choose to assign 'pt_segid' to any segment register
+// to gain access to previously mapped TLS memory.
+// NOTES:
+//   - This function will also allocate an SHM region used for the uthread structure.
+//   - To allow ring-#3 code easy access to stack limits, call this function
+//     _AFTER_ you have already allocated the task's userspace stack.
+// WARNING: Call this function during task initialization is _NOT_ optional!
+// @return: KE_OK:    Successfully initialized the TLS block of the given task.
+// @return: KE_NOMEM: Not enough available memory.
+// @return: KE_NOSPC: No unmapped memory range of sufficient size for the TLS block was found.
+extern __crit __wunused __nonnull((1,2)) kerrno_t
+kproc_tls_alloc_pt_unlocked(struct kproc *__restrict self,
+                            struct ktask *__restrict task);
 
 //////////////////////////////////////////////////////////////////////////
-// Delete the TLS entry associated with the given slot,
-// possibly freeing unused vector memory along the way.
-//  - This function is a no-op if the given slot
-//    is invalid, or simply was never initialized.
-// NOTE: This function should also be called for every task
-//       inside a given task context when a given slow is deleted.
-extern __nonnull((1)) void
-ktlspt_del(struct ktlspt *__restrict self,
-           __ktls_t slot);
+// Called during task cleanup: unmap all TLS regions from the given
+//                             task and delete its LDT entry.
+// The caller is expected to hold a lock to:
+//   - self->p_shm.s_lock   (write-lock)
+extern __crit __nonnull((1,2)) void
+kproc_tls_free_pt_unlocked(struct kproc *__restrict self,
+                           struct ktask *__restrict task);
+
 
 //////////////////////////////////////////////////////////////////////////
-// Sets the value of a given TLS slot.
-// WARNING: The caller is responsible to ensure that the given slot
-//          is valid, and failure to do so will lead to a security
-//          hole of user-processes being able to overallocate TLS
-//          vectors to the point of hawking up all the available memory.
-// @return: KE_OK:    The TLS value was successfully set.
-// @return: KS_FOUND: The given 'slot' was already allocated and a
-//                    potential previous value was overwritten.
-//                    NOTE: This does not mean that this was
-//                          the first time 'slot' was set.
-// @return: KE_NOMEM: The given 'slot' had yet to be set, and when attempting
-//                    to set it just now, the kernel failed to reallocate its
-//                    vector stored TLS values.
-extern __wunused __nonnull((1)) kerrno_t
-ktlspt_set(struct ktlspt *__restrict self,
-           __ktls_t slot, void *value);
+// Called during fork() on the calling task:
+//   - Copy the TLS uthread data from 'right' into 'self'.
+extern __crit __nonnull((1,2)) void
+ktlspt_copyuthread_unlocked(struct ktlspt *__restrict self,
+                            struct ktlspt const *__restrict right);
+
 
 __DECL_END
 #endif /* !__ASSEMBLY__ */

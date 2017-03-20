@@ -113,64 +113,57 @@ KSYSCALL_DEFINE_EX2(c,int,kproc_openbarrier,int,procfd,ksandbarrier_t,level) {
  return error;
 }
 
-KSYSCALL_DEFINE_EX1(c,kerrno_t,kproc_alloctls,__user __ktls_t *,result) {
- __ktls_t kernel_result;
- kerrno_t error;
+KSYSCALL_DEFINE_EX2(cr,kerrno_t,kproc_tlsalloc,
+                    __user void const *,template_,
+                    size_t,template_size) {
+ struct ktranslator trans; kerrno_t error;
+ struct kshmregion *region;
+ struct ktask *caller = ktask_self();
+ size_t template_pages;
+ ktls_addr_t resoffset;
  KTASK_CRIT_MARK
- error = kproc_alloctls_c(kproc_self(),&kernel_result);
- if (__likely  (KE_ISOK(error)) && /* TODO: Upon failure, this isn't atomic-threadsafe. */
-     __unlikely(copy_to_user(result,&kernel_result,sizeof(kernel_result)))
-     ) { kproc_freetls_c(kproc_self(),kernel_result); error = KE_FAULT; }
- return error;
-}
-
-KSYSCALL_DEFINE_EX1(c,kerrno_t,kproc_freetls,__ktls_t,slot) {
- KTASK_CRIT_MARK
- kproc_freetls_c(kproc_self(),slot);
- return KE_OK;
-}
-
-KSYSCALL_DEFINE_EX4(c,kerrno_t,kproc_enumtls,int,procfd,
-                    __user __ktls_t *,tlsv,size_t,tlsc,
-                    __user size_t *,reqtlsc) {
- struct kproc *proc; struct ktask *roottask; kerrno_t error;
- KTASK_CRIT_MARK
- tlsv = (__ktls_t *)kpagedir_translate(ktask_self()->t_epd,tlsv); /* TODO: Unsafe. */
- reqtlsc = (size_t *)kpagedir_translate(ktask_self()->t_epd,reqtlsc); /* TODO: Unsafe. */
- if (!tlsv) tlsc = 0;
- proc = kproc_getfdproc(kproc_self(),procfd);
- if __unlikely(!proc) error = KE_BADF;
- else {
-  roottask = kproc_getroottask(proc);
-  if __unlikely(!roottask) {
-   error = KE_DESTROYED;
-   kproc_decref(proc);
-  } else if __unlikely(!ktask_accessgm(roottask)) {
-   ktask_decref(roottask);
-   kproc_decref(proc);
-   error = KE_ACCES;
-  } else {
-   ktask_decref(roottask);
-   error = kproc_lock(proc,KPROC_LOCK_TLSMAN);
-   if __likely(KE_ISOK(error)) {
-#define GETBIT(i) (proc->p_tlsman.tls_usedv[(i)/8] & (1 << ((i)%8)))
-    size_t i,size,*iter,*end;
-    end = (iter = tlsv)+tlsc;
-    size = proc->p_tlsman.tls_usedc;
-    for (i = 0; i < size; ++i) if (GETBIT(i)) {
-     if (iter < end) *iter = i;
-     ++iter;
-    }
-    assert((size_t)(iter-tlsv) == proc->p_tlsman.tls_cnt);
-    if (reqtlsc) *reqtlsc = (size_t)(iter-tlsv);
-#undef GETBIT
-    kproc_unlock(proc,KPROC_LOCK_TLSMAN);
-   }
-   kproc_decref(proc);
+ template_pages = ceildiv(template_size,PAGESIZE);
+ region = kshmregion_newram(template_pages,
+                            KSHMREGION_FLAG_READ|
+                            KSHMREGION_FLAG_WRITE|
+                            KSHMREGION_FLAG_LOSEONFORK);
+ if __unlikely(!region) return KE_NOMEM;
+ /* Initialize the TLS region with the given template, or fill it with ZEROes. */
+ if (template_) {
+  size_t max_dst,max_src;
+  kshmregion_addr_t region_address = 0;
+  __kernel void *kdst,*ksrc;
+  error = ktranslator_init(&trans,caller);
+  if __unlikely(KE_ISERR(error)) goto err_region;
+  while ((kdst = kshmregion_translate_fast(region,region_address,&max_dst)) != NULL &&
+         (ksrc = ktranslator_exec(&trans,template_,max_dst,&max_src,0)) != NULL) {
+   memcpy(kdst,ksrc,max_src);
+   if ((template_size -= max_src) == 0) break;
+   region_address           += max_src;
+   *(uintptr_t *)&template_ += max_src;
   }
+  ktranslator_quit(&trans);
+  /* Make sure the entire template got copied. */
+  if __unlikely(template_size) { error = KE_FAULT; goto err_region; }
+ } else {
+  kshmregion_memset(region,0);
  }
+ /* Allocate a new TLS block using the new region as template. */
+ error = kproc_tls_alloc_inherited(ktask_getproc(caller),
+                                   region,&resoffset);
+ if __unlikely(KE_ISERR(error)) goto err_region;
+ regs->regs.ecx = (uintptr_t)resoffset;
+ return error;
+err_region:
+ kshmregion_decref_full(region);
  return error;
 }
+KSYSCALL_DEFINE_EX1(c,kerrno_t,kproc_tlsfree,
+                    ptrdiff_t,tls_offset) {
+ KTASK_CRIT_MARK
+ return kproc_tls_free_offset(kproc_self(),tls_offset);
+}
+
 
 KSYSCALL_DEFINE_EX3(c,kerrno_t,kproc_enumpid,__user __pid_t *,pidv,
                     size_t,pidc,__user size_t *,reqpidc) {
@@ -415,13 +408,13 @@ KSYSCALL_DEFINE_EX4(c,kerrno_t,kproc_perm,int,procfd,
  KTASK_CRIT_MARK
  proc = kproc_getfdproc(caller,procfd);
  if __unlikely(!proc) return KE_BADF;
- if (basic_mode == KPROC_CONF_MODE_SET ||
-     basic_mode == KPROC_CONF_MODE_XCH) {
+ if (basic_mode == KPROC_PERM_MODE_SET ||
+     basic_mode == KPROC_PERM_MODE_XCH) {
   /* Check if write permissions are allowed. */
   if (proc != caller || !kproc_hasflag(caller,KPERM_FLAG_SETPERM)
       ) { error = KE_ACCES; goto end_proc; }
-  if (basic_mode == KPROC_CONF_MODE_XCH) goto check_getperm;
- } else if (basic_mode == KPROC_CONF_MODE_GET) {
+  if (basic_mode == KPROC_PERM_MODE_XCH) goto check_getperm;
+ } else if (basic_mode == KPROC_PERM_MODE_GET) {
   __STATIC_ASSERT(KPERM_FLAG_GETGROUP(KPERM_FLAG_GETPERM|KPERM_FLAG_GETPERM_OTHER) ==
                   KPERM_FLAG_GETGROUP(KPERM_FLAG_GETPERM));
 check_getperm:
@@ -440,7 +433,7 @@ check_getperm:
   if __unlikely(copy_from_user(&perm,buf,offsetof(struct kperm,p_data))) goto err_fault;
   partsize = (size_t)perm.p_size;
   assert(partsize <= KPERM_MAXDATASIZE); /*< There should ~really~ be no way for this to fail... */
-  if (basic_mode != KPROC_CONF_MODE_GET) {
+  if (basic_mode != KPROC_PERM_MODE_GET) {
    /* We need input data. */
    if __unlikely(copy_from_user(&perm.p_data,&buf->p_data,partsize)) goto err_fault;
   } else if (perm.p_id == KPERM_GETID(KPERM_NAME_FLAG)) {
@@ -452,18 +445,18 @@ check_getperm:
   }
   partsize += offsetof(struct kperm,p_data);
   switch (basic_mode) {
-   case KPROC_CONF_MODE_GET:
+   case KPROC_PERM_MODE_GET:
     error = kproc_perm_get(proc,&perm);
     if (error == KE_INVAL) perm.p_id = 0,error = KE_OK;
     goto normal_handler;
-   case KPROC_CONF_MODE_SET: error = kproc_perm_set(proc,&perm); break;
-   case KPROC_CONF_MODE_XCH: error = kproc_perm_xch(proc,&perm); break;
+   case KPROC_PERM_MODE_SET: error = kproc_perm_set(proc,&perm); break;
+   case KPROC_PERM_MODE_XCH: error = kproc_perm_xch(proc,&perm); break;
    default: __compiler_unreachable();
   }
-       if (error == KE_INVAL && mode&KPROC_CONF_MODE_UNKNOWN) error = KE_OK;
-  else if (error == KE_ACCES && mode&KPROC_CONF_MODE_IGNORE)  error = KE_OK;
+       if (error == KE_INVAL && mode&KPROC_PERM_MODE_UNKNOWN) error = KE_OK;
+  else if (error == KE_ACCES && mode&KPROC_PERM_MODE_IGNORE)  error = KE_OK;
   else normal_handler: if __unlikely(KE_ISERR(error)) break;
-  if (basic_mode != KPROC_CONF_MODE_SET) {
+  if (basic_mode != KPROC_PERM_MODE_SET) {
    /* Copy our buffer back into userspace. */
    if __unlikely(copy_to_user(buf,&perm,partsize)) goto err_fault;
   }

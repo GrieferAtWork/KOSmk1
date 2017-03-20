@@ -124,6 +124,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kos", "kos", "{0BC61691-24B
 		..\include\kos\syscallno.h = ..\include\kos\syscallno.h
 		..\include\kos\sysconf.h = ..\include\kos\sysconf.h
 		..\include\kos\syslog.h = ..\include\kos\syslog.h
+		..\include\kos\task-tls.h = ..\include\kos\task-tls.h
 		..\include\kos\task.h = ..\include\kos\task.h
 		..\include\kos\time.h = ..\include\kos\time.h
 		..\include\kos\timespec.h = ..\include\kos\timespec.h

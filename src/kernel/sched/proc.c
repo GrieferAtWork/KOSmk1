@@ -60,7 +60,7 @@ kerrno_t kproc_close(struct kproc *__restrict self) {
  if __likely(error != KS_UNCHANGED) {
   kfdman_quit(&self->p_fdman);
   kprocperm_quit(&self->p_perm);
-  ktlsman_quit(&self->p_tlsman);
+  ktlsman_quit(&self->p_tls);
   kprocmodules_quit(&self->p_modules);
   kprocenv_quit(&self->p_environ);
   kshm_quit(&self->p_shm);
@@ -99,7 +99,7 @@ __crit __ref struct kproc *kproc_newroot(void) {
  if __unlikely(KE_ISERR(kproclist_addproc(result))) goto decref_result;
  result->p_fdman.fdm_root.fd_file = (struct kfile *)kdirfile_newroot();
  kprocenv_initroot(&result->p_environ);
- ktlsman_initroot(&result->p_tlsman);
+ ktlsman_init(&result->p_tls);
  ktasklist_init(&result->p_threads);
  if __unlikely(!result->p_fdman.fdm_root.fd_file) {
   /* NOTE: We may have failed to open the root directory because there is no filesystem.
@@ -187,7 +187,6 @@ kproc_getrootmodule_unlocked(struct kproc const *__restrict self) {
  }
  return NULL;
 }
-
 
 __DECL_END
 

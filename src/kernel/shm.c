@@ -1048,9 +1048,9 @@ kshmregion_getphyspage(struct kshmregion *__restrict self,
 }
 
 __kernel void *
-kshmregion_getphysaddr(struct kshmregion *__restrict self,
-                       kshmregion_addr_t address_offset,
-                       size_t *__restrict max_bytes) {
+kshmregion_translate_fast(struct kshmregion *__restrict self,
+                          kshmregion_addr_t address_offset,
+                          size_t *__restrict max_bytes) {
  struct kpageframe *frame;
  kshmregion_addr_t page_address;
  size_t max_pages;
@@ -1070,13 +1070,24 @@ kshmregion_getphysaddr(struct kshmregion *__restrict self,
 }
 
 __kernel void *
-kshmregion_getphysaddr_s(struct kshmregion *__restrict self,
-                         kshmregion_addr_t address_offset,
-                         size_t *__restrict max_bytes) {
+kshmregion_translate(struct kshmregion *__restrict self,
+                     kshmregion_addr_t address_offset,
+                     size_t *__restrict max_bytes) {
  kassert_kshmregion(self);
- if __unlikely(address_offset >= self->sre_chunk.sc_pages*PAGESIZE)
- { *max_bytes = 0; return NULL; }
- return kshmregion_getphysaddr(self,address_offset,max_bytes);
+ if __unlikely(address_offset >= self->sre_chunk.sc_pages*PAGESIZE) { *max_bytes = 0; return NULL; }
+ return kshmregion_translate_fast(self,address_offset,max_bytes);
+}
+
+__crit void
+kshmregion_memset(__ref struct kshmregion *__restrict self,
+                  int byte) {
+ __kernel void *addr;
+ size_t maxbytes;
+ kshmregion_addr_t offset = 0;
+ while ((addr = kshmregion_translate(self,offset,&maxbytes)) != NULL) {
+  memset(addr,byte,maxbytes);
+  offset += maxbytes;
+ }
 }
 
 

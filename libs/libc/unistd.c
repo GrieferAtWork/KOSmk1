@@ -1258,7 +1258,9 @@ __public int execlp(char const *file, char const *arg, ...) {
  error = kexecargs_fromsentinel(&argvdat,arg,args,0);
  va_end(args);
  if __unlikely(error != 0) return error;
- error = ktask_exec(file,(size_t)-1,&argvdat,KTASK_EXEC_FLAG_SEARCHPATH);
+ error = ktask_exec(file,(size_t)-1,&argvdat,
+                    KTASK_EXEC_FLAG_SEARCHPATH|
+                    KTASK_EXEC_FLAG_RESOLVEEXT);
  assert(KE_ISERR(error));
  free((void *)argvdat.ea_argv);
  __set_errno(-error);
@@ -1285,7 +1287,9 @@ __public int execlpe(char const *file, char const *arg, .../*, char *const envp[
  error = kexecargs_fromsentinel(&argvdat,arg,args,1);
  va_end(args);
  if __unlikely(error != 0) return error;
- error = ktask_exec(file,(size_t)-1,&argvdat,KTASK_EXEC_FLAG_SEARCHPATH);
+ error = ktask_exec(file,(size_t)-1,&argvdat,
+                    KTASK_EXEC_FLAG_SEARCHPATH|
+                    KTASK_EXEC_FLAG_RESOLVEEXT);
  assert(KE_ISERR(error));
  free((void *)argvdat.ea_argv);
  __set_errno(-error);
@@ -1308,7 +1312,9 @@ __public int execvp(char const *file, char *const argv[]) {
  memset(&argvdat,0,sizeof(argvdat));
  argvdat.ea_argc = (size_t)-1;
  argvdat.ea_argv = (char const *const *)argv;
- error = ktask_exec(file,(size_t)-1,&argvdat,KTASK_EXEC_FLAG_SEARCHPATH);
+ error = ktask_exec(file,(size_t)-1,&argvdat,
+                    KTASK_EXEC_FLAG_SEARCHPATH|
+                    KTASK_EXEC_FLAG_RESOLVEEXT);
  assert(KE_ISERR(error));
  __set_errno(-error);
  return -1;
@@ -1336,7 +1342,8 @@ __public int execvpe(char const *file, char *const argv[], char *const envp[]) {
  argvdat.ea_envc = (size_t)-1;
  argvdat.ea_environ = (char const *const *)envp;
  error = ktask_exec(file,(size_t)-1,&argvdat,
-                    KTASK_EXEC_FLAG_SEARCHPATH);
+                    KTASK_EXEC_FLAG_SEARCHPATH|
+                    KTASK_EXEC_FLAG_RESOLVEEXT);
  assert(KE_ISERR(error));
  __set_errno(-error);
  return -1;

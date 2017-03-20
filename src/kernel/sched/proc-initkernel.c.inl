@@ -88,7 +88,7 @@ struct kproc __kproc_kernel = {
 #endif
  /* p_perm.pp_flags        */{0xffff,0xffff,0xffff,0xffff},
  /* p_perm.pp_state        */KPROCSTATE_FLAG_NONE},
- /* p_tlsman               */KTLSMAN_INITROOT,
+ /* p_tls               */KTLSMAN_INITROOT,
  /* p_threads              */KTASKLIST_INIT,
  /* p_environ              */KPROCENV_INIT_ROOT,
 };

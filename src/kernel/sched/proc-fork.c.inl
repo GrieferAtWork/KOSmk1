@@ -90,9 +90,9 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc,
  }
  if __unlikely(KE_ISERR(error)) goto err_fdman;
 
- if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_TLSMAN))) goto err_sand;
- error = ktlsman_initcopy(&result->p_tlsman,&proc->p_tlsman);
- kproc_unlock(proc,KPROC_LOCK_TLSMAN);
+ if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_TLS))) goto err_sand;
+ error = ktlsman_initcopy(&result->p_tls,&proc->p_tls);
+ kproc_unlock(proc,KPROC_LOCK_TLS);
  if __unlikely(KE_ISERR(error)) goto err_sand;
 
  if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_ENVIRON))) goto err_sand;
@@ -109,7 +109,7 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc,
  *presult = result;
  return error;
 err_env:   kprocenv_quit(&result->p_environ);
-err_tls:   ktlsman_quit(&result->p_tlsman);
+err_tls:   ktlsman_quit(&result->p_tls);
 err_sand:  kprocperm_quit(&result->p_perm);
 err_fdman: kfdman_quit(&result->p_fdman);
 err_mod:   kprocmodules_quit(&result->p_modules);
@@ -129,12 +129,13 @@ ktask_copy4fork(struct ktask *__restrict self,
  kassert_ktask(self); kassert_kproc(proc); kassertobj(userregs);
  assert(self->t_flags&KTASK_FLAG_USERTASK);
  assert(!(self->t_flags&KTASK_FLAG_MALLKSTACK));
+ assert(krwlock_iswritelocked(&proc->p_tls.tls_lock));
  assert(krwlock_iswritelocked(&proc->p_shm.s_lock));
  if __unlikely(KE_ISERR(ktask_incref(parent))) return NULL;
  if __unlikely(KE_ISERR(kproc_incref(proc))) goto err_taskref;
  if __unlikely((result = omalloc(struct ktask)) == NULL) goto err_procref;
- if __unlikely(KE_ISERR(ktlspt_initcopy(&result->t_tls,&self->t_tls))) goto err_free;
  kobject_init(result,KOBJECT_MAGIC_TASK);
+
  result->t_epd         =
  result->t_userpd      = kproc_getpagedir(proc);
  result->t_refcnt      = 1;
@@ -164,6 +165,11 @@ ktask_copy4fork(struct ktask *__restrict self,
  /* The user-stack was already copied when forking the SHM. */
  result->t_ustackvp    = self->t_ustackvp;
  result->t_ustacksz    = self->t_ustacksz;
+
+ /* TODO: With this the task's TLS segment register might change (that's not in the spirit of fork()!) */
+ if __unlikely(KE_ISERR(kproc_tls_alloc_pt_unlocked(proc,result))) goto err_free;
+ ktlspt_copyuthread_unlocked(&result->t_tls,&self->t_tls);
+
  /* Since the kernel stack isn't addressable from ring-3, it
   * wasn't copied during the forking of the page directory.
   * >> That is good! So now lets manually allocate a new stack. */
@@ -249,7 +255,7 @@ err_parid:
 err_kstack:  kshm_unmap(&proc->p_shm,result->t_kstackvp,
                         ceildiv(kstacksize,PAGESIZE),
                         KSHMUNMAP_FLAG_RESTRICTED);
-err_tls:     ktlspt_quit(&result->t_tls);
+err_tls:     kproc_tls_free_pt_unlocked(proc,result);
 err_free:    free(result);
 err_procref: kproc_decref(proc);
 err_taskref: ktask_decref(self);
@@ -266,6 +272,8 @@ ktask_fork(__u32 flags, struct kirq_userregisters const *__restrict userregs,
  if __unlikely(KE_ISERR(error)) return error;
  error = krwlock_beginwrite(&newproc->p_shm.s_lock);
  if __unlikely(KE_ISERR(error)) goto err_proc;
+ error = krwlock_beginwrite(&newproc->p_tls.tls_lock);
+ if __unlikely(KE_ISERR(error)) goto err_proc_unlock;
  if (flags&KTASK_NEW_FLAG_UNREACHABLE) {
   /* Spawn the task as unreachable */
   if (flags&KTASK_NEW_FLAG_ROOTFORK) {
@@ -275,21 +283,23 @@ ktask_fork(__u32 flags, struct kirq_userregisters const *__restrict userregs,
    /* Spawn it off of the setmem barrier. */
    struct ktask *parent = kproc_getbarrier_r(ktask_getproc(task_self),
                                              KSANDBOX_BARRIER_NOSETMEM);
-   if __unlikely(!parent) { error = KE_DESTROYED; goto err_proc_unlock; }
+   if __unlikely(!parent) { error = KE_DESTROYED; goto err_proc_unlock2; }
    newtask = ktask_copy4fork(task_self,parent,newproc,userregs);
    ktask_decref(parent);
   }
  } else {
   newtask = ktask_copy4fork(task_self,task_self,newproc,userregs);
  }
+ krwlock_endwrite(&newproc->p_tls.tls_lock);
  krwlock_endwrite(&newproc->p_shm.s_lock);
  if __unlikely(!newtask) { error = KE_NOMEM; goto err_proc; }
  assert(newtask != ktask_self());
  kproc_decref(newproc);
  *presult = newtask;
  return error;
-err_proc_unlock: krwlock_endwrite(&newproc->p_shm.s_lock);
-err_proc: kproc_decref(newproc);
+err_proc_unlock2: krwlock_endwrite(&newproc->p_tls.tls_lock);
+err_proc_unlock:  krwlock_endwrite(&newproc->p_shm.s_lock);
+err_proc:         kproc_decref(newproc);
  return error;
 }
 

@@ -316,7 +316,10 @@ ktask_newkernel(struct ktask *__restrict parent,
  result->t_parent      = parent; /* Inherit reference. */
  result->t_sigval      = NULL;
  ktasklist_init(&result->t_children);
- ktlspt_init(&result->t_tls);
+ /* Kernel threads don't make use of TLS data.
+  * >> Allowing them to would just lead to unnecesary overhead. */
+ kobject_badmagic(&result->t_tls);
+
 #if KCONFIG_HAVE_TASK_STATS
  ktaskstat_init(&result->t_stats);
 #endif /* KCONFIG_HAVE_TASK_STATS */
@@ -382,6 +385,7 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
                 __pagealigned __user void *ustackaddr, __size_t ustacksize,
                 __size_t kstacksize, __u16 flags) {
  struct ktask *result;
+ kerrno_t error;
  KTASK_CRIT_MARK
  kassert_ktask(parent); kassert_kproc(proc);
  assertf(krwlock_iswritelocked(&proc->p_shm.s_lock),
@@ -431,7 +435,11 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  result->t_parent      = parent; /* Inherit reference. */
  result->t_sigval      = NULL;
  ktasklist_init(&result->t_children);
- ktlspt_init(&result->t_tls);
+ if __unlikely(KE_ISERR(krwlock_beginread(&proc->p_tls.tls_lock))) goto err_map;
+ error = kproc_tls_alloc_pt_unlocked(proc,result);
+ krwlock_endread(&proc->p_tls.tls_lock);
+ if __unlikely(KE_ISERR(error)) goto err_map;
+
 #if KCONFIG_HAVE_TASK_STATS
  ktaskstat_init(&result->t_stats);
 #endif /* KCONFIG_HAVE_TASK_STATS */
@@ -448,7 +456,7 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  result->t_name = NULL;
 #endif /* KCONFIG_HAVE_TASK_NAMES */
  /* Initialize the task's TID and setup its parent hooks. */
- if __unlikely(KE_ISERR(kproc_addtask(proc,result))) goto err_map;
+ if __unlikely(KE_ISERR(kproc_addtask(proc,result))) goto err_tls;
  ktask_lock(parent,KTASK_LOCK_CHILDREN);
  if __unlikely(ktask_isterminated(parent)) {
   /* TODO: Handle terminate parent task (Fail with
@@ -461,6 +469,7 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  if __unlikely(result->t_parid == (size_t)-1) goto err_ctx2;
  return result;
 err_ctx2: kproc_deltask(proc,result);
+err_tls:  kproc_tls_free_pt_unlocked(proc,result);
 err_map:  kshm_unmap_unlocked(kproc_getshm(proc),result->t_kstackvp,
                               ceildiv(ktask_getkstacksize(result),PAGESIZE),
                               KSHMUNMAP_FLAG_RESTRICTED);
@@ -805,6 +814,7 @@ __crit void ktask_decref_f(struct ktask *__restrict self) {
 }
 
 __local __crit void ktask_releasedata(struct ktask *__restrict self) {
+ kerrno_t lockerror;
  KTASK_CRIT_MARK
  kassert_object(self,KOBJECT_MAGIC_TASK);
  assert(ktask_isterminated(self) || !self->t_refcnt);
@@ -813,12 +823,13 @@ __local __crit void ktask_releasedata(struct ktask *__restrict self) {
  assertef(ktask_trylock(self,KTASK_LOCK_RELEASEDATA)
          ,"ktask_releasedata() Is not properly synchronized!");
 #endif
+ /* Free TLS data. */
  if (self->t_flags&KTASK_FLAG_USERTASK) {
   /* Unmap the kernel stack of the tasks. */
   assert(!(self->t_flags&KTASK_FLAG_MALLKSTACK));
   if (self->t_kstackvp ||
      (self->t_ustackvp && self->t_flags&KTASK_FLAG_OWNSUSTACK)) {
-   kerrno_t lockerror = krwlock_beginwrite(&self->t_proc->p_shm.s_lock);
+   lockerror = krwlock_beginwrite(&self->t_proc->p_shm.s_lock);
    if (self->t_kstackvp) {
     assert(isaligned((uintptr_t)self->t_kstackvp,PAGEALIGN));
     assert(isaligned((uintptr_t)self->t_kstack,PAGEALIGN));
@@ -844,6 +855,7 @@ __local __crit void ktask_releasedata(struct ktask *__restrict self) {
     self->t_ustackvp = NULL;
    }
    if __likely(KE_ISOK(lockerror)) {
+    kproc_tls_free_pt_unlocked(self->t_proc,self);
     krwlock_endwrite(&self->t_proc->p_shm.s_lock);
    }
   }
@@ -865,7 +877,6 @@ __local __crit void ktask_releasedata(struct ktask *__restrict self) {
    self->t_kstackend = self->t_kstackvp = self->t_kstack = NULL;
   }
  }
- ktlspt_clear(&self->t_tls);
  kproc_deltask(self->t_proc,self);
 #ifdef KTASK_LOCK_RELEASEDATA
  ktask_unlock(self,KTASK_LOCK_RELEASEDATA);
@@ -2174,7 +2185,6 @@ __DECL_END
 #include "task-syscall.c.inl"
 #include "task-usercheck.c.inl"
 #include "task-util.c.inl"
-#include "tls.c.inl"
 
 __DECL_BEGIN
 #undef ktask_iscrit

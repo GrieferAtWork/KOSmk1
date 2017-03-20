@@ -468,9 +468,9 @@ void ktask_setupuser(struct ktask *self, __user void *useresp, __user void *eip)
   * >> Like seriously: Am I writing the first hobby OS planned to include TRUE thread-local storage?
   */
 #if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
- regs.base.es     =
  regs.base.fs     =
  regs.base.gs     =
+ regs.base.es     =
 #endif
  regs.base.ds     =
 #ifdef KSEG_USER_DATA
@@ -483,6 +483,10 @@ void ktask_setupuser(struct ktask *self, __user void *useresp, __user void *eip)
 #else
  regs.base.cs     = self->t_proc->p_regs.pr_cs|3;
 #endif
+#if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS && 1
+ /* Setup the TLS segment register. */
+ regs.base.KTLS_SEGMENT_REGISTER = self->t_tls.pt_segid;
+#endif
  regs.base.eip    = (uintptr_t)eip;
  regs.useresp     = (uintptr_t)useresp;
 #ifdef KARCH_X86_EFLAGS_IF
@@ -492,29 +496,6 @@ void ktask_setupuser(struct ktask *self, __user void *useresp, __user void *eip)
 #endif
  ktask_stackpush_sp_unlocked(self,&regs,sizeof(regs));
 }
-
-__crit kerrno_t
-ktask_settls_c(struct ktask *__restrict self, __ktls_t tlsid,
-               void *value, void **oldvalue) {
- kerrno_t error;
- KTASK_CRIT_MARK
- kassert_ktask(self);
- kassertobjnull(oldvalue);
- error = kproc_lock(self->t_proc,KPROC_LOCK_TLSMAN);
- if __unlikely(KE_ISERR(error)) return error;
- if __unlikely(!ktlsman_validtls(&self->t_proc->p_tlsman,tlsid)) {
-  error = KE_INVAL;
-  goto end_proc;
- }
- ktask_lock((struct ktask *)self,KTASK_LOCK_TLS);
- if (oldvalue) *oldvalue = ktlspt_get(&self->t_tls,tlsid);
- error = ktlspt_set(&self->t_tls,tlsid,value);
- ktask_unlock((struct ktask *)self,KTASK_LOCK_TLS);
-end_proc:
- kproc_unlock(self->t_proc,KPROC_LOCK_TLSMAN);
- return error;
-}
-
 
 
 

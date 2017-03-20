@@ -42,7 +42,7 @@ __DECL_BEGIN
 /* Fill unused buffer space with ZEROes during allocation
  * to prevent random data from being leaked into userspace. */
 #ifndef KIOBUF_ZERO_UNUSED_BUFFER
-#define KIOBUF_ZERO_UNUSED_BUFFER 1
+#define KIOBUF_ZERO_UNUSED_BUFFER 0
 #endif
 
 /* An I/O Buffer for one-directional read/write.

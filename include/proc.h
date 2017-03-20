@@ -60,7 +60,6 @@ typedef int              proc_t;
 
 typedef __ktaskprio_t    taskprio_t;
 typedef __ksandbarrier_t sandbarrier_t;
-typedef __ktls_t         tls_t;
 typedef __ktid_t         tid_t;
 typedef struct kperm     perm_t;
 typedef kperm_name_t     perm_name_t;
@@ -225,13 +224,84 @@ extern __nonnull((1)) perm_t const *proc_setpermex __P((perm_t const *__restrict
 extern __nonnull((1)) perm_t       *proc_xchpermex __P((perm_t *__restrict __buf, __size_t __permcount));
 
 
-#define TLS_ERROR  ((tls_t)-1) /*< returned by 'tls_alloc' on error. */
-extern __wunused void *tls_get __P((tls_t __slot));
-extern             int tls_set __P((tls_t __slot, void *__value));
-extern __wunused tls_t tls_alloc __P((void));
-extern            void tls_free __P((tls_t __slot));
+//////////////////////////////////////////////////////////////////////////
+// Allocate/Free TLS memory.
+// @param: SIZE: The size of the template/TLS block (Actually allocated storage may be greater than this)
+// @return: 0 : [tls_alloc] Failed to allocate a new TLS block (see 'errno' and 'kproc_tlsalloc').
+// @return: * : [tls_alloc] The lower-most address for an offset that may be
+//                          used with as offset for 'tls_addr', or any of the
+//                          tls_(get|put)(b|w|l|q) functions.
+// @return: -1: [tls_free] An error occurred (see 'errno' and 'kproc_tlsfree').
+// @return: 0 : [tls_free] Successfully freed the TLS block at the given offset.
+extern __ptrdiff_t tls_alloc __P((void const *__template, __size_t __size));
+extern int         tls_free  __P((__ptrdiff_t __offset));
+
 
 __DECL_END
+
+#ifdef __INTELLISENSE__
+__DECL_BEGIN
+
+/* The base address of the thread-local TLS block.
+ * >> Add an offset to this and dereference to read thread-local data.
+ * WARNING: The value of this variable may change sporadically during a
+ *          call to 'tls_alloc', meaning that you must reload everything
+ *          derived from it after allocating more TLS storage. */
+extern __byte_t tls_addr[];
+
+/* Optimized getter/setter for TLS data.
+ * NOTE: Using these is faster than using 'tls_addr'. */
+extern __u8  tls_getb(__ptrdiff_t offset);
+extern __u16 tls_getw(__ptrdiff_t offset);
+extern __u32 tls_getl(__ptrdiff_t offset);
+extern __u64 tls_getq(__ptrdiff_t offset);
+extern void  tls_putb(__ptrdiff_t offset, __u8  value);
+extern void  tls_putw(__ptrdiff_t offset, __u16 value);
+extern void  tls_putl(__ptrdiff_t offset, __u32 value);
+extern void  tls_putq(__ptrdiff_t offset, __u64 value);
+
+__DECL_END
+#else
+#ifdef __i386__
+#   define __TLS_REGISTER      gs
+#   define __TLS_REGISTER_S   "gs"
+#elif defined(__x86_64__)
+#   define __TLS_REGISTER      fs
+#   define __TLS_REGISTER_S   "fs"
+#else
+#   error "Not implemented"
+#endif
+
+#ifdef __TLS_REGISTER
+#   define tls_addr          __xblock({ register __byte_t *__tls_res; __asm__("movl %%" __TLS_REGISTER_S ":0, %0" : "=r" (__tls_res)); __xreturn __tls_res; })
+#   define tls_getb(off)     __xblock({ register __u8  __tls_res; __asm__("movb %%" __TLS_REGISTER_S ":%1, %0" : "=r" (__tls_res) : "r" (off)); __xreturn __tls_res; })
+#   define tls_getw(off)     __xblock({ register __u16 __tls_res; __asm__("movw %%" __TLS_REGISTER_S ":%1, %0" : "=r" (__tls_res) : "r" (off)); __xreturn __tls_res; })
+#   define tls_getl(off)     __xblock({ register __u32 __tls_res; __asm__("movl %%" __TLS_REGISTER_S ":%1, %0" : "=r" (__tls_res) : "r" (off)); __xreturn __tls_res; })
+#   define tls_putb(off,val) __xblock({ __asm__("movb %2, %%" __TLS_REGISTER_S ":%1" : "=r" (__tls_res) : "r" (off), "r" (val)); (void)0; })
+#   define tls_putw(off,val) __xblock({ __asm__("movw %2, %%" __TLS_REGISTER_S ":%1" : "=r" (__tls_res) : "r" (off), "r" (val)); (void)0; })
+#   define tls_putl(off,val) __xblock({ __asm__("movl %2, %%" __TLS_REGISTER_S ":%1" : "=r" (__tls_res) : "r" (off), "r" (val)); (void)0; })
+#ifdef __x86_64__
+#   define tls_getq(off)     __xblock({ register __u64 __tls_res; __asm__("movq %%" __TLS_REGISTER_S ":%1, %0" : "=r" (__tls_res) : "r" (off)); __xreturn __tls_res; })
+#   define tls_putq(off,val) __xblock({ __asm__("movq %2, %%" __TLS_REGISTER_S ":%1" : "=r" (__tls_res) : "r" (off), "r" (val)); (void)0; })
+#else /* __x86_64__ */
+#include <kos/endian.h>
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#   define __tls_getq(off)     ((__u64)tls_getl(off) | ((__u64)tls_getl(off) << 32))
+#   define __tls_putq(off,val) (tls_putl(off,(__u32)(val)),tls_putl((off)+4,(__u32)((__u64)(val) >> 32)))
+#elif __BYTE_ORDER == __BIG_ENDIAN
+#   define __tls_getq(off)     (((__u64)tls_getl(off) << 32) | (__u64)tls_getl(off))
+#   define __tls_putq(off,val) (tls_putl(off,(__u32)((__u64)(val) >> 32)),tls_putl((off)+4,(__u32)(val)))
+#endif /* Endian... */
+#ifdef __tls_getq
+#   define tls_getq(off)     __xblock({ __ptrdiff_t const __off = (off); __xreturn __tls_getq(__off); })
+#endif /* __tls_getq */
+#ifdef __tls_putq
+#   define tls_putq(off,val) __xblock({ __ptrdiff_t const __off = (off); __u64 const __val = (val); __tls_putq(__off,__val); })
+#endif /* __tls_putq */
+#endif /* !__x86_64__ */
+#endif /* __TLS_REGISTER */
+#endif
+
 #endif /* !__KERNEL__ */
 
 #endif /* !__PROC_H__ */

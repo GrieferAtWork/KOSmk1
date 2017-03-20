@@ -379,44 +379,6 @@ __local __nonnull((2)) kerrno_t ktask_getname(ktask_t self, char *buffer, __size
 __local __nonnull((2)) kerrno_t ktask_setname_ex(ktask_t self, char const *__restrict name, size_t namesize) { return kfd_setattr(self,KATTR_GENERIC_NAME,name,namesize*sizeof(char)); }
 __local __nonnull((2)) kerrno_t ktask_setname(ktask_t self, char const *__restrict name) { return ktask_setname_ex(self,name,strlen(name)); }
 
-#ifndef __ASSEMBLY__
-#ifndef __ktls_t_defined
-#define __ktls_t_defined 1
-typedef __ktls_t ktls_t;
-#endif
-#endif /* !__ASSEMBLY__ */
-
-//////////////////////////////////////////////////////////////////////////
-// Get the value of a TLS slot in the calling thread.
-// @return: NULL: Invalid/Uninitialized TLS slot
-//                [ktask_gettlsof] The caller does not have GETMEM access to the given task.
-__local _syscall1(void *,ktask_gettls,ktls_t,slot);
-__local _syscall2(void *,ktask_gettlsof,ktask_t,self,ktls_t,slot);
-
-//////////////////////////////////////////////////////////////////////////
-// Set the value of a TLS slot in the calling thread.
-// >> An optional 'oldvalue' will be filled with the old TLS value when non-NULL.
-// @return: KE_OK:       The TLS value was successfully set.
-// @return: KE_INVAL:    The given TLS identifier is invalid/free/unused.
-// @return: KS_FOUND:    The given 'slot' was already allocated and a
-//                       potential previous value was overwritten.
-//                       NOTE: This does not mean that this was
-//                             the first time 'slot' was set.
-// @return: KE_NOMEM:    The given 'slot' had yet to be set, and when attempting
-//                       to set it just now, the kernel failed to reallocate its
-//                       vector stored TLS values.
-// @return: KE_ACCES:    [ktask_settlsof] The caller does not have SETMEM to the given task.
-__local _syscall3(kerrno_t,ktask_settls,ktls_t,slot,void *,value,void **,oldvalue);
-__local _syscall4(kerrno_t,ktask_settlsof,ktask_t,self,ktls_t,slot,void *,value,void **,oldvalue);
-
-//////////////////////////////////////////////////////////////////////////
-// Allocate/Free a TLS identifiers
-// @return: KE_DESTROYED: [kproc_alloctls] The given process was closed
-// @return: KE_NOMEM:     [kproc_alloctls] Not enough memory to allocate a new identifier
-// @return: KE_ACCES:     [kproc_alloctls] The process has reached its maximum amount of TLS identifiers
-__local _syscall1(kerrno_t,kproc_alloctls,ktls_t *,result);
-__local _syscall1(kerrno_t,kproc_freetls,ktls_t,slot);
-
 #endif /* !__NO_PROTOTYPES */
 #else /* !__KERNEL__ */
 #ifndef __ASSEMBLY__
@@ -750,18 +712,7 @@ __local __IDsyscall1(kerrno_t,__system_kproc_barrier,SYS_kproc_barrier,ksandbarr
 // @return: KE_ISOK(*):  A new file descriptor that must be closed using 'kfd_close'
 // @return: KE_ISERR(*): An error occurred.
 // @return: KE_MFILE:    Too many open file descriptors.
-// @return: KE_ACCESS:   The process is lacking the 'KPERM_FLAG_GETBARRIER' permission.
 __local _syscall2(ktask_t,kproc_openbarrier,kproc_t,self,ksandbarrier_t,level);
-
-//////////////////////////////////////////////////////////////////////////
-// Enumerate all TLS identifiers of a given process.
-// @return: KE_BADF:      Invalid file descriptor.
-// @return: KE_DESTROYED: The given process was destroyed.
-// @return: KE_ACCES:     The caller does not have GETMEM access to the process's root task.
-__local _syscall4(kerrno_t,kproc_enumtls,kproc_t,self,
-                  ktls_t *__restrict,tlsv,
-                  size_t,tlsc,size_t *,reqtlsc);
-
 
 //////////////////////////////////////////////////////////////////////////
 // Global list of processes
