@@ -30,6 +30,7 @@
 #include <kos/kernel/rwlock.h>
 #include <kos/kernel/gdt.h>
 #include <kos/types.h>
+#include <kos/task-tls.h>
 #include <stdint.h>
 #include <malloc.h>
 
@@ -54,17 +55,7 @@ typedef __ptrdiff_t ktls_addr_t;
 
 #define kassert_ktlspt(self)  kassert_object(self,KOBJECT_MAGIC_TLSPT)
 
-#ifndef __ASSEMBLY__
-#define KTLS_UTHREAD_PAGESIZE  1 /* (align(sizeof(struct ktls_uthread),PAGESIZE)/PAGESIZE) */
-struct ktls_uthread {
- /* This structure is located at offset ZERO, and actual TLS variables as located below. */
- /* Per-thread user structure at positive offsets. */
- __user struct ktls_uthread *u_self; /*< [1..1] Structure self-pointer. */
- /* TODO: Additional OS runtime-support must be added here, such
-  *       as userspace exception handling and stack address/size. */
-};
-#endif /* !__ASSEMBLY__ */
-
+#define KUTHREAD_PAGESIZE     1 /* (align(sizeof(struct kuthread),PAGESIZE)/PAGESIZE) */
 #define KTLSPT_SIZEOF        (KOBJECT_SIZEOFHEAD+4+2*__SIZEOF_POINTER__)
 #define KTLS_UREGION_FLAGS  \
  (KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE| /* Allow read-write access. */\
@@ -75,11 +66,11 @@ struct ktls_uthread {
 struct kshmregion;
 struct ktlspt {
  KOBJECT_HEAD
- ksegid_t                                  pt_segid;   /*< [const] The segment ID used for thread-local storage. */
- __u16                                     pt_padding; /*< Padding... */
- __pagealigned __user struct ktls_uthread *pt_uthread; /*< [1..1][lock(:t_proc->p_shm.s_lock)] Pointer to the user-mapped TLS block (Base address of the 'pt_segid' segment). */
- __ref struct kshmregion                  *pt_uregion; /*< [1..1][lock(:t_proc->p_shm.s_lock)] SHM region describing the 'pt_uthread' mapping.
-                                                            NOTE: This region uses flags described by 'KTLS_UREGION_FLAGS'. */
+ ksegid_t                              pt_segid;   /*< [const] The segment ID used for thread-local storage. */
+ __u16                                 pt_padding; /*< Padding... */
+ __pagealigned __user struct kuthread *pt_uthread; /*< [1..1][lock(:t_proc->p_shm.s_lock)] Pointer to the user-mapped TLS block (Base address of the 'pt_segid' segment). */
+ __ref struct kshmregion              *pt_uregion; /*< [1..1][lock(:t_proc->p_shm.s_lock)] SHM region describing the 'pt_uthread' mapping.
+                                                        NOTE: This region uses flags described by 'KTLS_UREGION_FLAGS'. */
 };
 #define KTLSPT_INIT {KOBJECT_INIT(KOBJECT_MAGIC_TLSPT) KSEG_NULL,0,NULL,NULL}
 #endif /* !__ASSEMBLY__ */

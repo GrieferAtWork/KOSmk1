@@ -72,15 +72,6 @@
 
 __DECL_BEGIN
 
-#ifndef __CONFIG_MIN_BSS__
-
-__public errno_t *__geterrno(void) {
- /* TODO: Thread-local */
- static errno_t eno = 0;
- return &eno;
-}
-#endif
-
 #ifndef __CONFIG_MIN_LIBC__
 __public int open(char const *path, int mode, ...) {
  va_list args; kerrno_t error;

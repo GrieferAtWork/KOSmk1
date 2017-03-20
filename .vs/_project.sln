@@ -66,6 +66,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "include", "include", "{FC82
 		..\include\math.h = ..\include\math.h
 		..\include\memory.h = ..\include\memory.h
 		..\include\mod.h = ..\include\mod.h
+		..\include\proc-tls.h = ..\include\proc-tls.h
 		..\include\proc.h = ..\include\proc.h
 		..\include\pthread.h = ..\include\pthread.h
 		..\include\pty.h = ..\include\pty.h

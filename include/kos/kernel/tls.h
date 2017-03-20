@@ -58,10 +58,10 @@ struct ktlsman {
  struct krwlock      tls_lock;      /*< Lock for this TLS manager. */
  struct ktlsmapping *tls_hiend;     /*< [lock(tls_lock)][owned] High-address end of the TLS mapping chain. */
  __size_t            tls_map_pages; /*< [lock(tls_lock)] Total amount of pages required for TLS mappings. */
- __size_t            tls_all_pages; /*< [lock(tls_lock)] Total size (in pages) of continuous, unused user address space required to map this chain in SHM (Including any required for 'struct ktls_uthread'). */
+ __size_t            tls_all_pages; /*< [lock(tls_lock)] Total size (in pages) of continuous, unused user address space required to map this chain in SHM (Including any required for 'struct kuthread'). */
 };
 #define KTLSMAN_INITROOT \
- {KOBJECT_INIT(KOBJECT_MAGIC_TLSMAN) KRWLOCK_INIT,NULL,0,KTLS_UTHREAD_PAGESIZE}
+ {KOBJECT_INIT(KOBJECT_MAGIC_TLSMAN) KRWLOCK_INIT,NULL,0,KUTHREAD_PAGESIZE}
 
 //////////////////////////////////////////////////////////////////////////
 // Initialize/Finalize a given TLS manager.
@@ -153,13 +153,22 @@ extern __crit __nonnull((1,2)) void
 kproc_tls_free_pt_unlocked(struct kproc *__restrict self,
                            struct ktask *__restrict task);
 
-
 //////////////////////////////////////////////////////////////////////////
 // Called during fork() on the calling task:
 //   - Copy the TLS uthread data from 'right' into 'self'.
 extern __crit __nonnull((1,2)) void
 ktlspt_copyuthread_unlocked(struct ktlspt *__restrict self,
                             struct ktlspt const *__restrict right);
+
+//////////////////////////////////////////////////////////////////////////
+// Called after 'kproc_tls_alloc_pt_unlocked' to fill the TLS uthread
+// data block with some useful information, such as stack info & ids.
+// WARNING: All data that we put into the uthread block can be accessed &
+//          overwritten by the user (When reading, don't believe anything!).
+// NOTE: The caller is responsible to hold a lock on 'self->p_shm.s_lock' (read-mode)
+extern __crit __nonnull((1,2)) void
+kproc_tls_pt_setup(struct kproc *__restrict self,
+                   struct ktask *__restrict task);
 
 
 __DECL_END

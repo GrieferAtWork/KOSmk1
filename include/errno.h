@@ -34,7 +34,53 @@ __DECL_BEGIN
 
 #ifndef __ASSEMBLY__
 typedef int errno_t;
+
+#ifndef __KERNEL__
+__DECL_END
+#include <proc-tls.h>
+__DECL_BEGIN
+/* offsetof(struct kuthread,u_errno). */
+#if __SIZEOF_POINTER__ == 4
+#   define __TLS_ERRNO_OFFSET    64
+#elif __SIZEOF_POINTER__ == 8
+#   define __TLS_ERRNO_OFFSET    128
+#else
+#   define __TLS_ERRNO_OFFSET   (16*__SIZEOF_POINTER__)
+#endif
+#define errno               *(errno_t *)(_tls_addr+__TLS_ERRNO_OFFSET)
+#define __do_geterrno()     _tls_getl(__TLS_ERRNO_OFFSET)
+#define __do_seterrno(v)    _tls_putl(__TLS_ERRNO_OFFSET,v)
+#endif /* !__KERNEL__ */
+
+#ifndef __do_geterrno
+/* Kernel-space code doesn't have errno.
+ * >> Instead, the kernel uses its own kerrno_t error type
+ *    that is usually passed through a function's return value. */
+#define __do_geterrno() EOK
+#define __do_seterrno  (void)
+#endif /* !__do_geterrno */
+
+
+#ifndef __NO_coldcall
+// Take advantage of cold calls to hint the compiler that
+// anything setting the errno this way is unlikely code.
+__forcelocal __coldcall void __set_errno __D1(errno_t,__eno) { __do_seterrno(__eno); }
+#   define __get_errno __do_geterrno
+#   define __set_errno __set_errno
+#else
+#   define __get_errno __do_geterrno
+#   define __set_errno __do_seterrno
+#endif
+
+/* Compatibility macros for MSVC's <errno.h> header */
+#ifndef _CRT_ERRNO_DEFINED
+#define _CRT_ERRNO_DEFINED 1
+#define _errno()            &errno
+#define _set_errno(v)      (__set_errno(v),EOK)
+#define _get_errno(v) (*(v)=__get_errno(),EOK)
+#endif
 #endif /* !__ASSEMBLY__ */
+
 
 /*[[[deemon
 #include <file>
@@ -89,43 +135,6 @@ for (local n: names) if ("(" !in n) {
 #define ECHANGED     (-KE_CHANGED)
 #define ESYNTAX      (-KE_SYNTAX)
 //[[[end]]]
-
-#ifndef __ASSEMBLY__
-#ifndef __CONFIG_MIN_BSS__
-extern __wunused __constcall errno_t *__geterrno __P((void));
-#define errno  (*__geterrno())
-#endif
-#endif /* !__ASSEMBLY__ */
-
-#ifndef __ASSEMBLY__
-#ifdef __CONFIG_MIN_BSS__
-// Kernel-space code doesn't have errno.
-// >> Instead, the kernel uses its own kerrno_t error type
-//    that is usually passed through a function's return value.
-#   define __get_errno()  EOK
-#   define __set_errno   (void)
-#elif defined(__GNUC__)
-// Take advantage of cold calls to hint the compiler that
-// anything setting the errno this way is unlikely code.
-__forcelocal __coldcall void __set_errno __D1(errno_t,__eno) { errno = __eno; }
-#   define __get_errno()         errno
-#   define __set_errno     __set_errno
-#else
-#   define __get_errno()         errno
-#   define __set_errno(v) (void)(errno = (v))
-#endif
-
-#ifndef __CONFIG_MIN_BSS__
-/* Compatibility defines for MSVC's <errno.h> header */
-#ifndef _CRT_ERRNO_DEFINED
-#define _CRT_ERRNO_DEFINED 1
-#define _errno               __geterrno
-#define _set_errno(v)      (__set_errno(v),EOK)
-#define _get_errno(v) (*(v)=__get_errno(),EOK)
-#endif
-
-#endif /* !__CONFIG_MIN_BSS__ */
-#endif /* !__ASSEMBLY__ */
 
 __DECL_END
 

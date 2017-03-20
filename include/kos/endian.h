@@ -23,6 +23,13 @@
 #ifndef __KOS_ENDIAN_H__
 #define __KOS_ENDIAN_H__ 1
 
+#undef __BYTE_ORDER
+#undef __LITTLE_ENDIAN
+#undef __BIG_ENDIAN
+#undef __PDP_ENDIAN
+
+/* Some libraries define these macros for themself with different meaning.
+ * Try not to confuse them and don't define anything is those cases. */
 #ifndef __BYTE_ORDER
 #if defined(__i386__) || defined(__i386) || defined(i386)\
  || defined(i486) || defined(intel) || defined(x86)\

@@ -170,7 +170,7 @@ kproc_exec(struct kshlib *__restrict exec_main,
   not1_begin = caller_thread->t_ustackvp;
   not1_end   = (__user void *)((uintptr_t)not1_begin+caller_thread->t_ustacksz);
   not2_begin = caller_thread->t_tls.pt_uthread;
-  not2_end   = (__user void *)((uintptr_t)not2_begin+KTLS_UTHREAD_PAGESIZE*PAGESIZE);
+  not2_end   = (__user void *)((uintptr_t)not2_begin+KUTHREAD_PAGESIZE*PAGESIZE);
   if (not1_begin > not2_begin) {
    __user void *temp;
    temp = not1_begin,not1_begin = not2_begin,not2_begin = temp;

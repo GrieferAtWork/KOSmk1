@@ -455,6 +455,8 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
 #if KCONFIG_HAVE_TASK_NAMES
  result->t_name = NULL;
 #endif /* KCONFIG_HAVE_TASK_NAMES */
+ /* Fill in some useful thread info. */
+ kproc_tls_pt_setup(proc,result);
  /* Initialize the task's TID and setup its parent hooks. */
  if __unlikely(KE_ISERR(kproc_addtask(proc,result))) goto err_tls;
  ktask_lock(parent,KTASK_LOCK_CHILDREN);

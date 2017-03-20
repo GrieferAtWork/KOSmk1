@@ -33,6 +33,9 @@
 #include <strings.h>
 #include <malloc.h>
 #include <kos/syslog.h>
+#if !KCONFIG_HAVE_TASK_STATS_START
+#include <kos/kernel/time.h>
+#endif /* !KCONFIG_HAVE_TASK_STATS_START */
 
 __DECL_BEGIN
 
@@ -44,7 +47,7 @@ void ktlsman_init(struct ktlsman *__restrict self) {
  krwlock_init(&self->tls_lock);
  self->tls_hiend     = NULL;
  self->tls_map_pages = 0;
- self->tls_all_pages = KTLS_UTHREAD_PAGESIZE;
+ self->tls_all_pages = KUTHREAD_PAGESIZE;
 }
 void ktlsman_quit(struct ktlsman *__restrict self) {
  struct ktlsmapping *iter,*next;
@@ -128,12 +131,12 @@ ktlsman_insmapping_inherited(struct ktlsman *__restrict self,
  } else {
   /* Special case: First mapping. */
   assert(self->tls_map_pages == 0);
-  assert(self->tls_all_pages == KTLS_UTHREAD_PAGESIZE);
+  assert(self->tls_all_pages == KUTHREAD_PAGESIZE);
   mapping->tm_prev          = NULL;
   self->tls_hiend     = mapping;
   self->tls_map_pages = mapping->tm_pages;
 update_allpages:
-  self->tls_all_pages = self->tls_map_pages+KTLS_UTHREAD_PAGESIZE;
+  self->tls_all_pages = self->tls_map_pages+KUTHREAD_PAGESIZE;
  }
 }
 __local __crit __nomp void
@@ -168,7 +171,7 @@ ktlsman_delregion(struct ktlsman *__restrict self,
 __local __crit __nomp void
 kproc_unmap_pt(struct kproc *__restrict self,
                struct ktask *__restrict task,
-               __pagealigned __user struct ktls_uthread *oldbase) {
+               __pagealigned __user struct kuthread *oldbase) {
  struct ktlsmapping *iter;
  kassert_kproc(self);
  kassert_ktask(task);
@@ -196,7 +199,7 @@ kproc_unmap_pt(struct kproc *__restrict self,
 __local __crit __nomp kerrno_t
 kproc_remap_pt(struct kproc *__restrict self,
                struct ktask *__restrict task,
-               __pagealigned __user struct ktls_uthread *newbase) {
+               __pagealigned __user struct kuthread *newbase) {
  struct ktlsmapping *iter,*iter2;
  kerrno_t error;
  kassert_kproc(self);
@@ -285,7 +288,7 @@ kproc_tls_alloc_inherited(struct kproc *__restrict self,
     }
    } else {
     __user void *newbase;
-    __pagealigned __user struct ktls_uthread *new_uthread;
+    __pagealigned __user struct kuthread *new_uthread;
 relocate_tls:
     /* Must relocate the entire TLS vector. */
     /* Step #1: Find a new address range of sufficient size. */
@@ -295,7 +298,7 @@ relocate_tls:
      error = KE_NOSPC;
      goto err_threads_iter;
     }
-    new_uthread = (__pagealigned __user struct ktls_uthread *)((uintptr_t)newbase+
+    new_uthread = (__pagealigned __user struct kuthread *)((uintptr_t)newbase+
                                                                 self->p_tls.tls_map_pages*PAGESIZE);
     /* Step #2: Suspend the thread to make sure it's not attempting to
      *          access existing TLS data while we're relocating its vector.
@@ -313,7 +316,7 @@ relocate_tls:
     error = kproc_remap_pt(self,task,new_uthread);
     if __likely(KE_ISOK(error)) {
      struct ksegment new_segment;
-     __pagealigned __kernel struct ktls_uthread *phys_newbase;
+     __pagealigned __kernel struct kuthread *phys_newbase;
      /* Step #4: Unmap the old TLS vector. */
      kproc_unmap_pt(self,task,task->t_tls.pt_uthread);
      /* Step #5: Install a new LDT segment and update the TLS pointers. */
@@ -324,7 +327,7 @@ relocate_tls:
      {
       /* Update the uthread self-pointer. */
       __STATIC_ASSERT(sizeof(phys_newbase->u_self) <= PAGESIZE);
-      phys_newbase = (__pagealigned __kernel struct ktls_uthread *)
+      phys_newbase = (__pagealigned __kernel struct kuthread *)
        task->t_tls.pt_uregion->sre_chunk.sc_partv[0].sp_frame;
       assert(isaligned((uintptr_t)phys_newbase,PAGEALIGN));
       phys_newbase->u_self   = new_uthread;
@@ -409,8 +412,8 @@ kproc_tls_free_offset(struct kproc *__restrict self,
 __crit kerrno_t
 kproc_tls_alloc_pt_unlocked(struct kproc *__restrict self,
                             struct ktask *__restrict task) {
- __pagealigned __kernel struct ktls_uthread *kernel_uthread;
- __pagealigned __user struct ktls_uthread *user_uthread;
+ __pagealigned __kernel struct kuthread *kernel_uthread;
+ __pagealigned __user struct kuthread *user_uthread;
  __pagealigned __user void *baseaddr;
  kerrno_t error;
  struct ksegment tls_segment;
@@ -420,15 +423,15 @@ kproc_tls_alloc_pt_unlocked(struct kproc *__restrict self,
  assert(krwlock_iswritelocked(&self->p_shm.s_lock));
  assert(krwlock_iswritelocked(&self->p_tls.tls_lock) ||
         krwlock_isreadlocked(&self->p_tls.tls_lock));
- assert(KTLS_UTHREAD_PAGESIZE == ceildiv(sizeof(struct ktls_uthread),PAGESIZE));
+ assert(KUTHREAD_PAGESIZE == ceildiv(sizeof(struct kuthread),PAGESIZE));
  assertf(self->p_tls.tls_map_pages ==
-         self->p_tls.tls_all_pages-KTLS_UTHREAD_PAGESIZE
+         self->p_tls.tls_all_pages-KUTHREAD_PAGESIZE
         ,"self->p_tls.tls_map_pages = %Iu\n"
          "self->p_tls.tls_all_pages = %Iu\n"
         ,self->p_tls.tls_map_pages
         ,self->p_tls.tls_all_pages);
  kobject_init(&task->t_tls,KOBJECT_MAGIC_TLSPT);
- task->t_tls.pt_uregion = kshmregion_newram(KTLS_UTHREAD_PAGESIZE,
+ task->t_tls.pt_uregion = kshmregion_newram(KUTHREAD_PAGESIZE,
                                             KTLS_UREGION_FLAGS);
  if __unlikely(!task->t_tls.pt_uregion) return KE_NOMEM;
  /* default-initialize the region with ZEROes. */
@@ -437,12 +440,12 @@ kproc_tls_alloc_pt_unlocked(struct kproc *__restrict self,
  baseaddr = kpagedir_findfreerange(self->p_shm.s_pd,self->p_tls.tls_all_pages,
                                    KPAGEDIR_MAPANY_HINT_TLS);
  if __unlikely(baseaddr == KPAGEDIR_FINDFREERANGE_ERR) { error = KE_NOSPC; goto err_region; }
- user_uthread = (__pagealigned __user struct ktls_uthread *)((uintptr_t)baseaddr+
+ user_uthread = (__pagealigned __user struct kuthread *)((uintptr_t)baseaddr+
                                                              self->p_tls.tls_map_pages*PAGESIZE);
  assert(isaligned((uintptr_t)baseaddr,PAGEALIGN));
  assert(isaligned((uintptr_t)user_uthread,PAGEALIGN));
  /* Setup the uthread self-pointer. */
- kernel_uthread = (__pagealigned __kernel struct ktls_uthread *)
+ kernel_uthread = (__pagealigned __kernel struct kuthread *)
   task->t_tls.pt_uregion->sre_chunk.sc_partv[0].sp_frame;
  assert(isaligned((uintptr_t)kernel_uthread,PAGEALIGN));
  kernel_uthread->u_self = user_uthread;
@@ -489,9 +492,9 @@ ktlspt_copyuthread_unlocked(struct ktlspt *__restrict self,
  kassert_ktlspt(right);
  kassert_kshmregion(self ->pt_uregion);
  kassert_kshmregion(right->pt_uregion);
- assert(self ->pt_uregion->sre_chunk.sc_pages == KTLS_UTHREAD_PAGESIZE);
- assert(right->pt_uregion->sre_chunk.sc_pages == KTLS_UTHREAD_PAGESIZE);
- dst = src = 0,bytes = sizeof(struct ktls_uthread);
+ assert(self ->pt_uregion->sre_chunk.sc_pages == KUTHREAD_PAGESIZE);
+ assert(right->pt_uregion->sre_chunk.sc_pages == KUTHREAD_PAGESIZE);
+ dst = src = 0,bytes = sizeof(struct kuthread);
  while ((kdst = kshmregion_translate_fast(self ->pt_uregion,dst,&max_dst)) != NULL &&
         (ksrc = kshmregion_translate_fast(right->pt_uregion,src,&max_src)) != NULL) {
   if (bytes   < max_src) max_src = bytes;
@@ -501,6 +504,44 @@ ktlspt_copyuthread_unlocked(struct ktlspt *__restrict self,
   dst += max_src;
   src += max_src;
  }
+}
+
+
+__crit void
+kproc_tls_pt_setup(struct kproc *__restrict self,
+                   struct ktask *__restrict task) {
+ struct kuthread *uthread;
+ struct ktask *parent;
+ size_t maxbytes;
+ kassert_kproc(self);
+ kassert_ktask(task);
+ assert(krwlock_isreadlocked(&self->p_shm.s_lock) ||
+        krwlock_iswritelocked(&self->p_shm.s_lock));
+ assertf(ktask_isusertask(task),"Kernel tasks can't be used for TLS");
+ uthread = (struct kuthread *)kshm_translateuser(&self->p_shm,self->p_shm.s_pd,task->t_tls.pt_uthread,
+                                                 sizeof(struct kuthread),&maxbytes,0);
+ if __unlikely(!uthread || maxbytes < sizeof(struct kuthread)) {
+  k_syslogf(KLOG_WARN,"[TLS] Failed to translate TLS uthread for task %p:%I32d:%Iu:%s\n",
+            task,task->t_proc->p_pid,task->t_tid,ktask_getname(task));
+  return;
+ }
+ parent = task->t_parent;
+ assertf(parent != NULL,"Must be non-NULL");
+ assertf(parent != task,"Only ktask_zero() (which is a kernel task) would apply for this");
+ if (parent->t_proc == self && ktask_isusertask(parent)) {
+  /* Parent thread is part of the same process. */
+  uthread->u_parent = parent->t_tls.pt_uthread;
+ }
+ uthread->u_stackbegin = task->t_ustackvp;
+ uthread->u_stackend   = (__user void *)((uintptr_t)task->t_ustackvp+task->t_ustacksz);
+ uthread->u_parid      = task->t_parid;
+ uthread->u_tid        = task->t_tid;
+ uthread->u_pid        = task->t_proc->p_pid;
+#if KCONFIG_HAVE_TASK_STATS_START
+ memcpy(&uthread->u_start,&task->t_stats.ts_abstime_start,sizeof(struct timespec));
+#else
+ ktime_getnow(&uthread->u_start);
+#endif
 }
 
 
