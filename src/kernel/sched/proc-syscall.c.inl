@@ -35,34 +35,48 @@ __DECL_BEGIN
 KSYSCALL_DEFINE_EX4(c,kerrno_t,kproc_enumfd,int,procfd,
                     __user int *__restrict,fdv,size_t,fdc,
                     __user size_t *,reqfdc) {
- __ref struct kproc *ctx; kerrno_t error;
- int *fditer,*fdend;
+ __ref struct kproc *proc; kerrno_t error;
+ __kernel int *kernel_fdv,*fditer,*fdend; size_t kernel_fdc;
+ struct ktranslator trans;
  struct kfdentry *entry_iter,*entry_end,*entry_begin;
+ struct ktask *caller = ktask_self();
  KTASK_CRIT_MARK
- fdend = (fditer = fdv)+fdc;
- ctx = kproc_getfdproc(kproc_self(),procfd);
- if __unlikely(!ctx) return KE_BADF;
- error = kmmutex_lock(&ctx->p_lock,KPROC_LOCK_FDMAN);
- if __unlikely(KE_ISERR(error)) { kproc_decref(ctx); return error; }
- entry_end = (entry_iter = entry_begin = ctx->p_fdman.fdm_fdv)+ctx->p_fdman.fdm_fda;
- for (; entry_iter != entry_end; ++entry_iter) if (entry_iter->fd_type != KFDTYPE_NONE) {
-  if (fditer < fdend) *fditer = (int)(entry_iter-entry_begin);
-  ++fditer;
+ if __unlikely(KE_ISERR(error = ktranslator_init(&trans,caller))) return error;
+ proc = kproc_getfdproc(ktask_getproc(caller),procfd);
+ if __unlikely(!proc) { error = KE_BADF; goto end_trans; }
+ kernel_fdv = (__kernel int *)ktranslator_exec(&trans,fdv,fdc*sizeof(int),&kernel_fdc,1);
+ kernel_fdc /= sizeof(int);
+ if __unlikely(kernel_fdc < fdc) { error = KE_FAULT; goto end_proc; }
+ error = kproc_lock(proc,KPROC_LOCK_FDMAN);
+ if __unlikely(KE_ISERR(error)) goto end_proc;
+ entry_begin = proc->p_fdman.fdm_fdv;
+ entry_end = (entry_iter = entry_begin)+proc->p_fdman.fdm_fda;
+ fdend = (fditer = kernel_fdv)+fdc;
+ for (; entry_iter != entry_end; ++entry_iter) {
+  if (entry_iter->fd_type != KFDTYPE_NONE) {
+   if (fditer < fdend) *fditer = (int)(entry_iter-entry_begin);
+   ++fditer;
+  }
  }
- kmmutex_unlock(&ctx->p_lock,KPROC_LOCK_FDMAN);
- kproc_decref(ctx);
- if (reqfdc) *reqfdc = (size_t)(fditer-fdv);
- return KE_OK;
+ kproc_unlock(proc,KPROC_LOCK_FDMAN);
+ if (reqfdc) {
+  size_t kernel_reqfdc = (size_t)(fditer-kernel_fdv);
+  if __unlikely(ktranslator_copytouser(&trans,reqfdc,
+               &kernel_reqfdc,sizeof(size_t))) error = KE_FAULT;
+ }
+end_proc:  kproc_decref(proc);
+end_trans: ktranslator_quit(&trans);
+ return error;
 }
 
 KSYSCALL_DEFINE_EX3(c,int,kproc_openfd,int,procfd,int,fd,int,flags) {
- __ref struct kproc *ctx,*caller = kproc_self();
+ __ref struct kproc *proc,*caller = kproc_self();
  struct kfdentry fdentry; int resfd; kerrno_t error;
  KTASK_CRIT_MARK
- ctx = kproc_getfdproc(caller,procfd);
- if __unlikely(!ctx) return KE_BADF;
- error = kproc_getfd(ctx,fd,&fdentry);
- kproc_decref(ctx);
+ proc = kproc_getfdproc(caller,procfd);
+ if __unlikely(!proc) return KE_BADF;
+ error = kproc_getfd(proc,fd,&fdentry);
+ kproc_decref(proc);
  if __unlikely(KE_ISERR(error)) return error;
  fdentry.fd_flag = (kfdflag_t)flags;
  error = kproc_insfd_inherited(caller,&resfd,&fdentry);
@@ -72,13 +86,13 @@ KSYSCALL_DEFINE_EX3(c,int,kproc_openfd,int,procfd,int,fd,int,flags) {
 }
 
 KSYSCALL_DEFINE_EX4(c,int,kproc_openfd2,int,procfd,int,fd,int,newfd,int,flags) {
- __ref struct kproc *ctx,*caller = kproc_self();
+ __ref struct kproc *proc,*caller = kproc_self();
  struct kfdentry fdentry; kerrno_t error;
  KTASK_CRIT_MARK
- ctx = kproc_getfdproc(caller,procfd);
- if __unlikely(!ctx) return KE_BADF;
- error = kproc_getfd(ctx,fd,&fdentry);
- kproc_decref(ctx);
+ proc = kproc_getfdproc(caller,procfd);
+ if __unlikely(!proc) return KE_BADF;
+ error = kproc_getfd(proc,fd,&fdentry);
+ kproc_decref(proc);
  if __unlikely(KE_ISERR(error)) return error;
  fdentry.fd_flag = (kfdflag_t)flags;
  error = kproc_insfdat_inherited(caller,newfd,&fdentry);
