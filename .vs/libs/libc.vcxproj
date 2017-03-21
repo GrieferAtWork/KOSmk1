@@ -16,6 +16,7 @@
     <ClCompile Include="..\..\libs\libc\ctype.c" />
     <ClCompile Include="..\..\libs\libc\dirent.c" />
     <ClCompile Include="..\..\libs\libc\environ.c" />
+    <ClCompile Include="..\..\libs\libc\exception.c" />
     <ClCompile Include="..\..\libs\libc\format-printer.c" />
     <ClCompile Include="..\..\libs\libc\getopt.c" />
     <ClCompile Include="..\..\libs\libc\itos.c" />

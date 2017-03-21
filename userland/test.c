@@ -28,8 +28,9 @@
 #include <stdlib.h>
 #include <proc.h>
 #include <kos/syslog.h>
-#include <kos/exception.h>
+#include <exception.h>
 #include <stdarg.h>
+#include <traceback.h>
 
 static void outf(char const *fmt, ...) {
  va_list args;
@@ -56,32 +57,34 @@ static void *thread_test(void *closure) {
 
 
 static __noreturn void handler(void) {
- outf("error = %d\n",kexcept_code());
- outf("eip = %p\n",_tls_self->u_exstate.eip);
- kexcept_rethrow();
+ outf("error = %d\n",exc_code());
+ outf("eip = %p\n",tls_self->u_exstate.eip);
+ tb_printebp((void const *)tls_self->u_exstate.ebp);
+ exc_rethrow();
 }
 
 
 int main(void) {
+ /* Reminder: This file gets compiler with GCC. - Not VC/VC++! */
  register int x = 42;
 #define get_esp() __xblock({ void *r; __asm__("mov %%esp, %0\n" : "=r" (r)); __xreturn r; })
 
  __try {
-  KEXCEPT_TRY_H(&handler) { kexcept_raise(69); }
+  KEXCEPT_TRY_H(&handler) { exc_raise(69); }
  } __except(1) {
+  assert(exc_code() == 69);
  }
+ assert(exc_code() == 0);
 
  outf("Before try %d (%p)\n",x,get_esp());
  __try {
   outf("Before raise %d (%p)\n",x,get_esp());
-  kexcept_raise(KEXCEPTION_TEST);
+  exc_raise(KEXCEPTION_TEST);
   outf("After raise %d (%p)\n",x,get_esp());
  } __finally {
   outf("In finally %d (%p)\n",x,get_esp());
  }
  outf("After finally %d (%p)\n",x,get_esp());
-
-
 
 #if 0
  ptrdiff_t off = tls_alloc(NULL,1);

@@ -336,6 +336,7 @@ search_all_modules:
    if (flags&KMOD_SYMINFO_FLAG_LOOKUPADDR) {
     symbol = proc_find_symbol_by_addr(proc,(__user void const *)addr_or_name,
                                       &module,module,&symbol_flags);
+    if __unlikely(!symbol) { error = KE_NOENT; goto end_unlock; }
    } else {
     symbol = proc_find_symbol_by_name(proc,sym_name.sn_name,sym_name.sn_size,
                                       sym_name_hash,&module,module,&symbol_flags);
@@ -350,8 +351,9 @@ search_all_modules:
    goto search_all_modules;
   }
   error = KE_INVAL;
- } else if __unlikely(!(module = &proc->p_modules.pms_modv[modid])->pm_lib) error = KE_INVAL;
- else {
+ } else if __unlikely(!(module = &proc->p_modules.pms_modv[modid])->pm_lib) {
+  error = KE_INVAL;
+ } else {
 parse_module:
   if (flags&KMOD_SYMINFO_FLAG_LOOKUPADDR) {
    if ((uintptr_t)addr_or_name < (uintptr_t)module->pm_base) {

@@ -26,6 +26,7 @@
     <ClCompile Include="..\..\libs\libc\signal.c" />
     <ClCompile Include="..\..\libs\libc\proc.c" />
     <ClCompile Include="..\..\libs\libc\mod.c" />
+    <ClCompile Include="..\..\libs\libc\exception.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\libs\libc\itos.impl.inl" />

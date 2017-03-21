@@ -52,6 +52,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "include", "include", "{FC82
 		..\include\elf.h = ..\include\elf.h
 		..\include\envlock.h = ..\include\envlock.h
 		..\include\errno.h = ..\include\errno.h
+		..\include\exception.h = ..\include\exception.h
 		..\include\fcntl.h = ..\include\fcntl.h
 		..\include\features.h = ..\include\features.h
 		..\include\float.h = ..\include\float.h

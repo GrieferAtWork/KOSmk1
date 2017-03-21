@@ -376,7 +376,7 @@ extern               void kexcept_raise(kexno_t no); /*< Small helper functions 
 #define kexcept_code()       _tls_getl(KUTHREAD_OFFSETOF_EXINFO+KEXINFO_OFFSETOF_NO)
 #define kexcept_handling() (kexcept_code() != KEXCEPTION_NONE)
 
-__local __noreturn void kexcept_rethrow(void) {
+__local __noreturn void kexcept_rethrow __D0() {
  struct kexrecord *handler;
  assertf(kexcept_code() != KEXCEPTION_NONE,
          "Not handling any exceptions right now");
@@ -389,7 +389,7 @@ __local __noreturn void kexcept_rethrow(void) {
                   "ret\n" : : "r" (handler));
  __compiler_unreachable();
 }
-__local __noreturn void __kexcept_throw(struct kexinfo const *__exc) {
+__local __noreturn void __kexcept_throw __D1(struct kexinfo const *,__exc) {
  memcpy(kexcept_current,__exc,sizeof(struct kexinfo));
  kexcept_rethrow();
 }
@@ -411,7 +411,7 @@ __local __noreturn void __kexcept_throw(struct kexinfo const *__exc) {
                          : : : "memory" : eip_label);\
             (void)0;\
  })
-__local __noreturn void kexcept_continue(void) {
+__forcelocal __noreturn void kexcept_continue __D0() {
  assertf(kexcept_code() != KEXCEPTION_NONE,
          "Not handling any exceptions right now");
  __asm_volatile__("pushl " __KX_SM(KEXSTATE_OFFSETOF_EFLAGS)  "\n"
@@ -431,14 +431,14 @@ __local __noreturn void kexcept_continue(void) {
 #else /* __i386__ */
 #error "FIXME"
 #endif /* arch... */
-__local void kexcept_throw(struct kexinfo const *__exc) {
+__local void kexcept_throw __D1(struct kexinfo const *,__exc) {
  assertf(__exc->ex_no != KEXCEPTION_NONE,
          "Can't throw exception code ZERO(0)");
  __kexcept_save(__done);
  __kexcept_throw(__exc);
 __done:;
 }
-__local void kexcept_raise(kexno_t __no) {
+__local void kexcept_raise __D1(kexno_t,__no) {
  struct kexinfo __exc;
  memset(&__exc,0,sizeof(struct kexinfo));
  __exc.ex_no = __no;
