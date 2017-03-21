@@ -1175,7 +1175,7 @@ kshm_unmapregion(struct kshm *__restrict self,
 
 
 //////////////////////////////////////////////////////////////////////////
-// Checks if the given process 'caller' has access to
+// Checks if the given thread 'caller' has access to
 // the specified area of physical (aka. device) memory.
 // @return: KE_OK:    Access is granted.
 // @return: KE_ACCES: They don't...
@@ -1308,7 +1308,7 @@ __ktranslator_init_nointr(struct ktranslator *__restrict self,
                           struct ktask *__restrict caller);
 __local __crit void
 __ktranslator_init_kepd(struct ktranslator *__restrict self) {
-#if kpagedir_kernel
+#ifdef kpagedir_kernel
  self->t_epd = kpagedir_kernel();
 #else
  extern struct kpagedir __kpagedir_kernel;

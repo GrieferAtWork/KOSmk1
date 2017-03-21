@@ -429,9 +429,6 @@ kproc_tls_free_mapping(struct kproc *__restrict self,
  assert(mapping->tm_pages);
  assert(mapping->tm_pages == mapping->tm_region->sre_chunk.sc_pages);
  assert(mapping->tm_region->sre_chunk.sc_partc);
-#if 0
- return KE_NOSYS;
-#else
  error = kproc_lock(self,KPROC_LOCK_THREADS);
  if __unlikely(KE_ISERR(error)) return error;
  end = (iter = self->p_threads.t_taskv)+self->p_threads.t_taska;
@@ -462,7 +459,6 @@ kproc_tls_free_mapping(struct kproc *__restrict self,
 end_threads:
  kproc_unlock(self,KPROC_LOCK_THREADS);
  return error;
-#endif
 }
 
 __crit kerrno_t
@@ -667,6 +663,7 @@ kproc_tls_pt_setup(struct kproc *__restrict self,
   }
  }
 #endif
+ /* Fill in all kinds of useful information. */
  parent = task->t_parent;
  assertf(parent != NULL,"Must be non-NULL");
  assertf(parent != task,"Only ktask_zero() (which is a kernel task) would apply for this");

@@ -52,7 +52,7 @@ ksecdata_elf32_init(struct ksecdata *__restrict self,
  kassertmem(pheaderv,pheaderc*sizeof(Elf32_Phdr));
  kassert_kfile(elf_file); req_sections = 0;
  if __unlikely(pheadersize < offsetafter(Elf32_Phdr,p_memsz)) goto set_section_count;
- // Figure out how many sections are needed (Only counting non-empty PT_LOAD headers)
+ /* Figure out how many sections are needed (Only counting non-empty PT_LOAD headers). */
  end = (Elf32_Phdr *)((uintptr_t)(iter = pheaderv)+(pheaderc*pheadersize));
  for (; iter != end; *(uintptr_t *)&iter += pheadersize) {
   if (iter->p_type == PT_LOAD && iter->p_memsz) ++req_sections;
@@ -73,7 +73,7 @@ set_section_count:
    if __likely(pheadersize >= sizeof(Elf32_Phdr)) {
     header = iter;
    } else {
-    // Super unlikely case, but must be checked
+    /* Super unlikely case, but must be checked. */
     memset(&header_copy,0,sizeof(header_copy));
     memcpy(&header_copy,iter,pheadersize);
     header = &header_copy;
@@ -88,17 +88,17 @@ set_section_count:
                        ,(header->p_flags&PF_W) ? 'W' : '-'
                        ,(header->p_flags&PF_X) ? 'X' : '-'
                        ,(uintptr_t)header->p_align);
-   section_region = kshmregion_newram(ceildiv(memsize,PAGESIZE),
 #if PF_X == KSHMREGION_FLAG_EXEC && \
     PF_W == KSHMREGION_FLAG_WRITE && \
     PF_R == KSHMREGION_FLAG_READ
-                                  (header->p_flags&(PF_X|PF_W|PF_R))
+   section_region = kshmregion_newram(ceildiv(memsize,PAGESIZE),
+                                     (header->p_flags&(PF_X|PF_W|PF_R)));
 #else
-                                  ((header->p_flags&PF_X) ? KSHMREGION_FLAG_EXEC : 0)|
-                                  ((header->p_flags&PF_W) ? KSHMREGION_FLAG_WRITE : 0)|
-                                  ((header->p_flags&PF_R) ? KSHMREGION_FLAG_READ : 0)
+   section_region = kshmregion_newram(ceildiv(memsize,PAGESIZE),
+                                     ((header->p_flags&PF_X) ? KSHMREGION_FLAG_EXEC : 0)|
+                                     ((header->p_flags&PF_W) ? KSHMREGION_FLAG_WRITE : 0)|
+                                     ((header->p_flags&PF_R) ? KSHMREGION_FLAG_READ : 0));
 #endif
-                                  );
    if __unlikely(!section_region) {
     error = KE_NOMEM;
 err_seciter:
@@ -178,7 +178,7 @@ kshlib_elf32_load_symtable(struct kshlib *__restrict self, Elf32_Shdr const *__r
  if (public_count) ksymtable_rehash(&self->sh_publicsym,self->sh_publicsym.st_size+public_count);
  if (weak_count) ksymtable_rehash(&self->sh_weaksym,self->sh_weaksym.st_size+weak_count);
  if (is_dynamic) {
-  // Vector of dynamic symbols.
+  /* Vector of dynamic symbols. */
   symcount = symtable_size/symtab->sh_entsize;
   dynsym = (struct ksymbol **)malloc(symcount*sizeof(struct ksymbol *));
   if __unlikely(!dynsym) { error = KE_NOMEM; goto end_symtable; }
@@ -256,7 +256,7 @@ kshlib_elf32_parse_needed(struct kshlib *__restrict self, struct kfile *__restri
   if (iter->d_tag == DT_NEEDED && iter->d_un.d_val < strtable_size) {
    if ((name = strtable+iter->d_un.d_val)[0] != '\0') {
     k_syslogf_prefixfile(KLOG_INFO,elf_file,"[ELF] Searching for dependency: %q\n",name);
-    // Recursively open dependencies
+    /* Recursively load dependencies. */
     if __unlikely(KE_ISERR(error = kshlib_openlib(name,(size_t)-1,&dep))) {
      k_syslogf_prefixfile(KLOG_ERROR,elf_file,"[ELF] Missing dependency: %q\n",name);
      if (!KSHLIB_IGNORE_MISSING_DEPENDENCIES) {
@@ -270,7 +270,7 @@ err_depiter:
      }
     } else if (!(dep->sh_flags&KMODFLAG_LOADED)) {
      k_syslogf_prefixfile(KLOG_ERROR,elf_file,"[ELF] Dependency loop: %q\n",name);
-     // Dependency loop
+     /* Dependency loop. */
      error = KE_LOOP;
      kshlib_decref(dep);
      goto err_depiter;
@@ -284,8 +284,8 @@ err_depiter:
  }
  assert(dep_iter == dependencies+self->sh_deps.sl_libc);
  if __unlikely(self->sh_deps.sl_libc != needed_count) {
-  // This can happen if NULL-named dependencies were found.
-  // >> Since KOS's linker isn't too strict, we simply ignore those.
+  /* This can happen if NULL-named dependencies were found.
+   * >> Since KOS's linker is very leanient, we simply ignore those. */
   if __unlikely(!self->sh_deps.sl_libc) {
    free(dependencies);
    self->sh_deps.sl_libv = NULL;
@@ -301,7 +301,7 @@ end_strtable:
  return error;
 }
 
-// Initialize 'sh_data' + 'sh_deps' and fill 'dyninfo'
+/* Initialize 'sh_data' + 'sh_deps' and fill 'dyninfo'. */
 __local kerrno_t
 kshlib_elf32_load_pheaders(struct kshlib *__restrict self,
                            struct elf32_dynsyminfo *__restrict dyninfo,
@@ -324,12 +324,13 @@ kshlib_elf32_load_pheaders(struct kshlib *__restrict self,
   error = ksecdata_elf32_init(&self->sh_data,phdr,ehdr->e_phnum,ehdr->e_phentsize,elf_file);
   if __unlikely(KE_ISERR(error)) goto __err_pheaders;
   phdr_end = (Elf32_Phdr *)((uintptr_t)(phdr_iter = phdr)+phsize);
-  // Iterate all segments
+  /* Iterate all segments. */
   for (; phdr_iter != phdr_end;
        *(uintptr_t *)&phdr_iter += ehdr->e_phentsize
        ) switch (phdr_iter->p_type) {
-   case PT_LOAD: break; // Already handled inside of 'ksecdata_elf32_init'
-   case PT_DYNAMIC: // Dynamic header
+   case PT_LOAD: break; /* Already handled inside of 'ksecdata_elf32_init' */
+ /*case PT_TLS: break;*/
+   case PT_DYNAMIC: /* Dynamic header. */
     dhdr = (Elf32_Dyn *)malloc(phdr_iter->p_filesz);
     if __unlikely(!dhdr) { error = KE_NOMEM; err_pheaders: free(phdr); goto err_data; }
     error = kfile_kernel_preadall(elf_file,phdr_iter->p_offset,dhdr,
@@ -344,12 +345,12 @@ kshlib_elf32_load_pheaders(struct kshlib *__restrict self,
      case DT_SYMTAB         : dyninfo->dyn_symtable_header.sh_offset  = kshlib_symaddr2fileaddr(self,diter->d_un.d_ptr); break;
      case DT_SYMENT         : dyninfo->dyn_symtable_header.sh_entsize = diter->d_un.d_val; break;
      case DT_HASH:
-      // This can be used to figure out the size of the symbol table
-      // >> The size can be read from index 1 (aka. the sector index)
+      /* This can be used to figure out the size of the symbol table
+       * >> The size can be read from index 1 (aka. the sector index). */
       if (ksecdata_getmem(&self->sh_data,
-                          kshlib_fileaddr2symaddr(self,diter->d_un.d_ptr)+sizeof(Elf32_Word), // read the second index
+                          kshlib_fileaddr2symaddr(self,diter->d_un.d_ptr)+sizeof(Elf32_Word), /* read the second index. */
                           &dyninfo->dyn_symtable_header.sh_size,sizeof(Elf32_Word))
-          ) dyninfo->dyn_symtable_header.sh_size = (Elf32_Word)-1; // Was worth a try...
+          ) dyninfo->dyn_symtable_header.sh_size = (Elf32_Word)-1; /* Was worth a try... */
       break;
      case DT_INIT           : self->sh_callbacks.slc_init            = diter->d_un.d_ptr; break;
      case DT_FINI           : self->sh_callbacks.slc_fini            = diter->d_un.d_ptr; break;
@@ -373,13 +374,13 @@ kshlib_elf32_load_pheaders(struct kshlib *__restrict self,
      case DT_JMPREL:
      case DT_PLTRELSZ:
      case DT_PLTGOT:
-      // We take our relocation information from section headers
+      /* We take our relocation information from section headers. */
       break;
      case DT_DEBUG:
-      // Don't warn about this one...
+      /* Don't warn about this one... */
       break;
      default:
-      // Don't warn about these...
+      /* Don't warn about these... */
       if (diter->d_tag >= DT_LOOS && diter->d_tag <= DT_HIOS) break;
       if (diter->d_tag >= DT_LOPROC && diter->d_tag <= DT_HIPROC) break;
       k_syslogf_prefixfile(KLOG_WARN,elf_file,"[ELF] Unrecognized dynamic header: %d\n",(int)diter->d_tag);
@@ -407,7 +408,7 @@ done_dynamic_1:
    case PT_PHDR:
     break;
    default:
-    if (phdr_iter->p_type == 3) break; // Something about interpreters, that wouldn't even work right now...
+    if (phdr_iter->p_type == 3) break; /* Something about interpreters, that wouldn't even work right now... */
     k_syslogf_prefixfile(KLOG_WARN,elf_file
                     ,"[ELF] Unrecognized program header: %d\n"
                     ,(int)phdr_iter->p_type);
@@ -427,7 +428,7 @@ err_deps: kshliblist_quit(&self->sh_deps);
 }
 
 
-// Returns 'KS_FOUND' if the given 'data' is inherited
+/* Returns 'KS_FOUND' if the given 'data' is inherited. */
 __local kerrno_t krelocvec_elf32_init(struct krelocvec *__restrict self,
                                       Elf32_Rel const *data, size_t entsize,
                                       size_t entcount, int is_rela) {
@@ -439,7 +440,7 @@ __local kerrno_t krelocvec_elf32_init(struct krelocvec *__restrict self,
  self->rv_type = is_rela ? KRELOCVEC_TYPE_ELF32_RELA : KRELOCVEC_TYPE_ELF32_REL;
  self->rv_relc = entcount;
  if (reqentsize == entsize) {
-  // Inherit data directly
+  /* Inherit data directly. */
   self->rv_data = (void *)data;
   return KS_FOUND;
  }
@@ -473,7 +474,7 @@ kshlib_elf32_load_rel(struct kshlib *__restrict self,
  kassert_kfile(elf_file);
  relsize = (size_t)shdr->sh_size;
  if __unlikely(!relsize || !shdr->sh_entsize) {
-  /* Empty section */
+  /* Empty section. */
 #ifdef __DEBUG__
   k_syslogf_prefixfile(KLOG_WARN,elf_file
                       ,"[ELF] Empty ELF REL%s section: %s\n"
@@ -522,7 +523,7 @@ kshlib_elf32_load_sheaders(struct kshlib *__restrict self,
  Elf32_Addr  sh_strtable_addr;
  Elf32_Word  sh_strtable_size;
  char *strtable;
- if (!ehdr->e_shnum) return KE_OK; // No sections headers found
+ if (!ehdr->e_shnum) return KE_OK; /* No sections headers found. */
  sh_dynstr = sh_dynsym = sh_strtab = sh_symtab = NULL;
 
  assert(ehdr->e_shnum);
@@ -531,7 +532,7 @@ kshlib_elf32_load_sheaders(struct kshlib *__restrict self,
  if __unlikely(!shdr) return KE_NOMEM;
  error = kfile_kernel_preadall(elf_file,ehdr->e_shoff,shdr,shsize);
  if __unlikely(KE_ISERR(error)) goto end_sheaders;
- // String table for section names
+ /* String table for section names. */
  if (ehdr->e_shstrndx < ehdr->e_shnum &&
      ehdr->e_shentsize >= offsetafter(Elf32_Shdr,sh_size)) {
   Elf32_Shdr *strt = (Elf32_Shdr *)((uintptr_t)shdr+
@@ -564,7 +565,7 @@ kshlib_elf32_load_sheaders(struct kshlib *__restrict self,
                       (__u64)shdr_iter->sh_size,
                        hrdtype,name);
   switch (hrdtype) {
-   case SHT_NULL: break; // Just ignore this one...
+   case SHT_NULL: break; /* Just ignore this one... */
    case SHT_PROGBITS:
     /* Parse DWARF .debug_line debug sections. */
     if (!strcmp(name,".debug_line")) {
@@ -575,7 +576,7 @@ kshlib_elf32_load_sheaders(struct kshlib *__restrict self,
     }
     break; /* Used for debug information and such... */
    case SHT_NOBITS: break; /* For bss sections (Already parsed by program headers, right?) */
-   case SHT_HASH: break; /* We do our own hashing */
+   case SHT_HASH: break; /* We do our own hashing. */
    case SHT_STRTAB:
     if (name) {
           if (!strcmp(name,".dynstr")) sh_dynstr = shdr_iter;
@@ -607,12 +608,12 @@ kshlib_elf32_load_sheaders(struct kshlib *__restrict self,
 #undef STRAT
  free(strtable);
 
- // Default to use Program-header-based tables
+ /* Default to use Program-header-based tables. */
  error = kshlib_elf32_load_symtable(self,sh_dynstr ? sh_dynstr : &dyninfo->dyn_strtable_header,
                                          sh_dynsym ? sh_dynsym : &dyninfo->dyn_symtable_header,
                                     elf_file,1);
  if __unlikely(KE_ISERR(error)) goto end_sheaders;
- // Load an optional symbol table
+ /* Load an optional symbol table. */
  if (sh_strtab && sh_symtab) {
   error = kshlib_elf32_load_symtable(self,sh_strtab,sh_symtab,elf_file,0);
   if __unlikely(KE_ISERR(error)) goto end_sheaders;
@@ -640,7 +641,7 @@ __crit kerrno_t kshlib_elf32_new(__ref struct kshlib **result, struct kfile *__r
  if __unlikely(ehdr.ehrd_magic[0] != ELFMAG0 || ehdr.ehrd_magic[1] != ELFMAG1
             || ehdr.ehrd_magic[2] != ELFMAG2 || ehdr.ehrd_magic[3] != ELFMAG3
             ) { error = KE_NOEXEC; goto err_lib; }
- /* TODO: Is there some other (better conforming) way of detecting fixed-address images? */
+ /* TODO: Is there some other (more conforming) way of detecting fixed-address images? */
  if (ehdr.e_type == ET_EXEC) {
   lib->sh_flags |= KMODFLAG_FIXED|KMODFLAG_BINARY|KMODFLAG_CANEXEC;
  }
@@ -672,10 +673,10 @@ __crit kerrno_t kshlib_elf32_new(__ref struct kshlib **result, struct kfile *__r
  lib->sh_callbacks.slc_fini             = KSYM_INVALID;
  lib->sh_callbacks.slc_fini_array_v     = KSYM_INVALID;
  lib->sh_callbacks.slc_fini_array_c     = 0;
- // Load program headers and collect dynamic information
+ /* Load program headers and collect dynamic information. */
  error = kshlib_elf32_load_pheaders(lib,&dyninfo,elf_file,&ehdr);
  if __unlikely(KE_ISERR(error)) goto err_cache;
- // Initialize symbol tables
+ /* Initialize symbol tables. */
  ksymtable_init(&lib->sh_publicsym);
  ksymtable_init(&lib->sh_weaksym);
  ksymtable_init(&lib->sh_privatesym);
@@ -685,7 +686,7 @@ __crit kerrno_t kshlib_elf32_new(__ref struct kshlib **result, struct kfile *__r
  if __unlikely(KE_ISERR(error)) goto err_post_pheaders;
  else {
   /* Without any relocations, the module must be loaded as fixed. */
-  //if (!lib->sh_reloc.r_vecc) lib->sh_flags |= KMODFLAG_FIXED;
+  /*if (!lib->sh_reloc.r_vecc) lib->sh_flags |= KMODFLAG_FIXED;*/
   kshlibrecent_add(lib);
  }
  lib->sh_flags |= KMODFLAG_LOADED;

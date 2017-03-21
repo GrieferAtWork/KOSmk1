@@ -294,22 +294,42 @@ kproc_insmod_unlocked_impl(struct kproc *__restrict self,
  kmodid_t *depids,*depids_iter;
  KTASK_CRIT_MARK
  kassertobj(module_id);
+ assert(kproc_islocked(self,KPROC_LOCK_MODS));
  depids = (kmodid_t *)malloc(module->sh_deps.sl_libc*sizeof(kmodid_t));
  if __unlikely(!depids) return KE_NOMEM;
+ /* Must insert 'module' first to prevent address conflicts. */
+ error = kproc_insmod_single_unlocked(self,module,module_id,depids);
+ if __unlikely(KE_ISERR(error)) goto err_depids;
+ assert(*module_id < self->p_modules.pms_moda);
+ assert(self->p_modules.pms_modv[*module_id].pm_lib == module);
+ assert(error != KE_OK || self->p_modules.pms_modv[*module_id].pm_depids == depids);
  end = (iter = module->sh_deps.sl_libv)+module->sh_deps.sl_libc;
- depids_iter = depids;
- for (; iter != end; ++depids_iter,++iter) {
-  error = kproc_insmod_unlocked_impl(self,*iter,depids_iter);
-  if __unlikely(KE_ISERR(error)) goto err_iter;
+ for (depids_iter = depids; iter != end; ++depids_iter,++iter) {
+  kerrno_t dep_error = kproc_insmod_unlocked_impl(self,*iter,depids_iter);
+  if __unlikely(KE_ISERR(dep_error)) { error = dep_error; goto err_iter; }
  }
  assert(depids_iter == depids+module->sh_deps.sl_libc);
- error = kproc_insmod_single_unlocked(self,module,module_id,depids);
+ /* The following can happen for KS_UNCHANGED (module was already loaded). */
  if __unlikely(error != KE_OK) free(depids);
  return error;
 err_iter:
  while (depids_iter-- != depids) {
   kproc_delmod_unlocked(self,*depids_iter);
  }
+ {
+  size_t depc;
+#ifdef __DEBUG__
+  kmodid_t *depv;
+  asserte(kproc_delmod_single_unlocked(
+          self,*module_id,&depv,&depc) ==
+          KE_OK);
+  assert(depv == depids);
+#else
+  kproc_delmod_single_unlocked(self,*module_id,&depids,&depc);
+#endif
+  assert(depc == module->sh_deps.sl_libc);
+ }
+err_depids:
  free(depids);
  return error;
 }
