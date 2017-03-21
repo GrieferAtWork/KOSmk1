@@ -114,6 +114,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kos", "kos", "{0BC61691-24B
 		..\include\kos\config.h = ..\include\kos\config.h
 		..\include\kos\endian.h = ..\include\kos\endian.h
 		..\include\kos\errno.h = ..\include\kos\errno.h
+		..\include\kos\exception.h = ..\include\kos\exception.h
 		..\include\kos\fd.h = ..\include\kos\fd.h
 		..\include\kos\fs.h = ..\include\kos\fs.h
 		..\include\kos\keyboard.h = ..\include\kos\keyboard.h
@@ -254,6 +255,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "time", "time", "{538A4144-3
 		..\include\hw\rtc\cmos.h = ..\include\hw\rtc\cmos.h
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test", "userland\test.vcxproj", "{6DA33F87-F2A9-45F0-A0AF-3AD4CED7BAB8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -360,6 +363,10 @@ Global
 		{1C200B65-C44E-41C3-B66C-67014189C758}.Debug|Win32.Build.0 = Debug|Win32
 		{1C200B65-C44E-41C3-B66C-67014189C758}.Release|Win32.ActiveCfg = Release|Win32
 		{1C200B65-C44E-41C3-B66C-67014189C758}.Release|Win32.Build.0 = Release|Win32
+		{6DA33F87-F2A9-45F0-A0AF-3AD4CED7BAB8}.Debug|Win32.ActiveCfg = Debug|Win32
+		{6DA33F87-F2A9-45F0-A0AF-3AD4CED7BAB8}.Debug|Win32.Build.0 = Debug|Win32
+		{6DA33F87-F2A9-45F0-A0AF-3AD4CED7BAB8}.Release|Win32.ActiveCfg = Release|Win32
+		{6DA33F87-F2A9-45F0-A0AF-3AD4CED7BAB8}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -402,5 +409,6 @@ Global
 		{0343CB51-A6B6-4369-B679-5F2207D0E825} = {81DF2AB2-5463-40A2-B23A-6E7F2215F7B0}
 		{2FF07674-83FB-4FE1-A80A-A023FCD30A74} = {81DF2AB2-5463-40A2-B23A-6E7F2215F7B0}
 		{538A4144-32CF-432B-9951-2004DDE63621} = {81DF2AB2-5463-40A2-B23A-6E7F2215F7B0}
+		{6DA33F87-F2A9-45F0-A0AF-3AD4CED7BAB8} = {9430368A-404E-4917-982A-DABD0023453A}
 	EndGlobalSection
 EndGlobal

@@ -150,7 +150,7 @@ kproc_exec(struct kshlib *__restrict exec_main,
  }
  /* NOTE: The process should not be a zombie at this point,
   *       as we (being a critical task) are still alive. */
- error = kproc_locks(self,KPROC_LOCK_MODS|KPROC_LOCK_TLS|KPROC_LOCK_ENVIRON);
+ error = kproc_locks(self,KPROC_LOCK_MODS|KPROC_LOCK_ENVIRON);
  assertf(KE_ISOK(error),"Why did this fail? %d",error);
  error = krwlock_beginwrite(&self->p_shm.s_lock);
  assertf(KE_ISOK(error),"Why did this fail? %d",error);
@@ -228,7 +228,7 @@ kproc_exec(struct kshlib *__restrict exec_main,
                      (uintptr_t)exec_main->sh_callbacks.slc_start;
  // Unlock all locks that we're still holding
  krwlock_endwrite(&self->p_shm.s_lock);
- kproc_unlocks(self,KPROC_LOCK_MODS|KPROC_LOCK_TLS|KPROC_LOCK_ENVIRON);
+ kproc_unlocks(self,KPROC_LOCK_MODS|KPROC_LOCK_ENVIRON);
  return error;
 }
 

@@ -90,9 +90,9 @@ kproc_copy4fork(__u32 flags, struct kproc *__restrict proc,
  }
  if __unlikely(KE_ISERR(error)) goto err_fdman;
 
- if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_TLS))) goto err_sand;
- error = ktlsman_initcopy(&result->p_tls,&proc->p_tls);
- kproc_unlock(proc,KPROC_LOCK_TLS);
+ if __unlikely(KE_ISERR(error = krwlock_beginread(&proc->p_tls.tls_lock))) goto err_sand;
+ error = ktlsman_initcopy_unlocked(&result->p_tls,&proc->p_tls);
+ krwlock_endread(&proc->p_tls.tls_lock);
  if __unlikely(KE_ISERR(error)) goto err_sand;
 
  if __unlikely(KE_ISERR(error = kproc_lock(proc,KPROC_LOCK_ENVIRON))) goto err_sand;

@@ -227,17 +227,8 @@ static char const welcome[] =
 "\033[2K"     _ X _ X _ _ X _ _ X _ _ X X X _ _ X X X _ "\n"
 "\033[m";
 
-__attribute_thread int foo = 42;
-__attribute_thread int bar = 84;
-
 int main(int argc, char *argv[]) {
  int error; struct rline *r; int optc;
- // movl	%gs:0, %eax
- // movl	foo@ntpoff(%eax), %eax
- //int x = foo;
- //int y = bar;
- //printf("thread_local %d %d\n",x,y);
-
  while ((optc = getopt_long(argc,argv,"c:irvSs:h",longopts,NULL)) != -1) {
   switch (optc) {
    case 'c': _exit(do_system(optarg)); break;

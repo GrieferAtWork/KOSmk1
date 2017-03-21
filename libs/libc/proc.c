@@ -551,6 +551,18 @@ __public int tls_free(ptrdiff_t offset) {
  return -1;
 }
 
+tlsinfo_t *tls_enum(tlsinfo_t *__restrict infov,
+                    size_t infoc) {
+ kerrno_t error; size_t reqinfoc;
+ error = kproc_tlsenum(infov,infoc,&reqinfoc);
+ if __likely(KE_ISOK(error)) {
+  if __likely(infoc >= reqinfoc) return infov;
+  error = KE_RANGE;
+ }
+ __set_errno(-error);
+ return NULL;
+}
+
 
 __DECL_END
 #endif

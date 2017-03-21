@@ -225,6 +225,8 @@ extern __nonnull((1)) perm_t const *proc_setpermex __P((perm_t const *__restrict
 extern __nonnull((1)) perm_t       *proc_xchpermex __P((perm_t *__restrict __buf, __size_t __permcount));
 
 
+typedef struct ktlsinfo tlsinfo_t;
+
 //////////////////////////////////////////////////////////////////////////
 // Allocate/Free TLS memory.
 // @param: SIZE: The size of the template/TLS block (Actually allocated storage may be greater than this)
@@ -234,8 +236,9 @@ extern __nonnull((1)) perm_t       *proc_xchpermex __P((perm_t *__restrict __buf
 //                          tls_(get|put)(b|w|l|q) functions.
 // @return: -1: [tls_free] An error occurred (see 'errno' and 'kproc_tlsfree').
 // @return: 0 : [tls_free] Successfully freed the TLS block at the given offset.
-extern __ptrdiff_t tls_alloc __P((void const *__template, __size_t __size));
-extern int         tls_free  __P((__ptrdiff_t __offset));
+extern __ptrdiff_t  tls_alloc __P((void const *__template, __size_t __size));
+extern int          tls_free  __P((__ptrdiff_t __offset));
+extern tlsinfo_t   *tls_enum  __P((tlsinfo_t *__restrict __infov, __size_t __infoc));
 
 
 

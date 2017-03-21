@@ -44,6 +44,7 @@ KSYSCALL_DEFINE_EX4(c,kerrno_t,kproc_enumfd,int,procfd,
  if __unlikely(KE_ISERR(error = ktranslator_init(&trans,caller))) return error;
  proc = kproc_getfdproc(ktask_getproc(caller),procfd);
  if __unlikely(!proc) { error = KE_BADF; goto end_trans; }
+ /* TODO: We can't just translate once! - What about page borders? */
  kernel_fdv = (__kernel int *)ktranslator_exec(&trans,fdv,fdc*sizeof(int),&kernel_fdc,1);
  kernel_fdc /= sizeof(int);
  if __unlikely(kernel_fdc < fdc) { error = KE_FAULT; goto end_proc; }
@@ -127,8 +128,9 @@ KSYSCALL_DEFINE_EX2(c,int,kproc_openbarrier,int,procfd,ksandbarrier_t,level) {
  return error;
 }
 
-KSYSCALL_DEFINE_EX3(c,kerrno_t,kproc_enumpid,__user __pid_t *,pidv,
-                    size_t,pidc,__user size_t *,reqpidc) {
+KSYSCALL_DEFINE_EX3(c,kerrno_t,kproc_enumpid,
+                    __user __pid_t *,pidv,size_t,pidc,
+                    __user size_t *,reqpidc) {
  kerrno_t error;
  KTASK_CRIT_MARK
  pidv = (__pid_t *)kpagedir_translate(ktask_self()->t_epd,pidv); /* TODO: Unsafe. */

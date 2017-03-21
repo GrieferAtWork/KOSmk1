@@ -75,11 +75,12 @@ struct kshmregion;
 
 //////////////////////////////////////////////////////////////////////////
 // Initializes a given TLS Manager as the copy of another.
+// NOTE: The caller must hold a lock to 'right->tls_lock' (read-mode)
 // @return: KE_OK:    Successfully initialized the given TLS manager.
 // @return: KE_NOMEM: Not enough memory to complete the operation.
 extern __wunused __nonnull((1,2)) kerrno_t
-ktlsman_initcopy(struct ktlsman *__restrict self,
-                 struct ktlsman const *__restrict right);
+ktlsman_initcopy_unlocked(struct ktlsman *__restrict self,
+                          struct ktlsman const *__restrict right);
 
 //////////////////////////////////////////////////////////////////////////
 // Allocate/Free space of sufficient size for a given SHM region.

@@ -89,16 +89,15 @@ struct kproc {
 #define KPROC_LOCK_MODS    KMMUTEX_LOCK(0)
 #define KPROC_LOCK_FDMAN   KMMUTEX_LOCK(1)
 #define KPROC_LOCK_PERM    KMMUTEX_LOCK(2)
-#define KPROC_LOCK_TLS     KMMUTEX_LOCK(3)
-#define KPROC_LOCK_THREADS KMMUTEX_LOCK(4)
-#define KPROC_LOCK_ENVIRON KMMUTEX_LOCK(5)
+#define KPROC_LOCK_THREADS KMMUTEX_LOCK(3)
+#define KPROC_LOCK_ENVIRON KMMUTEX_LOCK(4)
  struct kmmutex       p_lock;     /*< Lock for the task context. */
  struct kshm          p_shm;      /*< Shared memory management & page directory. */
  struct kprocregs     p_regs;     /*< [lock(KPROC_LOCK_REGS)] Per-process register-configuration & related. */
  struct kprocmodules  p_modules;  /*< [lock(KPROC_LOCK_MODS)] Shared libraries associated with this process. */
  struct kfdman        p_fdman;    /*< [lock(KPROC_LOCK_FDMAN)] File descriptor manager. */
  struct kprocperm     p_perm;     /*< [lock(KPROC_LOCK_PERM)] Process related, sandy limits / permissions. */
- struct ktlsman       p_tls;      /*< [lock(KPROC_LOCK_TLS)] TLS identifiers. */
+ struct ktlsman       p_tls;      /*< TLS identifiers. */
  struct ktasklist     p_threads;  /*< [lock(KPROC_LOCK_THREADS)] List of tasks using this context. */
  struct kprocenv      p_environ;  /*< [lock(KPROC_LOCK_ENVIRON)] Process environment variables. */
 };

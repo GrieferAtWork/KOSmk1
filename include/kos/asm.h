@@ -207,6 +207,13 @@ for (local o: ops) {
 #   define PS   __SIZEOF_POINTER__
 #endif
 
+
+#ifdef __ASSEMBLY__
+#   define __A(l)   l;
+#else
+#   define __A(l)  #l "\n\t"
+#endif
+
 __DECL_END
 
 #endif /* !__KOS_ASM_H__ */

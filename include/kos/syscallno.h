@@ -105,6 +105,7 @@ __DECL_BEGIN
 #define SYS_kproc_enumthreads  SYS_ktask_enumchildren           /*< _syscall4(kerrno_t,kproc_enumthreads,int,self,ktid_t *__restrict,idv,size_t,idc,size_t *,reqidc); */
 #define SYS_kproc_tlsalloc     70 /*< _syscall2(kerrno_t,kproc_tlsalloc,void const *,template_,size_t,template_size) && return:(ecx=tls_offset); */
 #define SYS_kproc_tlsfree      71 /*< _syscall1(kerrno_t,kproc_tlsfree,__ptrdiff_t,tls_offset); */
+#define SYS_kproc_tlsenum      72 /*< _syscall2(kerrno_t,kproc_tlsenum,struct ktlsinfo *__restrict,infov,__size_t,infoc) && return:(ecx=reqinfoc); */
 #define SYS_kproc_enumpid      73 /*< _syscall3(kerrno_t,kproc_enumpid,__pid_t *__restrict,pidv,size_t,pidc,size_t *,reqpidc); */
 #define SYS_kproc_openpid      74 /*< _syscall1(int,kproc_openpid,__pid_t,pid); */
 #define SYS_kproc_getpid       75 /*< _syscall1(__pid_t,kproc_getpid,int,self); */

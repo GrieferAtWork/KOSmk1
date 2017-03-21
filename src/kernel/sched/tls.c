@@ -64,13 +64,15 @@ void ktlsman_quit(struct ktlsman *__restrict self) {
 }
 
 kerrno_t
-ktlsman_initcopy(struct ktlsman *__restrict self,
-                 struct ktlsman const *__restrict right) {
+ktlsman_initcopy_unlocked(struct ktlsman *__restrict self,
+                          struct ktlsman const *__restrict right) {
  struct ktlsmapping **pdst,*iter,*copy;
  kerrno_t error;
  kassertobj(self);
  kassert_ktlsman(right);
  kobject_init(self,KOBJECT_MAGIC_TLSMAN);
+ assert(krwlock_isreadlocked(&right->tls_lock) ||
+        krwlock_iswritelocked(&right->tls_lock));
  krwlock_init(&self->tls_lock);
  self->tls_map_pages = right->tls_map_pages;
  self->tls_all_pages = right->tls_all_pages;
@@ -717,7 +719,7 @@ KSYSCALL_DEFINE_EX2(cr,kerrno_t,kproc_tlsalloc,
  KTASK_CRIT_MARK
  template_pages = ceildiv(template_size,PAGESIZE);
  /* TODO: Limit the template region size to what will be
-  *       allowed based on the processes memory limits. */
+  *       allowed based on the process's memory limits. */
  region = kshmregion_newram(template_pages,
                             KSHMREGION_FLAG_READ|
                             KSHMREGION_FLAG_WRITE|
@@ -758,6 +760,38 @@ KSYSCALL_DEFINE_EX1(c,kerrno_t,kproc_tlsfree,
                     ptrdiff_t,tls_offset) {
  KTASK_CRIT_MARK
  return kproc_tls_free_offset(kproc_self(),tls_offset);
+}
+KSYSCALL_DEFINE_EX2(cr,kerrno_t,kproc_tlsenum,
+                    __user struct ktlsinfo *,infov,
+                    size_t,infoc) {
+ kerrno_t error; struct ktranslator trans;
+ __user struct ktlsinfo *infov_iter,*infov_end;
+ struct ktlsmapping *iter;
+ struct ktask *caller = ktask_self();
+ struct kproc *proc = ktask_getproc(caller);
+ KTASK_CRIT_MARK
+ error = krwlock_beginread(&proc->p_tls.tls_lock);
+ if __unlikely(KE_ISERR(error)) return error;
+ error = ktranslator_init(&trans,caller);
+ if __unlikely(KE_ISERR(error)) goto end_tls;
+ iter = proc->p_tls.tls_hiend;
+ infov_end = (infov_iter = infov)+infoc;
+ while (iter) {
+  if (infov_iter < infov_end) {
+   struct ktlsinfo info;
+   info.ti_offset = iter->tm_offset;
+   info.ti_size   = iter->tm_pages*PAGESIZE;
+   if __unlikely(ktranslator_copytouser(&trans,infov_iter,
+                                        &info,sizeof(info))
+                 ) { error = KE_FAULT; goto end_trans; }
+  }
+  ++infov_iter;
+  iter = iter->tm_prev;
+ }
+ regs->regs.ecx = (size_t)(infov_iter-infov);
+end_trans: ktranslator_quit(&trans);
+end_tls:   krwlock_endread(&proc->p_tls.tls_lock);
+ return error;
 }
 
 __DECL_END

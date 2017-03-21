@@ -275,7 +275,6 @@ static void blink_cur(void) {
  CURSOR_UNLOCK
 }
 static void *cursor_blink_threadmain(void *__unused(closure)) {
- k_syslogf(KLOG_DEBUG,"cursor_blink_threadmain() : tls_addr = %p\n",tls_addr);
  for (;;) { usleep(300000); blink_cur(); }
  return NULL;
 }
@@ -481,7 +480,6 @@ static int amaster,aslave;
 
 static void *relay_slave_out_threadmain(void *__unused(closure)) {
  ssize_t s; char buf[128];
- k_syslogf(KLOG_DEBUG,"relay_slave_out_threadmain() : tls_addr = %p\n",tls_addr);
  while ((s = read(amaster,buf,sizeof(buf))) >= 0) {
   term_outl(terminal,buf,(size_t)s);
  }
@@ -494,7 +492,6 @@ static void *relay_slave_out_threadmain(void *__unused(closure)) {
 static void *relay_incoming_threadmain(void *__unused(closure)) {
  char text[8]; char *iter;
  struct kbevent event; ssize_t s;
- k_syslogf(KLOG_DEBUG,"relay_incoming_threadmain() : tls_addr = %p\n",tls_addr);
  while ((s = read(STDIN_FILENO,&event,sizeof(event))) >= 0) {
   //k_syslogf(KLOG_DEBUG,"KEY EVENT: %I16d %I16d\n",event.e_key,event.e_scan);
   if (s < sizeof(struct kbevent)) { errno = EBUFSIZ; break; }
@@ -627,7 +624,6 @@ int main(int argc, char *argv[]) {
  close(aslave);
 
  // Spawn helper threads
- k_syslogf(KLOG_DEBUG,"main() : tls_addr = %p\n",tls_addr);
  cursor_blink_thread = task_newthread(&cursor_blink_threadmain,NULL,TASK_NEWTHREAD_DEFAULT);
  relay_slave_out_thread = task_newthread(&relay_slave_out_threadmain,NULL,TASK_NEWTHREAD_DEFAULT);
  relay_incoming_thread = task_newthread(&relay_incoming_threadmain,NULL,TASK_NEWTHREAD_DEFAULT);
