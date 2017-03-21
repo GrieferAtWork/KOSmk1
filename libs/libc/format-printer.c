@@ -766,7 +766,7 @@ next:
     if (format_begin != iter) {
      print(format_begin,((size_t)(iter-format_begin))-1);
     }
-#define safe_elem(arr,i) ((arr)[min(i,__compiler_ARRAYSIZE(arr)-1)])
+#define safe_elem(arr,i) ((arr)[min(i,__COMPILER_ARRAYSIZE(arr)-1)])
 
 
     switch ((ch = *iter++)) {
@@ -1069,11 +1069,11 @@ format_hexdump(pformatprinter printer, void *closure,
     b = *iter;
     hex_buf[0] = hex_translate[(b&0xf0) >> 4];
     hex_buf[1] = hex_translate[b&0xf];
-    print(hex_buf,__compiler_ARRAYSIZE(hex_buf));
+    print(hex_buf,__COMPILER_ARRAYSIZE(hex_buf));
    }
    if (overflow) {
     error = print_space(printer,closure,overflow*
-                        __compiler_ARRAYSIZE(hex_buf));
+                        __COMPILER_ARRAYSIZE(hex_buf));
     if __unlikely(error != 0) return error;
    }
   }

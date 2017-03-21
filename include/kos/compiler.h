@@ -125,19 +125,19 @@
 #   define __NO_compiler_assume
 #   define __compiler_assume(expr) (void)0
 #endif
-#ifndef __compiler_ARRAYSIZE
-#   define __compiler_ARRAYSIZE(x)  (sizeof(x)/sizeof(*(x)))
+#ifndef __COMPILER_ARRAYSIZE
+#   define __COMPILER_ARRAYSIZE(x)  (sizeof(x)/sizeof(*(x)))
 #endif
-#ifndef __compiler_STRINGSIZE
-#   define __compiler_STRINGSIZE(x) (__compiler_ARRAYSIZE(x)-1)
+#ifndef __COMPILER_STRINGSIZE
+#   define __COMPILER_STRINGSIZE(x) (__COMPILER_ARRAYSIZE(x)-1)
 #endif
-#ifndef __compiler_ALIAS
+#ifndef __COMPILER_ALIAS
 #   define __NO_compiler_ALIAS
-#   define __compiler_ALIAS(new_name,old_name) /* nothing... */
+#   define __COMPILER_ALIAS(new_name,old_name) /* nothing... */
 #endif
-#ifndef __compiler_UNIQUE
+#ifndef __COMPILER_UNIQUE
 #   define __NO_compiler_UNIQUE
-#   define __compiler_UNIQUE(group) __PP_CAT_3(__hidden_,group,__LINE__)
+#   define __COMPILER_UNIQUE(group) __PP_CAT_3(__hidden_,group,__LINE__)
 #endif
 
 #ifndef __compiler_unreachable
@@ -357,7 +357,7 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #endif
 
 #ifndef __STATIC_ASSERT
-#   define __STATIC_ASSERT(expr)   typedef int __compiler_UNIQUE(sassert)[!!(expr)?1:-1]
+#   define __STATIC_ASSERT(expr)   typedef int __COMPILER_UNIQUE(sassert)[!!(expr)?1:-1]
 #endif
 #ifndef __STATIC_ASSERT_M
 #   define __STATIC_ASSERT_M(expr,msg) __STATIC_ASSERT(expr)
@@ -481,7 +481,9 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #endif /* !__bitwise */
 
 #ifdef __KERNEL__
-#include <kos/kernel/stdkernel.h>
+#ifndef __KOS_KERNEL_STDKERNEL_H__
+#include "kernel/stdkernel.h"
+#endif
 #endif
 
 #endif /* !__KOS_COMPILER_H__ */

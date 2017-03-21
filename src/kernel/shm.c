@@ -434,6 +434,7 @@ kshmregion_raw_alloc(size_t clusters, kshm_flag_t flags) {
  result = (__ref struct kshmregion *)malloc(SIZEOF_KSHMREGION(clusters));
  if __unlikely(!result) return NULL;
  kobject_init(result,KOBJECT_MAGIC_SHMREGION);
+ result->sre_origin   = NULL;
  result->sre_branches = 1;
  result->sre_clustera = clusters;
  result->sre_clusterc = clusters;
@@ -559,6 +560,7 @@ kshmregion_merge(__ref struct kshmregion *__restrict min_region,
  kobject_init(&result->sre_chunk,KOBJECT_MAGIC_SHMCHUNK);
  result->sre_chunk.sc_flags = min_region->sre_chunk.sc_flags;
  result->sre_chunk.sc_pages = total_pages;
+ result->sre_origin         = NULL; /*< Without an explicit origin, this region doesn't have one. */
  result->sre_clustera       = total_clusters;
  result->sre_clusterc       = total_clusters;
  result->sre_branches       = 1;
@@ -872,6 +874,7 @@ kshmregion_extractpart(struct kshmregion *__restrict self,
  result = (__ref struct kshmregion *)malloc(SIZEOF_KSHMREGION(cluster_count));
  if __unlikely(!result) return NULL;
  kobject_init(result,KOBJECT_MAGIC_SHMREGION);
+ result->sre_origin   = self->sre_origin ? self->sre_origin : self;
  result->sre_branches = 1;
  result->sre_clustera = cluster_count;
  result->sre_clusterc = cluster_count;
@@ -1270,7 +1273,7 @@ kshmbranch_unmap(struct kshmbranch **__restrict proot,
                  __pagealigned uintptr_t addr_min,
                                uintptr_t addr_max,
                  uintptr_t addr_semi, unsigned int addr_level,
-                 kshmunmap_flag_t flags) {
+                 kshmunmap_flag_t flags, struct kshmregion *origin) {
  struct kshmbranch *root;
  struct kshmregion *region;
  size_t result = 0;
@@ -1288,8 +1291,10 @@ search_again:
   region = root->sb_region;
   /* Found a matching entry. */
   /* Make sure that we're actually allowed to unmap this one... */
-  if ((region->sre_chunk.sc_flags&KSHMREGION_FLAG_RESTRICTED) &&
-     !(flags&KSHMUNMAP_FLAG_RESTRICTED)) goto continue_search;
+  if (((region->sre_chunk.sc_flags&KSHMREGION_FLAG_RESTRICTED) &&
+      !(flags&KSHMUNMAP_FLAG_RESTRICTED)) ||
+       (origin && region != origin &&
+        region->sre_origin != origin)) goto continue_search;
   /* Let's-a-go! */
 
   /* First off, we should figure out if supposed to unmap this
@@ -1334,14 +1339,14 @@ continue_search:
   new_semi = addr_semi,new_level = addr_level;
   KSHMBRANCH_WALKMIN(new_semi,new_level);
   result += kshmbranch_unmap(&root->sb_min,pd,addr_min,addr_max,
-                             new_semi,new_level,flags);
+                             new_semi,new_level,flags,origin);
  }
  if (addr_max >= addr_semi && root->sb_max) {
   /* Recursively continue searching right. */
   new_semi = addr_semi,new_level = addr_level;
   KSHMBRANCH_WALKMAX(new_semi,new_level);
   result += kshmbranch_unmap(&root->sb_max,pd,addr_min,addr_max,
-                             new_semi,new_level,flags);
+                             new_semi,new_level,flags,origin);
  }
 done:
  return result;
@@ -2175,10 +2180,10 @@ kshm_touchex_unlocked(struct kshm *__restrict self,
    * it is possible for all processes that had
    * simultaneously been using these pages to die
    * off before we started touching them.
-   * >> In that case, the pages in question might still
-   *    be mapped as read-only in our page directory,
-   *    even though they we're actually their sole
-   *    owner once again.
+   * >> In that case, the pages in question might
+   *    still be mapped as read-only in our own page
+   *    directory, even though we're actually their sole
+   *    owner (either again, or through inheritance).
    * Here we detect that situation by checking all
    * clusters affected by the touch for a reference
    * counter of ONE(1), indicating that we're their owner, and
@@ -2211,6 +2216,7 @@ true_unique_access:
   }
   goto end_success;
 true_shared_access:;
+  /* Access to this region must truly be shared. */
  }
 
  assert(branch->sb_cluster_min <= branch->sb_cluster_max);
@@ -2236,7 +2242,10 @@ true_shared_access:;
                             (struct kshmbranch ***)&pbranch,
                              &addr_semi,min_page);
   if __unlikely(KE_ISERR(error)) {
-   k_syslogf(KLOG_ERROR,"[SHM] Failed to split min-branch: %d\n",error);
+   k_syslogf(KLOG_ERROR,"[SHM] Failed to split min-branch %p..%p at %p: %d\n",
+             branch->sb_map_min,branch->sb_map_max,
+             branch->sb_map_min+(min_page-branch->sb_rstart)*PAGESIZE,
+             error);
    return 0;
   }
   kassertobj(pbranch);
@@ -2278,7 +2287,10 @@ true_shared_access:;
   if __unlikely(KE_ISERR(error)) {
    /* todo: We should probably clean up the first split, although
     *       the system still remains stable if we don't... */
-   k_syslogf(KLOG_ERROR,"[SHM] Failed to split max-branch: %d\n",error);
+   k_syslogf(KLOG_ERROR,"[SHM] Failed to split max-branch %p..%p at %p: %d\n",
+             branch->sb_map_min,branch->sb_map_max,
+             branch->sb_map_min+((max_page+1)-branch->sb_rstart)*PAGESIZE,
+             error);
    return 0;
   }
   kassertobj(pbranch);
@@ -2302,7 +2314,8 @@ true_shared_access:;
  if __unlikely(!subregion) {
   /* todo: We should probably clean up the first split, although
    *       the system still remains stable if we don't... */
-  k_syslogf(KLOG_ERROR,"[SHM] Failed extract sub-region\n");
+  k_syslogf(KLOG_ERROR,"[SHM] Failed to extract sub-region from %p mapped at %p..%p\n",
+            region,branch->sb_map_min,branch->sb_map_max);
   return 0;
  }
  assert(subregion->sre_chunk.sc_partc != 0);
@@ -2463,7 +2476,8 @@ end_success:
 __crit __nomp size_t
 kshm_unmap_unlocked(struct kshm *__restrict self,
                     __pagealigned __user void *address,
-                    size_t pages, kshmunmap_flag_t flags) {
+                    size_t pages, kshmunmap_flag_t flags,
+                    struct kshmregion *origin) {
  kassert_kshm(self);
  if __unlikely(!pages || !self->s_map.m_root) return 0;
  return kshmbranch_unmap(&self->s_map.m_root,self->s_pd,
@@ -2471,19 +2485,20 @@ kshm_unmap_unlocked(struct kshm *__restrict self,
                         (uintptr_t)address+(pages*PAGESIZE)-1,
                          KSHMBRANCH_ADDRSEMI_INIT,
                          KSHMBRANCH_ADDRLEVEL_INIT,
-                         flags);
+                         flags,origin);
 }
 __crit size_t
 kshm_unmap(struct kshm *__restrict self,
            __pagealigned __user void *address,
-           size_t pages, kshmunmap_flag_t flags) {
+           size_t pages, kshmunmap_flag_t flags,
+           struct kshmregion *origin) {
  size_t result;
  KTASK_CRIT_MARK
  kassert_kshm(self);
  KTASK_NOINTR_BEGIN
  if __unlikely(KE_ISERR(krwlock_beginwrite(&self->s_lock))) result = 0;
  else {
-  result = kshm_unmap_unlocked(self,address,pages,flags);
+  result = kshm_unmap_unlocked(self,address,pages,flags,origin);
   krwlock_endwrite(&self->s_lock);
  }
  KTASK_NOINTR_END
@@ -2496,6 +2511,7 @@ kshm_unmapregion_unlocked(struct kshm *self,
                           struct kshmregion *region) {
  struct kshmbranch **pbranch,*branch;
  uintptr_t addr_semi;
+ kerrno_t error;
  kassert_kshm(self);
  assert(krwlock_iswritelocked(&self->s_lock));
  kassert_kshmregion(region);
@@ -2504,13 +2520,13 @@ kshm_unmapregion_unlocked(struct kshm *self,
                              (uintptr_t)base_address,
                               &addr_semi);
  /* Make sure that there really is a branch mapped at the given address. */
- if __unlikely(!pbranch) return KE_FAULT;
+ if __unlikely(!pbranch) { error = KE_FAULT; goto unmap_origin; }
  branch = *pbranch;
  kassertobj(branch);
  /* Make sure that the given address is really the base of that branch. */
- if __unlikely(base_address != branch->sb_map) return KE_RANGE;
+ if __unlikely(base_address != branch->sb_map) { error = KE_RANGE; goto unmap_origin; }
  /* Finally, make sure that it is the given region, that is mapped here. */
- if __unlikely(branch->sb_region != region) return KE_PERM;
+ if __unlikely(branch->sb_region != region) { error = KE_PERM; goto unmap_origin; }
  /* OK! Time to delete this thing! */
  asserte(kshmbranch_popone(pbranch,addr_semi,KSHMBRANCH_SEMILEVEL(addr_semi)) == branch);
  kpagedir_unmap(self->s_pd,base_address,branch->sb_rpages);
@@ -2521,6 +2537,16 @@ kshm_unmapregion_unlocked(struct kshm *self,
  /* Free the branch. */
  free(branch);
  return KE_OK;
+unmap_origin:
+ /* Scan the entire address range covered by the region,
+  * unmapping everything that is originating from it. */
+ if (kshm_unmap_unlocked(self,base_address,region->sre_chunk.sc_pages,
+                         KSHMUNMAP_FLAG_RESTRICTED,region)) {
+  /* If we managed to unmap regions with this one as origin, we
+   * still managed to do it. (So don't return an error in that case) */
+  error = KE_OK;
+ }
+ return error;
 }
 
 __crit kerrno_t

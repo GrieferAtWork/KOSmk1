@@ -85,7 +85,7 @@ __DECL_BEGIN
 #define ATA_STATUS_BSY   0x80 // 1 << 7
 
 
-__COMPILER_PACK_PUSH(1)
+COMPILER_PACK_PUSH(1)
 
 struct __packed ata_generalconfiguration {
  unsigned int Reserved1 : 1;
@@ -304,7 +304,7 @@ struct __packed ata_identifydata {
  unsigned int                    CheckSum : 8;
 };
 
-__COMPILER_PACK_POP
+COMPILER_PACK_POP
 
 struct katadev {
  KSDEV_HEAD /*< Underlying storage device. */

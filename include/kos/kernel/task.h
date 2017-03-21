@@ -204,7 +204,7 @@ kcpu_unschedulesleep_unlocked(struct kcpu *__restrict self,
 #define KTASKREGISTERS3_OFFSETOF_SS      (KTASKREGISTERS_OFFSETOF_EDI+__SIZEOF_POINTER__*11)
 
 #ifndef __ASSEMBLY__
-__COMPILER_PACK_PUSH(1)
+COMPILER_PACK_PUSH(1)
 struct __packed ktaskregisters {
  /* The structure located at the top of any suspended/pending task
   * >> After creating a new task using one of the 'ktask_new*' functions,
@@ -232,7 +232,7 @@ struct __packed ktaskregisters3 {
  /* ring-3 only: */
  __uintptr_t useresp,ss;
 };
-__COMPILER_PACK_POP
+COMPILER_PACK_POP
 #endif /* !__ASSEMBLY__ */
 
 

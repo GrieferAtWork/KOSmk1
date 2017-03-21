@@ -34,7 +34,7 @@ __DECL_BEGIN
 #define KTSS_OFFSETOF_ESP0    4
 
 #ifndef __ASSEMBLY__
-__COMPILER_PACK_PUSH(1)
+COMPILER_PACK_PUSH(1)
 
 struct __packed ktss {
  __u16 link,__reserved1;
@@ -57,7 +57,7 @@ struct __packed ktss {
  __u16 __reservedC,iomap_base;
 };
 
-__COMPILER_PACK_POP
+COMPILER_PACK_POP
 #endif /* !__ASSEMBLY__ */
 
 __DECL_END

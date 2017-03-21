@@ -175,6 +175,7 @@ ktask_copy4fork(struct ktask *__restrict self,
   * >> That is good! So now lets manually allocate a new stack. */
  kstacksize = ktask_getkstacksize(self);
  /* Map linear memory for the kernel stack. */
+ /* TODO: Track the SHM region used for the stack to safely unmap it (and it alone) later. */
  if __unlikely(KE_ISERR(kshm_mapram_linear_unlocked(kproc_getshm(proc),
                                                    &result->t_kstack,
                                                    &result->t_kstackvp,
@@ -252,9 +253,9 @@ err_parid:
  ktask_lock(self,KTASK_LOCK_CHILDREN);
  asserte(ktasklist_erase(&self->t_children,result->t_parid) == result);
  ktask_unlock(self,KTASK_LOCK_CHILDREN);
-err_kstack:  kshm_unmap(&proc->p_shm,result->t_kstackvp,
-                        ceildiv(kstacksize,PAGESIZE),
-                        KSHMUNMAP_FLAG_RESTRICTED);
+err_kstack:  kshm_unmap_unlocked(&proc->p_shm,result->t_kstackvp,
+                                 ceildiv(kstacksize,PAGESIZE),
+                                 KSHMUNMAP_FLAG_RESTRICTED,NULL);
 err_tls:     kproc_tls_free_pt_unlocked(proc,result);
 err_free:    free(result);
 err_procref: kproc_decref(proc);

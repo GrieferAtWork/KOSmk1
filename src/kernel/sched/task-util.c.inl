@@ -53,14 +53,14 @@ __crit __ref struct ktask *
 ktask_newctxex_suspended(struct ktask *parent, struct kproc *__restrict proc,
                          void *(*main)(void *), void *closure,
                          size_t stacksize, __u32 flags) {
-__COMPILER_PACK_PUSH(1)
+COMPILER_PACK_PUSH(1)
  struct __packed {
   /* Mockup of how the task's stack will look like. */
   struct ktaskregisters regs;
   void (*return_address)(void);
   void  *closure_value;
  } stack;
-__COMPILER_PACK_POP
+COMPILER_PACK_POP
  extern void ktask_exitnormal(void);
  __ref struct ktask *result;
  KTASK_CRIT_MARK
@@ -420,7 +420,13 @@ ktask_setnameex_ck(struct ktask *__restrict self,
  KTASK_CRIT_MARK
  kassert_ktask(self);
  if __unlikely((dupname = strndup(name,maxlen)) == NULL) return KE_NOMEM;
- if __likely(katomic_cmpxch(self->t_name,NULL,dupname)) return KE_OK;
+ if __likely(katomic_cmpxch(self->t_name,NULL,dupname)) {
+  if __likely(ktask_isusertask(self)) {
+   /* Set the userspace-accessible name string. */
+   ktlspt_setname(&self->t_tls,dupname);
+  }
+  return KE_OK;
+ }
  /* A name had already been set. */
  free(dupname);
  return KE_EXISTS;

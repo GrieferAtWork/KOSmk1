@@ -45,23 +45,30 @@ struct kexhandler {
 
 #ifndef __kuthread_defined
 #define __kuthread_defined 1
+#define KUTHREAD_NAMEMAX  47 /*< Amount of leading characters to provide to ring-#3 code through uthread. */
 struct __packed kuthread {
  /* This structure is located at TLS offset ZERO, and actual TLS variables as located below. */
  /* Per-thread user structure at positive offsets. */
  /* NOTE: Upon startup, the kernel will initialize any unused & future fields to ZERO(0). */
- __user struct kuthread   *u_self;        /*< [1..1] Structure self-pointer. */
+ __user struct kuthread   *u_self;        /*< [1..1] Structure self-pointer (NOTE: Required by i386/x86-64 compilers to take the address of TLS variables). */
  __user struct kuthread   *u_parent;      /*< [0..1] Userthread control block of this thread's parent (or NULL if it has no parent, or that parent is part of a different process). */
  __user struct kexhandler *u_exh;         /*< [0..1] Stack of active exception handlers. */
  __user void              *u_stackbegin;  /*< [1..1] First valid memory address associated with the stack. */
  __user void              *u_stackend;    /*< [1..1] First invalid memory address no longer associated with the stack. */
- __user void              *u_padding[11]; /*< Padding data. */
+ __user void              *u_padding1[11]; /*< Padding data. */
  /* OFFSET: 16*__SIZEOF_POINTER__ */
+union __packed { struct __packed {
  int                       u_errno;       /*< Used by libc: the 'errno' variable (Placed here to prevent overhead from placing it in an ELF TLS block). */
  __pid_t                   u_pid;         /*< The ID of the process (unless changed: 'kproc_getpid(kproc_self())') */
  __ktid_t                  u_tid;         /*< The ID of the thread (unless changed: 'ktask_gettid(ktask_self())') */
  __size_t                  u_parid;       /*< The ID of the thread within its parent (unless changed: 'ktask_getparid(ktask_self())') */
  struct timespec           u_start;       /*< Timestamp for when the thread was launched. */
- /* More data can easily be here (The kernel internally aligned sizeof(kuthread) with PAGESIZE)... */
+}; __user void            *u_padding2[16]; /*< Padding data. */};
+ /* OFFSET: 32*__SIZEOF_POINTER__ */
+ char                      u_name[KUTHREAD_NAMEMAX]; /*< First 'KUTHREAD_NAMEMAX' characters from the thread's name (padded with ZEROes).
+                                                        (Included to provide a standardized, addressable thread name string. - Use this for debug output!) */
+ char                      u_zero;        /*< Always zero */
+ /* More data can easily be here (The kernel internally aligns sizeof(kuthread) with PAGESIZE)... */
 };
 #endif /* !__kuthread_defined */
 
@@ -102,10 +109,10 @@ __local _syscall1(kerrno_t,kproc_tlsfree,__ptrdiff_t,tls_offset);
 __local kerrno_t
 kproc_tlsalloc(void const *__template,
                __size_t __template_size,
-               __ptrdiff_t *__restrict tls_offset) {
+               __ptrdiff_t *__restrict __tls_offset) {
  kerrno_t __error;
  __asm__("int $" __PP_STR(__SYSCALL_INTNO) "\n"
-         : "=a" (__error), "=c" (*tls_offset)
+         : "=a" (__error), "=c" (*__tls_offset)
          : "a" (SYS_kproc_tlsalloc)
          , "b" (__template)
          , "c" (__template_size));

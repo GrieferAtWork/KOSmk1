@@ -135,8 +135,8 @@ static void *mover_threadmain(void *closure) {
 
 static int process_input(void) {
 #define handle(str) \
-   ((!memcmp(iter,str,__compiler_STRINGSIZE(str)) ?\
-     (iter += __compiler_STRINGSIZE(str),1) : 0))
+   ((!memcmp(iter,str,__COMPILER_STRINGSIZE(str)) ?\
+     (iter += __COMPILER_STRINGSIZE(str),1) : 0))
  char buf[16]; ssize_t s;
  char *iter,*end;
  s = read(IN,buf,sizeof(buf));

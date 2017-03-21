@@ -25,14 +25,16 @@
 
 #include <kos/compiler.h>
 #include <kos/kernel/debug.h>
-#include <kos/kernel/tls.h>
-#include <kos/kernel/tls-perthread.h>
-#include <kos/kernel/task.h>
-#include <kos/kernel/shm.h>
 #include <kos/kernel/proc.h>
-#include <strings.h>
-#include <malloc.h>
+#include <kos/kernel/shm.h>
+#include <kos/kernel/task.h>
+#include <kos/kernel/tls-perthread.h>
+#include <kos/kernel/tls.h>
 #include <kos/syslog.h>
+#include <malloc.h>
+#include <math.h>
+#include <stddef.h>
+#include <strings.h>
 #if !KCONFIG_HAVE_TASK_STATS_START
 #include <kos/kernel/time.h>
 #endif /* !KCONFIG_HAVE_TASK_STATS_START */
@@ -287,6 +289,7 @@ kproc_tls_alloc_inherited(struct kproc *__restrict self,
   error = krwlock_beginwrite(&self->p_shm.s_lock);
   if __unlikely(KE_ISERR(error)) goto err_threads;
   for (; iter != end; ++iter) if ((task = *iter) != NULL && ktask_isusertask(task)) {
+   kassert_ktlspt(&task->t_tls);
    /* Map the region in all threads already existing. */
    block_address = (__user void *)((uintptr_t)task->t_tls.pt_uthread+
                                     mapping->tm_offset);
@@ -342,14 +345,20 @@ relocate_tls:
      kassert_kshmregion(task->t_tls.pt_uregion);
      assert(task->t_tls.pt_uregion->sre_chunk.sc_pages);
      assert(task->t_tls.pt_uregion->sre_chunk.sc_partc);
+     assert(task->t_tls.pt_uregion->sre_chunk.sc_partv[0].sp_start == 0);
      assert(task->t_tls.pt_uregion->sre_chunk.sc_partv[0].sp_pages);
-     {
-      /* Update the uthread self-pointer. */
-      __STATIC_ASSERT(sizeof(phys_newbase->u_self) <= PAGESIZE);
+     { /* Update the uthread self-pointer. */
+      assert(offsetafter(struct kuthread,u_parent) <= PAGESIZE);
       phys_newbase = (__pagealigned __kernel struct kuthread *)
        task->t_tls.pt_uregion->sre_chunk.sc_partv[0].sp_frame;
       assert(isaligned((uintptr_t)phys_newbase,PAGEALIGN));
       phys_newbase->u_self   = new_uthread;
+      { /* Update the parent-pointer. */
+       struct ktask *par = task->t_parent;
+       if (ktask_isusertask(par) && par->t_proc == self) {
+        phys_newbase->u_parent = par->t_tls.pt_uthread;
+       }
+      }
       task->t_tls.pt_uthread = new_uthread;
      }
      /* Encode and setup the new TLS segment. */
@@ -403,25 +412,130 @@ kproc_tls_alloc(struct kproc *__restrict self,
  return error;
 }
 
+static __crit kerrno_t
+kproc_tls_free_mapping(struct kproc *__restrict self,
+                       struct ktlsmapping **__restrict pmapping) {
+ struct ktlsmapping *mapping;
+ struct ktask **iter,**end,*task;
+ kerrno_t error;
+ ktls_addr_t map_offset;
+ kassert_kproc(self);
+ kassert_ktlsman(&self->p_tls);
+ kassertobj(pmapping);
+ kassertobj(*pmapping);
+ assert(krwlock_iswritelocked(&self->p_tls.tls_lock));
+ mapping = *pmapping;
+ kassert_kshmregion(mapping->tm_region);
+ assert(mapping->tm_pages);
+ assert(mapping->tm_pages == mapping->tm_region->sre_chunk.sc_pages);
+ assert(mapping->tm_region->sre_chunk.sc_partc);
+#if 0
+ return KE_NOSYS;
+#else
+ error = kproc_lock(self,KPROC_LOCK_THREADS);
+ if __unlikely(KE_ISERR(error)) return error;
+ end = (iter = self->p_threads.t_taskv)+self->p_threads.t_taska;
+ if __likely(iter != end) { /*< likely because it's probably that process that's calling us. */
+  /* Go through all running threads and delete thread-local SHM mappings. */
+  map_offset = mapping->tm_offset;
+  error = krwlock_beginwrite(&self->p_shm.s_lock);
+  if __unlikely(KE_ISERR(error)) goto end_threads;
+  for (; iter != end; ++iter) if ((task = *iter) != NULL && ktask_isusertask(task)) {
+   __user void *umap_addr; kerrno_t unmap_error;
+   kassert_ktlspt(&task->t_tls);
+   umap_addr = (__user void *)((uintptr_t)task->t_tls.pt_uthread+map_offset);
+   /* Unmap the region from this thread (Make sure we're only unmapping that exact region!). */
+   unmap_error = kshm_unmapregion_unlocked(&self->p_shm,umap_addr,mapping->tm_region);
+   if __unlikely(KE_ISERR(unmap_error)) {
+    /* This can still happen if the user manually munmap'ed the region before. */
+    k_syslogf(KLOG_WARN,"[TLS] Failed to unmap TLS region at %p (%Iu pages): %d\n",
+              umap_addr,mapping->tm_pages,unmap_error);
+   }
+  }
+  krwlock_endwrite(&self->p_shm.s_lock);
+ }
+ kproc_unlock(self,KPROC_LOCK_THREADS);
+ kshmregion_decref_full(mapping->tm_region);
+ free(mapping);
+ *pmapping = mapping->tm_prev;
+ return error;
+end_threads:
+ kproc_unlock(self,KPROC_LOCK_THREADS);
+ return error;
+#endif
+}
+
 __crit kerrno_t
 kproc_tls_free_region(struct kproc *__restrict self,
                       struct kshmregion *__restrict region) {
+ kerrno_t error;
+ struct ktlsmapping **piter,*iter;
  kassert_kproc(self);
  kassert_kshmregion(region);
-
- /* TODO */
-
- return KE_OK;
+ error = krwlock_beginwrite(&self->p_tls.tls_lock);
+ if __unlikely(KE_ISERR(error)) return error;
+ piter = &self->p_tls.tls_hiend;
+ while ((iter = *piter) != NULL) {
+  if (iter->tm_region == region) {
+   error = kproc_tls_free_mapping(self,piter);
+   if __likely(KE_ISOK(error) && !*piter) {
+    /* The last mapping was deleted. */
+    if (piter == &self->p_tls.tls_hiend) {
+     self->p_tls.tls_map_pages = 0;
+     self->p_tls.tls_all_pages = KUTHREAD_PAGESIZE;
+    } else {
+     /* Figure out which mapping is now the last one.
+      * Then, using that information, calculate the new TLS
+      * region size using the greatest, absolute offset. */
+     iter = (struct ktlsmapping *)((uintptr_t)piter-offsetof(struct ktlsmapping,tm_prev));
+     self->p_tls.tls_map_pages = (size_t)(-iter->tm_offset)/PAGESIZE;
+     self->p_tls.tls_all_pages = self->p_tls.tls_map_pages+KUTHREAD_PAGESIZE;
+    }
+   }
+   goto done;
+  }
+  piter = &iter->tm_prev;
+ }
+ error = KE_NOENT;
+done:
+ krwlock_endwrite(&self->p_tls.tls_lock);
+ return error;
 }
 
 __crit kerrno_t
 kproc_tls_free_offset(struct kproc *__restrict self,
                       ktls_addr_t offset) {
+ kerrno_t error;
+ struct ktlsmapping **piter,*iter;
  kassert_kproc(self);
-
- /* TODO */
-
- return KE_OK;
+ error = krwlock_beginwrite(&self->p_tls.tls_lock);
+ if __unlikely(KE_ISERR(error)) return error;
+ piter = &self->p_tls.tls_hiend;
+ while ((iter = *piter) != NULL) {
+  if (iter->tm_offset == offset) {
+   error = kproc_tls_free_mapping(self,piter);
+   if __likely(KE_ISOK(error) && !*piter) {
+    /* The last mapping was deleted. */
+    if (piter == &self->p_tls.tls_hiend) {
+     self->p_tls.tls_map_pages = 0;
+     self->p_tls.tls_all_pages = KUTHREAD_PAGESIZE;
+    } else {
+     /* Figure out which mapping is now the last one.
+      * Then, using that information, calculate the new TLS
+      * region size using the greatest, absolute offset. */
+     iter = (struct ktlsmapping *)((uintptr_t)piter-offsetof(struct ktlsmapping,tm_prev));
+     self->p_tls.tls_map_pages = (size_t)(-iter->tm_offset)/PAGESIZE;
+     self->p_tls.tls_all_pages = self->p_tls.tls_map_pages+KUTHREAD_PAGESIZE;
+    }
+   }
+   goto done;
+  }
+  piter = &iter->tm_prev;
+ }
+ error = KE_NOENT;
+done:
+ krwlock_endwrite(&self->p_tls.tls_lock);
+ return error;
 }
 
 
@@ -433,7 +547,6 @@ kproc_tls_free_offset(struct kproc *__restrict self,
 __crit kerrno_t
 kproc_tls_alloc_pt_unlocked(struct kproc *__restrict self,
                             struct ktask *__restrict task) {
- __pagealigned __kernel struct kuthread *kernel_uthread;
  __pagealigned __user struct kuthread *user_uthread;
  __pagealigned __user void *baseaddr;
  kerrno_t error;
@@ -465,11 +578,6 @@ kproc_tls_alloc_pt_unlocked(struct kproc *__restrict self,
                                                           self->p_tls.tls_map_pages*PAGESIZE);
  assert(isaligned((uintptr_t)baseaddr,PAGEALIGN));
  assert(isaligned((uintptr_t)user_uthread,PAGEALIGN));
- /* Setup the uthread self-pointer. */
- kernel_uthread = (__pagealigned __kernel struct kuthread *)
-  task->t_tls.pt_uregion->sre_chunk.sc_partv[0].sp_frame;
- assert(isaligned((uintptr_t)kernel_uthread,PAGEALIGN));
- kernel_uthread->u_self = user_uthread;
  task->t_tls.pt_uthread = user_uthread;
  /* Map the PT block at the address we've just figured out. */
  error = kproc_remap_pt(self,task,user_uthread);
@@ -533,19 +641,32 @@ kproc_tls_pt_setup(struct kproc *__restrict self,
                    struct ktask *__restrict task) {
  struct kuthread *uthread;
  struct ktask *parent;
- size_t maxbytes;
  kassert_kproc(self);
  kassert_ktask(task);
  assert(krwlock_isreadlocked(&self->p_shm.s_lock) ||
         krwlock_iswritelocked(&self->p_shm.s_lock));
  assertf(ktask_isusertask(task),"Kernel tasks can't be used for TLS");
- uthread = (struct kuthread *)kshm_translateuser(&self->p_shm,self->p_shm.s_pd,task->t_tls.pt_uthread,
-                                                 sizeof(struct kuthread),&maxbytes,0);
- if __unlikely(!uthread || maxbytes < sizeof(struct kuthread)) {
-  k_syslogf(KLOG_WARN,"[TLS] Failed to translate TLS uthread for task %p:%I32d:%Iu:%s\n",
-            task,task->t_proc->p_pid,task->t_tid,ktask_getname(task));
-  return;
+ kassert_ktlspt(&task->t_tls);
+ kassert_kshmregion(task->t_tls.pt_uregion);
+ assert(task->t_tls.pt_uregion->sre_chunk.sc_pages);
+ assert(task->t_tls.pt_uregion->sre_chunk.sc_partc);
+ assert(task->t_tls.pt_uregion->sre_chunk.sc_partv[0].sp_start == 0);
+ assert(task->t_tls.pt_uregion->sre_chunk.sc_partv[0].sp_pages);
+#if 1
+ assert(sizeof(struct kuthread) <= PAGESIZE);
+ uthread = (struct kuthread *)task->t_tls.pt_uregion->sre_chunk.sc_partv[0].sp_frame;
+#else
+ {
+  size_t maxbytes;
+  uthread = (struct kuthread *)kshm_translateuser(&self->p_shm,self->p_shm.s_pd,task->t_tls.pt_uthread,
+                                                  sizeof(struct kuthread),&maxbytes,0);
+  if __unlikely(!uthread || maxbytes < sizeof(struct kuthread)) {
+   k_syslogf(KLOG_WARN,"[TLS] Failed to translate TLS uthread for task %p:%I32d:%Iu:%s\n",
+             task,task->t_proc->p_pid,task->t_tid,ktask_getname(task));
+   return;
+  }
  }
+#endif
  parent = task->t_parent;
  assertf(parent != NULL,"Must be non-NULL");
  assertf(parent != task,"Only ktask_zero() (which is a kernel task) would apply for this");
@@ -553,6 +674,7 @@ kproc_tls_pt_setup(struct kproc *__restrict self,
   /* Parent thread is part of the same process. */
   uthread->u_parent = parent->t_tls.pt_uthread;
  }
+ uthread->u_self       = task->t_tls.pt_uthread;
  uthread->u_stackbegin = task->t_ustackvp;
  uthread->u_stackend   = (__user void *)((uintptr_t)task->t_ustackvp+task->t_ustacksz);
  uthread->u_parid      = task->t_parid;
@@ -565,7 +687,81 @@ kproc_tls_pt_setup(struct kproc *__restrict self,
 #endif
 }
 
+void
+ktlspt_setname(struct ktlspt *__restrict self,
+               char const *__restrict name) {
+ struct kuthread *uthread;
+ assert(offsetof(struct kuthread,u_zero) <= PAGESIZE);
+ kassert_ktlspt(self);
+ kassert_kshmregion(self->pt_uregion);
+ assert(self->pt_uregion->sre_chunk.sc_pages);
+ assert(self->pt_uregion->sre_chunk.sc_partc);
+ assert(self->pt_uregion->sre_chunk.sc_partv[0].sp_start == 0);
+ assert(self->pt_uregion->sre_chunk.sc_partv[0].sp_pages);
+ uthread = (struct kuthread *)self->pt_uregion->sre_chunk.sc_partv[0].sp_frame;
+ strncpy(uthread->u_name,name,KUTHREAD_NAMEMAX);
+}
 
+
+__DECL_END
+
+
+#include <kos/kernel/syscall.h>
+__DECL_BEGIN
+
+KSYSCALL_DEFINE_EX2(cr,kerrno_t,kproc_tlsalloc,
+                    __user void const *,template_,
+                    size_t,template_size) {
+ struct ktranslator trans; kerrno_t error;
+ struct kshmregion *region;
+ struct ktask *caller = ktask_self();
+ size_t template_pages;
+ ktls_addr_t resoffset;
+ KTASK_CRIT_MARK
+ template_pages = ceildiv(template_size,PAGESIZE);
+ /* TODO: Limit the template region size to what will be
+  *       allowed based on the processes memory limits. */
+ region = kshmregion_newram(template_pages,
+                            KSHMREGION_FLAG_READ|
+                            KSHMREGION_FLAG_WRITE|
+                            KSHMREGION_FLAG_LOSEONFORK);
+ if __unlikely(!region) return KE_NOMEM;
+ /* Initialize the TLS region with the given template, or fill it with ZEROes. */
+ if (template_) {
+  size_t max_dst,max_src;
+  kshmregion_addr_t region_address = 0;
+  __kernel void *kdst,*ksrc;
+  error = ktranslator_init(&trans,caller);
+  if __unlikely(KE_ISERR(error)) goto err_region;
+  while ((kdst = kshmregion_translate_fast(region,region_address,&max_dst)) != NULL &&
+         (ksrc = ktranslator_exec(&trans,template_,min(max_dst,template_size),&max_src,0)) != NULL) {
+   memcpy(kdst,ksrc,max_src);
+   if ((template_size -= max_src) == 0) break;
+   region_address           += max_src;
+   *(uintptr_t *)&template_ += max_src;
+  }
+  ktranslator_quit(&trans);
+  /* Make sure the entire template got copied. */
+  if __unlikely(template_size) { error = KE_FAULT; goto err_region; }
+ } else {
+  kshmregion_memset(region,0);
+ }
+ /* Allocate a new TLS block using the new region as template. */
+ error = kproc_tls_alloc_inherited(ktask_getproc(caller),
+                                   region,&resoffset);
+ if __unlikely(KE_ISERR(error)) goto err_region;
+ /* Store the actual offset in ECX. */
+ regs->regs.ecx = (uintptr_t)resoffset;
+ return error;
+err_region:
+ kshmregion_decref_full(region);
+ return error;
+}
+KSYSCALL_DEFINE_EX1(c,kerrno_t,kproc_tlsfree,
+                    ptrdiff_t,tls_offset) {
+ KTASK_CRIT_MARK
+ return kproc_tls_free_offset(kproc_self(),tls_offset);
+}
 
 __DECL_END
 

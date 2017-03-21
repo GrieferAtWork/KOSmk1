@@ -46,7 +46,7 @@ static struct kwd {
  size_t      size;
  int         type;
 } const keywords[] = {
-#define KEYWORD(name,id) {name,__compiler_STRINGSIZE(name),id}
+#define KEYWORD(name,id) {name,__COMPILER_STRINGSIZE(name),id}
  KEYWORD("if",CMD_TOKEN_KWD_IF),
  KEYWORD("then",CMD_TOKEN_KWD_THEN),
  KEYWORD("else",CMD_TOKEN_KWD_ELSE),

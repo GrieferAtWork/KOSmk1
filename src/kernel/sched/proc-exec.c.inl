@@ -176,9 +176,9 @@ kproc_exec(struct kshlib *__restrict exec_main,
    temp = not1_begin,not1_begin = not2_begin,not2_begin = temp;
    temp = not1_end,  not1_end   = not2_end,  not2_end   = temp;
   }
-  kshm_unmap_unlocked(kproc_getshm(self),NULL,((uintptr_t)not1_begin)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
-  kshm_unmap_unlocked(kproc_getshm(self),not1_end,((uintptr_t)not2_begin-(uintptr_t)not1_end)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
-  kshm_unmap_unlocked(kproc_getshm(self),not2_end,((uintptr_t)0-(uintptr_t)not2_end)/PAGESIZE,KSHMUNMAP_FLAG_NONE);
+  kshm_unmap_unlocked(kproc_getshm(self),NULL,((uintptr_t)not1_begin)/PAGESIZE,KSHMUNMAP_FLAG_NONE,NULL);
+  kshm_unmap_unlocked(kproc_getshm(self),not1_end,((uintptr_t)not2_begin-(uintptr_t)not1_end)/PAGESIZE,KSHMUNMAP_FLAG_NONE,NULL);
+  kshm_unmap_unlocked(kproc_getshm(self),not2_end,((uintptr_t)0-(uintptr_t)not2_end)/PAGESIZE,KSHMUNMAP_FLAG_NONE,NULL);
  }
  assertf(kpagedir_ismapped(kproc_getpagedir(self),caller_thread->t_ustackvp,
                            ceildiv(ktask_getustacksize(caller_thread),PAGESIZE)),

@@ -145,9 +145,9 @@ for (local i: util::range(MAX_ARGS)) {
   for (local j: util::range(i)) print ",type"+(j+1)+",arg"+(j+1),;
   print ") \\";
   print " void syscall_##name(struct kirq_registers *__restrict regs) {\\";
-  print "  __STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\\";
+  print "  STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\\";
   for (local j: util::range(i)) {
-    print "  __STATIC_ASSERT(sizeof(type"+(j+1)+") <= __SIZEOF_POINTER__);\\";
+    print "  STATIC_ASSERT(sizeof(type"+(j+1)+") <= __SIZEOF_POINTER__);\\";
   }
   print "  ksyscall_enter_d(regs,&sysdbg_##name);\\";
   print "  __KSYSCALL_ENTER(flags)\\";
@@ -181,7 +181,7 @@ for (local i: util::range(MAX_ARGS)) {
 ]]]*/
 #define KIDSYSCALL_WRAPPER0(flags,type,name,id) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
-  __STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
   ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
@@ -192,8 +192,8 @@ for (local i: util::range(MAX_ARGS)) {
  }
 #define KIDSYSCALL_WRAPPER1(flags,type,name,id,type1,arg1) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
-  __STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
   ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
@@ -205,9 +205,9 @@ for (local i: util::range(MAX_ARGS)) {
  }
 #define KIDSYSCALL_WRAPPER2(flags,type,name,id,type1,arg1,type2,arg2) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
-  __STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
   ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
@@ -220,10 +220,10 @@ for (local i: util::range(MAX_ARGS)) {
  }
 #define KIDSYSCALL_WRAPPER3(flags,type,name,id,type1,arg1,type2,arg2,type3,arg3) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
-  __STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
   ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
@@ -237,11 +237,11 @@ for (local i: util::range(MAX_ARGS)) {
  }
 #define KIDSYSCALL_WRAPPER4(flags,type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
-  __STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type4) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type4) <= __SIZEOF_POINTER__);\
   ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
@@ -260,12 +260,12 @@ for (local i: util::range(MAX_ARGS)) {
  }
 #define KIDSYSCALL_WRAPPER5(flags,type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
-  __STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type4) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type5) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type4) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type5) <= __SIZEOF_POINTER__);\
   ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
@@ -285,13 +285,13 @@ for (local i: util::range(MAX_ARGS)) {
  }
 #define KIDSYSCALL_WRAPPER6(flags,type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
-  __STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type4) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type5) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type6) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type4) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type5) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type6) <= __SIZEOF_POINTER__);\
   ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
@@ -312,14 +312,14 @@ for (local i: util::range(MAX_ARGS)) {
  }
 #define KIDSYSCALL_WRAPPER7(flags,type,name,id,type1,arg1,type2,arg2,type3,arg3,type4,arg4,type5,arg5,type6,arg6,type7,arg7) \
  void syscall_##name(struct kirq_registers *__restrict regs) {\
-  __STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type4) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type5) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type6) <= __SIZEOF_POINTER__);\
-  __STATIC_ASSERT(sizeof(type7) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type)  <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type1) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type2) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type3) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type4) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type5) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type6) <= __SIZEOF_POINTER__);\
+  STATIC_ASSERT(sizeof(type7) <= __SIZEOF_POINTER__);\
   ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\

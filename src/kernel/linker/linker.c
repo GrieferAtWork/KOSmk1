@@ -820,7 +820,7 @@ kshlib_openlib(char const *__restrict name, size_t namemax,
    error = copyenvstring("LD_LIBRARY_PATH",&envval,&env_size);
    if (error == KE_NOENT) {
     error = kshlib_opensearch(&env,name,namemax,default_libsearch_paths,
-                              __compiler_STRINGSIZE(default_libsearch_paths),
+                              __COMPILER_STRINGSIZE(default_libsearch_paths),
                               result,0);
    } else if (KE_ISERR(error)) {
     goto end_err;
@@ -851,7 +851,7 @@ kshlib_openlib(char const *__restrict name, size_t namemax,
      !strnpbrk(name,namemax,fs_seps,2)) {
    struct kfspathenv rootenv = KFSPATHENV_INITROOT;
    error = kshlib_opensearch(&rootenv,name,namemax,default_libsearch_paths,
-                             __compiler_STRINGSIZE(default_libsearch_paths),
+                             __COMPILER_STRINGSIZE(default_libsearch_paths),
                              result,0);
   }
  }
@@ -885,7 +885,7 @@ kshlib_openexe(char const *__restrict name, size_t namemax,
      if __unlikely(error != KE_NOENT) goto end_envpath;
      /* Default to using the hard-coded list of extensions. */
      env_pathext      = (char *)default_pathext;
-     env_pathext_size = __compiler_STRINGSIZE(default_pathext);
+     env_pathext_size = __COMPILER_STRINGSIZE(default_pathext);
     }
     namemax   = strnlen(name,namemax);
     partstart = env_pathext;

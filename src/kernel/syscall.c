@@ -187,7 +187,7 @@ static kirq_handler_t const global_syscalls[] = {
 
 void ksyscall_handler(struct kirq_registers *regs) {
  kirq_handler_t syscall;
- __STATIC_ASSERT(__compiler_ARRAYSIZE(global_syscalls) == SYSCALL_TOTAL);
+ STATIC_ASSERT(COMPILER_ARRAYSIZE(global_syscalls) == SYSCALL_TOTAL);
  syscall = global_syscalls[regs->regs.eax&((1 << (SYSCALL_IDBITS+1))-1)];
  (*syscall)(regs);
 }

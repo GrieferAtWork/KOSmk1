@@ -38,7 +38,7 @@
 
 __DECL_BEGIN
 #ifndef __INTELLISENSE__
-__STATIC_ASSERT(sizeof(struct etherframe) == 1518);
+STATIC_ASSERT(sizeof(struct etherframe) == 1518);
 #endif
 
 

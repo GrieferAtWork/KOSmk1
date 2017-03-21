@@ -383,7 +383,7 @@ KSYSCALL_DEFINE_EX5(c,kerrno_t,kfd_open,int,cwd,__user char const *,path,
   attr[2].ia_perm.a_id     = KATTR_FS_PERM;
   attr[2].ia_perm.p_perm   = perms;
   error = kdirent_openat(&env,path,maxpath,env.env_flags,
-                         __compiler_ARRAYSIZE(attr),attr,&entry.fd_file);
+                         COMPILER_ARRAYSIZE(attr),attr,&entry.fd_file);
  } else {
   error = kdirent_openat(&env,path,maxpath,env.env_flags,0,NULL,&entry.fd_file);
  }
@@ -429,7 +429,7 @@ KSYSCALL_DEFINE_EX6(c,kerrno_t,kfd_open2,int,dfd,int,cwd,__user char const *,pat
   attr[2].ia_perm.a_id     = KATTR_FS_PERM;
   attr[2].ia_perm.p_perm   = perms;
   error = kdirent_openat(&env,path,maxpath,env.env_flags,
-                         __compiler_ARRAYSIZE(attr),attr,&entry.fd_file);
+                         COMPILER_ARRAYSIZE(attr),attr,&entry.fd_file);
  } else {
   error = kdirent_openat(&env,path,maxpath,env.env_flags,0,NULL,&entry.fd_file);
  }

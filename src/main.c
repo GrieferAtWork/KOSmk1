@@ -46,7 +46,17 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <kos/compiler.h>
 #include <kos/kernel/panic.h>
+
+STATIC_ASSERT(sizeof(__s8)  == 1);
+STATIC_ASSERT(sizeof(__u8)  == 1);
+STATIC_ASSERT(sizeof(__s16) == 2);
+STATIC_ASSERT(sizeof(__u16) == 2);
+STATIC_ASSERT(sizeof(__s32) == 4);
+STATIC_ASSERT(sizeof(__u32) == 4);
+STATIC_ASSERT(sizeof(__s64) == 8);
+STATIC_ASSERT(sizeof(__u64) == 8);
 
 
 void run_init(void) {

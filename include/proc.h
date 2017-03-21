@@ -239,7 +239,10 @@ extern int         tls_free  __P((__ptrdiff_t __offset));
 
 
 
+#ifndef __uthread_t_defined
+#define __uthread_t_defined 1
 typedef struct kuthread uthread_t;
+#endif
 
 __DECL_END
 
@@ -250,7 +253,12 @@ __DECL_BEGIN
  * >> Add an offset to this and dereference to read thread-local data.
  * WARNING: The value of this variable may change sporadically during a
  *          call to 'tls_alloc', meaning that you must reload everything
- *          derived from it after allocating more TLS storage. */
+ *          derived from it after allocating more TLS storage, or perform
+ *          your own synchronization whenever code may allocate more TLS
+ *          memory.
+ *          Also note, that when loading libraries, additional TLS storage
+ *          may be allocated for use by '__thread' or '__declspec(thread)',
+ *          implying the same potential for TLS relocations. */
 extern __byte_t  *const tls_addr;
 extern uthread_t *const tls_self;
 

@@ -56,7 +56,7 @@ kpagedir_delete(struct kpagedir *__restrict self) {
  KTASK_CRIT_MARK
  kassertobj(self);
  assertf(self != kpagedir_kernel(),"Can't delete the kernel page directory");
- end = (iter = self->d_entries)+__compiler_ARRAYSIZE(self->d_entries);
+ end = (iter = self->d_entries)+COMPILER_ARRAYSIZE(self->d_entries);
  while (iter != end) {
   if (iter->present) {
    kpageframe_free((struct kpageframe *)x86_pde_getpte(iter),
@@ -375,7 +375,7 @@ kpagedir_enum(struct kpagedir const *__restrict self,
  x86_pde const *iter,*end,*begin; int error;
  x86_pte const *pte_begin,*pte_iter,*pte_end;
  kpageflag_t current_flags;
- end = (iter = begin = self->d_entries)+__compiler_ARRAYSIZE(self->d_entries);
+ end = (iter = begin = self->d_entries)+COMPILER_ARRAYSIZE(self->d_entries);
 cont:
  while (iter != end) {
   while (iter != end && !iter->present) ++iter;

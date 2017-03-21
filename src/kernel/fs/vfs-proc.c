@@ -482,7 +482,7 @@ kfsproc_enumdir(struct kinode *__restrict self,
  struct kproc *buffer[64];
  struct kproc **iter,**end,**newdynbuf,**dynbuf = buffer;
  __ref struct kvinodepiddir *iternode;
- size_t reqbufsize,bufsize = __compiler_ARRAYSIZE(buffer);
+ size_t reqbufsize,bufsize = COMPILER_ARRAYSIZE(buffer);
 again_enumproc:
  reqbufsize = kproclist_enumproc(dynbuf,bufsize);
  if (reqbufsize > bufsize) {

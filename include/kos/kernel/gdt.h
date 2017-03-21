@@ -33,7 +33,7 @@
 __DECL_BEGIN
 
 #ifndef __ASSEMBLY__
-__COMPILER_PACK_PUSH(1)
+COMPILER_PACK_PUSH(1)
 
 /* Segment Descriptor / GDT (Global Descriptor Table) Entry */
 struct __packed ksegment {
@@ -110,7 +110,7 @@ struct __packed kidtpointer {
  struct ksegment *base;
 };
 
-__COMPILER_PACK_POP
+COMPILER_PACK_POP
 #endif /* !__ASSEMBLY__ */
 
 // Access flags
@@ -201,7 +201,7 @@ extern __crit void kernel_initialize_gdt(void);
 #endif /* !__ASSEMBLY__ */
 
 #ifndef __INTELLISENSE__
-__STATIC_ASSERT(sizeof(struct ksegment) == 8);
+STATIC_ASSERT(sizeof(struct ksegment) == 8);
 #endif
 
 

@@ -251,6 +251,10 @@ struct kshmcluster {
 struct kshmregion {
  KOBJECT_HEAD /* NOTE: This structure is synchronized because it is fully atomic/singleton. */
  struct kshmchunk   sre_chunk;       /*< Associated chunks of data. */
+ struct kshmregion *sre_origin;      /*< [0..1][const] Base region that this one is originating from.
+                                          Used to track the origin of a mapping throughout touches, allowing you to safely
+                                          unmap a specific region at a specific address even after it has been touched.
+                                          WARNING: Not a reference! The origin region may long be dead. - So don't deref! */
  __atomic __size_t  sre_branches;    /*< Amount of different reference holders that this region is associated with (Used to ensure uniqueness of a region). */
  __atomic __size_t  sre_clustera;    /*< [!0] Allocated amount of clusters (When this hits ZERO(0), free the region controller structure). */
  __size_t           sre_clusterc;    /*< [!0][const][== ceildiv(sre_chunk.sc_pages,KSHM_CLUSTERSIZE)] Amount of tracked clusters. */
@@ -672,7 +676,7 @@ kshmbranch_unmap(struct kshmbranch **__restrict proot,
                  __pagealigned __uintptr_t addr_min,
                                __uintptr_t addr_max,
                  __uintptr_t addr_semi, unsigned int addr_level,
-                 kshmunmap_flag_t flags);
+                 kshmunmap_flag_t flags, struct kshmregion *origin);
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -775,7 +779,7 @@ kshmmap_locate(struct kshmmap const *__restrict self,
 #define KLDT_OFFSETOF_BASE    (4)
 #define KLDT_OFFSETOF_VECTOR  (4+__SIZEOF_POINTER__)
 #ifndef __ASSEMBLY__
-__COMPILER_PACK_PUSH(1)
+COMPILER_PACK_PUSH(1)
 struct __packed kldt {
  /* Local descriptor table (One for each process). */
  ksegid_t                                ldt_gdtid;  /*< [const] Associated GDT offset/index. */
@@ -783,7 +787,7 @@ struct __packed kldt {
  __user struct ksegment                 *ldt_base;   /*< [0..1] User-mapped base address of the LDT vector. */
  __pagealigned __kernel struct ksegment *ldt_vector; /*< [0..1][owned] Physical address of the LDT vector. */
 };
-__COMPILER_PACK_POP
+COMPILER_PACK_POP
 #endif /* !__ASSEMBLY__ */
 
 
@@ -1127,16 +1131,19 @@ kshm_touchex(struct kshm *__restrict self,
 //          remaining mapped. (Meaning that partial munmap() is allowed)
 // NOTE: When calling 'kshm_unmap_unlocked', the caller
 //       must hold a write-lock on the given 'self' SHM.
+// @param: origin: When non-NULL, only allow regions that originated from this to be unmapped.
 // @return: 0 : Nothing was unmapped, [kshm_unmap] or the given SHM was closed.
 // @return: * : The amount of actually unmapped pages (as removed from the page directory).
 extern __crit __nomp __nonnull((1)) __size_t
 kshm_unmap_unlocked(struct kshm *__restrict self,
                     __pagealigned __user void *address,
-                    __size_t pages, kshmunmap_flag_t flags);
+                    __size_t pages, kshmunmap_flag_t flags,
+                    struct kshmregion *origin);
 extern __crit __nonnull((1)) __size_t
 kshm_unmap(struct kshm *__restrict self,
            __pagealigned __user void *address,
-           __size_t pages, kshmunmap_flag_t flags);
+           __size_t pages, kshmunmap_flag_t flags,
+           struct kshmregion *origin);
 
 //////////////////////////////////////////////////////////////////////////
 // Unmaps a specific region mapped to a given 'base_address'.
@@ -1146,6 +1153,11 @@ kshm_unmap(struct kshm *__restrict self,
 //       unmapping something other than what you're expecting to find
 //       at a given address, given the fact that user-code can freely
 //       unmap anything that wasn't mapped with 'KSHMREGION_FLAG_RESTRICTED'.
+// NOTE: SHM internally tracks the origin of regions, meaning that
+//       as a fallback, this function will automatically unmap all
+//       regions with the given 'region' as origin in the area covering
+//       'base_address' up to the region's size in the event that the
+//       region was not found.
 // @return: KE_FAULT:      Nothing was mapped to the given 'base_address'.
 // @return: KE_RANGE:      The given 'base_address' doesn't point to the base of a mapped region.
 // @return: KE_PERM:       The given 'region' didn't match the one mapped at 'base_address'.

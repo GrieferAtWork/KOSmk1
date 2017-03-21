@@ -84,17 +84,17 @@
 #define __unlikely(x) x
 #endif
 
-#ifndef __compiler_ALIAS
-#define __compiler_ALIAS(new_name,old_name) \
+#ifndef __COMPILER_ALIAS
+#define __COMPILER_ALIAS(new_name,old_name) \
  .global new_name; .type new_name, @function;\
  new_name: jmp old_name
 #endif
 
-#ifndef __compiler_UNIQUE
+#ifndef __COMPILER_UNIQUE
 #ifdef __COUNTER__
-#define __compiler_UNIQUE(group) __PP_CAT_3(__hidden_,group,__COUNTER__)
+#define __COMPILER_UNIQUE(group) __PP_CAT_3(__hidden_,group,__COUNTER__)
 #endif
-#endif /* !__compiler_UNIQUE */
+#endif /* !__COMPILER_UNIQUE */
 
 #ifndef __STATIC_ASSERT
 #define __STATIC_ASSERT(expr) /* nothing */

@@ -84,7 +84,7 @@ kerrno_t kata_poll(katabus_t bus, __u8 mask, __u8 state) {
 
 
 #ifndef __INTELLISENSE__
-__STATIC_ASSERT(sizeof(struct ata_identifydata) == 512);
+STATIC_ASSERT(sizeof(struct ata_identifydata) == 512);
 #endif
 
 static kerrno_t __katadev_pio28_readlba(struct katadev const *__restrict self, kslba_t lba, void *__restrict buf, size_t sectors, size_t *readsectors);

@@ -73,6 +73,12 @@ struct ktlspt {
                                                         NOTE: This region uses flags described by 'KTLS_UREGION_FLAGS'. */
 };
 #define KTLSPT_INIT {KOBJECT_INIT(KOBJECT_MAGIC_TLSPT) KSEG_NULL,0,NULL,NULL}
+
+//////////////////////////////////////////////////////////////////////////
+// Set the userspace accessible task name to 'name'.
+extern void ktlspt_setname(struct ktlspt *__restrict self,
+                           char const *__restrict name);
+
 #endif /* !__ASSEMBLY__ */
 
 __DECL_END

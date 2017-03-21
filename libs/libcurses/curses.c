@@ -898,7 +898,7 @@ __public int mvwprintw(WINDOW *win, int y, int x, const char *fmt, ...) {
  va_end(args);
  return result;
 }
-__public __compiler_ALIAS(vw_printw,vwprintw);
+__public __COMPILER_ALIAS(vw_printw,vwprintw);
 
 
 __public int

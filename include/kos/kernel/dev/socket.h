@@ -37,7 +37,7 @@
 
 __DECL_BEGIN
 
-__COMPILER_PACK_PUSH(1)
+COMPILER_PACK_PUSH(1)
 struct __packed macaddr {
  __u8 ma_bytes[6]; /*< Mac address. */
 };
@@ -190,7 +190,7 @@ union __packed {
 
 // NOTE: Layer 1 packet structures are handled by hardware
 
-__COMPILER_PACK_POP
+COMPILER_PACK_POP
 
 
 // struct kddist sd_distframes;

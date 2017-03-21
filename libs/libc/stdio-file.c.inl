@@ -442,12 +442,12 @@ __public int fileno(FILE *fp) {
 
 #undef getc
 #undef putc
-__public __compiler_ALIAS(getc,fgetc)
-__public __compiler_ALIAS(putc,fputc)
+__public __COMPILER_ALIAS(getc,fgetc)
+__public __COMPILER_ALIAS(putc,fputc)
 #undef _fseek64
 #undef _ftell64
-__public __compiler_ALIAS(_fseek64,fseek64)
-__public __compiler_ALIAS(_ftell64,ftell64)
+__public __COMPILER_ALIAS(_fseek64,fseek64)
+__public __COMPILER_ALIAS(_ftell64,ftell64)
 #endif
 
 __DECL_END

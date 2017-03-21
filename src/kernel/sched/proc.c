@@ -37,11 +37,11 @@
 
 __DECL_BEGIN
 
-__STATIC_ASSERT(offsetof(struct kproc,p_shm)     == KPROC_OFFSETOF_SHM);
-__STATIC_ASSERT(offsetof(struct kproc,p_regs)    == KPROC_OFFSETOF_REGS);
-__STATIC_ASSERT(offsetof(struct kproc,p_modules) == KPROC_OFFSETOF_MODULES);
-__STATIC_ASSERT(offsetof(struct kproc,p_shm.s_ldt.ldt_gdtid) ==
-               (KPROC_OFFSETOF_SHM+KSHM_OFFSETOF_LDT+KLDT_OFFSETOF_GDTID));
+STATIC_ASSERT(offsetof(struct kproc,p_shm)     == KPROC_OFFSETOF_SHM);
+STATIC_ASSERT(offsetof(struct kproc,p_regs)    == KPROC_OFFSETOF_REGS);
+STATIC_ASSERT(offsetof(struct kproc,p_modules) == KPROC_OFFSETOF_MODULES);
+STATIC_ASSERT(offsetof(struct kproc,p_shm.s_ldt.ldt_gdtid) ==
+             (KPROC_OFFSETOF_SHM+KSHM_OFFSETOF_LDT+KLDT_OFFSETOF_GDTID));
 
 
 extern void kproc_destroy(struct kproc *__restrict self);

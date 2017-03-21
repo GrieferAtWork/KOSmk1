@@ -30,7 +30,7 @@
 
 __DECL_BEGIN
 
-__COMPILER_PACK_PUSH(1)
+COMPILER_PACK_PUSH(1)
 
 // Flags used by pt_bootable
 #define KHDD_BOOTABLEFLAG_NONE   0x00
@@ -90,11 +90,11 @@ struct __packed khddmbr { /*< Master boot record */
 };
 
 
-__COMPILER_PACK_POP
+COMPILER_PACK_POP
 
 #ifndef __INTELLISENSE__
-__STATIC_ASSERT(sizeof(union khddpart) == 16);
-__STATIC_ASSERT(sizeof(struct khddmbr) == 512);
+STATIC_ASSERT(sizeof(union khddpart) == 16);
+STATIC_ASSERT(sizeof(struct khddmbr) == 512);
 #endif
 
 #define khddpart_islba48(self) \

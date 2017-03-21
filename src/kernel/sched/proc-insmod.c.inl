@@ -53,10 +53,9 @@ kproc_loadmodsections(struct kproc *__restrict self,
 err_seciter:
  // Unmap all already mapped sections
  while (iter-- != module->sh_data.ed_secv) {
-  kshm_unmap_unlocked(kproc_getshm(self),
-                     (void *)((uintptr_t)base+iter->sls_albase),
-                      kshmregion_getpages(iter->sls_region),
-                      KSHMUNMAP_FLAG_NONE);
+  kshm_unmapregion_unlocked(kproc_getshm(self),
+                           (void *)((uintptr_t)base+iter->sls_albase),
+                            iter->sls_region);
  }
  return error;
 }
@@ -76,21 +75,9 @@ kproc_unloadmodsections(struct kproc *__restrict self,
  assert(isaligned((uintptr_t)base,PAGEALIGN));
  secend = (seciter = module->sh_data.ed_secv)+module->sh_data.ed_secc;
  for (; seciter != secend; ++seciter) {
-  if (kshmregion_getflags(seciter->sls_region)&KSHMREGION_FLAG_WRITE) {
-   /* Force unmap writable sections (Due to copy-on-write,
-    * they may have been re-mapped. - An operation we can't track) */
-   kshm_unmap_unlocked(kproc_getshm(self),
-                      (void *)((uintptr_t)base+seciter->sls_albase),
-                      (seciter->sls_base-seciter->sls_albase)+
-                       kshmregion_getpages(seciter->sls_region),
-                       KSHMUNMAP_FLAG_NONE);
-  } else {
-   KTASK_NOINTR_BEGIN
-   __evalexpr(kshm_unmapregion_unlocked(kproc_getshm(self),
-                                       (void *)((uintptr_t)base+seciter->sls_albase),
-                                        seciter->sls_region));
-   KTASK_NOINTR_END
-  }
+  kshm_unmapregion_unlocked(kproc_getshm(self),
+                           (void *)((uintptr_t)base+seciter->sls_albase),
+                            seciter->sls_region);
  }
 }
 

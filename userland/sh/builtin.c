@@ -153,18 +153,17 @@ int builtin_color(int argc, char *argv[]) {
   int t;
   k_syslogf(KLOG_ERROR,"offset = %Id\n",offset);
   k_syslogf(KLOG_ERROR,"thread #1: tls_addr = %p\n",tls_addr);
+  assert(tls_addr == (__byte_t *)tls_getl(0));
   k_syslogf(KLOG_ERROR,"thread #1: %q\n",(char *)(tls_addr+offset));
   t = task_newthread(&thread_test,NULL,TASK_NEWTHREAD_DEFAULT);
   if (t == -1) perror("task_newthread");
   else task_join(t,NULL),close(t);
   if (tls_free(offset) == -1) perror("tls_free");
  }
-
-#else
+#endif
  dprintf(STDOUT_FILENO,
          "\033[48;5;0;37m00\033[48;5;1;30m01\033[48;5;2;30m02\033[48;5;3;30m03\033[48;5;4;37m04\033[48;5;5;30m05\033[48;5;6;30m06\033[48;5;7;30m07\n"
          "\033[48;5;8;30m08\033[48;5;9;30m09\033[48;5;10;30m0a\033[48;5;11;30m0b\033[48;5;12;30m0c\033[48;5;13;30m0d\033[48;5;14;30m0e\033[48;5;15;30m0f\033[0m\n");
-#endif
  return EXIT_SUCCESS;
 }
 

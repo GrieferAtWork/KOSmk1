@@ -239,7 +239,7 @@ void kernel_initialize_bklayout(void) {
  char const *layout = getenv("layout");
  struct kkeymap const *iter,*end;
  if (!layout) layout = "de_DE"; /* Sorry, but I'm german... */
- end = (iter = keymaps)+__compiler_ARRAYSIZE(keymaps);
+ end = (iter = keymaps)+COMPILER_ARRAYSIZE(keymaps);
  for (; iter != end; ++iter) {
   if (!strcmp(layout,iter->km_name)) {
    kkeymap_current = iter;

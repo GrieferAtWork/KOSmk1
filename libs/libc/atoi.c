@@ -207,22 +207,22 @@ __public long long atoll(char const *string) {
 
 
 #if __SIZEOF_LONG__ == 4
-__public __compiler_ALIAS(strtol,_strtos32);
-__public __compiler_ALIAS(strtoul,_strtou32);
+__public __COMPILER_ALIAS(strtol,_strtos32);
+__public __COMPILER_ALIAS(strtoul,_strtou32);
 #elif __SIZEOF_LONG__ == 8
-__public __compiler_ALIAS(strtol,_strtos64);
-__public __compiler_ALIAS(strtoul,_strtou64);
+__public __COMPILER_ALIAS(strtol,_strtos64);
+__public __COMPILER_ALIAS(strtoul,_strtou64);
 #else
 #error "Unsupported sizeof(long)"
 #endif
 
 #ifndef __NO_longlong
 #if __SIZEOF_LONG_LONG__ == 4
-__public __compiler_ALIAS(strtoll,_strtos32);
-__public __compiler_ALIAS(strtoull,_strtou32);
+__public __COMPILER_ALIAS(strtoll,_strtos32);
+__public __COMPILER_ALIAS(strtoull,_strtou32);
 #elif __SIZEOF_LONG_LONG__ == 8
-__public __compiler_ALIAS(strtoll,_strtos64);
-__public __compiler_ALIAS(strtoull,_strtou64);
+__public __COMPILER_ALIAS(strtoll,_strtos64);
+__public __COMPILER_ALIAS(strtoull,_strtou64);
 #else
 #error "Unsupported sizeof(long long)"
 #endif

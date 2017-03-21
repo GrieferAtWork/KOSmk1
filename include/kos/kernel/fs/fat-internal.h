@@ -36,7 +36,7 @@
 
 __DECL_BEGIN
 
-__COMPILER_PACK_PUSH(1)
+COMPILER_PACK_PUSH(1)
 
 #define KFAT12_MAXCLUSTERS 4084
 #define KFAT16_MAXCLUSTERS 65524
@@ -224,10 +224,10 @@ extern __u8 kfat_genlfnchecksum(char const short_name[KFATFILE_NAMEMAX+KFATFILE_
  ((self)->f_clusterhi = leswap_16(((v) >> 16) & 0xffff)))
 #define kfatfileheader_getsize(self) leswap_32((self)->f_size)
 
-__COMPILER_PACK_POP
+COMPILER_PACK_POP
 
 #ifndef __INTELLISENSE__
-__STATIC_ASSERT(sizeof(struct kfatfileheader) == 32);
+STATIC_ASSERT(sizeof(struct kfatfileheader) == 32);
 #endif
 
 typedef __u32     kfatsec_t; /*< Sector number. */

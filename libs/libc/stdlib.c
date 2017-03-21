@@ -323,7 +323,7 @@ __public void __libc_get_argv(struct __libc_args *a) {
  a->__c_argv = argv;
  return;
 use_empty:
- a->__c_argc = __compiler_ARRAYSIZE(cmd_default);
+ a->__c_argc = __COMPILER_ARRAYSIZE(cmd_default);
  a->__c_argv = cmd_default;
 }
 

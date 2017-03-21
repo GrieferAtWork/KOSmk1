@@ -63,7 +63,7 @@ static int debug_fillpageframe = 0;
 #endif
 
 
-__STATIC_ASSERT(sizeof(struct kpageframe) == PAGESIZE);
+STATIC_ASSERT(sizeof(struct kpageframe) == PAGESIZE);
 
 static struct kspinlock kpagealloc_lockno = KSPINLOCK_INIT;
 static struct kpageframe *first_free_page = PAGEFRAME_NIL;

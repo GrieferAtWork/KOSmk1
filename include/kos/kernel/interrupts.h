@@ -61,7 +61,7 @@ __DECL_BEGIN
 
 #ifndef __ASSEMBLY__
 
-__COMPILER_PACK_PUSH(1)
+COMPILER_PACK_PUSH(1)
 struct __packed kirq_userregisters {
 #if KCONFIG_HAVE_I386_SAVE_SEGMENT_REGISTERS
  /*4*/__u16 ds,es,fs,gs;
@@ -98,7 +98,7 @@ struct __packed kirq_registers {
   *          of a 'kirq_userregisters' structure. */
  struct kirq_userregisters         regs;
 };
-__COMPILER_PACK_POP
+COMPILER_PACK_POP
 #define kirq_registers_isuser(self) (((self)->regs.cs&0x3)==0x3)
 
 extern __nonnull((1)) void kirq_print_registers(struct kirq_registers const *__restrict regs);

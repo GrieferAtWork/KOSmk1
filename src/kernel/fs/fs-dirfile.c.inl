@@ -129,7 +129,7 @@ kdirfile_fillcache(struct kdirfilelist *__restrict self,
  kerrno_t error = KE_OK;
  kassertobj(self);
  kassertobj(cache);
- vecend = (veciter = cache->dc_cache)+__compiler_ARRAYSIZE(cache->dc_cache);
+ vecend = (veciter = cache->dc_cache)+COMPILER_ARRAYSIZE(cache->dc_cache);
  totalsize = 0;
  while (veciter != vecend) totalsize += (*veciter++).d_vecc;
  self->ent_a = totalsize;

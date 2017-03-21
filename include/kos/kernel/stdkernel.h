@@ -23,9 +23,18 @@
 #ifndef __KOS_KERNEL_STDKERNEL_H__
 #define __KOS_KERNEL_STDKERNEL_H__ 1
 
-//#define __init  __attribute_section(".init.free")
-//#define __fini  __attribute_section(".fini")
+#ifndef __KOS_COMPILER_H__
+#include <kos/compiler.h>
+#endif
 
+#define COMPILER_PACK_PUSH   __COMPILER_PACK_PUSH
+#define COMPILER_PACK_POP    __COMPILER_PACK_POP
+#define COMPILER_ARRAYSIZE   __COMPILER_ARRAYSIZE
+#define COMPILER_STRINGSIZE  __COMPILER_STRINGSIZE
+#define COMPILER_ALIAS       __COMPILER_ALIAS
+#define COMPILER_UNIQUE      __COMPILER_UNIQUE
+#define STATIC_ASSERT        __STATIC_ASSERT
+#define STATIC_ASSERT_M      __STATIC_ASSERT_M
 
 
 #endif /* !__KOS_KERNEL_STDKERNEL_H__ */

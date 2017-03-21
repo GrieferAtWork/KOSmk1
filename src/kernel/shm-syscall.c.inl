@@ -164,7 +164,7 @@ KSYSCALL_DEFINE2(kerrno_t,kmem_unmap,void *,addr,size_t,length) {
  error = kshm_unmap_unlocked(kproc_getshm(procself),
                             (__user void *)aligned_start,
                              ceildiv(aligned_length,PAGESIZE),
-                             KSHMUNMAP_FLAG_NONE);
+                             KSHMUNMAP_FLAG_NONE,NULL);
  krwlock_endwrite(&procself->p_shm.s_lock);
 end:
  KTASK_CRIT_END

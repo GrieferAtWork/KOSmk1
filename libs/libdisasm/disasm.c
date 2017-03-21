@@ -37,7 +37,7 @@ while(0)
 #define printl(s,l) \
 do if __unlikely((error = (*printer)(s,l,closure)) != 0) return error;\
 while(0)
-#define print(s) printl(s,__compiler_STRINGSIZE(s))
+#define print(s) printl(s,__COMPILER_STRINGSIZE(s))
 
 #define INDENT "    "
 static char const empty_prefix[] = "";

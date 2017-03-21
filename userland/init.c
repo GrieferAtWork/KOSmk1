@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
   * After this, many resources will no longer be unlimited
   * for this process and everything it will ever spawn.
   * >> To escape from this, a rootfork() must be performed. */
- proc_setpermex(default_permissions,__compiler_ARRAYSIZE(default_permissions));
+ proc_setpermex(default_permissions,__COMPILER_ARRAYSIZE(default_permissions));
 
  /* Launch a proper terminal */
  if (open2(STDIN_FILENO,"/dev/kbevent",O_RDONLY) == -1) perror("open2('/dev/kbevent')");

@@ -58,23 +58,23 @@ __DECL_BEGIN
 #endif
 
 /* Pick some random members to assert our contant offsets of. */
-__STATIC_ASSERT(offsetof(struct ktask,t_cpu)       == KTASK_OFFSETOF_CPU);
-__STATIC_ASSERT(offsetof(struct ktask,t_abstime)   == KTASK_OFFSETOF_ABSTIME);
-__STATIC_ASSERT(offsetof(struct ktask,t_suspended) == KTASK_OFFSETOF_SUSPENDED);
-__STATIC_ASSERT(offsetof(struct ktask,t_sigval)    == KTASK_OFFSETOF_SIGVAL);
-__STATIC_ASSERT(offsetof(struct ktask,t_joinsig)   == KTASK_OFFSETOF_JOINSIG);
-__STATIC_ASSERT(offsetof(struct ktask,t_proc)      == KTASK_OFFSETOF_PROC);
-__STATIC_ASSERT(offsetof(struct ktask,t_children)  == KTASK_OFFSETOF_CHILDREN);
-__STATIC_ASSERT(offsetof(struct ktask,t_ustackvp)  == KTASK_OFFSETOF_USTACKVP);
-__STATIC_ASSERT(offsetof(struct ktask,t_ustacksz)  == KTASK_OFFSETOF_USTACKSZ);
-__STATIC_ASSERT(offsetof(struct ktask,t_kstackvp)  == KTASK_OFFSETOF_KSTACKVP);
-__STATIC_ASSERT(offsetof(struct ktask,t_kstackend) == KTASK_OFFSETOF_KSTACKEND);
-__STATIC_ASSERT(offsetof(struct ktask,t_tls)       == KTASK_OFFSETOF_TLS);
+STATIC_ASSERT(offsetof(struct ktask,t_cpu)       == KTASK_OFFSETOF_CPU);
+STATIC_ASSERT(offsetof(struct ktask,t_abstime)   == KTASK_OFFSETOF_ABSTIME);
+STATIC_ASSERT(offsetof(struct ktask,t_suspended) == KTASK_OFFSETOF_SUSPENDED);
+STATIC_ASSERT(offsetof(struct ktask,t_sigval)    == KTASK_OFFSETOF_SIGVAL);
+STATIC_ASSERT(offsetof(struct ktask,t_joinsig)   == KTASK_OFFSETOF_JOINSIG);
+STATIC_ASSERT(offsetof(struct ktask,t_proc)      == KTASK_OFFSETOF_PROC);
+STATIC_ASSERT(offsetof(struct ktask,t_children)  == KTASK_OFFSETOF_CHILDREN);
+STATIC_ASSERT(offsetof(struct ktask,t_ustackvp)  == KTASK_OFFSETOF_USTACKVP);
+STATIC_ASSERT(offsetof(struct ktask,t_ustacksz)  == KTASK_OFFSETOF_USTACKSZ);
+STATIC_ASSERT(offsetof(struct ktask,t_kstackvp)  == KTASK_OFFSETOF_KSTACKVP);
+STATIC_ASSERT(offsetof(struct ktask,t_kstackend) == KTASK_OFFSETOF_KSTACKEND);
+STATIC_ASSERT(offsetof(struct ktask,t_tls)       == KTASK_OFFSETOF_TLS);
 #if KCONFIG_HAVE_TASK_STATS
-__STATIC_ASSERT(offsetof(struct ktask,t_stats)     == KTASK_OFFSETOF_STAT);
-__STATIC_ASSERT(sizeof(struct ktaskstat)           == KTASKSTAT_SIZEOF);
+STATIC_ASSERT(offsetof(struct ktask,t_stats)     == KTASK_OFFSETOF_STAT);
+STATIC_ASSERT(sizeof(struct ktaskstat)           == KTASKSTAT_SIZEOF);
 #endif /* KCONFIG_HAVE_TASK_STATS */
-__STATIC_ASSERT(sizeof(struct ktask)               == KTASK_SIZEOF);
+STATIC_ASSERT(sizeof(struct ktask)               == KTASK_SIZEOF);
 
 
 extern struct kcpu  __kcpu_zero;
@@ -141,12 +141,12 @@ struct ktask __ktask_zero = {
 };
 
 
-__COMPILER_PACK_PUSH(1)
+COMPILER_PACK_PUSH(1)
 struct __packed scheddata {
  __user   void            *esp;
  __kernel struct kpagedir *pd;
 };
-__COMPILER_PACK_POP
+COMPILER_PACK_POP
 
 
 size_t kcpu_taskcount(struct kcpu const *__restrict self) {
@@ -366,6 +366,7 @@ ktask_newuser(struct ktask *__restrict parent, struct kproc *__restrict proc,
  kassertobj(useresp);
  assertf(krwlock_iswritelocked(&proc->p_shm.s_lock),
          "The caller must lock the pagedir of the associated task context!");
+ /* TODO: Track the SHM region used for the stack to safely unmap it (and it alone) later. */
  if __unlikely(KE_ISERR(kshm_mapram_unlocked(kproc_getshm(proc),&userstack,
                                              ceildiv(ustacksize,PAGESIZE),
                                              KPAGEDIR_MAPANY_HINT_USTACK,
@@ -375,7 +376,7 @@ ktask_newuser(struct ktask *__restrict parent, struct kproc *__restrict proc,
                           KTASK_FLAG_USERTASK|KTASK_FLAG_OWNSUSTACK);
  if __unlikely(!result) kshm_unmap_unlocked(kproc_getshm(proc),userstack,
                                             ceildiv(ustacksize,PAGESIZE),
-                                            KSHMUNMAP_FLAG_NONE);
+                                            KSHMUNMAP_FLAG_NONE,NULL);
  else *useresp = (__user void *)((uintptr_t)userstack+ustacksize);
  return result;
 }
@@ -402,6 +403,7 @@ ktask_newuserex(struct ktask *__restrict parent, struct kproc *__restrict proc,
  kobject_init(result,KOBJECT_MAGIC_TASK);
  /* Allocate and map a linear kernel stack for user tasks. */
  k_syslogf(KLOG_TRACE,"[TASK] Mapping Linear RAM for kernel stack of user-thread\n");
+ /* TODO: Track the SHM region used for the stack to safely unmap it (and it alone) later. */
  if __unlikely(KE_ISERR(kshm_mapram_linear_unlocked(kproc_getshm(proc),
                                                    &result->t_kstack,
                                                    &result->t_kstackvp,
@@ -474,7 +476,7 @@ err_ctx2: kproc_deltask(proc,result);
 err_tls:  kproc_tls_free_pt_unlocked(proc,result);
 err_map:  kshm_unmap_unlocked(kproc_getshm(proc),result->t_kstackvp,
                               ceildiv(ktask_getkstacksize(result),PAGESIZE),
-                              KSHMUNMAP_FLAG_RESTRICTED);
+                              KSHMUNMAP_FLAG_RESTRICTED,NULL);
 err_r:    free(result);
 err_ctx:  kproc_decref(proc);
 err_par:  ktask_decref(parent);
@@ -839,7 +841,7 @@ __local __crit void ktask_releasedata(struct ktask *__restrict self) {
      assert(self->t_kstack == kpagedir_translate(kproc_getshm(ktask_getproc(self))->s_pd,self->t_kstackvp));
      kshm_unmap_unlocked(kproc_getshm(ktask_getproc(self)),self->t_kstackvp,
                          ceildiv(ktask_getkstacksize(self),PAGESIZE),
-                         KSHMUNMAP_FLAG_RESTRICTED);
+                         KSHMUNMAP_FLAG_RESTRICTED,NULL);
     }
     self->t_kstackvp = self->t_kstack = self->t_kstackend = NULL;
    }
@@ -848,7 +850,7 @@ __local __crit void ktask_releasedata(struct ktask *__restrict self) {
     if __likely(KE_ISOK(lockerror)) {
      kshm_unmap_unlocked(kproc_getshm(ktask_getproc(self)),self->t_ustackvp,
                          ceildiv(self->t_ustacksz,PAGESIZE),
-                         KSHMUNMAP_FLAG_RESTRICTED);
+                         KSHMUNMAP_FLAG_RESTRICTED,NULL);
     }
 #ifdef __DEBUG__
     self->t_flags &= ~(KTASK_FLAG_OWNSUSTACK);

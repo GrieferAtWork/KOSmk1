@@ -165,10 +165,10 @@ _vsnprintf(char *__restrict buf, size_t bufsize,
 
 
 #if __SIZEOF_INT__ == __SIZEOF_SIZE_T__
-__public __compiler_ALIAS(sprintf,_sprintf);
-__public __compiler_ALIAS(vsprintf,_vsprintf);
-__public __compiler_ALIAS(snprintf,_snprintf);
-__public __compiler_ALIAS(vsnprintf,_vsnprintf);
+__public __COMPILER_ALIAS(sprintf,_sprintf);
+__public __COMPILER_ALIAS(vsprintf,_vsprintf);
+__public __COMPILER_ALIAS(snprintf,_snprintf);
+__public __COMPILER_ALIAS(vsnprintf,_vsnprintf);
 #else
 #if 1
 #   define SPRINTF_RETURN_TYPE unsigned int

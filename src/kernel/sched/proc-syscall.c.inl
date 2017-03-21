@@ -113,58 +113,6 @@ KSYSCALL_DEFINE_EX2(c,int,kproc_openbarrier,int,procfd,ksandbarrier_t,level) {
  return error;
 }
 
-KSYSCALL_DEFINE_EX2(cr,kerrno_t,kproc_tlsalloc,
-                    __user void const *,template_,
-                    size_t,template_size) {
- struct ktranslator trans; kerrno_t error;
- struct kshmregion *region;
- struct ktask *caller = ktask_self();
- size_t template_pages;
- ktls_addr_t resoffset;
- KTASK_CRIT_MARK
- template_pages = ceildiv(template_size,PAGESIZE);
- region = kshmregion_newram(template_pages,
-                            KSHMREGION_FLAG_READ|
-                            KSHMREGION_FLAG_WRITE|
-                            KSHMREGION_FLAG_LOSEONFORK);
- if __unlikely(!region) return KE_NOMEM;
- /* Initialize the TLS region with the given template, or fill it with ZEROes. */
- if (template_) {
-  size_t max_dst,max_src;
-  kshmregion_addr_t region_address = 0;
-  __kernel void *kdst,*ksrc;
-  error = ktranslator_init(&trans,caller);
-  if __unlikely(KE_ISERR(error)) goto err_region;
-  while ((kdst = kshmregion_translate_fast(region,region_address,&max_dst)) != NULL &&
-         (ksrc = ktranslator_exec(&trans,template_,min(max_dst,template_size),&max_src,0)) != NULL) {
-   memcpy(kdst,ksrc,max_src);
-   if ((template_size -= max_src) == 0) break;
-   region_address           += max_src;
-   *(uintptr_t *)&template_ += max_src;
-  }
-  ktranslator_quit(&trans);
-  /* Make sure the entire template got copied. */
-  if __unlikely(template_size) { error = KE_FAULT; goto err_region; }
- } else {
-  kshmregion_memset(region,0);
- }
- /* Allocate a new TLS block using the new region as template. */
- error = kproc_tls_alloc_inherited(ktask_getproc(caller),
-                                   region,&resoffset);
- if __unlikely(KE_ISERR(error)) goto err_region;
- regs->regs.ecx = (uintptr_t)resoffset;
- return error;
-err_region:
- kshmregion_decref_full(region);
- return error;
-}
-KSYSCALL_DEFINE_EX1(c,kerrno_t,kproc_tlsfree,
-                    ptrdiff_t,tls_offset) {
- KTASK_CRIT_MARK
- return kproc_tls_free_offset(kproc_self(),tls_offset);
-}
-
-
 KSYSCALL_DEFINE_EX3(c,kerrno_t,kproc_enumpid,__user __pid_t *,pidv,
                     size_t,pidc,__user size_t *,reqpidc) {
  kerrno_t error;
@@ -415,8 +363,8 @@ KSYSCALL_DEFINE_EX4(c,kerrno_t,kproc_perm,int,procfd,
       ) { error = KE_ACCES; goto end_proc; }
   if (basic_mode == KPROC_PERM_MODE_XCH) goto check_getperm;
  } else if (basic_mode == KPROC_PERM_MODE_GET) {
-  __STATIC_ASSERT(KPERM_FLAG_GETGROUP(KPERM_FLAG_GETPERM|KPERM_FLAG_GETPERM_OTHER) ==
-                  KPERM_FLAG_GETGROUP(KPERM_FLAG_GETPERM));
+  STATIC_ASSERT(KPERM_FLAG_GETGROUP(KPERM_FLAG_GETPERM|KPERM_FLAG_GETPERM_OTHER) ==
+                KPERM_FLAG_GETGROUP(KPERM_FLAG_GETPERM));
 check_getperm:
   /* Check if read permissions are allowed. */
   if (!kproc_hasflag(caller,(proc == caller ? KPERM_FLAG_GETPERM :

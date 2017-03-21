@@ -33,7 +33,7 @@ struct shcmd {
  size_t      size; /*< strlen of 'name'. */
  int       (*main)(int argc, char *argv[]); /*< Command main() function. */
 };
-#define SHCMD(name,main) {name,__compiler_STRINGSIZE(name),main}
+#define SHCMD(name,main) {name,__COMPILER_STRINGSIZE(name),main}
 
 /* List of builtin commands. */
 extern struct shcmd const shbuiltin[];

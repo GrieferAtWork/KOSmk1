@@ -173,7 +173,7 @@ void kernel_initialize_interrupts(void) {
  outb_p(0x21,0x00       );
  outb_p(0xA1,0x00       );
 
- for (unsigned int i = 0; i < __compiler_ARRAYSIZE(idt); ++i) {
+ for (unsigned int i = 0; i < COMPILER_ARRAYSIZE(idt); ++i) {
   __u8 flags = IDTFLAG_PRESENT|IDTTYPE_80386_32_INTERRUPT_GATE|IDTFLAG_DPL(3);
   make_idt_entry(&idt[i],idt_functions[i],KSEG_KERNEL_CODE,flags);
  }
@@ -381,7 +381,7 @@ static struct kirq_siginfo const __irq_siginfo_data[] = {
 
 struct kirq_siginfo const *kirq_getsiginfo(kirq_t signum) {
  struct kirq_siginfo const *result;
- if (signum >= __compiler_ARRAYSIZE(__irq_siginfo_data)) return NULL;
+ if (signum >= COMPILER_ARRAYSIZE(__irq_siginfo_data)) return NULL;
  result = &__irq_siginfo_data[signum];
  if (!result->isi_mnemonic) result = NULL;
  return result;

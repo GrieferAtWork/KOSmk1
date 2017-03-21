@@ -178,9 +178,9 @@ __public off64_t lseek64(int fd, off64_t off, int whence) {
 #endif
 }
 
-__public __compiler_ALIAS(llseek,lseek64);
+__public __COMPILER_ALIAS(llseek,lseek64);
 #ifdef __USE_FILE_OFFSET64
-__public __compiler_ALIAS(lseek,lseek64);
+__public __COMPILER_ALIAS(lseek,lseek64);
 #else
 __public off_t lseek(int fd, off_t off, int whence) {
  return (off_t)lseek64(fd,off,whence);
@@ -267,7 +267,7 @@ __public int fsync(int fd) {
  return -1;
 #endif
 }
-__public __compiler_ALIAS(fdatasync,fsync)
+__public __COMPILER_ALIAS(fdatasync,fsync)
 
 __public ssize_t pread(int fd, void *__restrict buf, size_t bufsize, off_t pos) {
 #ifdef __CONFIG_MIN_BSS__
@@ -803,7 +803,7 @@ static __pid_t __kos_getbarrierpid_p(__pid_t proc, ksandbarrier_t barrier) {
  return result;
 }
 
-__public __compiler_ALIAS(__getpgid,getpgid);
+__public __COMPILER_ALIAS(__getpgid,getpgid);
 __public __pid_t getpgid(__pid_t pid) {
  return __kos_getbarrierpid_p(pid,__KOS_PGID_BARRIER);
 }

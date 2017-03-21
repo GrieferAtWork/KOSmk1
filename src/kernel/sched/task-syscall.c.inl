@@ -382,12 +382,12 @@ KSYSCALL_DEFINE_EX3(c,kerrno_t,ktask_timedjoin,int,taskfd,
 
 KSYSCALL_DEFINE_EX4(c,int,ktask_newthread,__user ktask_threadfun_t,thread_main,
                     void *,closure,__u32,flags,__user void **,arg) {
- __COMPILER_PACK_PUSH(1)
+ COMPILER_PACK_PUSH(1)
  struct __packed stackframe {
   void *returnaddr;
   void *closure;
  };
- __COMPILER_PACK_POP
+ COMPILER_PACK_POP
  void *useresp; struct kfdentry entry;
  int fd; kerrno_t error;
  struct stackframe *userstack;
@@ -486,13 +486,13 @@ err_task:
 KSYSCALL_DEFINE_EX5(c,int,ktask_newthreadi,__user ktask_threadfun_t,thread_main,
                     __user void const *,buf,size_t,bufsize,__u32,flags,
                     __user void **,arg) {
- __COMPILER_PACK_PUSH(1)
+ COMPILER_PACK_PUSH(1)
  struct __packed stackframe {
   __user void *returnaddr;
   __user void *datap;
          __u8  data[1024];
  };
- __COMPILER_PACK_POP
+ COMPILER_PACK_POP
  __user void *useresp,*dataesp; struct kfdentry entry;
  int fd; kerrno_t error; struct stackframe *userstack;
  struct ktask *caller = ktask_self();
@@ -577,8 +577,8 @@ KSYSCALL_DEFINE_EX2(rc,kerrno_t,ktask_fork,
  struct kfdentry entry; kerrno_t error; int fd;
  struct kproc *caller = kproc_self();
  KTASK_CRIT_MARK
- __STATIC_ASSERT(KPERM_FLAG_GETGROUP(KPERM_FLAG_CANFORK) ==
-                 KPERM_FLAG_GETGROUP(KPERM_FLAG_CANFORK|KPERM_FLAG_CANROOTFORK));
+ STATIC_ASSERT(KPERM_FLAG_GETGROUP(KPERM_FLAG_CANFORK) ==
+               KPERM_FLAG_GETGROUP(KPERM_FLAG_CANFORK|KPERM_FLAG_CANROOTFORK));
  /* Make sure the caller is allowed to fork(). */
  if (!kproc_hasflag(caller,
     ((flags&KTASK_NEW_FLAG_ROOTFORK) == KTASK_NEW_FLAG_ROOTFORK)

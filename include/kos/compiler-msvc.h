@@ -68,15 +68,15 @@
 #define __compiler_unreachable() __assume(0)
 #endif
 
-#ifndef __compiler_UNIQUE
+#ifndef __COMPILER_UNIQUE
 #ifdef __COUNTER__
-#define __compiler_UNIQUE(group) __PP_CAT_3(__hidden_,group,__COUNTER__)
+#define __COMPILER_UNIQUE(group) __PP_CAT_3(__hidden_,group,__COUNTER__)
 #endif
-#endif /* !__compiler_UNIQUE */
+#endif /* !__COMPILER_UNIQUE */
 
 #ifndef __STATIC_ASSERT
 #define __STATIC_ASSERT(expr) \
- extern __attribute_unused int __compiler_UNIQUE(sassert)[!!(expr)?1:-1]
+ extern __attribute_unused int __COMPILER_UNIQUE(sassert)[!!(expr)?1:-1]
 #endif
 
 #ifndef __compiler_pragma

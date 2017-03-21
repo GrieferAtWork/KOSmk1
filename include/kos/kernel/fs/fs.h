@@ -303,7 +303,7 @@ struct kdirentname {
             kdirentname_refreshhash(self); \
  })
 
-#define KDIRENTNAME_INIT(name) {(size_t)-1,__compiler_STRINGSIZE(name),name}
+#define KDIRENTNAME_INIT(name) {(size_t)-1,__COMPILER_STRINGSIZE(name),name}
 #define KDIRENTNAME_INIT_EMPTY {0,0,NULL}
 
 #define kdirentname_isempty(self) (!(self)->dn_name)

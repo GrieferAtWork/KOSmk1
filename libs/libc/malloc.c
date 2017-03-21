@@ -1384,9 +1384,9 @@ _vstrdupf(char const *__restrict format,
 
 #ifndef __CONFIG_MIN_LIBC__
 #undef cfree
-__public __compiler_ALIAS(cfree,free);
+__public __COMPILER_ALIAS(cfree,free);
 #undef aligned_alloc
-__public __compiler_ALIAS(aligned_alloc,memalign);
+__public __COMPILER_ALIAS(aligned_alloc,memalign);
 #endif /* !__CONFIG_MIN_LIBC__ */
 
 static int

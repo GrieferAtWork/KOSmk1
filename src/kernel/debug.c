@@ -209,11 +209,11 @@ kmem_validate(__kernel void const *__restrict p, size_t s) {
 
 
 // Helper functions designed to be called from assembly
-__COMPILER_PACK_PUSH(1)
+COMPILER_PACK_PUSH(1)
 struct __packed irettail {
  __uintptr_t eip,cs,eflags,useresp,ss;
 };
-__COMPILER_PACK_POP
+COMPILER_PACK_POP
 
 void printirettail(struct irettail *tail) {
  printf("printirettail(%#p) {\n",tail);

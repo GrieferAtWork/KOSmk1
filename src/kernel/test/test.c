@@ -126,7 +126,7 @@ __test void test_sleep_terminate(void) {
  struct ktask *tasks[200];
  KTASK_CRIT_BEGIN
  // Create a whole bunch of tasks
- for (i = 0; i < __compiler_ARRAYSIZE(tasks); ++i) {
+ for (i = 0; i < COMPILER_ARRAYSIZE(tasks); ++i) {
   tasks[i] = ktask_new(&sleep_task,(void *)i);
   assert(tasks[i] != NULL);
  }
@@ -134,7 +134,7 @@ __test void test_sleep_terminate(void) {
  struct timespec to = {1,0};
  ktask_sleep(ktask_self(),&to);
  // Now terminate them all
- for (i = 0; i < __compiler_ARRAYSIZE(tasks); ++i) {
+ for (i = 0; i < COMPILER_ARRAYSIZE(tasks); ++i) {
   KE_ASSERT(ktask_terminate_k(tasks[i],NULL),KE_OK);
   assert(ktask_isterminated(tasks[i]));
   // Make sure the reference counters are correct

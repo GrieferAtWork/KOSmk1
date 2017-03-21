@@ -105,11 +105,11 @@ typedef __u64 __bitwise __be64;
 
 #ifndef __SIZEOF_POINTER__
 #if defined(__i386__)
-#define __SIZEOF_POINTER__ 4
+#   define __SIZEOF_POINTER__ 4
 #elif defined(__x86_64__)
-#define __SIZEOF_POINTER__ 8
+#   define __SIZEOF_POINTER__ 8
 #else
-#define __SIZEOF_POINTER__ 4 /*< Guess. */
+#   define __SIZEOF_POINTER__ 4 /*< Guess. */
 #endif
 #endif
 
