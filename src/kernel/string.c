@@ -35,57 +35,6 @@
 __DECL_BEGIN
 
 __crit size_t
-__copy_from_user_c(__kernel void *__restrict dst,
-                   __user void const *src,
-                   size_t bytes) {
- size_t maxbytes; __kernel void const *kpt;
- KTASK_CRIT_MARK
- USER_FOREACH_BEGIN(src,bytes,kpt,maxbytes,0) {
-  memcpy(dst,kpt,maxbytes);
-  *(uintptr_t *)&dst += maxbytes;
- } USER_FOREACH_END({
-  return USER_FOREACH_PENDING;
- });
- return 0;
-}
-__crit size_t
-__copy_to_user_c(__user void *dst,
-                 __kernel void const *__restrict src,
-                 size_t bytes) {
- size_t maxbytes; __kernel void *kptr;
- KTASK_CRIT_MARK
- USER_FOREACH_BEGIN(dst,bytes,kptr,maxbytes,1) {
-  memcpy(kptr,src,maxbytes);
-  *(uintptr_t *)&src += maxbytes;
- } USER_FOREACH_END({
-  return USER_FOREACH_PENDING;
- });
- return 0;
-}
-__crit size_t
-__copy_in_user_c(__user void *dst,
-                 __user void const *src,
-                 size_t bytes) {
- size_t max_dst,max_src;
- __kernel void *kdst,*ksrc;
- struct ktranslator trans;
- KTASK_CRIT_MARK
- if __likely(KE_ISOK(ktranslator_init(&trans,ktask_self()))) {
-  while (bytes &&
-        (kdst = ktranslator_exec(&trans,dst,bytes,&max_dst,1)) != NULL &&
-        (ksrc = ktranslator_exec(&trans,src,max_dst,&max_src,0)) != NULL) {
-   memcpy(kdst,ksrc,max_src);
-   bytes -= max_src;
-   *(uintptr_t *)&dst += max_src;
-   *(uintptr_t *)&src += max_src;
-  }
-  ktranslator_quit(&trans);
- }
- return bytes;
-}
-
-
-__crit size_t
 __user_memset_c(__user void *p, int byte, size_t bytes) {
  size_t maxbytes; __kernel void *kptr;
  KTASK_CRIT_MARK

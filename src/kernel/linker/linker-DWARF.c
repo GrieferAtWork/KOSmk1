@@ -357,7 +357,7 @@ ka2ldwarfchunk_exec(struct ka2ldwarfchunk *__restrict self,
    }
    adv    = (ssize_t)(opcode % self->dc_header.li_line_range)+self->dc_header.li_line_base;
    line  += adv;
-   column = 0,has_column = 0;
+   has_column = 0;
   } else switch (opcode) {
 
    {
@@ -424,7 +424,7 @@ ka2ldwarfchunk_exec(struct ka2ldwarfchunk *__restrict self,
 
    case DW_LNS_advance_line:
     line += (ssize_t)parse_sleb128(&iter,end);
-    column = 0,has_column = 0;
+    has_column = 0;
     break;
 
    case DW_LNS_set_file:
@@ -507,7 +507,7 @@ default_lookup_file:
     result->fal_path  = ka2ldwarfchunk_getdir(self,(size_t)fileinfo.df_dir-1);
    }
    result->fal_line   = (unsigned int)last_line;
-   result->fal_column = (unsigned int)last_column;
+   result->fal_column = (unsigned int)(has_column ? last_column : 0);
    result->fal_flags  = KFILEANDLINE_FLAG_HASLINE;
    if (has_column) result->fal_flags |= KFILEANDLINE_FLAG_HASCOL;
    error = KE_OK;

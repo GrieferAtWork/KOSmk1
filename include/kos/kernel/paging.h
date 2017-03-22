@@ -239,7 +239,6 @@ kpagedir_enum(struct kpagedir const *__restrict self,
 extern __nonnull((1)) void kpagedir_print(struct kpagedir const *__restrict self);
 #endif
 
-
 #ifdef X86_PTE_FLAG_PRESENT
 #define KPAGEDIR_TRANSLATE_FLAGS(flags) ((flags)|X86_PTE_FLAG_PRESENT)
 #else
@@ -265,6 +264,14 @@ kpagedir_translate_flags(struct kpagedir const *__restrict self, __user void con
 extern __constcall __wunused __nonnull((1)) kpage_t *KPAGEDIR_TRANSLATE_CALL
 kpagedir_getpage(struct kpagedir *__restrict self,
                  __user void const *virt);
+
+
+//////////////////////////////////////////////////////////////////////////
+// Returns non-ZERO(0) if the given up to 'bytes' can be accesses
+// quickly (using one translation), starting at 'user_address'.
+#define KPAGEDIR_CAN_QUICKACCESS(user_address,bytes) \
+ (((__uintptr_t)(user_address)&(PAGESIZE-1))+(bytes) <= PAGESIZE)
+#define KPAGEDIR_MAYBE_QUICKACCESS(bytes)   ((bytes) <= PAGESIZE)
 
 //////////////////////////////////////////////////////////////////////////
 // Returns the page directory used by the kernel

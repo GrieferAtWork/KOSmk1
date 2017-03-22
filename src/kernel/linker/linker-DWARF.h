@@ -159,7 +159,7 @@ ka2ldwarfchunk_exec(struct ka2ldwarfchunk *__restrict self,
                     ksymaddr_t symaddr, struct kfileandline *__restrict result);
 
 struct kdwarffile {
- uleb128_t df_dir;  /*< Index of the associated directory. */
+ uleb128_t df_dir;  /*< Index of the associated directory +1 (When ZERO(0), the PWD is meant). */
  uleb128_t df_time; /*< Time?. */
  uleb128_t df_size; /*< Size?. */
 };
@@ -217,6 +217,7 @@ extern __crit __nonnull((1)) kerrno_t ka2ldwarf_load_unlocked(struct ka2ldwarf *
 
 
 
+
 //////////////////////////////////////////////////////////////////////////
 // Register an available DWARF .debug_line section for lazy initialization.
 // @return: KE_OK:    Successfully registered an engine at the given location.
@@ -225,7 +226,6 @@ extern __crit kerrno_t
 kshlib_a2l_add_dwarf_debug_line(struct kshlib *__restrict self,
                                 __u64 section_offset,
                                 __u64 section_size);
-
 
 __DECL_END
 

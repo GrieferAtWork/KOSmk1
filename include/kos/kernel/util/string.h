@@ -34,6 +34,7 @@
 #include <kos/errno.h>
 #include <kos/kernel/task.h>
 #include <kos/kernel/proc.h>
+#include <kos/kernel/shm.h>
 #endif
 
 __DECL_BEGIN
@@ -47,18 +48,33 @@ extern __nonnull((2)) __wunused __size_t copy_from_user(__kernel void *dst, __us
 extern __nonnull((2)) __wunused __size_t copy_to_user(__user void *dst, __kernel void const *__restrict src, __size_t bytes);
 extern __nonnull((2)) __wunused __size_t copy_in_user(__user void *dst, __user void const *src, __size_t bytes);
 #else
-extern __crit __nonnull((2)) __wunused __size_t __copy_from_user_c(__kernel void *dst, __user void const *src, __size_t bytes);
-extern __crit __nonnull((2)) __wunused __size_t __copy_to_user_c(__user void *dst, __kernel void const *__restrict src, __size_t bytes);
-extern __crit __nonnull((2)) __wunused __size_t __copy_in_user_c(__user void *dst, __user void const *src, __size_t bytes);
-#define __do_copy_from_user(dst,src,bytes) KTASK_CRIT(__copy_from_user_c(dst,src,bytes))
-#define __do_copy_to_user(dst,src,bytes)   KTASK_CRIT(__copy_to_user_c(dst,src,bytes))
-#define __do_copy_in_user(dst,src,bytes)   KTASK_CRIT(__copy_in_user_c(dst,src,bytes))
-#define __copy_from_user(dst,src,bytes)  (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : __do_copy_from_user(dst,src,bytes))
-#define __copy_to_user(dst,src,bytes)    (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : __do_copy_to_user(dst,src,bytes))
-#define __copy_in_user(dst,src,bytes)    (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : __do_copy_in_user(dst,src,bytes))
-#define copy_from_user(dst,src,bytes)    ((__builtin_constant_p(bytes) && !(bytes)) ? 0 : __copy_from_user(dst,src,bytes))
-#define copy_to_user(dst,src,bytes)      ((__builtin_constant_p(bytes) && !(bytes)) ? 0 : __copy_to_user(dst,src,bytes))
-#define copy_in_user(dst,src,bytes)      ((__builtin_constant_p(bytes) && !(bytes)) ? 0 : __copy_in_user(dst,src,bytes))
+#define __copy_from_user_impl(dst,src,bytes) \
+ __xblock({ struct ktranslator __cfu_trans; __size_t __cfu_result;\
+            __xreturn KE_ISOK(ktranslator_init(&__cfu_trans,ktask_self()))\
+             ? (__cfu_result = ktranslator_copyfromuser(&__cfu_trans,dst,src,bytes),\
+                               ktranslator_quit(&__cfu_trans),\
+                __cfu_result) : (bytes);\
+ })
+#define __copy_to_user_impl(dst,src,bytes) \
+ __xblock({ struct ktranslator __ctu_trans; __size_t __ctu_result;\
+            __xreturn KE_ISOK(ktranslator_init(&__ctu_trans,ktask_self()))\
+             ? (__ctu_result = ktranslator_copytouser(&__ctu_trans,dst,src,bytes),\
+                               ktranslator_quit(&__ctu_trans),\
+                __ctu_result) : (bytes);\
+ })
+#define __copy_in_user_impl(dst,src,bytes) \
+ __xblock({ struct ktranslator __ciu_trans; __size_t __ciu_result;\
+            __xreturn KE_ISOK(ktranslator_init(&__ciu_trans,ktask_self()))\
+             ? (__ciu_result = ktranslator_copyinuser(&__ciu_trans,dst,src,bytes),\
+                               ktranslator_quit(&__ciu_trans),\
+                __ciu_result) : (bytes);\
+ })
+#define __copy_from_user(dst,src,bytes)   (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : KTASK_CRIT((__size_t)__copy_from_user_impl(dst,src,bytes)))
+#define __copy_to_user(dst,src,bytes)     (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : KTASK_CRIT((__size_t)__copy_to_user_impl(dst,src,bytes)))
+#define __copy_in_user(dst,src,bytes)     (KTASK_ISKEPD_P ? (memcpy(dst,src,bytes),0) : KTASK_CRIT((__size_t)__copy_in_user_impl(dst,src,bytes)))
+#define copy_from_user(dst,src,bytes)     ((__builtin_constant_p(bytes) && !(bytes)) ? 0 : __copy_from_user(dst,src,bytes))
+#define copy_to_user(dst,src,bytes)       ((__builtin_constant_p(bytes) && !(bytes)) ? 0 : __copy_to_user(dst,src,bytes))
+#define copy_in_user(dst,src,bytes)       ((__builtin_constant_p(bytes) && !(bytes)) ? 0 : __copy_in_user(dst,src,bytes))
 #endif
 
 #ifdef __INTELLISENSE__

@@ -29,11 +29,11 @@ __DECL_BEGIN
 
 #ifdef WRITEABLE
 __crit __nomp __kernel void *
-__kshm_translateuser_w_impl(struct kshm const *__restrict self, struct kpagedir const *epd,
+__kshm_wtranslateuser_impl(struct kshm const *__restrict self, struct kpagedir const *__restrict epd,
                             __user void *addr, __size_t *__restrict rwbytes)
 #else
 __crit __nomp __kernel void *
-__kshm_translateuser_impl(struct kshm const *self, struct kpagedir const *epd,
+__kshm_translateuser_impl(struct kshm const *self, struct kpagedir const *__restrict epd,
                           __user void const *addr, size_t *__restrict rwbytes, int writable)
 #endif
 {

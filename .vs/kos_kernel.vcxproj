@@ -219,6 +219,7 @@
     <None Include="..\src\kernel\shm-map.c.inl" />
     <None Include="..\src\kernel\shm-mmap-impl.c.inl" />
     <None Include="..\src\kernel\shm-syscall.c.inl" />
+    <None Include="..\src\kernel\shm-transfer.c.inl" />
     <None Include="..\src\kernel\shm-translate.c.inl" />
     <None Include="..\src\kernel\socket-packet.c.inl" />
     <None Include="..\src\kernel\syslog-write.c.inl" />

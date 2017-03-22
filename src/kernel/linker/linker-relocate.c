@@ -36,24 +36,21 @@
 __DECL_BEGIN
 
 static __user void *
-__reloc_dlsym(struct kproc *__restrict proc,
-              struct kprocmodule *__restrict start_module,
-              char const *name, size_t name_size, ksymhash_t name_hash,
-              struct kprocmodule *__restrict exclude_module) {
+__reloc_dlsym(struct kproc *__restrict proc, struct kprocmodule *__restrict start_module,
+              struct ksymbol *__restrict sym, struct kprocmodule *__restrict exclude_module) {
  kmodid_t *iter,*end; __user void *result;
  struct ksymbol const *symbol;
  struct kshlib *lib = (start_module->pm_flags&KPROCMODULE_FLAG_RELOC) ? start_module->pm_lib : NULL;
  if (start_module != exclude_module && lib &&
-    (symbol = ksymtable_lookupname_h(&lib->sh_publicsym,name,name_size,name_hash)) != NULL &&
+    (symbol = ksymtable_lookupname_h(&lib->sh_publicsym,sym->s_name,sym->s_nmsz,sym->s_hash)) != NULL &&
      symbol->s_shndx != SHN_UNDEF) goto found_symbol;
  end = (iter = start_module->pm_depids)+start_module->pm_lib->sh_deps.sl_libc;
  for (; iter != end; ++iter) {
   assert(*iter < proc->p_modules.pms_moda);
-  result = __reloc_dlsym(proc,&proc->p_modules.pms_modv[*iter],
-                         name,name_size,name_hash,exclude_module);
+  result = __reloc_dlsym(proc,&proc->p_modules.pms_modv[*iter],sym,exclude_module);
   if (result != NULL) return result;
  }
- if (lib && (symbol = ksymtable_lookupname_h(&lib->sh_weaksym,name,name_size,name_hash)) != NULL &&
+ if (lib && (symbol = ksymtable_lookupname_h(&lib->sh_weaksym,sym->s_name,sym->s_nmsz,sym->s_hash)) != NULL &&
      symbol->s_shndx != SHN_UNDEF) goto found_symbol;
  return NULL;
 found_symbol:
@@ -61,23 +58,20 @@ found_symbol:
 }
 
 static __user void *
-__new_dlsym(struct kproc *__restrict proc,
-            struct kprocmodule *__restrict start_module,
-            char const *name, size_t name_size, ksymhash_t name_hash,
-            struct kprocmodule *__restrict exclude_module) {
+__new_dlsym(struct kproc *__restrict proc, struct kprocmodule *__restrict start_module,
+            struct ksymbol *__restrict sym, struct kprocmodule *__restrict exclude_module) {
  kmodid_t *iter,*end; __user void *result;
  struct ksymbol const *symbol; struct kshlib *lib = start_module->pm_lib;
  if (start_module != exclude_module && 
-    (symbol = ksymtable_lookupname_h(&lib->sh_publicsym,name,name_size,name_hash)) != NULL &&
+    (symbol = ksymtable_lookupname_h(&lib->sh_publicsym,sym->s_name,sym->s_nmsz,sym->s_hash)) != NULL &&
      symbol->s_shndx != SHN_UNDEF) goto found_symbol;
  end = (iter = start_module->pm_depids)+start_module->pm_lib->sh_deps.sl_libc;
  for (; iter != end; ++iter) {
   assert(*iter < proc->p_modules.pms_moda);
-  result = __new_dlsym(proc,&proc->p_modules.pms_modv[*iter],
-                       name,name_size,name_hash,exclude_module);
+  result = __new_dlsym(proc,&proc->p_modules.pms_modv[*iter],sym,exclude_module);
   if (result != NULL) return result;
  }
- if ((symbol = ksymtable_lookupname_h(&lib->sh_weaksym,name,name_size,name_hash)) != NULL &&
+ if ((symbol = ksymtable_lookupname_h(&lib->sh_weaksym,sym->s_name,sym->s_nmsz,sym->s_hash)) != NULL &&
       symbol->s_shndx != SHN_UNDEF) goto found_symbol;
  return NULL;
 found_symbol:
@@ -85,10 +79,8 @@ found_symbol:
 }
 
 __local __user void *
-__dlsym(struct kproc *__restrict proc,
-        struct kprocmodule *__restrict start_module,
-        char const *name, size_t name_size, ksymhash_t name_hash,
-        struct kprocmodule *__restrict exclude_module) {
+__dlsym(struct kproc *__restrict proc, struct kprocmodule *__restrict start_module,
+        struct ksymbol *__restrict sym, struct kprocmodule *__restrict exclude_module) {
  /* Must prefer symbols from modules that are already relocated
   * in order to prevent symbols from being defined multiple
   * times when originating from different modules.
@@ -109,10 +101,10 @@ __dlsym(struct kproc *__restrict proc,
   * >> }
   */
 #if 0
- return __new_dlsym(proc,start_module,name,name_size,name_hash,exclude_module);
+ return __new_dlsym(proc,start_module,sym,exclude_module);
 #else
- void        *result = __reloc_dlsym(proc,start_module,name,name_size,name_hash,exclude_module);
- if (!result) result =   __new_dlsym(proc,start_module,name,name_size,name_hash,exclude_module);
+ void        *result = __reloc_dlsym(proc,start_module,sym,exclude_module);
+ if (!result) result =   __new_dlsym(proc,start_module,sym,exclude_module);
  return result;
 #endif
 }
@@ -169,9 +161,7 @@ kreloc_elf32_rel_exec(Elf32_Rel const *relv, size_t relc,
      * During execution, the dynamic linker copies data associated with the
      * shared object's symbol to the location specified by the offset.
      * >> Meaning we must not search for the symbol within the current module for R_386_COPY */
-    new_address = (uintptr_t)__dlsym(proc,start_module,sym->s_name,
-                                     sym->s_nmsz,sym->s_hash,
-                                     type == R_386_COPY ? reloc_module : NULL);
+    new_address = (uintptr_t)__dlsym(proc,start_module,sym,type == R_386_COPY ? reloc_module : NULL);
     LOG(KLOG_INSANE,"[CMD %Iu] Lookup symbol: %I32u:%s %p -> %p\n",
         iter-relv,symbol,sym->s_name,iter->r_offset,new_address);
     /* TODO: Weak symbols may be initialized to NULL. */
@@ -248,12 +238,11 @@ kreloc_pe_import_exec(struct krelocvec const *__restrict self,
    *       look further down below, you'll see that we're even performing
    *       regular ELF-style dependency scanning as well! */
   new_address = __likely(hint_module)
-   ? (uintptr_t)__dlsym(proc,hint_module,sym->s_name,sym->s_nmsz,sym->s_hash,reloc_module) 
+   ? (uintptr_t)__dlsym(proc,hint_module,sym,reloc_module) 
    : 0;
   /* If we didn't already find the symbol, do a regular ELF-style symbol scan. */
   if __unlikely(!new_address) {
-   new_address = (uintptr_t)__dlsym(proc,start_module,sym->s_name,
-                                    sym->s_nmsz,sym->s_hash,reloc_module);
+   new_address = (uintptr_t)__dlsym(proc,start_module,sym,reloc_module);
   }
   if (!new_address) {
    LOG(KLOG_ERROR,"[PE][CMD %Iu] Failed to find symbol: %s\n",

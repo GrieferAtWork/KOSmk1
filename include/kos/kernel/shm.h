@@ -1234,28 +1234,6 @@ extern __crit __wunused __nonnull((1,3)) kerrno_t __kshm_ldtset_c(struct kshm *_
 #endif
 
 
-//////////////////////////////////////////////////////////////////////////
-// Copy memory to/from/in user space.
-// NOTE: These functions are simple wrappers around 'kshm_translateuser'.
-// @param: dst:   The (potentially virtual) destination address.
-// @param: src:   The (potentially virtual) source address.
-// @param: bytes: The (max) amount of bytes to transfer.
-// @return: 0 :   Success transferred all specified memory.
-// @return: * :   Amount of bytes _NOT_ transferred.
-extern __crit __nomp __wunused __nonnull((1))   __size_t kshm_copyinuser(struct kshm const *self, __user void *dst, __user void const *src, __size_t bytes);
-extern __crit __nomp __wunused __nonnull((1,3)) __size_t kshm_copytouser(struct kshm const *self, __user void *dst, __kernel void const *src, __size_t bytes);
-extern __crit __nomp __wunused __nonnull((1,2)) __size_t kshm_copyfromuser(struct kshm const *self, __kernel void *dst, __user void const *src, __size_t bytes);
-
-//////////////////////////////////////////////////////////////////////////
-// Similar to the !*_w-versions, but allows for
-// write-access to otherwise read-only regions of memory.
-// Copy-on-write style semantics are still active for
-// such areas of memory, meaning that writing to such
-// a read-only region will follow the same chain of
-// commands, as well as share the same set of semantics
-// implied when if the region was writable.
-extern __crit __nomp __wunused __nonnull((1))   __size_t kshm_copyinuser_w(struct kshm const *self, __user void *dst, __user void const *src, __size_t bytes);
-extern __crit __nomp __wunused __nonnull((1,3)) __size_t kshm_copytouser_w(struct kshm const *self, __user void *dst, __kernel void const *src, __size_t bytes);
 
 struct ktranslator {
  struct kshm           *t_shm;  /*< [1..1][const] Associated SHM. */
@@ -1346,9 +1324,8 @@ ktranslator_quit(struct ktranslator *__restrict self) {
 // @return: * :       The physical counterpart to the given virtual address.
 // @return: NULL :    '*rwbytes' was set to ZERO(0) because the given pointer isn't mapped.
 extern __crit __wunused __nonnull((1,4)) __kernel void *
-ktranslator_exec(struct ktranslator *__restrict self,
-                 __user void const *addr, __size_t maxbytes,
-                 __kernel __size_t *__restrict rwbytes, int writable);
+ktranslator_exec(struct ktranslator *__restrict self, __user void const *addr,
+                 __size_t maxbytes, __kernel __size_t *__restrict rwbytes, int writable);
 
 //////////////////////////////////////////////////////////////////////////
 // Same 'ktranslator_exec', but allows write-access to otherwise
@@ -1359,9 +1336,13 @@ ktranslator_exec(struct ktranslator *__restrict self,
 //          '.text' sections, yet is required during processes,
 //          such as dynamic relocations.
 extern __crit __wunused __nonnull((1,4)) __kernel void *
-ktranslator_wexec(struct ktranslator *__restrict self,
-                  __user void *addr, __size_t maxbytes,
-                  __kernel __size_t *__restrict rwbytes);
+ktranslator_wexec(struct ktranslator *__restrict self, __user void *addr,
+                  __size_t maxbytes, __kernel __size_t *__restrict rwbytes);
+
+extern __crit __wunused __nonnull((1)) __kernel void *
+ktranslator_qexec(struct ktranslator *__restrict self, __user void *addr, int writable);
+extern __crit __wunused __nonnull((1)) __kernel void *
+ktranslator_qwexec(struct ktranslator *__restrict self, __user void *addr);
 #else
 extern __crit __wunused __nonnull((1,3)) __kernel void *
 __ktranslator_exec_impl(struct ktranslator *__restrict self,
@@ -1372,17 +1353,166 @@ extern __crit __wunused __nonnull((1,3)) __kernel void *
 __ktranslator_wexec_impl(struct ktranslator *__restrict self,
                          __user void *addr,
                          __kernel __size_t *__restrict rwbytes);
-#define ktranslator_exec(self,addr,maxbytes,rwbytes,writable) \
+extern __crit __wunused __nonnull((1)) __kernel void *
+__ktranslator_w1qexec_impl(struct ktranslator *__restrict self,
+                           __user void const *addr);
+extern __crit __wunused __nonnull((1)) __kernel void *
+__ktranslator_qwexec_impl(struct ktranslator *__restrict self,
+                          __user void *addr);
+#define __ktranslator_w0qexec_impl(self,addr) \
+ kpagedir_translate_flags((self)->t_epd,addr,X86_PTE_FLAG_PRESENT)
+#define __ktranslator_qexec_impl(self,addr,writable) \
+ ((writable) ? __ktranslator_w1qexec_impl(self,addr) \
+             : __ktranslator_w0qexec_impl(self,addr))
+#define __ktranslator_exec(self,addr,maxbytes,rwbytes,writable) \
  (*(rwbytes) = (maxbytes),__ktranslator_exec_impl(self,addr,rwbytes,writable))
-#define ktranslator_wexec(self,addr,maxbytes,rwbytes) \
+#define __ktranslator_wexec(self,addr,maxbytes,rwbytes) \
  (*(rwbytes) = (maxbytes),__ktranslator_wexec_impl(self,addr,rwbytes))
+#define __ktranslator_qexec   __ktranslator_qexec_impl
+#define __ktranslator_qwexec  __ktranslator_qwexec_impl
+#define ktranslator_exec(self,addr,maxbytes,rwbytes,writable) \
+ ((__builtin_constant_p(maxbytes) && !KPAGEDIR_MAYBE_QUICKACCESS(maxbytes))\
+  ? __ktranslator_exec(self,addr,maxbytes,rwbytes,writable)\
+  : __xblock({ __user void const *__addr = (addr); __size_t const __maxbytes = (maxbytes);\
+               __xreturn KPAGEDIR_CAN_QUICKACCESS(__addr,__maxbytes)\
+                ? (*(rwbytes) = __maxbytes,__ktranslator_qexec(self,__addr,writable))\
+                : __ktranslator_exec(self,__addr,__maxbytes,rwbytes,writable);\
+    }))
+#define ktranslator_wexec(self,addr,maxbytes,rwbytes) \
+ ((__builtin_constant_p(maxbytes) && !KPAGEDIR_MAYBE_QUICKACCESS(maxbytes))\
+  ? __ktranslator_wexec(self,addr,maxbytes,rwbytes)\
+  : __xblock({ __user void *__addr = (addr); __size_t const __maxbytes = (maxbytes);\
+               __xreturn KPAGEDIR_CAN_QUICKACCESS(__addr,__maxbytes)\
+                ? (*(rwbytes) = __maxbytes,__ktranslator_qwexec(self,addr))\
+                : __ktranslator_wexec(self,addr,maxbytes,rwbytes);\
+    }))
+#define ktranslator_qexec   __ktranslator_qexec
+#define ktranslator_qwexec  __ktranslator_qwexec
 #endif
 
+
+#ifdef __INTELLISENSE__
 extern __size_t ktranslator_copyinuser(struct ktranslator *__restrict self, __user void *dst, __user void const *src, __size_t bytes);
 extern __size_t ktranslator_copytouser(struct ktranslator *__restrict self, __user void *dst, __kernel void const *src, __size_t bytes);
 extern __size_t ktranslator_copyfromuser(struct ktranslator *__restrict self, __kernel void *dst, __user void const *src, __size_t bytes);
 extern __size_t ktranslator_copyinuser_w(struct ktranslator *__restrict self, __user void *dst, __user void const *src, __size_t bytes);
 extern __size_t ktranslator_copytouser_w(struct ktranslator *__restrict self, __user void *dst, __kernel void const *src, __size_t bytes);
+#else
+extern __size_t __ktranslator_copyinuser_impl(struct ktranslator *__restrict self, __user void *dst, __user void const *src, __size_t bytes);
+extern __size_t __ktranslator_copytouser_impl(struct ktranslator *__restrict self, __user void *dst, __kernel void const *src, __size_t bytes);
+extern __size_t __ktranslator_copyfromuser_impl(struct ktranslator *__restrict self, __kernel void *dst, __user void const *src, __size_t bytes);
+extern __size_t __ktranslator_copyinuser_w_impl(struct ktranslator *__restrict self, __user void *dst, __user void const *src, __size_t bytes);
+extern __size_t __ktranslator_copytouser_w_impl(struct ktranslator *__restrict self, __user void *dst, __kernel void const *src, __size_t bytes);
+__local __size_t
+__ktranslator_q_copyinuser_impl(struct ktranslator *__restrict self,
+                                __user void *dst, __user void const *src,
+                                __size_t bytes) {
+ __kernel void *kdst,*ksrc;
+ if __unlikely((kdst = ktranslator_qexec(self,dst,1)) == NULL ||
+               (ksrc = ktranslator_qexec(self,src,0)) == NULL) return bytes;
+ memcpy(kdst,ksrc,bytes);
+ return 0;
+}
+__local __size_t
+__ktranslator_q_copytouser_impl(struct ktranslator *__restrict self,
+                                __user void *dst, __kernel void const *src,
+                                __size_t bytes) {
+ __kernel void *kdst = ktranslator_qexec(self,dst,1);
+ if __unlikely(!kdst) return bytes;
+ memcpy(kdst,src,bytes);
+ return 0;
+}
+__local __size_t
+__ktranslator_q_copyfromuser_impl(struct ktranslator *__restrict self,
+                                  __kernel void *dst, __user void const *src,
+                                  __size_t bytes) {
+ __kernel void *ksrc = ktranslator_qexec(self,src,0);
+ if __unlikely(!ksrc) return bytes;
+ memcpy(dst,ksrc,bytes);
+ return 0;
+}
+__local __size_t
+__ktranslator_q_copyinuser_w_impl(struct ktranslator *__restrict self,
+                                  __user void *dst, __user void const *src,
+                                  __size_t bytes) {
+ __kernel void *kdst,*ksrc;
+ if __unlikely((kdst = ktranslator_qwexec(self,dst)) == NULL ||
+               (ksrc = ktranslator_qexec(self,src,0)) == NULL) return bytes;
+ memcpy(kdst,ksrc,bytes);
+ return 0;
+}
+__local __size_t
+__ktranslator_q_copytouser_w_impl(struct ktranslator *__restrict self,
+                                  __user void *dst, __kernel void const *src,
+                                  __size_t bytes) {
+ __kernel void *kdst = ktranslator_qwexec(self,dst);
+ if __unlikely(!kdst) return bytes;
+ memcpy(kdst,src,bytes);
+ return 0;
+}
+__forcelocal __size_t
+ktranslator_copyinuser(struct ktranslator *__restrict self,
+                       __user void *dst, __user void const *src,
+                       __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __ktranslator_copyinuser_impl(self,dst,src,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(dst,bytes) &&
+            KPAGEDIR_CAN_QUICKACCESS(src,bytes)) {
+  return __ktranslator_q_copyinuser_impl(self,dst,src,bytes);
+ } else {
+  return __ktranslator_copyinuser_impl(self,dst,src,bytes);
+ }
+}
+__forcelocal __size_t
+ktranslator_copytouser(struct ktranslator *__restrict self,
+                       __user void *dst, __kernel void const *src,
+                       __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __ktranslator_copytouser_impl(self,dst,src,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(dst,bytes)) {
+  return __ktranslator_q_copytouser_impl(self,dst,src,bytes);
+ } else {
+  return __ktranslator_copytouser_impl(self,dst,src,bytes);
+ }
+}
+__forcelocal __size_t
+ktranslator_copyfromuser(struct ktranslator *__restrict self,
+                         __kernel void *dst, __user void const *src,
+                         __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __ktranslator_copyfromuser_impl(self,dst,src,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(src,bytes)) {
+  return __ktranslator_q_copyfromuser_impl(self,dst,src,bytes);
+ } else {
+  return __ktranslator_copyfromuser_impl(self,dst,src,bytes);
+ }
+}
+__forcelocal __size_t
+ktranslator_copyinuser_w(struct ktranslator *__restrict self,
+                         __user void *dst, __user void const *src,
+                         __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __ktranslator_copyinuser_w_impl(self,dst,src,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(dst,bytes) &&
+            KPAGEDIR_CAN_QUICKACCESS(src,bytes)) {
+  return __ktranslator_q_copyinuser_w_impl(self,dst,src,bytes);
+ } else {
+  return __ktranslator_copyinuser_w_impl(self,dst,src,bytes);
+ }
+}
+__forcelocal __size_t
+ktranslator_copytouser_w(struct ktranslator *__restrict self,
+                         __user void *dst, __kernel void const *src,
+                         __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __ktranslator_copytouser_w_impl(self,dst,src,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(dst,bytes)) {
+  return __ktranslator_q_copytouser_w_impl(self,dst,src,bytes);
+ } else {
+  return __ktranslator_copytouser_w_impl(self,dst,src,bytes);
+ }
+}
+#endif
 
 
 
@@ -1406,7 +1536,7 @@ extern __size_t ktranslator_copytouser_w(struct ktranslator *__restrict self, __
 // @return: * :       The physical counterpart to the given virtual address.
 // @return: NULL :    '*rwbytes' was set to ZERO(0) because the given pointer isn't mapped.
 extern __crit __nomp __wunused __nonnull((1,2,5)) __kernel void *
-kshm_translateuser(struct kshm const *__restrict self, struct kpagedir const *epd,
+kshm_translateuser(struct kshm const *__restrict self, struct kpagedir const *__restrict epd,
                    __user void const *addr, __size_t maxbytes,
                    __size_t *__restrict rwbytes, int writable);
 
@@ -1419,21 +1549,207 @@ kshm_translateuser(struct kshm const *__restrict self, struct kpagedir const *ep
 //          '.text' sections, yet is required during processes,
 //          such as dynamic relocations.
 extern __crit __nomp __wunused __nonnull((1,2,5)) __kernel void *
-kshm_translateuser_w(struct kshm const *__restrict self, struct kpagedir const *epd,
-                     __user void *addr, __size_t maxbytes,
-                     __size_t *__restrict rwbytes);
+kshm_wtranslateuser(struct kshm const *__restrict self, struct kpagedir const *__restrict epd,
+                    __user void *addr, __size_t maxbytes,
+                    __size_t *__restrict rwbytes);
+
+//////////////////////////////////////////////////////////////////////////
+// Quick-translate a given address.
+// WARNING: Only use this if 'KPAGEDIR_CAN_QUICKACCESS' returned true.
+extern __crit __nomp __wunused __nonnull((1,2)) __kernel void *
+kshm_qtranslateuser(struct kshm const *__restrict self,
+                    struct kpagedir const *__restrict epd,
+                    __user void *addr, int writable);
+extern __crit __nomp __wunused __nonnull((1,2)) __kernel void *
+kshm_qwtranslateuser(struct kshm const *__restrict self,
+                     struct kpagedir const *__restrict epd,
+                     __user void *addr);
 #else
 extern __crit __nomp __wunused __nonnull((1,2,4)) __kernel void *
-__kshm_translateuser_impl(struct kshm const *__restrict self, struct kpagedir const *epd,
+__kshm_translateuser_impl(struct kshm const *__restrict self, struct kpagedir const *__restrict epd,
                           __user void const *addr, __size_t *__restrict rwbytes, int writable);
 extern __crit __nomp __wunused __nonnull((1,2,4)) __kernel void *
-__kshm_translateuser_w_impl(struct kshm const *__restrict self, struct kpagedir const *epd,
-                            __user void *addr, __size_t *__restrict rwbytes);
-#define kshm_translateuser(self,epd,addr,maxbytes,rwbytes,writable) \
+__kshm_wtranslateuser_impl(struct kshm const *__restrict self, struct kpagedir const *__restrict epd,
+                           __user void *addr, __size_t *__restrict rwbytes);
+extern __crit __nomp __wunused __nonnull((1,2)) __kernel void *
+__kshm_qwtranslateuser_impl(struct kshm const *__restrict self,
+                            struct kpagedir const *__restrict epd, __user void const *addr);
+extern __crit __nomp __wunused __nonnull((1,2)) __kernel void *
+__kshm_w1qtranslateuser_impl(struct kshm const *__restrict self,
+                             struct kpagedir const *__restrict epd, __user void const *addr);
+#define __kshm_w0qtranslateuser_impl(self,epd,addr)\
+ kpagedir_translate_flags(epd,addr,X86_PTE_FLAG_PRESENT)
+#define __kshm_qtranslateuser_impl(self,epd,addr,writable) \
+ ((writable) ? __kshm_w1qtranslateuser_impl(self,epd,addr)\
+             : __kshm_w0qtranslateuser_impl(self,epd,addr))
+#define __kshm_qtranslateuser  __kshm_qtranslateuser_impl
+#define __kshm_qwtranslateuser __kshm_qwtranslateuser_impl
+#define __kshm_translateuser(self,epd,addr,maxbytes,rwbytes,writable) \
  (*(rwbytes) = (maxbytes),__kshm_translateuser_impl(self,epd,addr,rwbytes,writable))
-#define kshm_translateuser_w(self,epd,addr,maxbytes,rwbytes) \
- (*(rwbytes) = (maxbytes),__kshm_translateuser_w_impl(self,epd,addr,rwbytes))
+#define __kshm_wtranslateuser(self,epd,addr,maxbytes,rwbytes) \
+ (*(rwbytes) = (maxbytes),__kshm_wtranslateuser_impl(self,epd,addr,rwbytes))
+#define kshm_translateuser(self,epd,addr,maxbytes,rwbytes,writable) \
+ ((__builtin_constant_p(maxbytes) && !KPAGEDIR_MAYBE_QUICKACCESS(maxbytes))\
+  ? __kshm_translateuser(self,epd,addr,maxbytes,rwbytes,writable)\
+  : __xblock({ __user void const *__addr = (addr); __size_t const __maxbytes = (maxbytes);\
+               __xreturn KPAGEDIR_CAN_QUICKACCESS(__addr,__maxbytes)\
+                ? (*(rwbytes) = __maxbytes,__kshm_qtranslateuser(self,epd,addr,writable))\
+                : __kshm_translateuser(self,epd,__addr,__maxbytes,rwbytes,writable);\
+    }))
+#define kshm_wtranslateuser(self,epd,addr,maxbytes,rwbytes) \
+ ((__builtin_constant_p(maxbytes) && !KPAGEDIR_MAYBE_QUICKACCESS(maxbytes))\
+  ? __kshm_wtranslateuser(self,epd,addr,maxbytes,rwbytes)\
+  : __xblock({ __user void *__addr = (addr); __size_t const __maxbytes = (maxbytes);\
+               __xreturn KPAGEDIR_CAN_QUICKACCESS(__addr,__maxbytes)\
+                ? (*(rwbytes) = __maxbytes,__kshm_qwtranslateuser(self,epd,addr))\
+                : __kshm_wtranslateuser(self,epd,__addr,__maxbytes,rwbytes);\
+    }))
+#define kshm_qtranslateuser   __kshm_qtranslateuser
+#define kshm_qwtranslateuser  __kshm_qwtranslateuser
 #endif
+
+
+//////////////////////////////////////////////////////////////////////////
+// Copy memory to/from/in user space.
+// NOTE: These functions are simple wrappers around 'kshm_translateuser'.
+// @param: dst:   The (potentially virtual) destination address.
+// @param: src:   The (potentially virtual) source address.
+// @param: bytes: The (max) amount of bytes to transfer.
+// @return: 0 :   Success transferred all specified memory.
+// @return: * :   Amount of bytes _NOT_ transferred.
+#ifdef __INTELLISENSE__
+extern __crit __nomp __wunused __nonnull((1))   __size_t kshm_copyinuser(struct kshm const *self, __user void *dst, __user void const *src, __size_t bytes);
+extern __crit __nomp __wunused __nonnull((1,3)) __size_t kshm_copytouser(struct kshm const *self, __user void *dst, __kernel void const *src, __size_t bytes);
+extern __crit __nomp __wunused __nonnull((1,2)) __size_t kshm_copyfromuser(struct kshm const *self, __kernel void *dst, __user void const *src, __size_t bytes);
+#else
+extern __crit __nomp __wunused __nonnull((1))   __size_t __kshm_copyinuser_impl(struct kshm const *self, __user void *dst, __user void const *src, __size_t bytes);
+extern __crit __nomp __wunused __nonnull((1,3)) __size_t __kshm_copytouser_impl(struct kshm const *self, __user void *dst, __kernel void const *src, __size_t bytes);
+extern __crit __nomp __wunused __nonnull((1,2)) __size_t __kshm_copyfromuser_impl(struct kshm const *self, __kernel void *dst, __user void const *src, __size_t bytes);
+__local __crit __nomp __wunused __nonnull((1)) __size_t
+__kshm_q_copyinuser_impl(struct kshm const *self, __user void *dst,
+                         __user void const *src, __size_t bytes) {
+ __kernel void *kdst,*ksrc;
+ if __unlikely((kdst = kshm_qtranslateuser(self,self->s_pd,dst,1)) == NULL ||
+               (ksrc = kshm_qtranslateuser(self,self->s_pd,src,0)) == NULL) return bytes;
+ memcpy(kdst,ksrc,bytes);
+ return 0;
+}
+__local __crit __nomp __wunused __nonnull((1,3)) __size_t
+__kshm_q_copytouser_impl(struct kshm const *self, __user void *dst,
+                         __kernel void const *src, __size_t bytes) {
+ __kernel void *kdst;
+ if __unlikely((kdst = kshm_qtranslateuser(self,self->s_pd,dst,1)) == NULL) return bytes;
+ memcpy(kdst,src,bytes);
+ return 0;
+}
+__local __crit __nomp __wunused __nonnull((1,2)) __size_t
+__kshm_q_copyfromuser_impl(struct kshm const *self, __kernel void *dst,
+                         __user void const *src, __size_t bytes) {
+ __kernel void *ksrc;
+ if __unlikely((ksrc = kshm_qtranslateuser(self,self->s_pd,src,0)) == NULL) return bytes;
+ memcpy(dst,ksrc,bytes);
+ return 0;
+}
+
+__forcelocal __size_t
+kshm_copyinuser(struct kshm *__restrict self,
+                __user void *dst, __user void const *src,
+                __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __kshm_copyinuser_impl(self,dst,src,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(dst,bytes) &&
+            KPAGEDIR_CAN_QUICKACCESS(src,bytes)) {
+  return __kshm_q_copyinuser_impl(self,dst,src,bytes);
+ } else {
+  return __kshm_copyinuser_impl(self,dst,src,bytes);
+ }
+}
+__forcelocal __size_t
+kshm_copytouser(struct kshm *__restrict self,
+                __user void *dst, __kernel void const *src,
+                __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __kshm_copytouser_impl(self,dst,src,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(dst,bytes)) {
+  return __kshm_q_copytouser_impl(self,dst,src,bytes);
+ } else {
+  return __kshm_copytouser_impl(self,dst,src,bytes);
+ }
+}
+__forcelocal __size_t
+kshm_copyfromuser(struct kshm *__restrict self,
+                  __kernel void *dst, __user void const *src,
+                  __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __kshm_copyfromuser_impl(self,dst,src,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(src,bytes)) {
+  return __kshm_q_copyfromuser_impl(self,dst,src,bytes);
+ } else {
+  return __kshm_copyfromuser_impl(self,dst,src,bytes);
+ }
+}
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+// Similar to the !*_w-versions, but allows for
+// write-access to otherwise read-only regions of memory.
+// Copy-on-write style semantics are still active for
+// such areas of memory, meaning that writing to such
+// a read-only region will follow the same chain of
+// commands, as well as share the same set of semantics
+// implied when if the region was writable.
+#ifdef __INTELLISENSE__
+extern __crit __nomp __wunused __nonnull((1))   __size_t kshm_copyinuser_w(struct kshm const *self, __user void *dst, __user void const *src, __size_t bytes);
+extern __crit __nomp __wunused __nonnull((1,3)) __size_t kshm_copytouser_w(struct kshm const *self, __user void *dst, __kernel void const *src, __size_t bytes);
+#else
+extern __crit __nomp __wunused __nonnull((1))   __size_t __kshm_copyinuser_w_impl(struct kshm const *self, __user void *dst, __user void const *src, __size_t bytes);
+extern __crit __nomp __wunused __nonnull((1,3)) __size_t __kshm_copytouser_w_impl(struct kshm const *self, __user void *dst, __kernel void const *src, __size_t bytes);
+__local __size_t
+__kshm_q_copyinuser_w_impl(struct kshm *__restrict self,
+                           __user void *dst, __user void const *src,
+                           __size_t bytes) {
+ __kernel void *kdst,*ksrc;
+ if __unlikely((kdst = kshm_qwtranslateuser(self,self->s_pd,dst)) == NULL ||
+               (ksrc = kshm_qtranslateuser(self,self->s_pd,src,0)) == NULL) return bytes;
+ memcpy(kdst,ksrc,bytes);
+ return 0;
+}
+__local __size_t
+__kshm_q_copytouser_w_impl(struct kshm *__restrict self,
+                           __user void *dst, __kernel void const *src,
+                           __size_t bytes) {
+ __kernel void *kdst = kshm_qwtranslateuser(self,self->s_pd,dst);
+ if __unlikely(!kdst) return bytes;
+ memcpy(kdst,src,bytes);
+ return 0;
+}
+__forcelocal __size_t
+kshm_copyinuser_w(struct kshm *__restrict self,
+                  __user void *dst, __user void const *src,
+                  __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __kshm_copyinuser_w_impl(self,dst,src,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(dst,bytes) &&
+            KPAGEDIR_CAN_QUICKACCESS(src,bytes)) {
+  return __kshm_q_copyinuser_w_impl(self,dst,src,bytes);
+ } else {
+  return __kshm_copyinuser_w_impl(self,dst,src,bytes);
+ }
+}
+__forcelocal __size_t
+kshm_copytouser_w(struct kshm *__restrict self,
+                  __user void *dst, __kernel void const *src,
+                  __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __kshm_copytouser_w_impl(self,dst,src,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(dst,bytes)) {
+  return __kshm_q_copytouser_w_impl(self,dst,src,bytes);
+ } else {
+  return __kshm_copytouser_w_impl(self,dst,src,bytes);
+ }
+}
+#endif
+
 
 
 //////////////////////////////////////////////////////////////////////////

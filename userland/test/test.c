@@ -41,7 +41,7 @@ static void run_test(test_t test) {
 
 
 int main(void) {
-#define RUN(name) { extern TEST(name); run_test(&_test__##name); }
+#define RUN(name) { extern TEST(name); run_test(&NAME(name)); }
  RUN(exceptions);
  RUN(quote);
  RUN(tls);
