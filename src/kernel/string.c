@@ -42,6 +42,7 @@ __copy_from_user_c(__kernel void *__restrict dst,
  KTASK_CRIT_MARK
  USER_FOREACH_BEGIN(src,bytes,kpt,maxbytes,0) {
   memcpy(dst,kpt,maxbytes);
+  *(uintptr_t *)&dst += maxbytes;
  } USER_FOREACH_END({
   return USER_FOREACH_PENDING;
  });
@@ -55,6 +56,7 @@ __copy_to_user_c(__user void *dst,
  KTASK_CRIT_MARK
  USER_FOREACH_BEGIN(dst,bytes,kptr,maxbytes,1) {
   memcpy(kptr,src,maxbytes);
+  *(uintptr_t *)&src += maxbytes;
  } USER_FOREACH_END({
   return USER_FOREACH_PENDING;
  });

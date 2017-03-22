@@ -64,4 +64,6 @@ TEST(unaligned) {
  /* Make sure the output matches the input. */
  assertf(!memcmp(buf,data,sizeof(data)),"%.?q != %.?q",
          sizeof(data),buf,sizeof(data),data);
+
+ free(p);
 }
