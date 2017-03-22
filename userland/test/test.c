@@ -45,6 +45,7 @@ int main(void) {
  RUN(exceptions);
  RUN(quote);
  RUN(tls);
+ RUN(unaligned);
 #undef RUN
  return 0;
 }

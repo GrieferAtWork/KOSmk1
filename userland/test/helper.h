@@ -40,6 +40,11 @@ static __attribute_unused void outf(char const *fmt, ...) {
 }
 
 
+#include <assert.h>
+#include <string.h>
+#include <errno.h>
+#define ASSERT_ERRNO(expr) \
+ { if (!(expr)) assertf(0,"Operation " #expr " failed: %d: %s",errno,strerror(errno)); }
 
 
 
