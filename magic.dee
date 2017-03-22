@@ -135,6 +135,7 @@ local default_attrib = dict {
 		"-Wall",
 		"-Wno-nonnull-compare",
 		"-Wno-comment",
+		//"-no-integrated-cpp",
 	},
 	.include = list {
 		"include",

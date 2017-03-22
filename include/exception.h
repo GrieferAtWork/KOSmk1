@@ -51,6 +51,10 @@ extern __noreturn void exc_continue __P((void));
 #define exc_finally   KEXCEPT_FINALLY
 #define exc_except    KEXCEPT_EXCEPT
 
+#undef __KEXCEPT_EXCEPT_BEGIN_RETHROW
+#define __KEXCEPT_EXCEPT_BEGIN_RETHROW \
+ exc_rethrow() /*< Reduce binary size by not inlining this. */
+
 #if 0  /* Not really a good idea... */
 #ifndef __STDC_PURE__
 #define try      __try

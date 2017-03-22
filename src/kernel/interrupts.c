@@ -221,6 +221,15 @@ void __kirq_default_handler(struct kirq_registers *regs) {
   struct ktask *caller = ktask_self();
   info = kirq_getsiginfo(regs->regs.intno);
   if __unlikely(KE_ISERR(kmem_validateob(caller))) caller = NULL;
+  /* Try to call a userspace exception handler. */
+  if (kirq_registers_isuser(regs) &&
+     (caller && ktask_isusertask(caller))) {
+   if (KE_ISOK(ktask_raise_irq_exception(caller,regs))) return;
+   /* TODO: Don't cause kernel panic at this point.
+    *     - It's not out fault and we can just
+    *       terminate the associated process! */
+  }
+
   k_syslogf(KLOG_ERROR,"\nTask: %I32u|%Iu: %s"
             "\nException code received %u|%u\n>> [%s] %s\n",
             caller ? caller->t_proc->p_pid : -1,

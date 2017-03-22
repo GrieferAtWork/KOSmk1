@@ -31,6 +31,7 @@
 #include <exception.h>
 #include <stdarg.h>
 #include <traceback.h>
+#include <mod.h>
 
 static void outf(char const *fmt, ...) {
  va_list args;
@@ -67,24 +68,33 @@ static __noreturn void handler(void) {
 int main(void) {
  /* Reminder: This file gets compiler with GCC. - Not VC/VC++! */
  register int x = 42;
-#define get_esp() __xblock({ void *r; __asm__("mov %%esp, %0\n" : "=r" (r)); __xreturn r; })
 
  __try {
-  KEXCEPT_TRY_H(&handler) { exc_raise(69); }
- } __except(1) {
-  assert(exc_code() == 69);
+  /* Time to mess things up! */
+  char *p = (char *)0xdeadbeef;
+  for (;;) {
+   *p++ = '\xAA';
+  }
+ } __except (exc_code() == KEXCEPTION_SEGFAULT) {
+  syminfo_t *syminfo; void *eip;
+  /* Figure out what kind of segfault this is. */
+  char const *mode = (exc_current->ex_info&KEXCEPTIONINFO_SEGFAULT_WRITE) ? "writing" : "reading";
+  outf("Segfault occurred while %s address %p\n",
+       mode,exc_current->ex_ptr[0]);
+  eip = (void *)tls_self->u_exstate.eip;
+  outf("Exception occurred at %p\n",eip);
+  /* Figure out some symbol information about the EIP. */
+  syminfo = mod_addrinfo(MOD_ALL,eip,NULL,0,MOD_SYMINFO_ALL);
+  if (!syminfo) perror("mod_addrinfo");
+  else {
+   /* Print file,line and function name of where the error occurred
+    * (All using the very helpful system interfaces of KOS).
+    * NOTE: Again: This will only work if you're compiling in debug-mode. */
+   outf("%s(%d) : %s : See reference to source code location\n",
+        syminfo->si_file,syminfo->si_line+1,syminfo->si_name);
+   free(syminfo);
+  }
  }
- assert(exc_code() == 0);
-
- outf("Before try %d (%p)\n",x,get_esp());
- __try {
-  outf("Before raise %d (%p)\n",x,get_esp());
-  exc_raise(KEXCEPTION_TEST);
-  outf("After raise %d (%p)\n",x,get_esp());
- } __finally {
-  outf("In finally %d (%p)\n",x,get_esp());
- }
- outf("After finally %d (%p)\n",x,get_esp());
 
 #if 0
  ptrdiff_t off = tls_alloc(NULL,1);

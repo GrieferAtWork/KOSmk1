@@ -33,6 +33,10 @@
 #include <stddef.h>
 #include <string.h>
 #endif
+#ifdef __i386__
+#include <kos/arch/x86/irq.h>
+#endif
+#endif
 
 __DECL_BEGIN
 
@@ -41,9 +45,36 @@ __DECL_BEGIN
 #endif
 
 #define KEXCEPTION_NONE   0
-#define KEXCEPTION_TEST   1
-#define KEXCEPTION_COUNT  256
 
+#ifdef __i386__
+#define KEXCEPTION_X86_IRQ(num) (16+(num))
+#define KEXCEPTION_DIVIDE_BY_ZERO   KEXCEPTION_X86_IRQ(KARCH_X64_IRQ_DE)
+#define KEXCEPTION_OVERFLOW         KEXCEPTION_X86_IRQ(KARCH_X64_IRQ_OF)
+#define KEXCEPTION_BOUND_RANGE      KEXCEPTION_X86_IRQ(KARCH_X64_IRQ_BR)
+#define KEXCEPTION_INVALID_OPCODE   KEXCEPTION_X86_IRQ(KARCH_X64_IRQ_UD)
+#define KEXCEPTION_PROTECTION_FAULT KEXCEPTION_X86_IRQ(KARCH_X64_IRQ_GP)
+
+//////////////////////////////////////////////////////////////////////////
+// Segfault (aka. Access Violation)
+// This exception is the most interesting one, because it is
+// generated when trying to access an invalid memory location.
+// Additional exception information is stored in the 'ex_info'
+// and 'ex_ptr' fields of the accompanying exception record:
+// ex_info:   Set of 'KEXCEPTIONINFO_SEGFAULT_*'
+// ex_ptr[0]: Virtual address that you attempted to access.
+#define KEXCEPTION_SEGFAULT         KEXCEPTION_X86_IRQ(KARCH_X64_IRQ_PF)
+#define KEXCEPTIONINFO_SEGFAULT_NONE        0x00000000
+#define KEXCEPTIONINFO_SEGFAULT_PRESENT     0x00000001 /*< When set, the associated page is present (NOTE: Not set if the page belongs to the kernel). */
+#define KEXCEPTIONINFO_SEGFAULT_WRITE       0x00000002 /*< Set if the fault was caused by a write operation (Otherwise it was a read). */
+#define KEXCEPTIONINFO_SEGFAULT_INSTR_FETCH 0x00000010 /*< Set if the fault happened during an instruction fetch (aka.: because you jumped to unmapped memory). */
+#endif
+
+
+#define KEXCEPTION_COUNT    256 /*< Number of exceptions reserved for internal use (When defining your own, only use indices >= this) */
+#define KEXCEPTION_USER(i) (KEXCEPTION_COUNT+(i)) /*< Generate a user exception number, given an ID >= 0. */
+
+
+#ifndef __KERNEL__
 /* Continue execution where the exception occurred
  * WARNING: Don't use this if you don't know what you're doing!
  *          After doing work somewhere further down the stack from
@@ -176,14 +207,16 @@ __DECL_BEGIN
             (void)0;\
  })
 #define __KEXCEPT_FINALLY_END \
- (kexcept_code() != KEXCEPTION_NONE ? kexcept_rethrow() : (void)0)
+ (kexcept_code() ? kexcept_rethrow() : (void)0)
 
 /* Except begin/end */
+#define __KEXCEPT_EXCEPT_BEGIN_CONTINUE   kexcept_continue()
+#define __KEXCEPT_EXCEPT_BEGIN_RETHROW    kexcept_rethrow()
 #define __KEXCEPT_EXCEPT_BEGIN(expr) \
  __xblock({ __asm__(__KEXCEPT_LOADREGS_S : : : "memory", "esp");\
             switch ((int)(expr)) {\
-             case KEXCEPTION_CONTINUE_EXECUTION: kexcept_continue();\
-             case KEXCEPTION_CONTINUE_SEARCH:    kexcept_rethrow();\
+             case KEXCEPTION_CONTINUE_EXECUTION: __KEXCEPT_EXCEPT_BEGIN_CONTINUE;\
+             case KEXCEPTION_CONTINUE_SEARCH:    __KEXCEPT_EXCEPT_BEGIN_RETHROW;\
              default: break;\
             }\
             (void)0;\
@@ -446,8 +479,8 @@ __local void kexcept_raise __D1(kexno_t,__no) {
 }
 #endif
 #endif /* !__ASSEMBLY__ */
+#endif /* !__KERNEL__ */
 
 __DECL_END
-#endif /* !__KERNEL__ */
 
 #endif /* !__KOS_EXCEPTION_H__ */

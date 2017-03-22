@@ -34,7 +34,9 @@
 #include <malloc.h>
 #include <math.h>
 #include <stddef.h>
+#include <string.h>
 #include <strings.h>
+#include <kos/exception.h>
 #if !KCONFIG_HAVE_TASK_STATS_START
 #include <kos/kernel/time.h>
 #endif /* !KCONFIG_HAVE_TASK_STATS_START */
@@ -700,6 +702,104 @@ ktlspt_setname(struct ktlspt *__restrict self,
  uthread = (struct kuthread *)self->pt_uregion->sre_chunk.sc_partv[0].sp_frame;
  strncpy(uthread->u_name,name,KUTHREAD_NAMEMAX);
 }
+
+kerrno_t
+ktask_raise_exception(struct ktask *__restrict self,
+                      struct kirq_registers *__restrict regs,
+                      struct kexinfo const *__restrict exinfo) {
+ __kernel struct kuthread *uthread;
+ struct ktranslator trans; size_t copy_error;
+ struct kexrecord exrecord; kerrno_t error;
+ __user struct kexrecord *exaddr;
+ kassert_ktask(self);
+ assert(ktask_isusertask(self));
+ kassertobj(regs);
+ kassertobj(exinfo);
+ kassert_ktlspt(&self->t_tls);
+ kassert_kshmregion(self->t_tls.pt_uregion);
+ assertf(exinfo->ex_no != 0,"Invalid exception number");
+ assert(self->t_tls.pt_uregion->sre_chunk.sc_pages);
+ assert(self->t_tls.pt_uregion->sre_chunk.sc_partc);
+ assert(self->t_tls.pt_uregion->sre_chunk.sc_partv[0].sp_start == 0);
+ assert(self->t_tls.pt_uregion->sre_chunk.sc_partv[0].sp_pages);
+ uthread = (struct kuthread *)self->t_tls.pt_uregion->sre_chunk.sc_partv[0].sp_frame;
+ KTASK_CRIT_BEGIN
+ if __likely(KE_ISOK(error = ktranslator_init(&trans,self))) {
+  /* Make sure this is only read once!
+   * (Because it's also used as the new ESP upon return to userspace). */
+  exaddr = uthread->u_exh;
+  __asm_volatile__("mfence\n" : : : "memory");
+  copy_error = ktranslator_copyfromuser(&trans,&exrecord,exaddr,
+                                        sizeof(struct kexrecord));
+  ktranslator_quit(&trans);
+ }
+ KTASK_CRIT_END
+ if __unlikely(KE_ISERR(error)) return error;
+ /* If the copy failed, check why it did. */
+ if __unlikely(copy_error) {
+  return exaddr ? KE_FAULT : KE_NOENT;
+ }
+ /* Update the exception handler chain. */
+ uthread->u_exh = exrecord.eh_prev;
+ /* Fill in user-accessible exception state information. */
+ uthread->u_exstate.edi    = regs->regs.edi;
+ uthread->u_exstate.esi    = regs->regs.esi;
+ uthread->u_exstate.ebp    = regs->regs.ebp;
+ uthread->u_exstate.esp    = regs->regs.useresp;
+ uthread->u_exstate.ebx    = regs->regs.ebx;
+ uthread->u_exstate.edx    = regs->regs.edx;
+ uthread->u_exstate.ecx    = regs->regs.ecx;
+ uthread->u_exstate.eax    = regs->regs.eax;
+ uthread->u_exstate.eip    = regs->regs.eip;
+ uthread->u_exstate.eflags = regs->regs.eflags;
+ memcpy(&uthread->u_exinfo,exinfo,sizeof(struct kexinfo));
+ /* Update the given registers to mirror the used handler. */
+ regs->regs.useresp = (uintptr_t)(__user void *)(exaddr+1);
+ regs->regs.eip     = (uintptr_t)(__user void *)exrecord.eh_handler;
+ return error;
+}
+
+kerrno_t
+ktask_raise_irq_exception(struct ktask *__restrict self,
+                          struct kirq_registers *__restrict regs) {
+ struct kexinfo exinfo;
+ memset(&exinfo,0,sizeof(struct kexinfo));
+ switch (regs->regs.intno) {
+#ifdef __i386__
+  case KARCH_X64_IRQ_DE:
+  case KARCH_X64_IRQ_OF:
+  case KARCH_X64_IRQ_BR:
+  case KARCH_X64_IRQ_UD:
+  case KARCH_X64_IRQ_GP:
+   exinfo.ex_no = KEXCEPTION_X86_IRQ(regs->regs.intno);
+   break;
+  case KARCH_X64_IRQ_PF:
+   exinfo.ex_no = KEXCEPTION_X86_IRQ(KARCH_X64_IRQ_PF);
+   exinfo.ex_info = regs->regs.ecode&0x00000012; /* write+instr_fetch. */
+   __asm__("movl %%cr2, %0\n" : "=r" (exinfo.ex_ptr[0]));
+   if (regs->regs.ecode&0x00000001) { /* Present. */
+    struct kshmbranch *branch;
+    struct kproc *proc = ktask_getproc(self);
+    /* Figure out if the branch is really present in userspace. */
+    if __likely(KE_ISOK(krwlock_beginread(&proc->p_shm.s_lock))) {
+     branch = kshmbranch_locate(proc->p_shm.s_map.m_root,
+                               (uintptr_t)exinfo.ex_ptr[0]);
+     if (branch) {
+      kshm_flag_t flags = branch->sb_region->sre_chunk.sc_flags;
+      if (!(flags&KSHMREGION_FLAG_RESTRICTED) ||
+           (flags&(KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE))
+          ) exinfo.ex_info |= 1; /* Present. */
+     }
+     krwlock_endread(&proc->p_shm.s_lock);
+    }
+   }
+   break;
+#endif
+  default: return KE_INVAL;
+ }
+ return ktask_raise_exception(self,regs,&exinfo);
+}
+
 
 
 __DECL_END

@@ -79,6 +79,39 @@ struct ktlspt {
 extern void ktlspt_setname(struct ktlspt *__restrict self,
                            char const *__restrict name);
 
+//////////////////////////////////////////////////////////////////////////
+// Raise a given exception 'exinfo' in the task assicated with 'SELF'.
+// For this purpose, one exception handler is popped of the handler stack
+// and the register state described by 'regs' is stored in the exinfo
+// fields of the uthread before being update to describe the previously
+// popped exception handler.
+// NOTE: The caller is responsible to ensure that the given task is
+//       suitable for use of TLS memory (aka. isn't a kernel thread)
+// HINT: You should also make sure that any IRQ exception you're raising
+//       actually originated from ring-#3 (aka. checking the 'cs' register)
+// @return: KE_OK:    Successfully performed all of the above.
+//                    You may no use 'regs' to return to userspace.
+// @return: KE_FAULT: The userspace exception handler chain contained a
+//                    faulty pointer that prevented dereferencing of
+//                    the non-NULL handler entry.
+// @return: KE_NOENT: No userspace exception handler was defined.
+extern __wunused __nonnull((1,2,3)) kerrno_t
+ktask_raise_exception(struct ktask *__restrict self,
+                      struct kirq_registers *__restrict regs,
+                      struct kexinfo const *__restrict exinfo);
+
+//////////////////////////////////////////////////////////////////////////
+// Similar to 'ktask_raise_exception', but the exception raised is an IRQ.
+// @return: KE_OK:    Sucessfully raised the exception.
+// @return: KE_FAULT: The userspace exception handler chain contained a
+//                    faulty pointer that prevented dereferencing of
+//                    the non-NULL handler entry.
+// @return: KE_NOENT: No userspace exception handler was defined.
+// @return: KE_INVAL: No userspace exception number associated with the IRQ error.
+extern __wunused __nonnull((1,2)) kerrno_t
+ktask_raise_irq_exception(struct ktask *__restrict self,
+                          struct kirq_registers *__restrict regs);
+
 #endif /* !__ASSEMBLY__ */
 
 __DECL_END

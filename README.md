@@ -49,7 +49,8 @@ Chaos|KOS - Total anarchy.
      - detach/join
      - yield
      - alarm/pause
-     - tls
+     - TLS
+       - True TLS memory using segment registers
    - synchronization primitives (Missing from user-space)
      - semaphore
      - mutex
@@ -58,11 +59,15 @@ Chaos|KOS - Total anarchy.
      - mmutex (non-standard primitive)
      - signal+vsignal (non-standard primitive)
      - addist+ddist (non-standard primitive)
+ - True user-space exception handling
+   - <b>__try</b>, <b>__finally</b> and <b>__except</b> magic keywords implemented through the preprocessor
+   - Ability to handle CPU/IRQ exceptions such as SEGFAULT from usercode.
  - ELF binaries/libraries (<i>no extension</i> / .so)
    - DWARF .debug_line debug information
  - PE binaries/libraries (.exe / .dll)
  - dlopen (Shared libraries)
  - Time (time_t/struct timespec)
+   - High-precision (sub-second) time
  - Ring #3
  - Filesystem
    - FAT-12/16/32
