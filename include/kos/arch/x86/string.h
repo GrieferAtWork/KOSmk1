@@ -24,6 +24,8 @@
 #define __KOS_ARCHX86_STRING_H__ 1
 
 #include <kos/compiler.h>
+
+#ifndef __ASSEMBLY__
 #include <kos/types.h>
 
 __DECL_BEGIN
@@ -48,11 +50,11 @@ __local int x86_ffs(int i) {
                   , "+D" (dst)\
                   : : "memory")
 
-__local void *x86_memcpyb(void *__restrict __dst, void const *__restrict __src, __size_t _bytes)  { void *__result = __dst; x86_memcpyX("b",__dst,__src,_bytes);  return __result; }
-__local void *x86_memcpyw(void *__restrict __dst, void const *__restrict __src, __size_t _words)  { void *__result = __dst; x86_memcpyX("w",__dst,__src,_words);  return __result; }
+__local void *x86_memcpyb(void *__restrict __dst, void const *__restrict __src, __size_t __bytes)  { void *__result = __dst; x86_memcpyX("b",__dst,__src,__bytes);  return __result; }
+__local void *x86_memcpyw(void *__restrict __dst, void const *__restrict __src, __size_t __words)  { void *__result = __dst; x86_memcpyX("w",__dst,__src,__words);  return __result; }
 __local void *x86_memcpyl(void *__restrict __dst, void const *__restrict __src, __size_t __dwords) { void *__result = __dst; x86_memcpyX("l",__dst,__src,__dwords); return __result; }
 #ifdef __x86_64__
-__local void *x86_memcpyq(void *__restrict __dst, void const *__restrict __src, __size_t _qwords) { void *__result = __dst; x86_memcpyX("q",__dst,__src,_qwords); return __result; }
+__local void *x86_memcpyq(void *__restrict __dst, void const *__restrict __src, __size_t __qwords) { void *__result = __dst; x86_memcpyX("q",__dst,__src,__qwords); return __result; }
 #endif /* __x86_64__ */
 #undef x86_memcpyX
 
@@ -64,11 +66,11 @@ __local void *x86_memcpyq(void *__restrict __dst, void const *__restrict __src, 
                   : "a" (byte)\
                   : "memory")
 
-__local void *x86_memsetb(void *__restrict __dst, __u8  _byte,  __size_t _bytes)  { void *__result = __dst; x86_memsetX("b",__dst,_byte,_bytes);   return __result; }
-__local void *x86_memsetw(void *__restrict __dst, __u16 _word,  __size_t _words)  { void *__result = __dst; x86_memsetX("w",__dst,_word,_words);   return __result; }
+__local void *x86_memsetb(void *__restrict __dst, __u8  _byte,  __size_t __bytes)  { void *__result = __dst; x86_memsetX("b",__dst,_byte,__bytes);   return __result; }
+__local void *x86_memsetw(void *__restrict __dst, __u16 _word,  __size_t __words)  { void *__result = __dst; x86_memsetX("w",__dst,_word,__words);   return __result; }
 __local void *x86_memsetl(void *__restrict __dst, __u32 __dword, __size_t __dwords) { void *__result = __dst; x86_memsetX("l",__dst,__dword,__dwords); return __result; }
 #ifdef __x86_64__
-__local void *x86_memsetq(void *__restrict __dst, __u32 _qword, __size_t _qwords) { void *__result = __dst; x86_memsetX("q",__dst,_qword,_qwords); return __result; }
+__local void *x86_memsetq(void *__restrict __dst, __u32 _qword, __size_t __qwords) { void *__result = __dst; x86_memsetX("q",__dst,_qword,__qwords); return __result; }
 #endif /* __x86_64__ */
 #undef x86_memsetX
 
@@ -158,7 +160,7 @@ __local __size_t x86_strnlenq(__u64 const *__s, __size_t __maxchars) { register 
 #endif
 #undef x86_strnlenX
 
-__local void *x86_memchrb(void const *__p, __u8 __needle, __size_t _bytes) {
+__local void *x86_memchrb(void const *__p, __u8 __needle, __size_t __bytes) {
  __asm_volatile__("cld\n"              /* clear direction flag. */
                   "repne scasb\n"      /* perform the string operation. */
                   "jz 1f\n"            /* Skip the NULL-return if we did find it. */
@@ -166,7 +168,7 @@ __local void *x86_memchrb(void const *__p, __u8 __needle, __size_t _bytes) {
                   "inc %%edi\n"        /* ... */
                   "1: dec %%edi\n"     /* Walk back to the character in question. */
                   : "+D" (__p)
-                  : "c" (_bytes)
+                  : "c" (__bytes)
                   , "a" (__needle)
                   : "memory");
  return (char *)__p;
@@ -183,15 +185,15 @@ __local void *x86_memchrb(void const *__p, __u8 __needle, __size_t _bytes) {
                   : "c" (bytes)\
                   , "a" (needle)\
                   : "memory")
-__local void *x86_memchrw(void const *__p, __u16 __needle, __size_t _words)  { x86_memchrX("w",2,__p,__needle,_words); return (char *)__p; }
+__local void *x86_memchrw(void const *__p, __u16 __needle, __size_t __words)  { x86_memchrX("w",2,__p,__needle,__words); return (char *)__p; }
 __local void *x86_memchrl(void const *__p, __u32 __needle, __size_t __dwords) { x86_memchrX("l",4,__p,__needle,__dwords); return (char *)__p; }
 #ifdef __x86_64__
-__local void *x86_memchrq(void const *__p, __u64 __needle, __size_t _qwords) { x86_memchrX("q",8,__p,__needle,_qwords); return (char *)__p; }
+__local void *x86_memchrq(void const *__p, __u64 __needle, __size_t __qwords) { x86_memchrX("q",8,__p,__needle,__qwords); return (char *)__p; }
 #endif
 #undef x86_memchrX
 
-__local void *x86_memrchrb(void const *__p, __u8 __needle, __size_t _bytes) {
- __p = (void const *)((__uintptr_t)__p+(_bytes-1));
+__local void *x86_memrchrb(void const *__p, __u8 __needle, __size_t __bytes) {
+ __p = (void const *)((__uintptr_t)__p+(__bytes-1));
  __asm_volatile__("std\n"                  /* set direction flag. */
                   "repne scasb\n"          /* perform the string operation. */
                   "jz 1f\n"                /* Skip the NULL-return if we did find it. */
@@ -199,7 +201,7 @@ __local void *x86_memrchrb(void const *__p, __u8 __needle, __size_t _bytes) {
                   "dec %%edi\n"            /* ... */
                   "1: inc %%edi\n"         /* Walk forward to the character in question. */
                   : "+D" (__p)
-                  : "c" (_bytes)
+                  : "c" (__bytes)
                   , "a" (__needle)
                   : "memory");
  return (void *)__p;
@@ -216,10 +218,10 @@ __local void *x86_memrchrb(void const *__p, __u8 __needle, __size_t _bytes) {
                   : "c" (bytes)\
                   , "a" (needle)\
                   : "memory")
-__local void *x86_memrchrw(void const *__p, __u16 __needle, __size_t _words)  { __p = (void const *)((__uintptr_t)__p+((_words-1)*2));  x86_memrchrX("w",2,__p,__needle,_words);  return (void *)__p; }
+__local void *x86_memrchrw(void const *__p, __u16 __needle, __size_t __words)  { __p = (void const *)((__uintptr_t)__p+((__words-1)*2));  x86_memrchrX("w",2,__p,__needle,__words);  return (void *)__p; }
 __local void *x86_memrchrl(void const *__p, __u32 __needle, __size_t __dwords) { __p = (void const *)((__uintptr_t)__p+((__dwords-1)*4)); x86_memrchrX("l",4,__p,__needle,__dwords); return (void *)__p; }
 #ifdef __x86_64__
-__local void *x86_memrchrq(void const *__p, __u64 __needle, __size_t _qwords) { __p = (void const *)((__uintptr_t)__p+((_qwords-1)*8)); x86_memrchrX("q",8,__p,__needle,_qwords); return (void *)__p; }
+__local void *x86_memrchrq(void const *__p, __u64 __needle, __size_t __qwords) { __p = (void const *)((__uintptr_t)__p+((__qwords-1)*8)); x86_memrchrX("q",8,__p,__needle,__qwords); return (void *)__p; }
 #endif
 #undef x86_memrchrX
 
@@ -235,11 +237,11 @@ __local void *x86_memrchrq(void const *__p, __u64 __needle, __size_t _qwords) { 
                   , "+a" (result)\
                   : "c" (bytes)\
                   : "memory")
-__local __s8  x86_memcmpb(void const *__a, void const *_b, __size_t _bytes)  { register __s8  __result = 0; x86_memcmpX("b",1,"al", __a,_b,_bytes, __result); return __result; }
-__local __s16 x86_memcmpw(void const *__a, void const *_b, __size_t _words)  { register __s16 __result = 0; x86_memcmpX("w",2,"ax", __a,_b,_words, __result); return __result; }
+__local __s8  x86_memcmpb(void const *__a, void const *_b, __size_t __bytes)  { register __s8  __result = 0; x86_memcmpX("b",1,"al", __a,_b,__bytes, __result); return __result; }
+__local __s16 x86_memcmpw(void const *__a, void const *_b, __size_t __words)  { register __s16 __result = 0; x86_memcmpX("w",2,"ax", __a,_b,__words, __result); return __result; }
 __local __s32 x86_memcmpl(void const *__a, void const *_b, __size_t __dwords) { register __s32 __result = 0; x86_memcmpX("l",4,"eax",__a,_b,__dwords,__result); return __result; }
 #ifdef __x86_64__
-__local __s64 x86_memcmpq(void const *__a, void const *_b, __size_t _qwords) { register __s64 __result = 0; x86_memcmpX("q",8,"rax",__a,_b,_qwords,__result); return __result; }
+__local __s64 x86_memcmpq(void const *__a, void const *_b, __size_t __qwords) { register __s64 __result = 0; x86_memcmpX("q",8,"rax",__a,_b,__qwords,__result); return __result; }
 #endif
 #undef x86_memcmpX
 
@@ -248,54 +250,55 @@ __local __s64 x86_memcmpq(void const *__a, void const *_b, __size_t _qwords) { r
  * like (mem|str)chr, (mem|str)cmp.
  * (I think) even something like strstr, and strspn and memmem. */
 
-#define x86_raw_ffs     x86_ffs
-#define x86_raw_memcpy  x86_memcpyb
-#define x86_raw_memset(dst,byte,bytes) \
+#define __karch_raw_ffs     x86_ffs
+#define __karch_raw_memcpy  x86_memcpyb
+#define __karch_raw_memset(dst,byte,bytes) \
  x86_memsetb(dst,(__u8)(byte),bytes)
-#define x86_raw_memcpyb x86_memcpyb
-#define x86_raw_memcpyw x86_memcpyw
-#define x86_raw_memcpyl x86_memcpyl
-#define x86_raw_memsetb x86_memsetb
-#define x86_raw_memsetw x86_memsetw
-#define x86_raw_memsetl x86_memsetl
+#define __karch_raw_memcpyb x86_memcpyb
+#define __karch_raw_memcpyw x86_memcpyw
+#define __karch_raw_memcpyl x86_memcpyl
+#define __karch_raw_memsetb x86_memsetb
+#define __karch_raw_memsetw x86_memsetw
+#define __karch_raw_memsetl x86_memsetl
 #ifdef __x86_64__
-#define x86_raw_memcpyq x86_memcpyq
-#define x86_raw_memsetq x86_memsetq
+#define __karch_raw_memcpyq x86_memcpyq
+#define __karch_raw_memsetq x86_memsetq
 #endif /* __x86_64__ */
-#define x86_raw_strend(s)     (char *)x86_strendb((__u8 *)(s))
-#define x86_raw_strnend(s,n)  (char *)x86_strnendb((__u8 *)(s),n)
-#define x86_raw_strlen(s)     x86_strlenb((__u8 *)(s))
-#define x86_raw_strnlen(s,n)  x86_strnlenb((__u8 *)(s),n)
+#define __karch_raw_strend(s)     (char *)x86_strendb((__u8 *)(s))
+#define __karch_raw_strnend(s,n)  (char *)x86_strnendb((__u8 *)(s),n)
+#define __karch_raw_strlen(s)     x86_strlenb((__u8 *)(s))
+#define __karch_raw_strnlen(s,n)  x86_strnlenb((__u8 *)(s),n)
 
-#define x86_raw_memchr(dst,byte,bytes) \
+#define __karch_raw_memchr(dst,byte,bytes) \
  x86_memchrb(dst,(__u8)(byte),bytes)
-#define x86_raw_memchrb x86_memchrb
-#define x86_raw_memchrw x86_memchrw
-#define x86_raw_memchrl x86_memchrl
+#define __karch_raw_memchrb x86_memchrb
+#define __karch_raw_memchrw x86_memchrw
+#define __karch_raw_memchrl x86_memchrl
 #ifdef __x86_64__
-#define x86_raw_memchrq x86_memchrq
+#define __karch_raw_memchrq x86_memchrq
 #endif
 
-#define x86_raw_memrchr(dst,byte,bytes) \
+#define __karch_raw_memrchr(dst,byte,bytes) \
  x86_memrchrb(dst,(__u8)(byte),bytes)
-#define x86_raw_memrchrb x86_memrchrb
-#define x86_raw_memrchrw x86_memrchrw
-#define x86_raw_memrchrl x86_memrchrl
+#define __karch_raw_memrchrb x86_memrchrb
+#define __karch_raw_memrchrw x86_memrchrw
+#define __karch_raw_memrchrl x86_memrchrl
 #ifdef __x86_64__
-#define x86_raw_memrchrq x86_memrchrq
+#define __karch_raw_memrchrq x86_memrchrq
 #endif
 
-#define x86_raw_memcmp  x86_memcmpb
-#define x86_raw_memcmpb x86_memcmpb
-#define x86_raw_memcmpw x86_memcmpw
-#define x86_raw_memcmpl x86_memcmpl
+#define __karch_raw_memcmp  x86_memcmpb
+#define __karch_raw_memcmpb x86_memcmpb
+#define __karch_raw_memcmpw x86_memcmpw
+#define __karch_raw_memcmpl x86_memcmpl
 #ifdef __x86_64__
-#define x86_raw_memcmpq x86_memcmpq
+#define __karch_raw_memcmpq x86_memcmpq
 #endif
 
 __DECL_END
 
 /* Autocomplete string functions using generic constant optimizations. */
 #include <kos/arch/generic/string.h>
+#endif /* !__ASSEMBLY__ */
 
 #endif /* !__KOS_ARCHX86_STRING_H__ */

@@ -30,11 +30,14 @@
 __DECL_BEGIN
 
 #ifdef __KERNEL__
-#define arch_hang() \
- __xblock({ __karch_raw_irq_disable();\
-            for (;;) __karch_raw_irq_idle();\
-            __compiler_unreachable();\
- })
+__local __noreturn void x86_hang(void) {
+ __asm_volatile__("1: cli\n"
+                  "   hlt\n"
+                  "   jmp 1b\n"
+                  : : : "memory");
+ __builtin_unreachable();
+}
+#define karch_hang   x86_hang
 #endif
 
 __DECL_END

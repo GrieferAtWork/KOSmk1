@@ -25,9 +25,7 @@
 
 #include <kos/compiler.h>
 #include <kos/kernel/types.h>
-#ifndef __ASSEMBLY__
-#include <kos/arch/x86/eflags.h>
-#endif
+#include <kos/arch/x86/cpu-registers.h>
 
 __DECL_BEGIN
 
@@ -40,7 +38,7 @@ __DECL_BEGIN
 #define __karch_raw_irq_enable()    __asm__("sti" : : : "memory")
 #define __karch_raw_irq_disable()   __asm__("cli" : : : "memory")
 #define __karch_raw_irq_idle()      __asm__("hlt" : : : "memory")
-#define __karch_raw_irq_enabled() ((karch_x86_eflags()&KARCH_X86_EFLAGS_IF)!=0)
+#define __karch_raw_irq_enabled()  (x86_geteflags()&X86_EFLAGS_IF)
 #endif
 
 #define karch_irq_enable  __karch_raw_irq_enable

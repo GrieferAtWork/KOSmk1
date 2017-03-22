@@ -30,7 +30,7 @@
 #include <kos/kernel/proc.h>
 #include <kos/arch.h>
 #ifdef __x86__
-#include <kos/arch/x86/eflags.h>
+#include <kos/arch/x86/cpu-registers.h>
 #endif
 
 /* Low-level IRQ #32 handler (no c-prototype as this one's directly called by the CPU) */

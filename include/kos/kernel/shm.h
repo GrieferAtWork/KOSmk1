@@ -35,11 +35,36 @@
 #include <kos/kernel/rwlock.h>
 #include <kos/types.h>
 #include <math.h>
+#include <string.h>
 #include <strings.h>
 
 /* TODO: Make SHM branches use <kos/addrtree.h>. */
 
 /* Shared memory management. */
+
+
+/* Force use of arch-optimized string operations, not performing any debug checks.
+ * NOTE: When not in debug-mode, this doesn't make any difference.
+ * NOTE: Using these makes quite the difference, because stuff like 'memcpy'
+ *       has special compile-time optimizations to generate fast code for
+ *       copying small amounts of memory, or large dividable by 2,4 or 8. */
+#if 1
+#include <kos/arch/string.h>
+#ifdef karch_memset
+#define SHM_MEMSET karch_memset
+#endif
+#ifdef karch_memcpy
+#define SHM_MEMCPY karch_memcpy
+#endif
+#endif
+
+#ifndef SHM_MEMSET
+#define SHM_MEMSET memset
+#endif
+#ifndef SHM_MEMCPY
+#define SHM_MEMCPY memcpy
+#endif
+
 
 __DECL_BEGIN
 
@@ -1397,57 +1422,77 @@ extern __size_t ktranslator_copytouser(struct ktranslator *__restrict self, __us
 extern __size_t ktranslator_copyfromuser(struct ktranslator *__restrict self, __kernel void *dst, __user void const *src, __size_t bytes);
 extern __size_t ktranslator_copyinuser_w(struct ktranslator *__restrict self, __user void *dst, __user void const *src, __size_t bytes);
 extern __size_t ktranslator_copytouser_w(struct ktranslator *__restrict self, __user void *dst, __kernel void const *src, __size_t bytes);
+extern __size_t ktranslator_memset(struct ktranslator *__restrict self, __user void *dst, int byte, __size_t bytes);
+extern __size_t ktranslator_memset_w(struct ktranslator *__restrict self, __user void *dst, int byte, __size_t bytes);
 #else
 extern __size_t __ktranslator_copyinuser_impl(struct ktranslator *__restrict self, __user void *dst, __user void const *src, __size_t bytes);
 extern __size_t __ktranslator_copytouser_impl(struct ktranslator *__restrict self, __user void *dst, __kernel void const *src, __size_t bytes);
 extern __size_t __ktranslator_copyfromuser_impl(struct ktranslator *__restrict self, __kernel void *dst, __user void const *src, __size_t bytes);
 extern __size_t __ktranslator_copyinuser_w_impl(struct ktranslator *__restrict self, __user void *dst, __user void const *src, __size_t bytes);
 extern __size_t __ktranslator_copytouser_w_impl(struct ktranslator *__restrict self, __user void *dst, __kernel void const *src, __size_t bytes);
-__local __size_t
+extern __size_t __ktranslator_memset_impl(struct ktranslator *__restrict self, __user void *dst, int byte, __size_t bytes);
+extern __size_t __ktranslator_memset_w_impl(struct ktranslator *__restrict self, __user void *dst, int byte, __size_t bytes);
+__forcelocal __size_t
 __ktranslator_q_copyinuser_impl(struct ktranslator *__restrict self,
                                 __user void *dst, __user void const *src,
                                 __size_t bytes) {
  __kernel void *kdst,*ksrc;
  if __unlikely((kdst = ktranslator_qexec(self,dst,1)) == NULL ||
                (ksrc = ktranslator_qexec(self,src,0)) == NULL) return bytes;
- memcpy(kdst,ksrc,bytes);
+ SHM_MEMCPY(kdst,ksrc,bytes);
  return 0;
 }
-__local __size_t
+__forcelocal __size_t
 __ktranslator_q_copytouser_impl(struct ktranslator *__restrict self,
                                 __user void *dst, __kernel void const *src,
                                 __size_t bytes) {
  __kernel void *kdst = ktranslator_qexec(self,dst,1);
  if __unlikely(!kdst) return bytes;
- memcpy(kdst,src,bytes);
+ SHM_MEMCPY(kdst,src,bytes);
  return 0;
 }
-__local __size_t
+__forcelocal __size_t
 __ktranslator_q_copyfromuser_impl(struct ktranslator *__restrict self,
                                   __kernel void *dst, __user void const *src,
                                   __size_t bytes) {
  __kernel void *ksrc = ktranslator_qexec(self,src,0);
  if __unlikely(!ksrc) return bytes;
- memcpy(dst,ksrc,bytes);
+ SHM_MEMCPY(dst,ksrc,bytes);
  return 0;
 }
-__local __size_t
+__forcelocal __size_t
 __ktranslator_q_copyinuser_w_impl(struct ktranslator *__restrict self,
                                   __user void *dst, __user void const *src,
                                   __size_t bytes) {
  __kernel void *kdst,*ksrc;
  if __unlikely((kdst = ktranslator_qwexec(self,dst)) == NULL ||
                (ksrc = ktranslator_qexec(self,src,0)) == NULL) return bytes;
- memcpy(kdst,ksrc,bytes);
+ SHM_MEMCPY(kdst,ksrc,bytes);
  return 0;
 }
-__local __size_t
+__forcelocal __size_t
 __ktranslator_q_copytouser_w_impl(struct ktranslator *__restrict self,
                                   __user void *dst, __kernel void const *src,
                                   __size_t bytes) {
  __kernel void *kdst = ktranslator_qwexec(self,dst);
  if __unlikely(!kdst) return bytes;
- memcpy(kdst,src,bytes);
+ SHM_MEMCPY(kdst,src,bytes);
+ return 0;
+}
+__forcelocal __size_t
+__ktranslator_q_memset_impl(struct ktranslator *__restrict self,
+                            __user void *dst, int byte, __size_t bytes) {
+ __kernel void *kdst = ktranslator_qexec(self,dst,1);
+ if __unlikely(!kdst) return bytes;
+ SHM_MEMSET(kdst,byte,bytes);
+ return 0;
+}
+__forcelocal __size_t
+__ktranslator_q_memset_w_impl(struct ktranslator *__restrict self,
+                              __user void *dst, int byte, __size_t bytes) {
+ __kernel void *kdst = ktranslator_qwexec(self,dst);
+ if __unlikely(!kdst) return bytes;
+ SHM_MEMSET(kdst,byte,bytes);
  return 0;
 }
 __forcelocal __size_t
@@ -1510,6 +1555,28 @@ ktranslator_copytouser_w(struct ktranslator *__restrict self,
   return __ktranslator_q_copytouser_w_impl(self,dst,src,bytes);
  } else {
   return __ktranslator_copytouser_w_impl(self,dst,src,bytes);
+ }
+}
+__forcelocal __size_t
+ktranslator_memset(struct ktranslator *__restrict self,
+                   __user void *dst, int byte, __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __ktranslator_memset_impl(self,dst,byte,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(dst,bytes)) {
+  return __ktranslator_q_memset_impl(self,dst,byte,bytes);
+ } else {
+  return __ktranslator_memset_impl(self,dst,byte,bytes);
+ }
+}
+__forcelocal __size_t
+ktranslator_memset_w(struct ktranslator *__restrict self,
+                     __user void *dst, int byte, __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __ktranslator_memset_w_impl(self,dst,byte,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(dst,bytes)) {
+  return __ktranslator_q_memset_w_impl(self,dst,byte,bytes);
+ } else {
+  return __ktranslator_memset_w_impl(self,dst,byte,bytes);
  }
 }
 #endif
@@ -1625,29 +1692,29 @@ extern __crit __nomp __wunused __nonnull((1,2)) __size_t kshm_copyfromuser(struc
 extern __crit __nomp __wunused __nonnull((1))   __size_t __kshm_copyinuser_impl(struct kshm const *self, __user void *dst, __user void const *src, __size_t bytes);
 extern __crit __nomp __wunused __nonnull((1,3)) __size_t __kshm_copytouser_impl(struct kshm const *self, __user void *dst, __kernel void const *src, __size_t bytes);
 extern __crit __nomp __wunused __nonnull((1,2)) __size_t __kshm_copyfromuser_impl(struct kshm const *self, __kernel void *dst, __user void const *src, __size_t bytes);
-__local __crit __nomp __wunused __nonnull((1)) __size_t
+__forcelocal __crit __nomp __wunused __nonnull((1)) __size_t
 __kshm_q_copyinuser_impl(struct kshm const *self, __user void *dst,
                          __user void const *src, __size_t bytes) {
  __kernel void *kdst,*ksrc;
  if __unlikely((kdst = kshm_qtranslateuser(self,self->s_pd,dst,1)) == NULL ||
                (ksrc = kshm_qtranslateuser(self,self->s_pd,src,0)) == NULL) return bytes;
- memcpy(kdst,ksrc,bytes);
+ SHM_MEMCPY(kdst,ksrc,bytes);
  return 0;
 }
-__local __crit __nomp __wunused __nonnull((1,3)) __size_t
+__forcelocal __crit __nomp __wunused __nonnull((1,3)) __size_t
 __kshm_q_copytouser_impl(struct kshm const *self, __user void *dst,
                          __kernel void const *src, __size_t bytes) {
  __kernel void *kdst;
  if __unlikely((kdst = kshm_qtranslateuser(self,self->s_pd,dst,1)) == NULL) return bytes;
- memcpy(kdst,src,bytes);
+ SHM_MEMCPY(kdst,src,bytes);
  return 0;
 }
-__local __crit __nomp __wunused __nonnull((1,2)) __size_t
+__forcelocal __crit __nomp __wunused __nonnull((1,2)) __size_t
 __kshm_q_copyfromuser_impl(struct kshm const *self, __kernel void *dst,
                          __user void const *src, __size_t bytes) {
  __kernel void *ksrc;
  if __unlikely((ksrc = kshm_qtranslateuser(self,self->s_pd,src,0)) == NULL) return bytes;
- memcpy(dst,ksrc,bytes);
+ SHM_MEMCPY(dst,ksrc,bytes);
  return 0;
 }
 
@@ -1704,23 +1771,23 @@ extern __crit __nomp __wunused __nonnull((1,3)) __size_t kshm_copytouser_w(struc
 #else
 extern __crit __nomp __wunused __nonnull((1))   __size_t __kshm_copyinuser_w_impl(struct kshm const *self, __user void *dst, __user void const *src, __size_t bytes);
 extern __crit __nomp __wunused __nonnull((1,3)) __size_t __kshm_copytouser_w_impl(struct kshm const *self, __user void *dst, __kernel void const *src, __size_t bytes);
-__local __size_t
+__forcelocal __size_t
 __kshm_q_copyinuser_w_impl(struct kshm *__restrict self,
                            __user void *dst, __user void const *src,
                            __size_t bytes) {
  __kernel void *kdst,*ksrc;
  if __unlikely((kdst = kshm_qwtranslateuser(self,self->s_pd,dst)) == NULL ||
                (ksrc = kshm_qtranslateuser(self,self->s_pd,src,0)) == NULL) return bytes;
- memcpy(kdst,ksrc,bytes);
+ SHM_MEMCPY(kdst,ksrc,bytes);
  return 0;
 }
-__local __size_t
+__forcelocal __size_t
 __kshm_q_copytouser_w_impl(struct kshm *__restrict self,
                            __user void *dst, __kernel void const *src,
                            __size_t bytes) {
  __kernel void *kdst = kshm_qwtranslateuser(self,self->s_pd,dst);
  if __unlikely(!kdst) return bytes;
- memcpy(kdst,src,bytes);
+ SHM_MEMCPY(kdst,src,bytes);
  return 0;
 }
 __forcelocal __size_t

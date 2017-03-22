@@ -267,6 +267,14 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #   define __NO_attribute_thread
 #   define __attribute_thread /* nothing */
 #endif
+#ifndef __attribute_warning
+#   define __NO_attribute_warning
+#   define __attribute_warning(text) /* nothing */
+#endif
+#ifndef __attribute_error
+#   define __NO_attribute_error
+#   define __attribute_error(text) /* nothing */
+#endif
 #ifndef __attribute_section
 #   define __NO_attribute_section
 #   define __attribute_section(name) /* nothing */
@@ -320,6 +328,8 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #ifndef __local
 #if defined(__DEBUG__) && 0
 #   define __local        static __attribute_unused
+#elif 0
+#   define __local        static __attribute_forceinline
 #else
 #   define __local        static __attribute_inline
 #endif

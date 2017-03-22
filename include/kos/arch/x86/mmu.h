@@ -26,6 +26,7 @@
 #include <kos/compiler.h>
 #include <kos/kernel/types.h>
 #include <stdint.h>
+#include <kos/arch/x86/cpu-registers.h>
 
 __DECL_BEGIN
 
@@ -142,26 +143,25 @@ typedef union __packed __x86_pte {
 #define X86_PTE_FLAG_PRESENT        UINT32_C(0x00000001)
 
 #ifndef __ASSEMBLY__
-#define __arch_getpagedirectory()  __xblock({ void *_r; __asm__("movl %%cr3, %0" : "=r" (_r)); __xreturn _r; })
-#define __arch_setpagedirectory(p) __xblock({           __asm__("movl %0, %%cr3" : : "r" (p));               })
-
-#define __arch_pagingenabled() __xblock({ __u32 _cr0; __asm__("movl %%cr0, %0" : "=r" (_cr0)); __xreturn (_cr0&0x80000000)!=0; })
-#define __arch_enablepaging()  __xblock({ __u32 _cr0; __asm__("movl %%cr0, %0" : "=r" (_cr0)); _cr0 |= (0x80000000); __asm__("movl %0, %%cr0" : : "r" (_cr0)); (void)0; })
-#define __arch_disablepaging() __xblock({ __u32 _cr0; __asm__("movl %%cr0, %0" : "=r" (_cr0)); _cr0 &= (0x7FFFFFFF); __asm__("movl %0, %%cr0" : : "r" (_cr0)); (void)0; })
+#define __arch_getpagedirectory  x86_getcr3
+#define __arch_setpagedirectory  x86_setcr3
+#define __arch_pagingenabled()  (x86_getcr0()&X86_CR0_PG)
+#define __arch_enablepaging()   (x86_setcr0(x86_getcr0()|X86_CR0_PG))
+#define __arch_disablepaging()  (x86_setcr0(x86_getcr0()&~X86_CR0_PG))
 #else /* !__ASSEMBLY__ */
-#define __arch_enablepaging()  __arch_enablepaging
-#define __arch_disablepaging() __arch_disablepaging
-.macro __arch_enablepaging
+#define __arch_enablepaging()  x86_enablepaging
+#define __arch_disablepaging() x86_disablepaging
+.macro x86_enablepaging
     push %eax
     mov  %cr0, %eax
-    or   %eax, $0x80000000
+    or   %eax, $(X86_CR0_PG)
     mov  %eax, %cr0
     pop  %eax
 .endm
-.macro __arch_disablepaging
+.macro x86_disablepaging
     push %eax
     mov  %cr0, %eax
-    and  %eax, $0x7FFFFFFF
+    and  %eax, $(~X86_CR0_PG)
     mov  %eax, %cr0
     pop  %eax
 .endm

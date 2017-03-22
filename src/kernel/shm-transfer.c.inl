@@ -84,7 +84,7 @@ __kshm_copyinuser_w_impl(struct kshm const *self, __user void *dst,
  size_t max_dst,max_src; __kernel void *kdst,*ksrc;
  while ((kdst = kshm_wtranslateuser(self,self->s_pd,dst,bytes,&max_dst)) != NULL &&
         (ksrc = kshm_translateuser(self,self->s_pd,src,max_dst,&max_src,0)) != NULL) {
-  memcpy(kdst,ksrc,max_src);
+  SHM_MEMCPY(kdst,ksrc,max_src);
   if ((bytes -= max_src) == 0) break;
   *(uintptr_t *)&dst += max_src;
   *(uintptr_t *)&src += max_src;
@@ -94,13 +94,13 @@ __kshm_copyinuser_w_impl(struct kshm const *self, __user void *dst,
 __crit __nomp size_t
 __kshm_copytouser_w_impl(struct kshm const *self, __user void *dst,
                          __kernel void const *src, size_t bytes) {
- size_t copy_max; __kernel void *kdst;
- while ((kdst = kshm_wtranslateuser(self,self->s_pd,dst,bytes,&copy_max)) != NULL) {
-  assert(copy_max <= bytes);
-  memcpy(kdst,src,copy_max);
-  if ((bytes -= copy_max) == 0) break;
-  *(uintptr_t *)&dst += copy_max;
-  *(uintptr_t *)&src += copy_max;
+ size_t maxbytes; __kernel void *kdst;
+ while ((kdst = kshm_wtranslateuser(self,self->s_pd,dst,bytes,&maxbytes)) != NULL) {
+  assert(maxbytes <= bytes);
+  SHM_MEMCPY(kdst,src,maxbytes);
+  if ((bytes -= maxbytes) == 0) break;
+  *(uintptr_t *)&dst += maxbytes;
+  *(uintptr_t *)&src += maxbytes;
  }
  return bytes;
 }
@@ -110,7 +110,7 @@ __kshm_copyinuser_impl(struct kshm const *self, __user void *dst,
  size_t max_dst,max_src; __kernel void *kdst,*ksrc;
  while ((kdst = kshm_translateuser(self,self->s_pd,dst,bytes,&max_dst,1)) != NULL &&
         (ksrc = kshm_translateuser(self,self->s_pd,src,max_dst,&max_src,0)) != NULL) {
-  memcpy(kdst,ksrc,max_src);
+  SHM_MEMCPY(kdst,ksrc,max_src);
   if ((bytes -= max_src) == 0) break;
   *(uintptr_t *)&dst += max_src;
   *(uintptr_t *)&src += max_src;
@@ -120,26 +120,26 @@ __kshm_copyinuser_impl(struct kshm const *self, __user void *dst,
 __crit __nomp size_t
 __kshm_copytouser_impl(struct kshm const *self, __user void *dst,
                        __kernel void const *src, size_t bytes) {
- size_t copy_max; __kernel void *kdst;
- while ((kdst = kshm_translateuser(self,self->s_pd,dst,bytes,&copy_max,1)) != NULL) {
-  assert(copy_max <= bytes);
-  memcpy(kdst,src,copy_max);
-  if ((bytes -= copy_max) == 0) break;
-  *(uintptr_t *)&dst += copy_max;
-  *(uintptr_t *)&src += copy_max;
+ size_t maxbytes; __kernel void *kdst;
+ while ((kdst = kshm_translateuser(self,self->s_pd,dst,bytes,&maxbytes,1)) != NULL) {
+  assert(maxbytes <= bytes);
+  SHM_MEMCPY(kdst,src,maxbytes);
+  if ((bytes -= maxbytes) == 0) break;
+  *(uintptr_t *)&dst += maxbytes;
+  *(uintptr_t *)&src += maxbytes;
  }
  return bytes;
 }
 __crit __nomp size_t
 __kshm_copyfromuser_impl(struct kshm const *self, __kernel void *dst,
                          __user void const *src, size_t bytes) {
- size_t copy_max; __kernel void *ksrc;
- while ((ksrc = kshm_translateuser(self,self->s_pd,src,bytes,&copy_max,0)) != NULL) {
-  assert(copy_max <= bytes);
-  memcpy(dst,ksrc,copy_max);
-  if ((bytes -= copy_max) == 0) break;
-  *(uintptr_t *)&dst += copy_max;
-  *(uintptr_t *)&src += copy_max;
+ size_t maxbytes; __kernel void *ksrc;
+ while ((ksrc = kshm_translateuser(self,self->s_pd,src,bytes,&maxbytes,0)) != NULL) {
+  assert(maxbytes <= bytes);
+  SHM_MEMCPY(dst,ksrc,maxbytes);
+  if ((bytes -= maxbytes) == 0) break;
+  *(uintptr_t *)&dst += maxbytes;
+  *(uintptr_t *)&src += maxbytes;
  }
  return bytes;
 }
@@ -228,7 +228,7 @@ __ktranslator_copyinuser_impl(struct ktranslator *__restrict self,
  size_t max_dst,max_src; __kernel void *kdst,*ksrc;
  while ((kdst = ktranslator_exec(self,dst,bytes,&max_dst,1)) != NULL &&
         (ksrc = ktranslator_exec(self,src,max_dst,&max_src,0)) != NULL) {
-  memcpy(kdst,ksrc,max_src);
+  SHM_MEMCPY(kdst,ksrc,max_src);
   if ((bytes -= max_src) == 0) break;
   *(uintptr_t *)&dst += max_src;
   *(uintptr_t *)&src += max_src;
@@ -239,13 +239,13 @@ size_t
 __ktranslator_copytouser_impl(struct ktranslator *__restrict self,
                               __user void *dst, __kernel void const *src,
                               size_t bytes) {
- size_t copy_max; __kernel void *kdst;
- while ((kdst = ktranslator_exec(self,dst,bytes,&copy_max,1)) != NULL) {
-  assert(copy_max <= bytes);
-  memcpy(kdst,src,copy_max);
-  if ((bytes -= copy_max) == 0) break;
-  *(uintptr_t *)&dst += copy_max;
-  *(uintptr_t *)&src += copy_max;
+ size_t maxbytes; __kernel void *kdst;
+ while ((kdst = ktranslator_exec(self,dst,bytes,&maxbytes,1)) != NULL) {
+  assert(maxbytes <= bytes);
+  SHM_MEMCPY(kdst,src,maxbytes);
+  if ((bytes -= maxbytes) == 0) break;
+  *(uintptr_t *)&dst += maxbytes;
+  *(uintptr_t *)&src += maxbytes;
  }
  return bytes;
 }
@@ -253,13 +253,13 @@ size_t
 __ktranslator_copyfromuser_impl(struct ktranslator *__restrict self,
                                 __kernel void *dst, __user void const *src,
                                 size_t bytes) {
- size_t copy_max; __kernel void *ksrc;
- while ((ksrc = ktranslator_exec(self,src,bytes,&copy_max,0)) != NULL) {
-  assert(copy_max <= bytes);
-  memcpy(dst,ksrc,copy_max);
-  if ((bytes -= copy_max) == 0) break;
-  *(uintptr_t *)&dst += copy_max;
-  *(uintptr_t *)&src += copy_max;
+ size_t maxbytes; __kernel void *ksrc;
+ while ((ksrc = ktranslator_exec(self,src,bytes,&maxbytes,0)) != NULL) {
+  assert(maxbytes <= bytes);
+  SHM_MEMCPY(dst,ksrc,maxbytes);
+  if ((bytes -= maxbytes) == 0) break;
+  *(uintptr_t *)&dst += maxbytes;
+  *(uintptr_t *)&src += maxbytes;
  }
  return bytes;
 }
@@ -270,7 +270,7 @@ __ktranslator_copyinuser_w_impl(struct ktranslator *__restrict self,
  size_t max_dst,max_src; __kernel void *kdst,*ksrc;
  while ((kdst = ktranslator_wexec(self,dst,bytes,&max_dst)) != NULL &&
         (ksrc = ktranslator_exec(self,src,max_dst,&max_src,0)) != NULL) {
-  memcpy(kdst,ksrc,max_src);
+  SHM_MEMCPY(kdst,ksrc,max_src);
   if ((bytes -= max_src) == 0) break;
   *(uintptr_t *)&dst += max_src;
   *(uintptr_t *)&src += max_src;
@@ -281,16 +281,42 @@ size_t
 __ktranslator_copytouser_w_impl(struct ktranslator *__restrict self,
                                 __user void *dst, __kernel void const *src,
                                 size_t bytes) {
- size_t copy_max; __kernel void *kdst;
- while ((kdst = ktranslator_wexec(self,dst,bytes,&copy_max)) != NULL) {
-  assert(copy_max <= bytes);
-  memcpy(kdst,src,copy_max);
-  if ((bytes -= copy_max) == 0) break;
-  *(uintptr_t *)&dst += copy_max;
-  *(uintptr_t *)&src += copy_max;
+ size_t maxbytes; __kernel void *kdst;
+ while ((kdst = ktranslator_wexec(self,dst,bytes,&maxbytes)) != NULL) {
+  assert(maxbytes <= bytes);
+  SHM_MEMCPY(kdst,src,maxbytes);
+  if ((bytes -= maxbytes) == 0) break;
+  *(uintptr_t *)&dst += maxbytes;
+  *(uintptr_t *)&src += maxbytes;
  }
  return bytes;
 }
+
+size_t
+__ktranslator_memset_impl(struct ktranslator *__restrict self,
+                          __user void *dst, int byte, size_t bytes) {
+ size_t maxbytes; __kernel void *kdst;
+ while ((kdst = ktranslator_exec(self,dst,bytes,&maxbytes,1)) != NULL) {
+  assert(maxbytes <= bytes);
+  SHM_MEMSET(kdst,byte,maxbytes);
+  if ((bytes -= maxbytes) == 0) break;
+  *(uintptr_t *)&dst += maxbytes;
+ }
+ return bytes;
+}
+size_t
+__ktranslator_memset_w_impl(struct ktranslator *__restrict self,
+                            __user void *dst, int byte, size_t bytes) {
+ size_t maxbytes; __kernel void *kdst;
+ while ((kdst = ktranslator_wexec(self,dst,bytes,&maxbytes)) != NULL) {
+  assert(maxbytes <= bytes);
+  SHM_MEMSET(kdst,byte,maxbytes);
+  if ((bytes -= maxbytes) == 0) break;
+  *(uintptr_t *)&dst += maxbytes;
+ }
+ return bytes;
+}
+
 
 __DECL_END
 

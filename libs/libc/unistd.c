@@ -1149,7 +1149,7 @@ err:
 
 
 #ifndef __KERNEL__
-__local int
+static int
 kexecargs_fromsentinel(struct kexecargs *self,
                        char const *arg,
                        va_list args, int has_envp) {

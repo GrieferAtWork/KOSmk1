@@ -374,15 +374,15 @@ __DECL_END
 .endm
 
 .macro DISABLE_PAGING
-    mov32 %cr0, %eax
-    and32 $0x7fffffff, %eax
-    mov32 %eax, %cr0
+    mov %cr0, %eax
+    and $(~X86_CR0_PG), %eax
+    mov %eax, %cr0
 .endm
 
 .macro ENABLE_PAGING
-    mov32 %cr0, %eax
-    or32  $0x80000000, %eax
-    mov32 %eax, %cr0
+    mov %cr0, %eax
+    or  $(X86_CR0_PG), %eax
+    mov %eax, %cr0
 .endm
 
 #endif

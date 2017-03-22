@@ -137,6 +137,12 @@
 #ifndef __attribute_thread
 #define __attribute_thread        __thread
 #endif
+#ifndef __attribute_warning
+#define __attribute_warning(text) __attribute__((__warning__(text)))
+#endif
+#ifndef __attribute_error
+#define __attribute_error(text) __attribute__((__error__(text)))
+#endif
 #ifndef __attribute_section
 #define __attribute_section(name) __attribute__((__section__(name)))
 #endif

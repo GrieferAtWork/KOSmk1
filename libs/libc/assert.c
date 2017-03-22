@@ -88,7 +88,7 @@ __public void __libc_unreachable_d(__LIBC_DEBUG_PARAMS) {
                ,__LIBC_DEBUG_FUNC);
  tb_printex(1);
 #ifdef __KERNEL__
- arch_hang();
+ karch_hang();
 #else
  abort();
 #endif
@@ -136,7 +136,7 @@ void __assertion_failedxvf(__LIBC_DEBUG_X_PARAMS_ char const *expr,
   if (pd) kpagedir_print(pd);
   else ASSERT_PRINTF("NO PAGE DIRECTORY (task: %p, proc: %p, pd: %p)\n",task,proc,pd);
  }
- arch_hang();
+ karch_hang();
  __compiler_unreachable();
 #else
  abort();
@@ -209,7 +209,7 @@ void k_syspanic(__LIBC_DEBUG_PARAMS_ char const *__restrict fmt, ...) {
   if (pd) kpagedir_print(pd);
   else ASSERT_PRINTF("NO PAGE DIRECTORY (task: %p, proc: %p, pd: %p)\n",task,proc,pd);
  }
- arch_hang();
+ karch_hang();
  __compiler_unreachable();
 }
 #endif
@@ -226,7 +226,7 @@ __public uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
 __public __noreturn __noinline void __stack_chk_fail(void) {
  __assertion_failedf(NULL,-1,NULL,"STACK VIOLATION",1,NULL);
 #ifdef __KERNEL__
- arch_hang();
+ karch_hang();
 #else
  abort();
 #endif

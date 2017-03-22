@@ -170,11 +170,12 @@ typedef bool _Bool;
 #define ____INTELLISENE_ATTR(...) ____INTELLISENE_ATTR_N(____INTELLISENE_PP_VA_NARGS(__VA_ARGS__),__VA_ARGS__)
 
 
-#define __thread                        __declspec(thread)
-#define ____INTELLISENE_ATTR_FUNC       __declspec(noreturn)
-#define ____INTELLISENE_ATTR_VAR        __declspec(allocate("~"))
-#define ____INTELLISENE_ATTR_FUNCORVAR  /* ??? */
-#define ____INTELLISENE_ATTR_TYPE       __declspec(align(4))
+#define __thread                         __declspec(thread)
+#define ____INTELLISENE_ATTR_FUNC        __declspec(noreturn)
+#define ____INTELLISENE_ATTR_FUNC_STR(s) __declspec(noreturn,deprecated(s))
+#define ____INTELLISENE_ATTR_VAR         __declspec(allocate("~"))
+#define ____INTELLISENE_ATTR_FUNCORVAR   /* ??? */
+#define ____INTELLISENE_ATTR_TYPE        __declspec(align(4))
 // NOTE: These attribute are only meant to signal incorrect use, not to actually work corrently...
 #define ____INTELLISENE_attribute_noreturn                   __declspec(noreturn)
 #define ____INTELLISENE_attribute___noreturn                 __declspec(noreturn)
@@ -287,6 +288,12 @@ typedef bool _Bool;
 #define ____INTELLISENE_attribute_returns_twice              ____INTELLISENE_ATTR_FUNC
 #define ____INTELLISENE_attribute___returns_twice            ____INTELLISENE_ATTR_FUNC
 #define ____INTELLISENE_attribute___returns_twice__          ____INTELLISENE_ATTR_FUNC
+#define ____INTELLISENE_attribute_error                      ____INTELLISENE_ATTR_FUNC_STR
+#define ____INTELLISENE_attribute___error                    ____INTELLISENE_ATTR_FUNC_STR
+#define ____INTELLISENE_attribute___error__                  ____INTELLISENE_ATTR_FUNC_STR
+#define ____INTELLISENE_attribute_warning                    ____INTELLISENE_ATTR_FUNC_STR
+#define ____INTELLISENE_attribute___warning                  ____INTELLISENE_ATTR_FUNC_STR
+#define ____INTELLISENE_attribute___warning__                ____INTELLISENE_ATTR_FUNC_STR
 
 #if 1
 enum{ /* Highlight attributes in a different color */
@@ -319,6 +326,8 @@ enum{ /* Highlight attributes in a different color */
  __regparm__,            /*< __attribute__((regparm(...))). */
  __returns_twice__,      /*< __attribute__((returns_twice)). */
  __assume_aligned__,     /*< __attribute__((assume_aligned(...))). */
+ __error__,              /*< __attribute__((error(...))). */
+ __warning__,            /*< __attribute__((warning(...))). */
 };
 #endif
 

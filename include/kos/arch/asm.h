@@ -31,8 +31,8 @@
 
 __DECL_BEGIN
 
-#ifndef arch_hang
-#define arch_hang() \
+#ifndef karch_hang
+#define karch_hang() \
  __xblock({ for (;;) {} \
             __compiler_unreachable();\
  })

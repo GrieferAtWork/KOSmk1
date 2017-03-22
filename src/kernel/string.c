@@ -26,6 +26,7 @@
 #include <kos/compiler.h>
 #include <kos/kernel/proc.h>
 #include <kos/kernel/paging.h>
+#include <kos/kernel/shm.h>
 #include <kos/kernel/util/string.h>
 #include <sys/types.h>
 #include <string.h>
@@ -35,30 +36,18 @@
 __DECL_BEGIN
 
 __crit size_t
-__user_memset_c(__user void *p, int byte, size_t bytes) {
- size_t maxbytes; __kernel void *kptr;
- KTASK_CRIT_MARK
- USER_FOREACH_BEGIN(p,bytes,kptr,maxbytes,1) {
-  memset(kptr,byte,maxbytes);
- } USER_FOREACH_END({
-  return USER_FOREACH_PENDING;
- });
- return 0;
-}
-
-__crit size_t
 __user_strncpy_c(__user char *p, __kernel char const *s, size_t maxchars) {
  size_t maxbytes; __kernel void *kptr;
  KTASK_CRIT_MARK
  maxchars = strnlen(s,maxchars)*sizeof(char);
  USER_FOREACH_BEGIN(p,maxchars+1,kptr,maxbytes,1) {
   if (maxbytes > maxchars) {
-   memcpy(kptr,s,maxchars);
-   memset((char *)kptr+maxchars/sizeof(char),0,
-          maxbytes-maxchars);
+   SHM_MEMCPY(kptr,s,maxchars);
+   SHM_MEMSET((char *)kptr+maxchars/sizeof(char),0,
+              maxbytes-maxchars);
    maxchars = 0;
   } else {
-   memcpy(kptr,s,maxbytes);
+   SHM_MEMCPY(kptr,s,maxbytes);
    s        += maxbytes;
    maxchars -= maxbytes;
   }
@@ -94,7 +83,7 @@ user_vsnprintf_callback(__kernel char const *s, size_t maxlen,
  maxlen = strnlen(s,maxlen)*sizeof(char);
  for (;;) {
   copysize = min(maxlen,data->k_bufsiz);
-  memcpy(data->k_bufpos,s,copysize);
+  SHM_MEMCPY(data->k_bufpos,s,copysize);
   data->k_bufpos += copysize;
   data->k_bufsiz -= copysize;
   maxlen         -= copysize;

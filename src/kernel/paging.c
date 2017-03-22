@@ -492,13 +492,14 @@ void kernel_initialize_paging(void) {
  kpagedir_kernel_installmemory((void *)NULL,((uintptr_t)-1)/PAGESIZE,X86_PDE_FLAG_READ_WRITE);
  kpagedir_print(kpagedir_kernel());
 #endif
-
  kpagedir_makecurrent(kpagedir_kernel());
+
+#ifdef __x86__
+ /* Enable paging and write-protection within kernel-land (ring 0) */
+ x86_setcr0(x86_getcr0()|X86_CR0_PG|X86_CR0_WP);
+#else
  __arch_enablepaging();
-#define WP (1 << 16)
- /* Enable write-protection within kernel-land (ring 0) */
- __u32 cr0; __asm_volatile__("movl %%cr0, %0" : "=r" (cr0));
- cr0 |= WP; __asm_volatile__("movl %0, %%cr0" : : "r" (cr0));
+#endif
 }
 
 __DECL_END

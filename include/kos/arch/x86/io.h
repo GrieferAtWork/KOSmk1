@@ -28,7 +28,7 @@
 
 __DECL_BEGIN
 
-// Using the same trick as the linux kernel...
+/* Using the same trick as the linux kernel... */
 #define __X86_SLOWDOWNIO_IMPL "\noutb %%al,$0x80"
 #if 0
 #define __X86_SLOWDOWNIO      __X86_SLOWDOWNIO_IMPL\
@@ -39,17 +39,17 @@ __DECL_BEGIN
 #endif
 
 #define __MAKEIN(T,sfx) \
-__forcelocal T __karch_raw_in##sfx(__u16 port) {\
+__forcelocal T x86_in##sfx(__u16 port) {\
  T rv;\
  __asm_volatile__("in" #sfx " %w1, %0" : "=a" (rv) : "Nd" (port));\
  return rv;\
 }\
-__forcelocal T __karch_raw_in##sfx##_p(__u16 port) {\
+__forcelocal T x86_in##sfx##_p(__u16 port) {\
  T rv;\
  __asm_volatile__("in" #sfx " %w1, %0" __X86_SLOWDOWNIO : "=a" (rv) : "Nd" (port));\
  return rv;\
 }\
-__forcelocal void __karch_raw_ins##sfx(__u16 port, void *addr, __size_t count) {\
+__forcelocal void x86_ins##sfx(__u16 port, void *addr, __size_t count) {\
  __asm_volatile__("rep; ins" #sfx \
                   : "=D" (addr)\
                   , "=c" (count)\
@@ -63,15 +63,15 @@ __MAKEIN(__u32,l)
 #undef __MAKEIN
 
 #define __MAKEOUT(T,sfx,s1) \
-__forcelocal void __karch_raw_out##sfx(__u16 port, T value) {\
+__forcelocal void x86_out##sfx(__u16 port, T value) {\
  __asm_volatile__("out" #sfx " %" s1 "0, %w1"\
                   : : "a" (value), "Nd" (port));\
 }\
-__forcelocal void __karch_raw_out##sfx##_p(__u16 port, T value) {\
+__forcelocal void x86_out##sfx##_p(__u16 port, T value) {\
  __asm_volatile__("out" #sfx " %" s1 "0, %w1" __X86_SLOWDOWNIO\
                   : : "a" (value), "Nd" (port));\
 }\
-__forcelocal void __karch_raw_outs##sfx(__u16 port, void const *addr, __size_t count) {\
+__forcelocal void x86_outs##sfx(__u16 port, void const *addr, __size_t count) {\
  __asm_volatile__("rep; outs" #sfx\
                   : "=S" (addr)\
                   , "=c" (count)\
@@ -84,24 +84,24 @@ __MAKEOUT(__u16,w,"w")
 __MAKEOUT(__u32,l,"")
 #undef __MAKEOUT
 
-#define karch_inb    __karch_raw_inb
-#define karch_inw    __karch_raw_inw
-#define karch_inl    __karch_raw_inl
-#define karch_insb   __karch_raw_insb
-#define karch_insw   __karch_raw_insw
-#define karch_insl   __karch_raw_insl
-#define karch_inb_p  __karch_raw_inb_p
-#define karch_inw_p  __karch_raw_inw_p
-#define karch_inl_p  __karch_raw_inl_p
-#define karch_outb   __karch_raw_outb
-#define karch_outw   __karch_raw_outw
-#define karch_outl   __karch_raw_outl
-#define karch_outsb  __karch_raw_outsb
-#define karch_outsw  __karch_raw_outsw
-#define karch_outsl  __karch_raw_outsl
-#define karch_outb_p __karch_raw_outb_p
-#define karch_outw_p __karch_raw_outw_p
-#define karch_outl_p __karch_raw_outl_p
+#define karch_inb    x86_inb
+#define karch_inw    x86_inw
+#define karch_inl    x86_inl
+#define karch_insb   x86_insb
+#define karch_insw   x86_insw
+#define karch_insl   x86_insl
+#define karch_inb_p  x86_inb_p
+#define karch_inw_p  x86_inw_p
+#define karch_inl_p  x86_inl_p
+#define karch_outb   x86_outb
+#define karch_outw   x86_outw
+#define karch_outl   x86_outl
+#define karch_outsb  x86_outsb
+#define karch_outsw  x86_outsw
+#define karch_outsl  x86_outsl
+#define karch_outb_p x86_outb_p
+#define karch_outw_p x86_outw_p
+#define karch_outl_p x86_outl_p
 
 __DECL_END
 

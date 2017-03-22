@@ -25,7 +25,7 @@
 
 #include <kos/compiler.h>
 
-
+#ifndef __ASSEMBLY__
 /* Using low-level assembly functions implemented
  * by the #include-er, generate high-level wrappers
  * for string utilities, featuring constant
@@ -39,7 +39,8 @@
 #include <kos/kernel/types.h>
 __DECL_BEGIN
 
-__forcelocal __wunused __constcall int __karch_constant_ffs(int __i) {
+__forcelocal __wunused __constcall
+int __karch_constant_ffs(int __i) {
  if (__i & 0x01) return 1;
  if (__i & 0x02) return 2;
  if (__i & 0x04) return 3;
@@ -93,35 +94,93 @@ __DECL_END
 #include <kos/kernel/types.h>
 __DECL_BEGIN
 
+extern __attribute_error("Size is too large for small memcpy()")
+void __karch_small_memcpy_too_large(void);
 
-__forcelocal void *__karch_constant_memcpy(void *__dst, void const *__src, __size_t __bytes) {
+#define __KARCH_SMALL_MEMCPY_MAXSIZE  8
+__forcelocal void *
+__karch_small_memcpy(void *__dst, void const *__src, __size_t __bytes) {
 #define __X(T,i) ((T *)__dst)[i] = ((T const *)__src)[i]
  switch (__bytes) {
-  case 1: __X(__u8,0);                           return __dst;
-  case 2: __X(__u16,0);                          return __dst;
-  case 3: __X(__u16,0),__X(__u8,2);              return __dst;
-  case 4: __X(__u32,0);                          return __dst;
-  case 5: __X(__u32,0),__X(__u8,4);              return __dst;
-  case 6: __X(__u32,0),__X(__u16,2);             return __dst;
-  case 7: __X(__u32,0),__X(__u16,2),__X(__u8,6); return __dst;
+  case 0:                                        break;
+  case 1: __X(__u8,0);                           break;
+  case 2: __X(__u16,0);                          break;
+  case 3: __X(__u16,0),__X(__u8,2);              break;
+  case 4: __X(__u32,0);                          break;
+  case 5: __X(__u32,0),__X(__u8,4);              break;
+  case 6: __X(__u32,0),__X(__u16,2);             break;
+  case 7: __X(__u32,0),__X(__u16,2),__X(__u8,6); break;
 #if __SIZEOF_POINTER__ >= 8
-  case 8: __X(__u64,0);                          return __dst;
+  case 8: __X(__u64,0);                          break;
 #else
-  case 8: __X(__u32,0),__X(__u32,1);             return __dst;
+  case 8: __X(__u32,0),__X(__u32,1);             break;
 #endif
-  default: break;
+  default: __karch_small_memcpy_too_large();
  }
+ return __dst;
 #undef __X
+}
+
+/* Size limits used to determine string-operations large
+ * enough to qualify use of a w/l/q arch-operation, even
+ * if that means having to produce additional alignment code. */
+#define __KARCH_STRING_LARGE_LIMIT_8  (1 << 12)
+#define __KARCH_STRING_LARGE_LIMIT_4  (1 << 10)
+#define __KARCH_STRING_LARGE_LIMIT_2  (1 << 5)
+
+__forcelocal void *
+__karch_constant_memcpy(void *__dst, void const *__src, __size_t __bytes) {
+ /* Special optimization: Small memcpy. */
+ if (__bytes <= __KARCH_SMALL_MEMCPY_MAXSIZE) {
+  return __karch_small_memcpy(__dst,__src,__bytes);
+ }
 #ifdef __karch_raw_memcpy_q
+ /* Special optimization: 8-byte aligned memcpy. */
  if (!(__bytes%8)) return __karch_raw_memcpy_q(__dst,__src,__bytes/8);
+#if __KARCH_SMALL_MEMCPY_MAXSIZE >= 8
+ if (__bytes >= __KARCH_STRING_LARGE_LIMIT_8) {
+  /* Special optimization: Large memcpy. */
+  __size_t __offset = __bytes % 8;
+  __karch_small_memcpy(__dst,__src,__offset);
+  return __karch_raw_memcpy_q((void *)((__uintptr_t)__dst+__offset),
+                              (void *)((__uintptr_t)__src+__offset),
+                               __bytes/8);
+ }
+#endif /* __KARCH_SMALL_MEMCPY_MAXSIZE >= 8 */
 #endif /* __karch_raw_memcpy_q */
 #ifdef __karch_raw_memcpy_l
+ /* Special optimization: 4-byte aligned memcpy. */
  if (!(__bytes%4)) return __karch_raw_memcpy_l(__dst,__src,__bytes/4);
+#if __KARCH_SMALL_MEMCPY_MAXSIZE >= 4
+ if (__bytes >= __KARCH_STRING_LARGE_LIMIT_4) {
+  /* Special optimization: Large memcpy. */
+  __size_t __offset = __bytes % 4;
+  __karch_small_memcpy(__dst,__src,__offset);
+  return __karch_raw_memcpy_l((void *)((__uintptr_t)__dst+__offset),
+                              (void *)((__uintptr_t)__src+__offset),
+                               __bytes/4);
+ }
+#endif /* __KARCH_SMALL_MEMCPY_MAXSIZE >= 4 */
 #endif /* __karch_raw_memcpy_l */
 #ifdef __karch_raw_memcpy_w
  if (!(__bytes%2)) return __karch_raw_memcpy_w(__dst,__src,__bytes/2);
+#if __KARCH_SMALL_MEMCPY_MAXSIZE >= 2
+ if (__bytes >= __KARCH_STRING_LARGE_LIMIT_2) {
+  /* Special optimization: Large memcpy. */
+  __size_t __offset = __bytes % 2;
+  __karch_small_memcpy(__dst,__src,__offset);
+  return __karch_raw_memcpy_w((void *)((__uintptr_t)__dst+__offset),
+                              (void *)((__uintptr_t)__src+__offset),
+                               __bytes/2);
+ }
+#endif /* __KARCH_SMALL_MEMCPY_MAXSIZE >= 2 */
 #endif /* __karch_raw_memcpy_w */
+ /* Fallback: Perform a regular, old memcpy(). */
+#ifdef __karch_raw_memcpy_b
+ return __karch_raw_memcpy_b(__dst,__src,__bytes);
+#else
  return __karch_raw_memcpy(__dst,__src,__bytes);
+#endif
 }
 #define karch_memcpy(dst,src,bytes) \
  (__builtin_constant_p(bytes)\
@@ -139,40 +198,82 @@ __DECL_END
 #include <stdint.h>
 __DECL_BEGIN
 
-__forcelocal void *__karch_constant_memset(void *__dst, int __c, __size_t __bytes) {
+extern __attribute_error("Size is too large for small memset()")
+void __karch_small_memset_too_large(void);
+
+#define __KARCH_SMALL_MEMSET_MAXSIZE  8
+__forcelocal void *
+__karch_small_memset(void *__dst, int __c, __size_t __bytes) {
 #define __X(T,i,m) ((T *)__dst)[i] = m*__c
  switch (__bytes) {
-  case 1: __X(__u8, 0,UINT8_C (0x01));               return __dst;
-  case 2: __X(__u16,0,UINT16_C(0x0101));             return __dst;
+  case 0:                                            break;
+  case 1: __X(__u8, 0,UINT8_C (0x01));               break;
+  case 2: __X(__u16,0,UINT16_C(0x0101));             break;
   case 3: __X(__u16,0,UINT16_C(0x0101)),
-          __X(__u8, 2,UINT8_C (0x01));               return __dst;
-  case 4: __X(__u32,0,UINT32_C(0x01010101));         return __dst;
+          __X(__u8, 2,UINT8_C (0x01));               break;
+  case 4: __X(__u32,0,UINT32_C(0x01010101));         break;
   case 5: __X(__u32,0,UINT32_C(0x01010101)),
-          __X(__u8, 4,UINT8_C (0x01));               return __dst;
+          __X(__u8, 4,UINT8_C (0x01));               break;
   case 6: __X(__u32,0,UINT32_C(0x01010101)),
-          __X(__u16,2,UINT16_C(0x0101));             return __dst;
+          __X(__u16,2,UINT16_C(0x0101));             break;
   case 7: __X(__u32,0,UINT32_C(0x01010101)),
           __X(__u16,2,UINT16_C(0x0101)),
-          __X(__u8, 6,UINT8_C (0x01));               return __dst;
+          __X(__u8, 6,UINT8_C (0x01));               break;
 #if __SIZEOF_POINTER__ >= 8
-  case 8: __X(__u64,0,UINT64_C(0x0101010101010101)); return __dst;
+  case 8: __X(__u64,0,UINT64_C(0x0101010101010101)); break;
 #else
   case 8: __X(__u32,0,UINT32_C(0x01010101)),
-          __X(__u32,1,UINT32_C(0x01010101));         return __dst;
+          __X(__u32,1,UINT32_C(0x01010101));         break;
 #endif
-  default: break;
+  default: __karch_small_memset_too_large();
  }
 #undef __X
+ return __dst;
+}
+
+__forcelocal void *
+__karch_constant_memset(void *__dst, int __c, __size_t __bytes) {
+ if (__bytes <= __KARCH_SMALL_MEMSET_MAXSIZE) {
+  return __karch_small_memset(__dst,__c,__bytes);
+ }
 #ifdef __karch_raw_memset_q
  if (!(__bytes%8)) return __karch_raw_memset_q(__dst,__c,__bytes/8);
+#if __KARCH_SMALL_MEMSET_MAXSIZE >= 8
+ if (__bytes >= __KARCH_STRING_LARGE_LIMIT_8) {
+  /* Special optimization: Large memset. */
+  __size_t __offset = __bytes % 8;
+  __karch_small_memset(__dst,__c,__offset);
+  return __karch_raw_memset_q((void *)((__uintptr_t)__dst+__offset),__c,__bytes/8);
+ }
+#endif /* __KARCH_SMALL_MEMSET_MAXSIZE >= 8 */
 #endif /* __karch_raw_memset_q */
 #ifdef __karch_raw_memset_l
  if (!(__bytes%4)) return __karch_raw_memset_l(__dst,__c,__bytes/4);
+#if __KARCH_SMALL_MEMSET_MAXSIZE >= 4
+ if (__bytes >= __KARCH_STRING_LARGE_LIMIT_4) {
+  /* Special optimization: Large memset. */
+  __size_t __offset = __bytes % 4;
+  __karch_small_memset(__dst,__c,__offset);
+  return __karch_raw_memset_l((void *)((__uintptr_t)__dst+__offset),__c,__bytes/4);
+ }
+#endif /* __KARCH_SMALL_MEMSET_MAXSIZE >= 4 */
 #endif /* __karch_raw_memset_l */
 #ifdef __karch_raw_memset_w
  if (!(__bytes%2)) return __karch_raw_memset_w(__dst,__c,__bytes/2);
+#if __KARCH_SMALL_MEMSET_MAXSIZE >= 2
+ if (__bytes >= __KARCH_STRING_LARGE_LIMIT_2) {
+  /* Special optimization: Large memset. */
+  __size_t __offset = __bytes % 2;
+  __karch_small_memset(__dst,__c,__offset);
+  return __karch_raw_memset_w((void *)((__uintptr_t)__dst+__offset),__c,__bytes/2);
+ }
+#endif /* __KARCH_SMALL_MEMSET_MAXSIZE >= 2 */
 #endif /* __karch_raw_memset_w */
+#ifdef __karch_raw_memset_b
+ return __karch_raw_memset_b(__dst,__c,__bytes);
+#else
  return __karch_raw_memset(__dst,__c,__bytes);
+#endif
 }
 
 #define karch_memset(dst,c,bytes) \
@@ -243,57 +344,106 @@ __karch_getfirstnzbyte_64(__s64 __b) {
 #endif
 }
 
+
+extern __attribute_error("Size is too large for small memcmp()")
+void __karch_small_memcmp_too_large(void);
+
+#define __KARCH_SMALL_MEMCMP_MAXSIZE   8
+
 __forcelocal int
-__karch_constant_memcmp(void const *__a, void const *__b, __size_t __bytes) {
- /* Optimizations for small sizes. */
+__karch_small_memcmp(void const *__a, void const *__b, __size_t __bytes) {
+#define __CMP(T,i) (((T *)__a)[i]-((T *)__b)[i])
  switch (__bytes) {
   case 0: return 0;
-#if __SIZEOF_POINTER__ >= 1
-  case 1: return (int)(*(__s8 const *)__a-*(__s8 const *)__b);
-#endif
-#if __SIZEOF_POINTER__ >= 2
-  case 2: return __karch_getfirstnzbyte_16((*(__s16 const *)__a-*(__s16 const *)__b));
+  case 1: return (int)__CMP(__s8,0);
+  case 2: return __karch_getfirstnzbyte_16(__CMP(__s16,0));
   case 3: {
-   __s16 __result = (*(__s16 const *)__a-*(__s16 const *)__b);
+   __s16 __result = __CMP(__s16,0);
    if (__result) return __karch_getfirstnzbyte_16(__result);
-   return (int)(((__s8 const *)__a)[2]-((__s8 const *)__b)[2]);
+   return (int)__CMP(__s8,2);
   }
-#endif
-#if __SIZEOF_POINTER__ >= 4
-  case 4: return __karch_getfirstnzbyte_32((*(__s32 const *)__a-*(__s32 const *)__b));
+  case 4: return __karch_getfirstnzbyte_32(__CMP(__s32,0));
   case 5: {
-   __s32 __result = (*(__s32 const *)__a-*(__s32 const *)__b);
+   __s32 __result = __CMP(__s32,0);
    if (__result) return __karch_getfirstnzbyte_32(__result);
-   return (int)(((__s8 const *)__a)[4]-((__s8 const *)__b)[4]);
+   return (int)__CMP(__s8,4);
   }
   case 6: {
-   __s32 __result = (*(__s32 const *)__a-*(__s32 const *)__b);
+   __s32 __result = __CMP(__s32,0);
    if (__result) return __karch_getfirstnzbyte_32(__result);
-   return __karch_getfirstnzbyte_16((((__s16 const *)__a)[2]-((__s16 const *)__b)[2]));
+   return __karch_getfirstnzbyte_16(__CMP(__s16,2));
   }
   case 7: {
    __s16 __result16;
-   __s32 __result32 = (*(__s32 const *)__a-*(__s32 const *)__b);
+   __s32 __result32 = __CMP(__s32,0);
    if (__result32) return __karch_getfirstnzbyte_32(__result32);
-   __result16 = (((__s16 const *)__a)[2]-((__s16 const *)__b)[2]);
+   __result16 = __CMP(__s16,2);
    if (__result16) return __karch_getfirstnzbyte_16(__result16);
-   return (int)(((__s8 const *)__a)[6]-((__s8 const *)__b)[6]);
+   return (int)__CMP(__s8,6);
+  }
+#if __SIZEOF_POINTER__ >= 8
+  case 8: return __karch_getfirstnzbyte_64(__CMP(__s64,0));
+#else
+  case 8: {
+   __s32 __result32 = __CMP(__s32,0);
+   if (__result32) return __karch_getfirstnzbyte_32(__result32);
+   return __karch_getfirstnzbyte_32(__CMP(__s32,1));
   }
 #endif
-#if __SIZEOF_POINTER__ >= 8
-  case 8: return __karch_getfirstnzbyte_64((*(__s64 const *)__a-*(__s64 const *)__b));
-#endif
-  default: break;
+  default: __karch_small_memcmp_too_large();
+ }
+#undef __CMP
+}
+
+
+__forcelocal int
+__karch_constant_memcmp(void const *__a, void const *__b, __size_t __bytes) {
+ /* Optimizations for small sizes. */
+ if (__bytes <= __KARCH_SMALL_MEMCMP_MAXSIZE) {
+  return __karch_small_memcmp(__a,__b,__bytes);
  }
  /* Optimizations for qword/dword/word-aligned sizes. */
 #ifdef __karch_raw_memcmp_q
  if (!(__bytes%8)) return __karch_getfirstnzbyte_64(__karch_raw_memcmp_q(__a,__b,__bytes/8));
+#if __KARCH_SMALL_MEMSET_MAXSIZE >= 8
+ if (__bytes >= __KARCH_STRING_LARGE_LIMIT_8) {
+  /* Special optimization: Large memset. */
+  __size_t __offset = __bytes % 8;
+  int __result = __karch_small_memcmp(__a,__b,__offset);
+  return __result ? __result : __karch_getfirstnzbyte_64(
+   __karch_raw_memcmp_q((void *)((__uintptr_t)__a+__offset),
+                        (void *)((__uintptr_t)__b+__offset),
+                         __bytes/8));
+ }
+#endif /* __KARCH_SMALL_MEMSET_MAXSIZE >= 8 */
 #endif /* __karch_raw_memcmp_q */
 #ifdef __karch_raw_memcmp_l
  if (!(__bytes%4)) return __karch_getfirstnzbyte_32(__karch_raw_memcmp_l(__a,__b,__bytes/4));
+#if __KARCH_SMALL_MEMSET_MAXSIZE >= 4
+ if (__bytes >= __KARCH_STRING_LARGE_LIMIT_4) {
+  /* Special optimization: Large memset. */
+  __size_t __offset = __bytes % 4;
+  int __result = __karch_small_memcmp(__a,__b,__offset);
+  return __result ? __result : __karch_getfirstnzbyte_32(
+   __karch_raw_memcmp_l((void *)((__uintptr_t)__a+__offset),
+                        (void *)((__uintptr_t)__b+__offset),
+                         __bytes/4));
+ }
+#endif /* __KARCH_SMALL_MEMSET_MAXSIZE >= 4 */
 #endif /* __karch_raw_memcmp_l */
 #ifdef __karch_raw_memcmp_w
  if (!(__bytes%2)) return __karch_getfirstnzbyte_16(__karch_raw_memcmp_w(__a,__b,__bytes/2));
+#if __KARCH_SMALL_MEMSET_MAXSIZE >= 2
+ if (__bytes >= __KARCH_STRING_LARGE_LIMIT_2) {
+  /* Special optimization: Large memset. */
+  __size_t __offset = __bytes % 2;
+  int __result = __karch_small_memcmp(__a,__b,__offset);
+  return __result ? __result : __karch_getfirstnzbyte_16(
+   __karch_raw_memcmp_w((void *)((__uintptr_t)__a+__offset),
+                        (void *)((__uintptr_t)__b+__offset),
+                         __bytes/2));
+ }
+#endif /* __KARCH_SMALL_MEMSET_MAXSIZE >= 4 */
 #endif /* __karch_raw_memcmp_w */
  /* Fallback. */
 #ifdef __karch_raw_memcmp_b
@@ -318,19 +468,19 @@ __DECL_END
 
 
 #ifdef __karch_raw_strend
-#define karch_strend   __karch_raw_strend
+#define karch_strend  __karch_raw_strend
 #endif
 
 #ifdef __karch_raw_strnend
-#define karch_strnend  __karch_raw_strnend
+#define karch_strnend __karch_raw_strnend
 #endif
 
 #ifdef __karch_raw_strlen
-#define karch_strlen   __karch_raw_strlen
+#define karch_strlen  __karch_raw_strlen
 #endif
 
 #ifdef __karch_raw_strnlen
-#define karch_strnlen  __karch_raw_strnlen
+#define karch_strnlen __karch_raw_strnlen
 #endif
 
 #ifdef __karch_raw_memchr_b
@@ -340,9 +490,9 @@ __DECL_END
 #endif
 
 #ifdef __karch_raw_memrchr_b
-#define karch_memrchr  __karch_raw_memrchr_b
+#define karch_memrchr __karch_raw_memrchr_b
 #elif defined(__karch_raw_memrchr)
-#define karch_memrchr  __karch_raw_memrchr
+#define karch_memrchr __karch_raw_memrchr
 #endif
 
 
@@ -647,6 +797,6 @@ __DECL_END
 #endif /* __karch_raw_memcmp... */
 #endif /* karch_memrchr */
 #endif /* !karch_memrmem */
-
+#endif /* !__ASSEMBLY__ */
 
 #endif /* !__KOS_ARCH_GENERIC_STRING_H__ */

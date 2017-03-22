@@ -44,7 +44,7 @@
 
 #include <kos/arch.h>
 #ifdef __x86__
-#include <kos/arch/x86/eflags.h>
+#include <kos/arch/x86/cpu-registers.h>
 #endif
 
 __DECL_BEGIN
@@ -77,8 +77,8 @@ COMPILER_PACK_POP
  stack.regs.fs       = KSEG_KERNEL_DATA;
  stack.regs.gs       = KSEG_KERNEL_DATA;
 #endif
-#ifdef KARCH_X86_EFLAGS_IF
- stack.regs.eflags   = KARCH_X86_EFLAGS_IF;
+#ifdef X86_EFLAGS_IF
+ stack.regs.eflags   = X86_EFLAGS_IF;
 #else
  stack.regs.eflags   = 0;
 #endif
@@ -495,8 +495,8 @@ void ktask_setupuser(struct ktask *self, __user void *useresp, __user void *eip)
 #endif
  regs.base.eip    = (uintptr_t)eip;
  regs.useresp     = (uintptr_t)useresp;
-#ifdef KARCH_X86_EFLAGS_IF
- regs.base.eflags = KARCH_X86_EFLAGS_IF;
+#ifdef X86_EFLAGS_IF
+ regs.base.eflags = X86_EFLAGS_IF;
 #else
  regs.base.eflags = 0;
 #endif

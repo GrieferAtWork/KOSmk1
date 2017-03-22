@@ -24,7 +24,7 @@
 #define __KOS_KERNEL_SCHED_PROC_FORK_C_INL__ 1
 
 #include <assert.h>
-#include <kos/arch/x86/eflags.h>
+#include <kos/arch/x86/cpu-registers.h>
 #include <kos/compiler.h>
 #include <kos/config.h>
 #include <kos/kernel/debug.h>
@@ -232,8 +232,8 @@ ktask_copy4fork(struct ktask *__restrict self,
   regs.base.eax    = KE_OK; /* Return 0 in EAX for child task. */
   regs.base.eip    = userregs->eip;
   regs.base.cs     = userregs->cs;
-#ifdef KARCH_X86_EFLAGS_IF
-  regs.base.eflags = userregs->eflags|KARCH_X86_EFLAGS_IF;
+#ifdef X86_EFLAGS_IF
+  regs.base.eflags = userregs->eflags|X86_EFLAGS_IF;
 #else
   regs.base.eflags = userregs->eflags;
 #endif

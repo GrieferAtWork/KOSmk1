@@ -50,7 +50,9 @@ mode16_reloc_begin:
 	
 	mov32 %cr0, %eax
 	mov32 %eax, MODE16_SYM(mode16_oldcr0)
-	and32 $0x7FFFFFFe, %eax /* Disable paging bit & enable 16-bit pmode (NOTE: Paging should already be disabled, though...). */
+	/* Disable paging bit & enable 16-bit pmode
+	 * (NOTE: Paging should already be disabled, though...). */
+	and32 $(~(X86_CR0_PG|X86_CR0_PE)), %eax /* 0x7ffffffe */
 	mov32 %eax, %cr0
 	jmp16 $0x0000, $MODE16_SYM(mode16_startup)
 mode16_startup:
@@ -150,7 +152,7 @@ GLOBAL_FUNCTION(__realmode_interrupt):
 //	cli
 	movI %cr0, %eax
 	pushI %eax
-	andI $0x7FFFFFFF, %eax
+	andI $(~X86_CR0_PE), %eax
 	movI %eax, %cr0
 
 	/* CR3 must be ZERO before we can switch to 16-bit mode. */

@@ -53,7 +53,7 @@
 __DECL_BEGIN
 
 #ifdef __KERNEL__
-#define ABORT(exitcode) arch_hang()
+#define ABORT(exitcode) karch_hang()
 #else
 #define ABORT(exitcode) kproc_exit(exitcode)
 #endif
