@@ -42,22 +42,28 @@ GLOBAL_FUNCTION(__kos_syscall):
 	/* ... And this big blob of code fixing registers is why I really
 	 *     just wants you to use the macros from <kos/syscall.h> ...
 	 *  >> With inlining and what not, those are just so much faster! */
-	pushI %ebp
-	movI (PS*2)(%esp), %eax /*< sysno. */
-	leaI (PS*6)(%esp), %ebp /*< Pointer to additional arguments (#3 + ...) */
-	pushI %ebx
+	movI PS(%esp), %eax /*< sysno. */
 	pushI %ecx
 	pushI %edx
-	movI (-PS*3)(%ebp), %ebx /*< ARG #0. */
-	movI (-PS*2)(%ebp), %ecx /*< ARG #1. */
-	movI (-PS*1)(%ebp), %edx /*< ARG #2. */
+	pushI %ebx
+	pushI %esi
+	pushI %edi
+	/* 12: 1*return_addr+1*sysno+5*old_regs+5*regargs */
+	addI $(PS*12), %esp /*< Pointer to additional arguments (#5 + ...) */
+	movI (-PS*5)(%esp), %ecx /*< ARG #0. */
+	movI (-PS*4)(%esp), %edx /*< ARG #1. */
+	movI (-PS*3)(%esp), %ebx /*< ARG #2. */
+	movI (-PS*2)(%esp), %esi /*< ARG #3. */
+	movI (-PS*1)(%esp), %edi /*< ARG #4. */
 
 	int $__SYSCALL_INTNO
 
+	subI $(PS*12), %esp
+	popI %edi
+	popI %esi
+	popI %ebx
 	popI %edx
 	popI %ecx
-	popI %ebx
-	popI %ebp
 	ret
 SYMBOLEND(__kos_syscall)
 SYMBOLEND(syscall)

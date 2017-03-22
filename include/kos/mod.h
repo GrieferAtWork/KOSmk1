@@ -56,10 +56,10 @@ typedef __kmodid_t kmodid_t;
 // as designated through the given 'name'.
 // - Unlike many other APIs, 'kmod_open' is not restricted by chroot prisons,
 //   always resolving the given name in origin to the true filesystem root
-//  (if it doesn't contain any slashes; i.e. is just the filename).
+//  (Though only if it doesn't contain any slashes; i.e. is just the filename).
 // - This does however not pose a security risk, as loading
 //   a module is a read-only operation from start to finish,
-//   with library that have the SETUID flag set being responsible
+//   with libraries that have the SETUID flag set being responsible
 //   to prevent abuse by never returning to non-privileged code
 //   after having done a rootfork().
 // - doing calling something like:
@@ -84,21 +84,31 @@ typedef __kmodid_t kmodid_t;
 //       into the address space of an existing process.
 //       Though modules cannot be loaded more than once (with
 //       KOS telling them apart based on their absolute
-//       and sanitized filename), it is possible to load
-//       two completely different applications into the same
-//       process (as long as none of the new binaries addresses
-//       clash with those of already the already existing binary)
-// NOTE: Some executable formats are not supported for such
-//       loading at a later point (most notably shebang).
-// @param: modid: Filled with an identifier that can be used
-//                to unload the module, after successful return
-//                of this function, at a later point, as well
-//                as load symbols from that module.
-// @param: flags: A set of 'KMOD_OPEN_FLAG_*'.
+//       and sanitized filenames), it is possible to load
+//       two completely different, non-relocatable applications
+//       into the same process (so long as none of their section
+//       addresses clash with those of already existing binary)
+//    >> With this in mind, you could write a program that
+//       relocates itself to some high memory location before
+//       loading another binary, which it can then proceed
+//       to modify in some way (such as changing data of its
+//       BSS section), before finally passing over control,
+//       thus allowing for yet another way of secret handshakes
+//       between applications, as well as custom loaders.
+// WARNING: Some executable formats are not supported for such
+//          loading at a later point (most notably shebang).
+// @param: modid:   Filled with an identifier that can be used
+//                  to unload the module at a later point and
+//                  after a successful return from this function, as
+//                  well as explicitly load symbols from that module.
+// @param: flags:   A set of 'KMOD_OPEN_FLAG_*'.
+// @param: namemax: strnlen-style max length of the given 'name'.
 // @return: KE_OK:        The module was successfully loaded.
 // @return: KE_NOENT:     [kmod_open] No module matching the given name was found.
 // @return: KE_ACCES:     [kmod_open] The caller doesn't have access to the only matching executable/dependency.
 // @return: KE_BADF:      [kmod_fopen] Bad file-descriptor.
+// @return: KE_NOSYS:     Some file interface required by the linker is not supported
+//                        by the specified file (stop trying to kmod_fopen() a pipe!)
 // @return: KE_NOMEM:     Insufficient memory.
 // @return: KE_RANGE:     The specified module is position-dependent,
 //                        but the region of memory required to load
@@ -132,16 +142,16 @@ __local _syscall3(kerrno_t,kmod_fopen,int,fd,kmodid_t *,modid,__u32,flags);
 //          should not that as soon as the kernel returns control
 //          to you, your application will SEGFAULT.
 // @param: modid: A valid module id obtained from 'kmod_open' or 'kmod_fopen'.
-//                Because there is ~some~ sense to it, you can specify 'KMODID_*',
-//                though I'd really recommend not doing a call like
-//               'kmod_close(KMODID_ALL)', because that just makes too much sense...
+//                Because there is ~some~ sense to it, you can also specify one of the
+//                'KMODID_*' value, though I'd really recommend not doing a call like
+//                'kmod_close(KMODID_ALL)', because that'd just makes too much sense...
 //               (I guess it would be useful if you need to cover your tracks,
 //                but then again, why isn't whoever you're running from just
-//                suspending you?)
+//                ktask_suspend()-ing you?)
 // @return: KE_OK:        The module associated with the given id was successfully closed.
 // @return: KE_INVAL:     Invalid/already closed module id.
 // @return: KS_UNCHANGED: The module load counter was decreased, but didn't hit zero.
-//                        -> The module remains loaded because of multiple calls to 'kmod_fopen'
+//                        -> The module remains loaded because of multiple calls to 'kmod_{f}open'
 __local _syscall1(kerrno_t,kmod_close,kmodid_t,modid);
 
 //////////////////////////////////////////////////////////////////////////
@@ -150,9 +160,33 @@ __local _syscall1(kerrno_t,kmod_close,kmodid_t,modid);
 //       the given module for the same symbol, only failing
 //       if neither the module itself, nor any of its
 //       dependencies carry it.
+// HINT: Weak symbols will also be resolved during
+//       the return trip from the dependency tree.
 // @param: modid: A valid module id obtained from 'kmod_open' or 'kmod_fopen',
 //                or one of the special 'KMODID_*' module ids.
-//                In case of 'KMODID_NEXT', the calling module is loaded last.
+//                'KMODID_NEXT' behaves similar to KMODID_ALL, but the
+//                calling module is check last for the symbol, making this
+//                id very useful when implementing some kind of modloader,
+//                without wanting to do some actual error/dependency checks.
+//             >> #include <mod.h>
+//             >> 
+//             >> __public int game_main(void) {
+//             >>   return 42;
+//             >> }
+//             >> 
+//             >> static int (*pgame_main)(void);
+//             >> int main(void) {
+//             >>   // Load some cool A$$ Mods!
+//             >>   mod_open("/usr/lib/game/mods/killa_tweex.so",0);
+//             >>   mod_open("/usr/lib/game/mods/epic_render.so",0);
+//             >>   mod_open("/usr/lib/game/mods/gnarly_patches.so",0);
+//             >>   *(void **)&pgame_main = kmod_sym(MOD_NEXT,"game_main",(size_t)-1);
+//             >>   return (*pgame_main)();
+//             >> }
+//                The exact check order here depends on what module the caller is from:
+//                A B C D E F  (Caller is module 'D')
+//                3 4 5 6 1 2  (Most likely module lookup order)
+//      REMINDER: The calling module is the one invoking the system call 'int $0x69'
 // @param: name:  The name of a given symbol. Together with
 //                'namemax', it describes an strnlen-style string.
 // @return: NULL: Something went wrong (probably just doesn't export the given symbol)
@@ -167,11 +201,12 @@ __local _syscall3(void *,kmod_sym,kmodid_t,modid,
 typedef __u32 ksymflag_t;
 #endif
 #define KSYMINFO_FLAG_NONE    0x00000000
-#define KSYMINFO_FLAG_NAME    0x00000100 /*< The symbol has a known name. */
-#define KSYMINFO_FLAG_FILE    0x00000200 /*< The symbol has a known file name. */
-#define KSYMINFO_FLAG_LINE    0x00000400 /*< The symbol has a known line number. */
-#define KSYMINFO_FLAG_BASE    0x00001000 /*< The symbol has a known base. */
-#define KSYMINFO_FLAG_SIZE    0x00002000 /*< The symbol has a known size. */
+#define KSYMINFO_FLAG_NAME    0x00000100 /*< The symbol has a known name ('si_name'). */
+#define KSYMINFO_FLAG_FILE    0x00000200 /*< The symbol has a known file name ('si_file'). */
+#define KSYMINFO_FLAG_LINE    0x00000400 /*< The symbol has a known line number ('si_line'). */
+#define KSYMINFO_FLAG_COL     0x00000800 /*< The symbol has a known column number ('si_col'). */
+#define KSYMINFO_FLAG_BASE    0x00001000 /*< The symbol has a known base ('si_base'). */
+#define KSYMINFO_FLAG_SIZE    0x00002000 /*< The symbol has a known size ('si_size'). */
 #define KSYMINFO_FLAG_PUBLIC  0x00010000 /*< The symbol is exported as public. */
 #define KSYMINFO_FLAG_PRIVATE 0x00020000 /*< The symbol is exported as private. */
 #define KSYMINFO_FLAG_WEAK    0x00030000 /*< The symbol is exported as weak. */
@@ -205,6 +240,7 @@ struct ksyminfo {
                             HINT: Symbol line numbers originate at ZERO(0), whilst text editors usually start at ONE(1).
                             NOTE: When generating tracebacks, you will often see this point to the next line after a call,
                                   simply because you're looking up the return address, which _does_ point to the next line. */
+ unsigned int si_col;   /*< Column number (May not be available even if a line number is). */
 };
 
 
@@ -235,7 +271,7 @@ __local _syscall7(kerrno_t,kmod_syminfo,int,procfd,kmodid_t,modid,
 #define KMOD_SYMINFO_FLAG_LOOKUPADDR 0x00000001 /*< 'addr_or_name' is the address of the symbol instead of its name. */
 #define KMOD_SYMINFO_FLAG_WANTNAME   KSYMINFO_FLAG_NAME /*< Fill 'si_name' and 'si_nmsz'. */
 #define KMOD_SYMINFO_FLAG_WANTFILE   KSYMINFO_FLAG_FILE /*< Fill 'si_file' and 'si_flsz'. */
-#define KMOD_SYMINFO_FLAG_WANTLINE   KSYMINFO_FLAG_LINE /*< Fill 'si_line'. */
+#define KMOD_SYMINFO_FLAG_WANTLINE   KSYMINFO_FLAG_LINE /*< Fill 'si_line' and 'si_col'. */
 
 #endif /* !__NO_PROTOTYPES */
 
@@ -250,10 +286,10 @@ typedef __u32 kmodkind_t;
 #define KMODFLAG_BINARY     0x00000100 /*< FLAG: Module is a binary (NOTE: Not set for scripts, such as shebang). */
 #define KMODFLAG_FIXED      0x00000200 /*< FLAG: The module has no relocation information and must be loaded to a fixed address. */
 #define KMODFLAG_PREFFIXED  0x00000400 /*< FLAG: The module prefers being loaded to a fixed address (base = NULL), but is capable of being relocated elsewhere. */
-#define KMODFLAG_CANEXEC    0x00000800 /*< FLAG: The module can be executed (NOTE: ). */
-#define KMODFLAG_LOADED     0x80000000 /*< FLAG: Always set; Used internally to prevent dependecy loops (the library and all dependencies were loaded successfully). */
-#define KMODKIND_FMASK      0xffffff00 /*< Mask for flags (KMODFLAG_*). */
+#define KMODFLAG_CANEXEC    0x00000800 /*< FLAG: The module can be executed (Aka. has an entry point). */
+#define KMODFLAG_LOADED     0x80000000 /*< FLAG: Always set; Used internally to prevent dependecy loops (indicates that the library and all dependencies were loaded successfully). */
 #define KMODKIND_KMASK      0x000000ff /*< Mask for kind (KMODKIND_*). */
+#define KMODKIND_FMASK      0xffffff00 /*< Mask for flags (KMODFLAG_*). */
 #define KMODKIND_KIND(x)  ((x)&KMODKIND_KMASK)
 #define KMODKIND_FLAGS(x) ((x)&KMODKIND_FMASK)
 
@@ -271,7 +307,7 @@ struct kmodinfo {
     /* The kind of module/binary.
      * - One of 'KMODKIND_*'.
      * - Potentially or-ed with addition flags.
-     * - Use 'KMODKIND_KIND' to extract the raw switch-capable kind.
+     * - Use 'KMODKIND_KIND' to extract the raw switch-capable kind (aka. technology).
      * - Use 'KMODKIND_FLAGS' to extract flags.
      */
     kmodid_t   mi_id;         /*< The real module id. */
@@ -280,7 +316,7 @@ struct kmodinfo {
     /* == Section-based address range ==
      * Given an instruction-pointer, one can determine what module
      * the given pointer belongs to through use of its section range:
-     * >> if (eip >= module->mi_begin && eip < module->mi_end) found_module();
+     * >> if (eip >= module->mi_begin && eip < module->mi_end) found_module(module);
      * - 'mi_begin' refers to the lowest address belonging to a given
      *    module, while 'mi_end' refers to that after the greatest.
      * - Note, that depending on the module technology, there may

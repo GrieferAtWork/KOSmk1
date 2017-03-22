@@ -355,8 +355,9 @@ ka2ldwarfchunk_exec(struct ka2ldwarfchunk *__restrict self,
     address += ((op_index+uladv)/self->dc_header.li_max_ops_per_insn)*self->dc_header.li_min_insn_length;
     op_index = (op_index+uladv)%self->dc_header.li_max_ops_per_insn;
    }
-   adv   = (ssize_t)(opcode % self->dc_header.li_line_range)+self->dc_header.li_line_base;
-   line += adv;
+   adv    = (ssize_t)(opcode % self->dc_header.li_line_range)+self->dc_header.li_line_base;
+   line  += adv;
+   column = 0,has_column = 0;
   } else switch (opcode) {
 
    {
@@ -423,6 +424,7 @@ ka2ldwarfchunk_exec(struct ka2ldwarfchunk *__restrict self,
 
    case DW_LNS_advance_line:
     line += (ssize_t)parse_sleb128(&iter,end);
+    column = 0,has_column = 0;
     break;
 
    case DW_LNS_set_file:
@@ -507,15 +509,16 @@ default_lookup_file:
    result->fal_line   = (unsigned int)last_line;
    result->fal_column = (unsigned int)last_column;
    result->fal_flags  = KFILEANDLINE_FLAG_HASLINE;
-   if (has_column) result->fal_flags = KFILEANDLINE_FLAG_HASCOL;
+   if (has_column) result->fal_flags |= KFILEANDLINE_FLAG_HASCOL;
    error = KE_OK;
    goto done;
   }
  }
  /* Check for special case: end state is the address. */
  if (address == symaddr) {
-  last_file = file;
-  last_line = line;
+  last_file   = file;
+  last_line   = line;
+  last_column = column;
   goto found_address;
  }
 #undef RESET_STATE_MACHINE

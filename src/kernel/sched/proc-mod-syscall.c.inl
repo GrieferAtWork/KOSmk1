@@ -193,8 +193,8 @@ ksymbol_fillinfo(struct kproc *__restrict proc,
                  struct kprocmodule *__restrict module,
                  struct ksymbol const *__restrict symbol,
                  ksymaddr_t effective_addr,
-                 __user struct ksyminfo *buf,
-                 size_t bufsize, size_t *__restrict kernel_reqsize,
+                 __user struct ksyminfo *buf, size_t bufsize,
+                 __kernel size_t *__restrict kernel_reqsize,
                  __u32 flags, __u32 symbol_flags) {
  struct ksyminfo info; byte_t *buf_end; kerrno_t error;
  size_t copy_size,bufavail,bufreq,info_size;
@@ -217,7 +217,7 @@ dont_copy_input:
  }
 
  /* Figure out where the buffer of what the user requested ends. */
-      if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info_size = offsetafter(struct ksyminfo,si_line);
+      if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info_size = offsetafter(struct ksyminfo,si_col);
  else if (flags&KMOD_SYMINFO_FLAG_WANTFILE) info_size = offsetafter(struct ksyminfo,si_flsz);
  else if (flags&KMOD_SYMINFO_FLAG_WANTNAME) info_size = offsetafter(struct ksyminfo,si_nmsz);
  else                                       info_size = offsetafter(struct ksyminfo,si_size);
@@ -259,11 +259,11 @@ dont_copy_input:
                               module->pm_lib,effective_addr,&fal);
   if __unlikely(KE_ISERR(error)) {
    if (flags&KMOD_SYMINFO_FLAG_WANTFILE) info.si_flsz = 0;
-   if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info.si_line = 0;
+   if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info.si_line = 0,info.si_col = 0;
   } else {
    if (flags&KMOD_SYMINFO_FLAG_WANTFILE) {
     char const *s1,*s2,*s3;
-    info.si_flsz |= KSYMINFO_FLAG_FILE;
+    info.si_flags |= KSYMINFO_FLAG_FILE;
     if (!info.si_file || !info.si_flsz) {
      info.si_file = (char *)buf_end;
      info.si_flsz = (__size_t)bufavail;
@@ -285,7 +285,20 @@ dont_copy_input:
    } else {
     info.si_flsz = 0;
    }
-   if (flags&KMOD_SYMINFO_FLAG_WANTLINE) info.si_line = fal.fal_line;
+   if (flags&KMOD_SYMINFO_FLAG_WANTLINE) {
+    if (fal.fal_flags&KFILEANDLINE_FLAG_HASLINE) {
+     info.si_flags |= KSYMINFO_FLAG_LINE;
+     info.si_line = fal.fal_line;
+    } else {
+     info.si_line = 0;
+    }
+    if (fal.fal_flags&KFILEANDLINE_FLAG_HASCOL) {
+     info.si_flags |= KSYMINFO_FLAG_COL;
+     info.si_col = fal.fal_column;
+    } else {
+     info.si_col = 0;
+    }
+   }
    kfileandline_quit(&fal);
   }
  }
@@ -296,8 +309,6 @@ dont_copy_input:
 }
 
 
-
-/* _syscall7(kerrno_t,kmod_syminfo,int,procfd,kmodid_t,modid,void const *,addr_or_name,struct ksyminfo *,buf,size_t,bufsize,size_t *,kernel_reqsize,__u32,flags); */
 KSYSCALL_DEFINE_EX7(rc,kerrno_t,kmod_syminfo,int,procfd,kmodid_t,modid,
                     __user void const *,addr_or_name,
                     __user struct ksyminfo *,buf,size_t,bufsize,

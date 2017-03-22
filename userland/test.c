@@ -73,10 +73,12 @@ int main(void) {
   /* Time to mess things up! */
   char *p = (char *)0xdeadbeef;
   for (;;) {
+   assert(x == 42);
    *p++ = '\xAA';
   }
  } __except (exc_code() == KEXCEPTION_SEGFAULT) {
   syminfo_t *syminfo; void *eip;
+  assert(x == 42);
   /* Figure out what kind of segfault this is. */
   char const *mode = (exc_current->ex_info&KEXCEPTIONINFO_SEGFAULT_WRITE) ? "writing" : "reading";
   outf("Segfault occurred while %s address %p\n",
@@ -90,11 +92,12 @@ int main(void) {
    /* Print file,line and function name of where the error occurred
     * (All using the very helpful system interfaces of KOS).
     * NOTE: Again: This will only work if you're compiling in debug-mode. */
-   outf("%s(%d) : %s : See reference to source code location\n",
-        syminfo->si_file,syminfo->si_line+1,syminfo->si_name);
+   outf("%s(%d:%d) : %s : See reference to source code location\n",
+        syminfo->si_file,syminfo->si_line+1,syminfo->si_col,syminfo->si_name);
    free(syminfo);
   }
  }
+ assert(x == 42);
 
 #if 0
  ptrdiff_t off = tls_alloc(NULL,1);

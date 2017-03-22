@@ -68,17 +68,17 @@ ksymhash_of(char const *__restrict text, __size_t size);
 
 
 struct ksymbol {
- struct ksymbol    *s_nextname; /*< [0..1][owned] Next symbol who's name has the same hash. */
- struct ksymbol    *s_nextaddr; /*< [0..1][owned] Next symbol who's address has the same hash. */
- ksymaddr_t         s_addr;     /*< Address associated with this symbol. */
- __size_t           s_size;     /*< Size of this symbol (Or ZERO(0) if not known). */
- ksymhash_t         s_hash;     /*< Unmodulated hash of this symbol. */
- __size_t           s_shndx;    /*< Section index of this symbol (== Elf32_Sym::st_shndx).
-                                    NOTE: In PE-mode, this field is set to 'SHN_UNDEF' for imported symbols, and
-                                          some other value for those either exported, or simply not imported. */
- __size_t           s_nmsz;     /*< Length of this symbol's name. */
- char               s_name[1];  /*< [s_nmsz] Name of the symbol (inlined to improve speed). */
- //char             s_zero;     /*< Ensure zero-termination of 's_name'. */
+ struct ksymbol *s_nextname; /*< [0..1][owned] Next symbol who's name has the same hash. */
+ struct ksymbol *s_nextaddr; /*< [0..1][owned] Next symbol who's address has the same hash. */
+ ksymaddr_t      s_addr;     /*< Address associated with this symbol. */
+ __size_t        s_size;     /*< Size of this symbol (Or ZERO(0) if not known). */
+ ksymhash_t      s_hash;     /*< Unmodulated hash of this symbol. */
+ __size_t        s_shndx;    /*< Section index of this symbol (== Elf32_Sym::st_shndx).
+                                 NOTE: In PE-mode, this field is set to 'SHN_UNDEF' for imported symbols, and
+                                       some other value for those either exported, or simply not imported. */
+ __size_t        s_nmsz;     /*< Length of this symbol's name. */
+ char            s_name[1];  /*< [s_nmsz] Name of the symbol (inlined to improve speed). */
+ //char          s_zero;     /*< Ensure zero-termination of 's_name'. */
 };
 
 extern __crit __wunused __malloccall __nonnull((1))
@@ -495,10 +495,10 @@ __local KOBJECT_DEFINE_DECREF(kshlib_decref,struct kshlib,sh_refcnt,kassert_kshl
 // Initialize a shared library/executable from a given file.
 // @return: KE_NOMEM:    Insufficient memory.
 // @return: KE_NOEXEC:   Not a valid ELF executable.
-// @return: KE_LOOP:     The library and its dependencies are creating an unresolvable loop
+// @return: KE_LOOP:     The library and its dependencies are creating an unresolvable loop.
 // @return: KE_NODEP:    At least one dependencies required by the module could not be found.
-// @return: KE_OVERFLOW: A reference counter would have overflown (the library is loaded too often)
-// @return: KE_ISERR(*): Some other, possibly file-specific error has occurred
+// @return: KE_OVERFLOW: A reference counter would have overflown (the library is loaded too often).
+// @return: KE_ISERR(*): Some other, possibly file-specific error has occurred.
 extern __crit __wunused __nonnull((1,2)) kerrno_t
 kshlib_new(struct kshlib **__restrict result,
            struct kfile *__restrict elf_file);
@@ -534,7 +534,7 @@ __local struct ksymbol const *
 ksymtable_lookupname(struct ksymtable const *__restrict self,
                      char const *__restrict symname,
                      __size_t symnamelength) {
- return ksymtable_lookupname_h(self,symname,symnamelength,
+ return ksymtable_lookupname_h(self,       symname,symnamelength,
                                ksymhash_of(symname,symnamelength));
 }
 #endif

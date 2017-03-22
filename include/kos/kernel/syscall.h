@@ -151,15 +151,13 @@ for (local i: util::range(MAX_ARGS)) {
   }
   print "  ksyscall_enter_d(regs,&sysdbg_##name);\\";
   print "  __KSYSCALL_ENTER(flags)\\";
-  const first_missing_arg = 3;
+  const first_missing_arg = 5;
   local register_arguments = util::min(i,first_missing_arg);
   local missing_arguments = i-register_arguments;
-  if (missing_arguments) {
-  }
   print "  {\\";
   if (missing_arguments) {
     print "   __uintptr_t stackargs["+missing_arguments+"];\\";
-    print "   if __unlikely(copy_from_user(stackargs,(__user void *)regs->regs.ebp,\\";
+    print "   if __unlikely(copy_from_user(stackargs,(__user void *)regs->regs.useresp,\\";
     print "                 sizeof(stackargs))) regs->regs.eax = KE_FAULT;\\";
     print "   else\\";
   }
@@ -167,7 +165,7 @@ for (local i: util::range(MAX_ARGS)) {
         "__KSYSCALL_REGISTER_ARG"+(i ? "" : "0")+"(flags)",;
   for (local j: util::range(register_arguments)) {
     print "\\\n                                               "+(j ? "," : " "),;
-    print "(type"+(j+1)+")regs->regs."+["ebx","ecx","edx"][j],;
+    print "(type"+(j+1)+")regs->regs."+["ecx","edx","ebx","esi","edi"][j],;
   }
   for (local j: util::range(missing_arguments)) {
     print "\\\n                                               ,(type"+(first_missing_arg+j+1)+")stackargs["+j+"]",;
@@ -198,7 +196,7 @@ for (local i: util::range(MAX_ARGS)) {
   __KSYSCALL_ENTER(flags)\
   {\
    regs->regs.eax = (__uintptr_t)sysimpl_##name(__KSYSCALL_REGISTER_ARG(flags)\
-                                                (type1)regs->regs.ebx);\
+                                                (type1)regs->regs.ecx);\
   }\
   __KSYSCALL_LEAVE(flags)\
   ksyscall_leave_d(regs,&sysdbg_##name);\
@@ -212,8 +210,8 @@ for (local i: util::range(MAX_ARGS)) {
   __KSYSCALL_ENTER(flags)\
   {\
    regs->regs.eax = (__uintptr_t)sysimpl_##name(__KSYSCALL_REGISTER_ARG(flags)\
-                                                (type1)regs->regs.ebx\
-                                               ,(type2)regs->regs.ecx);\
+                                                (type1)regs->regs.ecx\
+                                               ,(type2)regs->regs.edx);\
   }\
   __KSYSCALL_LEAVE(flags)\
   ksyscall_leave_d(regs,&sysdbg_##name);\
@@ -228,9 +226,9 @@ for (local i: util::range(MAX_ARGS)) {
   __KSYSCALL_ENTER(flags)\
   {\
    regs->regs.eax = (__uintptr_t)sysimpl_##name(__KSYSCALL_REGISTER_ARG(flags)\
-                                                (type1)regs->regs.ebx\
-                                               ,(type2)regs->regs.ecx\
-                                               ,(type3)regs->regs.edx);\
+                                                (type1)regs->regs.ecx\
+                                               ,(type2)regs->regs.edx\
+                                               ,(type3)regs->regs.ebx);\
   }\
   __KSYSCALL_LEAVE(flags)\
   ksyscall_leave_d(regs,&sysdbg_##name);\
@@ -245,15 +243,11 @@ for (local i: util::range(MAX_ARGS)) {
   ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
-   __uintptr_t stackargs[1];\
-   if __unlikely(copy_from_user(stackargs,(__user void *)regs->regs.ebp,\
-                 sizeof(stackargs))) regs->regs.eax = KE_FAULT;\
-   else\
    regs->regs.eax = (__uintptr_t)sysimpl_##name(__KSYSCALL_REGISTER_ARG(flags)\
-                                                (type1)regs->regs.ebx\
-                                               ,(type2)regs->regs.ecx\
-                                               ,(type3)regs->regs.edx\
-                                               ,(type4)stackargs[0]);\
+                                                (type1)regs->regs.ecx\
+                                               ,(type2)regs->regs.edx\
+                                               ,(type3)regs->regs.ebx\
+                                               ,(type4)regs->regs.esi);\
   }\
   __KSYSCALL_LEAVE(flags)\
   ksyscall_leave_d(regs,&sysdbg_##name);\
@@ -269,16 +263,12 @@ for (local i: util::range(MAX_ARGS)) {
   ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
-   __uintptr_t stackargs[2];\
-   if __unlikely(copy_from_user(stackargs,(__user void *)regs->regs.ebp,\
-                 sizeof(stackargs))) regs->regs.eax = KE_FAULT;\
-   else\
    regs->regs.eax = (__uintptr_t)sysimpl_##name(__KSYSCALL_REGISTER_ARG(flags)\
-                                                (type1)regs->regs.ebx\
-                                               ,(type2)regs->regs.ecx\
-                                               ,(type3)regs->regs.edx\
-                                               ,(type4)stackargs[0]\
-                                               ,(type5)stackargs[1]);\
+                                                (type1)regs->regs.ecx\
+                                               ,(type2)regs->regs.edx\
+                                               ,(type3)regs->regs.ebx\
+                                               ,(type4)regs->regs.esi\
+                                               ,(type5)regs->regs.edi);\
   }\
   __KSYSCALL_LEAVE(flags)\
   ksyscall_leave_d(regs,&sysdbg_##name);\
@@ -295,17 +285,17 @@ for (local i: util::range(MAX_ARGS)) {
   ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
-   __uintptr_t stackargs[3];\
-   if __unlikely(copy_from_user(stackargs,(__user void *)regs->regs.ebp,\
+   __uintptr_t stackargs[1];\
+   if __unlikely(copy_from_user(stackargs,(__user void *)regs->regs.useresp,\
                  sizeof(stackargs))) regs->regs.eax = KE_FAULT;\
    else\
    regs->regs.eax = (__uintptr_t)sysimpl_##name(__KSYSCALL_REGISTER_ARG(flags)\
-                                                (type1)regs->regs.ebx\
-                                               ,(type2)regs->regs.ecx\
-                                               ,(type3)regs->regs.edx\
-                                               ,(type4)stackargs[0]\
-                                               ,(type5)stackargs[1]\
-                                               ,(type6)stackargs[2]);\
+                                                (type1)regs->regs.ecx\
+                                               ,(type2)regs->regs.edx\
+                                               ,(type3)regs->regs.ebx\
+                                               ,(type4)regs->regs.esi\
+                                               ,(type5)regs->regs.edi\
+                                               ,(type6)stackargs[0]);\
   }\
   __KSYSCALL_LEAVE(flags)\
   ksyscall_leave_d(regs,&sysdbg_##name);\
@@ -323,18 +313,18 @@ for (local i: util::range(MAX_ARGS)) {
   ksyscall_enter_d(regs,&sysdbg_##name);\
   __KSYSCALL_ENTER(flags)\
   {\
-   __uintptr_t stackargs[4];\
-   if __unlikely(copy_from_user(stackargs,(__user void *)regs->regs.ebp,\
+   __uintptr_t stackargs[2];\
+   if __unlikely(copy_from_user(stackargs,(__user void *)regs->regs.useresp,\
                  sizeof(stackargs))) regs->regs.eax = KE_FAULT;\
    else\
    regs->regs.eax = (__uintptr_t)sysimpl_##name(__KSYSCALL_REGISTER_ARG(flags)\
-                                                (type1)regs->regs.ebx\
-                                               ,(type2)regs->regs.ecx\
-                                               ,(type3)regs->regs.edx\
-                                               ,(type4)stackargs[0]\
-                                               ,(type5)stackargs[1]\
-                                               ,(type6)stackargs[2]\
-                                               ,(type7)stackargs[3]);\
+                                                (type1)regs->regs.ecx\
+                                               ,(type2)regs->regs.edx\
+                                               ,(type3)regs->regs.ebx\
+                                               ,(type4)regs->regs.esi\
+                                               ,(type5)regs->regs.edi\
+                                               ,(type6)stackargs[0]\
+                                               ,(type7)stackargs[1]);\
   }\
   __KSYSCALL_LEAVE(flags)\
   ksyscall_leave_d(regs,&sysdbg_##name);\

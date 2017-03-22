@@ -31,16 +31,35 @@ __DECL_BEGIN
 
 #define __SYSCALL_INTNO  0x69 /*< Huehuehue... */
 
+//////////////////////////////////////////////////////////////////////////
+// KOS System call conventions:
+// INTERRUPT NUMBER:       0x69 (69h)
+// FUNCTION NUMBER:        %eax
+// ARG #1:                 %ecx
+// ARG #2:                 %edx
+// ARG #3:                 %ebx
+// ARG #4:                 %esi
+// ARG #5:                 %edi
+// ARG #6 .. ARG #*:     (([index]-6)*PS)(%esp)
+// 1st RETURN REGISTER:    %eax
+// 2nd RETURN REGISTER:    %ecx
+// 3rd RETURN REGISTER:    %edx
+// 4th RETURN REGISTER:    %ebx
+// NOTES:
+//   - When an unknown function is called, '%eax' (1st return register)
+//     is set to 'KE_NOSYS', though it should be noted that this can
+//     also happen if the system call does exist and simply chooses
+//     to fail with that error.
 #ifndef __ASSEMBLY__
 #ifdef _MSC_VER
 #define __ASMSYSCALL0(id,...)                                    __VA_ARGS__; movl eax, id; int __SYSCALL_INTNO;
 #define __ASMSYSCALL1(id,arg1,...)                               __ASMSYSCALL0(id,                movl ebx, arg1; __VA_ARGS__)
 #define __ASMSYSCALL2(id,arg1,arg2,...)                          __ASMSYSCALL1(id,arg1,           movl ecx, arg2; __VA_ARGS__)
 #define __ASMSYSCALL3(id,arg1,arg2,arg3,...)                     __ASMSYSCALL2(id,arg1,arg2,      movl edx, arg3; __VA_ARGS__)
-#define __ASMSYSCALL4(id,arg1,arg2,arg3,arg4,...)                __ASMSYSCALL3(id,arg1,arg2,arg3, pushl ebp; pushl arg4;                                     movl ebp, esp; __VA_ARGS__) addl esp, 4;  popl ebp;
-#define __ASMSYSCALL5(id,arg1,arg2,arg3,arg4,arg5,...)           __ASMSYSCALL3(id,arg1,arg2,arg3, pushl ebp; pushl arg5; pushl arg4;                         movl ebp, esp; __VA_ARGS__) addl esp, 8;  popl ebp;
-#define __ASMSYSCALL6(id,arg1,arg2,arg3,arg4,arg5,arg6,...)      __ASMSYSCALL3(id,arg1,arg2,arg3, pushl ebp; pushl arg6; pushl arg5; pushl arg4;             movl ebp, esp; __VA_ARGS__) addl esp, 12; popl ebp;
-#define __ASMSYSCALL7(id,arg1,arg2,arg3,arg4,arg5,arg6,arg7,...) __ASMSYSCALL3(id,arg1,arg2,arg3, pushl ebp; pushl arg7; pushl arg6; pushl arg5; pushl arg4; movl ebp, esp; __VA_ARGS__) addl esp, 16; popl ebp;
+#define __ASMSYSCALL4(id,arg1,arg2,arg3,arg4,...)                __ASMSYSCALL3(id,arg1,arg2,arg3, pushl arg4;                                     __VA_ARGS__) addl esp, 4;
+#define __ASMSYSCALL5(id,arg1,arg2,arg3,arg4,arg5,...)           __ASMSYSCALL3(id,arg1,arg2,arg3, pushl arg5; pushl arg4;                         __VA_ARGS__) addl esp, 8;
+#define __ASMSYSCALL6(id,arg1,arg2,arg3,arg4,arg5,arg6,...)      __ASMSYSCALL3(id,arg1,arg2,arg3, pushl arg6; pushl arg5; pushl arg4;             __VA_ARGS__) addl esp, 12;
+#define __ASMSYSCALL7(id,arg1,arg2,arg3,arg4,arg5,arg6,arg7,...) __ASMSYSCALL3(id,arg1,arg2,arg3, pushl arg7; pushl arg6; pushl arg5; pushl arg4; __VA_ARGS__) addl esp, 16;
 #define __ASMSYSCALL0_DO(result,id)                                    __asm { __ASMSYSCALL0(id) movl result, eax; }
 #define __ASMSYSCALL1_DO(result,id,arg1)                               __asm { __ASMSYSCALL1(id,arg1) movl result, eax; }
 #define __ASMSYSCALL2_DO(result,id,arg1,arg2)                          __asm { __ASMSYSCALL2(id,arg1,arg2) movl result, eax; }
@@ -50,30 +69,15 @@ __DECL_BEGIN
 #define __ASMSYSCALL6_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6)      __asm { __ASMSYSCALL6(id,arg1,arg2,arg3,arg4,arg5,arg6) movl result, eax; }
 #define __ASMSYSCALL7_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) __asm { __ASMSYSCALL7(id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) movl result, eax; }
 #else
-#define __ASMSYSCALL0(id,more)                  more "movl $" __PP_STR(id) ", %%eax\nint $" __PP_STR(__SYSCALL_INTNO) "\n"
-#define __ASMSYSCALL1(id,more) __ASMSYSCALL0(id,"movl %1, %%ebx\n" more)
-#define __ASMSYSCALL2(id,more) __ASMSYSCALL1(id,"movl %2, %%ecx\n" more)
-#define __ASMSYSCALL3(id,more) __ASMSYSCALL2(id,"movl %3, %%edx\n" more)
-#define __ASMSYSCALL4(id,more) __ASMSYSCALL3(id,"pushl %%ebp\npushl %4\n"                               "movl %%esp, %%ebp\n" more) "addl $4,  %%esp\npopl %%ebp\n"
-#define __ASMSYSCALL5(id,more) __ASMSYSCALL3(id,"pushl %%ebp\npushl %5\npushl %4\n"                     "movl %%esp, %%ebp\n" more) "addl $8,  %%esp\npopl %%ebp\n"
-#define __ASMSYSCALL6(id,more) __ASMSYSCALL3(id,"pushl %%ebp\npushl %6\npushl %5\npushl %4\n"           "movl %%esp, %%ebp\n" more) "addl $12, %%esp\npopl %%ebp\n"
-#define __ASMSYSCALL7(id,more) __ASMSYSCALL3(id,"pushl %%ebp\npushl %7\npushl %6\npushl %5\npushl %4\n" "movl %%esp, %%ebp\n" more) "addl $16, %%esp\npopl %%ebp\n"
-#define __ASMSYSCALL0_CLOBBER                        "eax"
-#define __ASMSYSCALL1_CLOBBER __ASMSYSCALL0_CLOBBER, "ebx"
-#define __ASMSYSCALL2_CLOBBER __ASMSYSCALL1_CLOBBER, "ecx"
-#define __ASMSYSCALL3_CLOBBER __ASMSYSCALL2_CLOBBER, "edx"
-#define __ASMSYSCALL4_CLOBBER __ASMSYSCALL3_CLOBBER
-#define __ASMSYSCALL5_CLOBBER __ASMSYSCALL4_CLOBBER
-#define __ASMSYSCALL6_CLOBBER __ASMSYSCALL4_CLOBBER
-#define __ASMSYSCALL7_CLOBBER __ASMSYSCALL4_CLOBBER
-#define __ASMSYSCALL0_DO(result,id)                                    __asm_volatile__(__ASMSYSCALL0(id,"") "movl %%eax, %0" : "=g" (result) : : __ASMSYSCALL0_CLOBBER)
-#define __ASMSYSCALL1_DO(result,id,arg1)                               __asm_volatile__(__ASMSYSCALL1(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1) : __ASMSYSCALL1_CLOBBER)
-#define __ASMSYSCALL2_DO(result,id,arg1,arg2)                          __asm_volatile__(__ASMSYSCALL2(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1), "g" (arg2) : __ASMSYSCALL2_CLOBBER)
-#define __ASMSYSCALL3_DO(result,id,arg1,arg2,arg3)                     __asm_volatile__(__ASMSYSCALL3(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1), "g" (arg2), "g" (arg3) : __ASMSYSCALL3_CLOBBER)
-#define __ASMSYSCALL4_DO(result,id,arg1,arg2,arg3,arg4)                __asm_volatile__(__ASMSYSCALL4(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1), "g" (arg2), "g" (arg3), "g" (arg4) : __ASMSYSCALL4_CLOBBER)
-#define __ASMSYSCALL5_DO(result,id,arg1,arg2,arg3,arg4,arg5)           __asm_volatile__(__ASMSYSCALL5(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1), "g" (arg2), "g" (arg3), "g" (arg4), "g" (arg5) : __ASMSYSCALL5_CLOBBER)
-#define __ASMSYSCALL6_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6)      __asm_volatile__(__ASMSYSCALL6(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1), "g" (arg2), "g" (arg3), "g" (arg4), "g" (arg5), "g" (arg6) : __ASMSYSCALL6_CLOBBER)
-#define __ASMSYSCALL7_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) __asm_volatile__(__ASMSYSCALL7(id,"") "movl %%eax, %0" : "=g" (result) : "g" (arg1), "g" (arg2), "g" (arg3), "g" (arg4), "g" (arg5), "g" (arg6), "g" (arg7) : __ASMSYSCALL7_CLOBBER)
+#define __ASMSYSCALL_DOINT    "int $" __PP_STR(__SYSCALL_INTNO) "\n"
+#define __ASMSYSCALL0_DO(result,id)                                    __asm__(__ASMSYSCALL_DOINT : "=a" (result) : "a" (id))
+#define __ASMSYSCALL1_DO(result,id,arg1)                               __asm__(__ASMSYSCALL_DOINT : "=a" (result) : "a" (id), "c" (arg1))
+#define __ASMSYSCALL2_DO(result,id,arg1,arg2)                          __asm__(__ASMSYSCALL_DOINT : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2))
+#define __ASMSYSCALL3_DO(result,id,arg1,arg2,arg3)                     __asm__(__ASMSYSCALL_DOINT : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2), "b" (arg3))
+#define __ASMSYSCALL4_DO(result,id,arg1,arg2,arg3,arg4)                __asm__(__ASMSYSCALL_DOINT : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2), "b" (arg3), "S" (arg4))
+#define __ASMSYSCALL5_DO(result,id,arg1,arg2,arg3,arg4,arg5)           __asm__(__ASMSYSCALL_DOINT : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2), "b" (arg3), "S" (arg4), "D" (arg5))
+#define __ASMSYSCALL6_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6)      __asm__("pushl %7\n"           __ASMSYSCALL_DOINT "add $4, %%esp" : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2), "b" (arg3), "S" (arg4), "D" (arg5), "" (arg6))
+#define __ASMSYSCALL7_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) __asm__("pushl %8\npushl %7\n" __ASMSYSCALL_DOINT "add $8, %%esp" : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2), "b" (arg3), "S" (arg4), "D" (arg5), "" (arg6), "" (arg7))
 #endif
 
 /*[[[deemon
