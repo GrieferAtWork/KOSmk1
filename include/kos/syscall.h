@@ -32,7 +32,7 @@ __DECL_BEGIN
 #define __SYSCALL_INTNO  0x69 /*< Huehuehue... */
 
 //////////////////////////////////////////////////////////////////////////
-// KOS System call conventions:
+// KOS System call conventions (__i386__):
 // INTERRUPT NUMBER:       0x69 (69h)
 // FUNCTION NUMBER:        %eax
 // ARG #1:                 %ecx
@@ -52,14 +52,14 @@ __DECL_BEGIN
 //     to fail with that error.
 #ifndef __ASSEMBLY__
 #ifdef _MSC_VER
-#define __ASMSYSCALL0(id,...)                                    __VA_ARGS__; movl eax, id; int __SYSCALL_INTNO;
-#define __ASMSYSCALL1(id,arg1,...)                               __ASMSYSCALL0(id,                movl ebx, arg1; __VA_ARGS__)
-#define __ASMSYSCALL2(id,arg1,arg2,...)                          __ASMSYSCALL1(id,arg1,           movl ecx, arg2; __VA_ARGS__)
-#define __ASMSYSCALL3(id,arg1,arg2,arg3,...)                     __ASMSYSCALL2(id,arg1,arg2,      movl edx, arg3; __VA_ARGS__)
-#define __ASMSYSCALL4(id,arg1,arg2,arg3,arg4,...)                __ASMSYSCALL3(id,arg1,arg2,arg3, pushl arg4;                                     __VA_ARGS__) addl esp, 4;
-#define __ASMSYSCALL5(id,arg1,arg2,arg3,arg4,arg5,...)           __ASMSYSCALL3(id,arg1,arg2,arg3, pushl arg5; pushl arg4;                         __VA_ARGS__) addl esp, 8;
-#define __ASMSYSCALL6(id,arg1,arg2,arg3,arg4,arg5,arg6,...)      __ASMSYSCALL3(id,arg1,arg2,arg3, pushl arg6; pushl arg5; pushl arg4;             __VA_ARGS__) addl esp, 12;
-#define __ASMSYSCALL7(id,arg1,arg2,arg3,arg4,arg5,arg6,arg7,...) __ASMSYSCALL3(id,arg1,arg2,arg3, pushl arg7; pushl arg6; pushl arg5; pushl arg4; __VA_ARGS__) addl esp, 16;
+#define __ASMSYSCALL0(id,...)                                    __VA_ARGS__; mov eax, id; int __SYSCALL_INTNO;
+#define __ASMSYSCALL1(id,arg1,...)                               __ASMSYSCALL0(id,                          mov ecx, arg1; __VA_ARGS__)
+#define __ASMSYSCALL2(id,arg1,arg2,...)                          __ASMSYSCALL1(id,arg1,                     mov edx, arg2; __VA_ARGS__)
+#define __ASMSYSCALL3(id,arg1,arg2,arg3,...)                     __ASMSYSCALL2(id,arg1,arg2,                mov ebx, arg3; __VA_ARGS__)
+#define __ASMSYSCALL4(id,arg1,arg2,arg3,arg4,...)                __ASMSYSCALL3(id,arg1,arg2,arg3,           mov esi, arg4; __VA_ARGS__)
+#define __ASMSYSCALL5(id,arg1,arg2,arg3,arg4,arg5,...)           __ASMSYSCALL4(id,arg1,arg2,arg3,arg4,      mov edi, arg5; __VA_ARGS__)
+#define __ASMSYSCALL6(id,arg1,arg2,arg3,arg4,arg5,arg6,...)      __ASMSYSCALL5(id,arg1,arg2,arg3,arg4,arg5, pushl arg6;             __VA_ARGS__) addl esp, 4;
+#define __ASMSYSCALL7(id,arg1,arg2,arg3,arg4,arg5,arg6,arg7,...) __ASMSYSCALL5(id,arg1,arg2,arg3,arg4,arg5, pushl arg7; pushl arg6; __VA_ARGS__) addl esp, 8;
 #define __ASMSYSCALL0_DO(result,id)                                    __asm { __ASMSYSCALL0(id) movl result, eax; }
 #define __ASMSYSCALL1_DO(result,id,arg1)                               __asm { __ASMSYSCALL1(id,arg1) movl result, eax; }
 #define __ASMSYSCALL2_DO(result,id,arg1,arg2)                          __asm { __ASMSYSCALL2(id,arg1,arg2) movl result, eax; }

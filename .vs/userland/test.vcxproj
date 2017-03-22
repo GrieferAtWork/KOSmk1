@@ -11,7 +11,13 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\userland\test.c" />
+    <ClCompile Include="..\..\userland\test\test-exceptions.c" />
+    <ClCompile Include="..\..\userland\test\test-quote.c" />
+    <ClCompile Include="..\..\userland\test\test-tls.c" />
+    <ClCompile Include="..\..\userland\test\test.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\userland\test\helper.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{6DA33F87-F2A9-45F0-A0AF-3AD4CED7BAB8}</ProjectGuid>

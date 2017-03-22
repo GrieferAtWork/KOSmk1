@@ -173,8 +173,8 @@ kproc_tlsalloc(void const *__template,
  __asm__("int $" __PP_STR(__SYSCALL_INTNO) "\n"
          : "=a" (__error), "=c" (*__tls_offset)
          : "a" (SYS_kproc_tlsalloc)
-         , "b" (__template)
-         , "c" (__template_size));
+         , "c" (__template)
+         , "d" (__template_size));
  return __error;
 }
 
@@ -192,7 +192,7 @@ kproc_tlsenum(struct ktlsinfo *__restrict __infov,
  __size_t __val_reqinfoc;
  __asm__("int $" __PP_STR(__SYSCALL_INTNO) "\n"
          : "=a" (__error), "=c" (__val_reqinfoc)
-         : "a" (SYS_kproc_tlsenum), "b" (__infov), "c" (__infoc));
+         : "a" (SYS_kproc_tlsenum), "c" (__infov), "d" (__infoc));
  if (__reqinfoc) *__reqinfoc = __val_reqinfoc;
  return __error;
 }

@@ -377,7 +377,7 @@ struct mallhead;
 static __atomic int mall_currfreq = MALL_VALIDFREQ;
 static void mall_validate(void) {
 #if MALL_VALIDFREQ_SYSLOG
- k_syslogf(KLOG_INFO,"[MALL] Performing periodic memory validation\n");
+ k_syslogf(KLOG_DEBUG,"[MALL] Performing periodic memory validation\n");
 #endif
  _malloc_validate_d();
 }

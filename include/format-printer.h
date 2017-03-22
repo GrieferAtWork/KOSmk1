@@ -183,8 +183,29 @@ format_quote __P((pformatprinter __printer, void *__closure,
 #define FORMAT_QUOTE_FLAG_NOCTRL   0x00000008 /*< Disable special encoding strings such as '\r', '\n' or '\e' */
 #define FORMAT_QUOTE_FLAG_NOASCII  0x00000010 /*< Disable regular ascii-characters and print everything using special encodings. */
 #define FORMAT_QUOTE_FLAG_QUOTEALL 0x00000020 /*< MAXTEXT is the exact length of the given TEXT. */
-#define FORMAT_QUOTE_FLAG_UPPERPRE 0x00000040 /*< Use uppercase characters for hex (e.g.: '\Xab'). */
-#define FORMAT_QUOTE_FLAG_UPPERSUF 0x00000080 /*< Use uppercase characters for hex (e.g.: '\xAB'). */
+#define FORMAT_QUOTE_FLAG_LOWERHEX 0x00000040 /*< Use lowercase characters for hex (e.g.: '\xab'). */
+
+//////////////////////////////////////////////////////////////////////////
+// The reverse of 'format_quote', re-print the text contained in quotes.
+// >> Very useful when parsing configuration files featuring strings.
+// NOTES:
+//  - Using default c-escape sequences and supporting the GCC '\e' extension,
+//    optional surrounding quotes are automatically skipped as well.
+//  - Hex-sequences are limited to 2 characters.
+//  - Oct-sequences are limited to 3 characters.
+//  - An optional leading '\"' or '\'' is ignored, and if the text
+//    is terminated by the same quote, that one is ignored as well.
+//  - Non-escaped quotes in the middle of the text are ignored and simply forwarded
+//   (The given TEXT is only terminated by MAXTEXT or a '\0'-character).
+//  - Unknown escape sequences are ignored and simply forwarded.
+// @param: TEXT:    A string containing quoted text following standard
+//                  c-encoding, such as produced by 'format_quote'.
+// @param: MAXTEXT: strnlen-style max-length of the given TEXT.
+// @return: 0: The given text was successfully de-quoted.
+// @return: *: The first non-ZERO(0) return value of PRINTER.
+extern __nonnull((1,3)) int
+format_dequote __P((pformatprinter __printer, void *__closure,
+                    char const *__restrict __text, __size_t __maxtext));
 
 
 //////////////////////////////////////////////////////////////////////////

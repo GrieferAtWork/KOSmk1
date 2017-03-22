@@ -484,7 +484,7 @@ union{struct{
  struct kaddr2linelist   sh_addr2line;  /*< Address->line technologies. */
 };struct{ /* KMODKIND_SHEBANG */
  __ref struct kshlib    *sh_sb_ref;     /*< [1..1][const] Reference to the binary referenced by the given shebang script. */
- struct ksbargs          sh_sb_args;    /*<  */
+ struct ksbargs          sh_sb_args;    /*< Commandline arguments prefixed before the existing commandline, as specified in the script. */
 };};
 };
 

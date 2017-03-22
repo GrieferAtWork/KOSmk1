@@ -57,7 +57,7 @@ struct ktlsman {
  KOBJECT_HEAD
  struct krwlock      tls_lock;      /*< Lock for this TLS manager. */
  struct ktlsmapping *tls_hiend;     /*< [lock(tls_lock)][owned] High-address end of the TLS mapping chain. */
- __size_t            tls_map_pages; /*< [lock(tls_lock)] Total amount of pages required for TLS mappings. */
+ __size_t            tls_map_pages; /*< [lock(tls_lock)] Total amount of continuous pages required for TLS mappings. */
  __size_t            tls_all_pages; /*< [lock(tls_lock)] Total size (in pages) of continuous, unused user address space required to map this chain in SHM (Including any required for 'struct kuthread'). */
 };
 #define KTLSMAN_INITROOT \

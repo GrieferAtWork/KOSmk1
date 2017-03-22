@@ -121,9 +121,19 @@ __local __wunused __constcall char _tohex2(int __uppercase, int __x) { return __
 __local __wunused __constcall char _tohex(int __uppercase, int __x) { __assertf(__x < 16,"%d is not a hex",x); return __x >= 10 ? ((__uppercase ? 'A' : 'a')+(__x-10)) : '0'+__x; }
 __local __wunused __constcall char _tohex2(int __uppercase, int __x) { return __x >= 10 ? ((__uppercase ? 'A' : 'a')+(__x-10)) : '0'+__x; }
 #endif
-#endif /* !__CTYPE_C__ */
 
-#ifndef __CTYPE_C__
+#ifdef __INTELLISENSE__
+extern char _tooct(int __x);
+#ifndef __STDC_PURE__
+extern char tooct(int __x);
+#endif
+#else
+#define _tooct(x) ('0'+(x))
+#ifndef __STDC_PURE__
+#define tooct      _tooct
+#endif
+#endif
+
 #ifdef __DEBUG__
 __local __wunused __constcall int _tolower(int __ch) { __assertf(isupper(__ch),"'%c' is not uppercase",__ch); return __ch+('a'-'A'); }
 __local __wunused __constcall int _toupper(int __ch) { __assertf(islower(__ch),"'%c' is not lowercase",__ch); return __ch+('A'-'a'); }

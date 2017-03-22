@@ -817,7 +817,9 @@ KSYSCALL_DEFINE_EX2(cr,kerrno_t,kproc_tlsalloc,
  size_t template_pages;
  ktls_addr_t resoffset;
  KTASK_CRIT_MARK
+ if __unlikely(!template_size) template_size = 1;
  template_pages = ceildiv(template_size,PAGESIZE);
+ assert(template_pages);
  /* TODO: Limit the template region size to what will be
   *       allowed based on the process's memory limits. */
  region = kshmregion_newram(template_pages,

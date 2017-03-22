@@ -259,34 +259,34 @@ void __kirq_default_handler(struct kirq_registers *regs) {
    struct kpagedir *pd = NULL;
    if ((kmem_validateob(caller) == KE_OK) &&
        (kmem_validateob(ktask_getproc(caller)) == KE_OK)) {
-    struct kprocmodule *iter,*end;
+    struct kprocmodule *iter,*end; struct kshlib *lib;
     uintptr_t eip = regs->regs.eip;
     end = (iter = caller->t_proc->p_modules.pms_modv)+caller->t_proc->p_modules.pms_moda;
-    for (; iter != end; ++iter) if (iter->pm_lib && eip >= (uintptr_t)iter->pm_base) {
-     size_t libsize = (iter->pm_lib->sh_data.ed_end-iter->pm_lib->sh_data.ed_begin);
-     if (eip-(uintptr_t)iter->pm_base < libsize) {
+    for (; iter != end; ++iter) if ((lib = iter->pm_lib) != NULL && eip >= (uintptr_t)iter->pm_base) {
+     uintptr_t module_eip = eip-(uintptr_t)iter->pm_base;
+     if (module_eip >= lib->sh_data.ed_begin &&
+         module_eip <  lib->sh_data.ed_end) {
       struct ksymbol const *symbols[3],*symbol;
       uintptr_t diff,newdiff;
       char buffer[PATH_MAX];
-      eip -= (uintptr_t)iter->pm_base;
       serial_print (SERIAL_01,"########### Associated Module Information:\n");
       serial_printf(SERIAL_01,"Module ID:              %Iu\n",iter-caller->t_proc->p_modules.pms_modv);
-      serial_printf(SERIAL_01,"Module EIP:             %p\n",eip);
+      serial_printf(SERIAL_01,"Module EIP:             %p\n",module_eip);
       serial_printf(SERIAL_01,"Module load base:       %p\n",iter->pm_base);
-      serial_printf(SERIAL_01,"Module load begin:      %p\n",(uintptr_t)iter->pm_base+iter->pm_lib->sh_data.ed_begin);
-      serial_printf(SERIAL_01,"Module load end:        %p\n",(uintptr_t)iter->pm_base+iter->pm_lib->sh_data.ed_end);
-      kfile_kernel_getattr(iter->pm_lib->sh_file,KATTR_FS_PATHNAME,
+      serial_printf(SERIAL_01,"Module load begin:      %p\n",(uintptr_t)iter->pm_base+lib->sh_data.ed_begin);
+      serial_printf(SERIAL_01,"Module load end:        %p\n",(uintptr_t)iter->pm_base+lib->sh_data.ed_end);
+      kfile_kernel_getattr(lib->sh_file,KATTR_FS_PATHNAME,
                            buffer,sizeof(buffer),NULL);
       serial_printf(SERIAL_01,"Module Path:            %.?q\n",sizeof(buffer),buffer);
-      symbols[0] = ksymtable_lookupaddr(&iter->pm_lib->sh_privatesym,eip,iter->pm_lib->sh_data.ed_begin);
-      symbols[1] = ksymtable_lookupaddr(&iter->pm_lib->sh_publicsym,eip,iter->pm_lib->sh_data.ed_begin);
-      symbols[2] = ksymtable_lookupaddr(&iter->pm_lib->sh_weaksym,eip,iter->pm_lib->sh_data.ed_begin);
+      symbols[0] = ksymtable_lookupaddr(&lib->sh_privatesym,module_eip,lib->sh_data.ed_begin);
+      symbols[1] = ksymtable_lookupaddr(&lib->sh_publicsym,module_eip,lib->sh_data.ed_begin);
+      symbols[2] = ksymtable_lookupaddr(&lib->sh_weaksym,module_eip,lib->sh_data.ed_begin);
                    symbol = symbols[0];
       if (!symbol) symbol = symbols[1];
       if (!symbol) symbol = symbols[2];
       if (symbol) {
-       diff = eip-symbol->s_addr;
-#define BETTER(x) if (x) { newdiff = eip-(x)->s_addr; if (newdiff < diff) { diff = newdiff; symbol = (x); } }
+       diff = module_eip-symbol->s_addr;
+#define BETTER(x) if (x) { newdiff = module_eip-(x)->s_addr; if (newdiff < diff) { diff = newdiff; symbol = (x); } }
        BETTER(symbols[1]);
        BETTER(symbols[2]);
 #undef BETTER
@@ -295,6 +295,28 @@ void __kirq_default_handler(struct kirq_registers *regs) {
       serial_printf(SERIAL_01,"Closest private symbol: %q (%p)\n",symbols[0] ? symbols[0]->s_name : NULL,symbols[0] ? symbols[0]->s_addr : 0);
       serial_printf(SERIAL_01,"Closest public symbol:  %q (%p)\n",symbols[1] ? symbols[1]->s_name : NULL,symbols[1] ? symbols[1]->s_addr : 0);
       serial_printf(SERIAL_01,"Closest weak symbol:    %q (%p)\n",symbols[2] ? symbols[2]->s_name : NULL,symbols[2] ? symbols[2]->s_addr : 0);
+      {
+       struct kfileandline fal; kerrno_t error;
+       error = kaddr2linelist_exec(&lib->sh_addr2line,lib,module_eip,&fal);
+       if __unlikely(KE_ISERR(error)) {
+        serial_printf(SERIAL_01,"Addr2Line error: %d\n",error);
+       } else {
+        serial_printf(SERIAL_01,"Address path:           %q\n",fal.fal_path ? fal.fal_path : "??" "?");
+        serial_printf(SERIAL_01,"Address file:           %q\n",fal.fal_file ? fal.fal_file : "??" "?");
+        if (fal.fal_flags&KFILEANDLINE_FLAG_HASLINE) {
+         serial_printf(SERIAL_01,"Address line:           %d\n",fal.fal_line+1);
+        } else {
+         serial_print (SERIAL_01,"Address line:           ??" "?\n");
+        }
+        if (fal.fal_flags&KFILEANDLINE_FLAG_HASCOL) {
+         serial_printf(SERIAL_01,"Address column:         %d\n",fal.fal_column);
+        } else {
+         serial_print (SERIAL_01,"Address column:         ??" "?\n");
+        }
+        serial_printf(SERIAL_01,"../%s/%s(%d) : Here\n",fal.fal_path,fal.fal_file,fal.fal_line+1);
+        kfileandline_quit(&fal);
+       }
+      }
       break;
      }
     }

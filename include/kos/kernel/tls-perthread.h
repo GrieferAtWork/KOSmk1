@@ -80,7 +80,7 @@ extern void ktlspt_setname(struct ktlspt *__restrict self,
                            char const *__restrict name);
 
 //////////////////////////////////////////////////////////////////////////
-// Raise a given exception 'exinfo' in the task assicated with 'SELF'.
+// Raise a given exception 'exinfo' in the task associated with 'SELF'.
 // For this purpose, one exception handler is popped of the handler stack
 // and the register state described by 'regs' is stored in the exinfo
 // fields of the uthread before being update to describe the previously
@@ -102,7 +102,7 @@ ktask_raise_exception(struct ktask *__restrict self,
 
 //////////////////////////////////////////////////////////////////////////
 // Similar to 'ktask_raise_exception', but the exception raised is an IRQ.
-// @return: KE_OK:    Sucessfully raised the exception.
+// @return: KE_OK:    Successfully raised the exception.
 // @return: KE_FAULT: The userspace exception handler chain contained a
 //                    faulty pointer that prevented dereferencing of
 //                    the non-NULL handler entry.

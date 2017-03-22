@@ -911,49 +911,48 @@ end:
 }
 
 
-#define tooct(x) ('0'+(x))
-
-int
+__public int
 format_quote(pformatprinter printer, void *closure,
              char const *__restrict text, size_t maxtext,
              __u32 flags) {
  char encoded_text[4];
  size_t encoded_text_size;
- int error; char ch;
- char const *iter,*end,*flush_start;
+ int error; unsigned char ch;
+ char const *iter,*end,*flush_start,*c_hex;
  register int force_special = !!(flags&FORMAT_QUOTE_FLAG_NOASCII);
  __printf_assert(kassertbyte(printer));
  end = (iter = flush_start = text)+maxtext;
+ c_hex = __ctype_tohex[!(flags&FORMAT_QUOTE_FLAG_LOWERHEX)];
  encoded_text[0] = '\\';
  if (!(flags&FORMAT_QUOTE_FLAG_PRINTRAW)) print("\"",1);
  while (iter != end) {
-  ch = *iter;
+  ch = *(unsigned char *)iter;
   if (ch < 32    || ch >= 127  || ch == '\'' ||
       ch == '\"' || ch == '\\' || force_special) {
    /* Character requires special encoding. */
-   if (!ch && !(flags&FORMAT_QUOTE_FLAG_QUOTEALL)) goto end;
+   if (!ch && !(flags&FORMAT_QUOTE_FLAG_QUOTEALL)) goto done;
    /* Flush unprinted text. */
    if (iter != flush_start) {
     print(flush_start,(size_t)(iter-flush_start));
-    flush_start = iter+1;
    }
+   flush_start = iter+1;
    if (ch < 32) {
     /* Control character. */
     if (flags&FORMAT_QUOTE_FLAG_NOCTRL) {
 default_ctrl:
      if (flags&FORMAT_QUOTE_FLAG_FORCEHEX) goto encode_hex;
 encode_oct:
-     if ((__u8)ch <= 0x07) {
-      encoded_text[1] = tooct(((__u8)ch & 0x07));
+     if (ch <= 0x07) {
+      encoded_text[1] = tooct((ch & 0x07));
       encoded_text_size = 2;
-     } else if ((__u8)ch <= 0x38) {
-      encoded_text[1] = tooct(((__u8)ch & 0x38) >> 3);
-      encoded_text[2] = tooct(((__u8)ch & 0x07));
+     } else if (ch <= 0x38) {
+      encoded_text[1] = tooct((ch & 0x38) >> 3);
+      encoded_text[2] = tooct((ch & 0x07));
       encoded_text_size = 3;
      } else {
-      encoded_text[1] = tooct(((__u8)ch & 0xC0) >> 6);
-      encoded_text[2] = tooct(((__u8)ch & 0x38) >> 3);
-      encoded_text[3] = tooct(((__u8)ch & 0x07));
+      encoded_text[1] = tooct((ch & 0xC0) >> 6);
+      encoded_text[2] = tooct((ch & 0x38) >> 3);
+      encoded_text[3] = tooct((ch & 0x07));
       encoded_text_size = 4;
      }
      goto print_encoded;
@@ -982,13 +981,13 @@ special_control:
 /*default_nonascii:*/
     if (flags&FORMAT_QUOTE_FLAG_FORCEOCT) goto encode_oct;
 encode_hex:
-    encoded_text[1] = flags&FORMAT_QUOTE_FLAG_UPPERPRE ? 'X' : 'x';
-    if ((__u8)ch <= 0xf) {
-     encoded_text[2] = tohex(flags&FORMAT_QUOTE_FLAG_UPPERSUF,(__u8)ch);
+    encoded_text[1] = 'x';
+    if (ch <= 0xf) {
+     encoded_text[2] = c_hex[ch];
      encoded_text_size = 3;
     } else {
-     encoded_text[2] = tohex(flags&FORMAT_QUOTE_FLAG_UPPERSUF,((__u8)ch & 0xf0) >> 4);
-     encoded_text[3] = tohex(flags&FORMAT_QUOTE_FLAG_UPPERSUF, (__u8)ch & 0x0f);
+     encoded_text[2] = c_hex[(ch & 0xf0) >> 4];
+     encoded_text[3] = c_hex[ch&0xf];
      encoded_text_size = 4;
     }
 print_encoded:
@@ -999,11 +998,117 @@ print_encoded:
 next:
   ++iter;
  }
-end:
+done:
  if (iter != flush_start) print(flush_start,(size_t)(iter-flush_start));
  if (!(flags&FORMAT_QUOTE_FLAG_PRINTRAW)) print("\"",1);
  return 0;
 }
+
+__public int
+format_dequote(pformatprinter printer, void *closure,
+               char const *__restrict text, size_t maxtext) {
+#if defined(__KERNEL__) && defined(__DEBUG__)
+#define getch(off)  (__printf_assert(kassertbyte(iter+(off))),iter[off])
+#else
+#define getch(off)  (iter[off])
+#endif
+ int error; char ch,used_quote = 0;
+ char const *iter,*end,*flush_start;
+ __printf_assert(kassertbyte(printer));
+ end = (iter = flush_start = text)+maxtext;
+ while (iter != end) {
+  ch = getch(0);
+  switch (ch) {
+   {
+    unsigned char escaped_char;
+    char const *escape_start;
+   case '\\':
+    escape_start = iter;
+    if (++iter == end) goto done;
+    ch = getch(0);
+    switch (ch) {
+     case 'a': escaped_char = '\a'; break;
+     case 'b': escaped_char = '\b'; break;
+     case 'f': escaped_char = '\f'; break;
+     case 'n': escaped_char = '\n'; break;
+     case 'r': escaped_char = '\r'; break;
+     case 't': escaped_char = '\t'; break;
+     case 'v': escaped_char = '\v'; break;
+     case 'e': escaped_char = '\033'; break;
+     {
+     case '0': case '1': case '2': case '3':
+     case '4': case '5': case '6': case '7':
+      escaped_char = (unsigned char)(ch-'0');
+#define OCT_STEP() \
+      if (iter != end-1 && (ch = getch(1),ch >= '0' && ch <= '7')) \
+        ++iter,escaped_char = (escaped_char*8)+(unsigned char)(ch-'0')
+      OCT_STEP();
+      OCT_STEP();
+#undef OCT_STEP
+      break;
+     }
+     case 'x':
+      if (++iter == end) goto done;
+      ch = getch(0);
+           if (ch >= '0' && ch <= '9') escaped_char = (unsigned char)(ch-'0');
+      else if (ch >= 'a' && ch <= 'f') escaped_char = (unsigned char)(ch-'a')+10;
+      else if (ch >= 'A' && ch <= 'F') escaped_char = (unsigned char)(ch-'A')+10;
+      else goto next;
+      if (iter != end-1) {
+       unsigned char low_4bit;
+       ch = getch(1);
+       /* Parse a character describing the lower 4 bit of the string. */
+            if (ch >= '0' && ch <= '9') low_4bit = (unsigned char)(ch-'0');
+       else if (ch >= 'a' && ch <= 'f') low_4bit = (unsigned char)(ch-'a')+10;
+       else if (ch >= 'A' && ch <= 'F') low_4bit = (unsigned char)(ch-'A')+10;
+       else goto print_escape;
+       escaped_char <<= 4;
+       escaped_char  |= low_4bit;
+       ++iter;
+      }
+      break;
+     case '\"': case '\'': case '\\':
+      escaped_char = (unsigned char)ch;
+      break;
+     default:
+      /* Unknown escape sequence (Ignore). */
+      goto next;
+    }
+print_escape:
+    if (escape_start != flush_start) {
+     print(flush_start,(size_t)(escape_start-flush_start));
+    }
+    /* Print the escaped character. */
+    print((char *)&escaped_char,1);
+set_flush_start:
+    flush_start = iter+1;
+    break;
+   }
+   case 0: goto done;
+   case '\'': case '\"':
+    if (iter == text) {
+     /* Define initial quote (Used at the end to skip optional suffix quote). */
+     used_quote  = ch;
+     goto set_flush_start;
+    } else {
+     /* Unescaped quotation mark (Ignore). */
+    }
+    /* fallthrough */
+   default: break;
+  }
+next:
+  ++iter;
+ }
+done:
+ if (iter != flush_start) {
+  /* Must handle special case: Don't flush quote characters. */
+  if (iter[-1] == used_quote) --iter;
+  print(flush_start,(size_t)(iter-flush_start));
+ }
+#undef getch
+ return 0;
+}
+
 
 #define MAX_SPACE_SIZE  64
 #define MAX_ASCII_SIZE  64
