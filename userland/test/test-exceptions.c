@@ -44,14 +44,12 @@ TEST(exceptions) {
   exc_tbprint(0);
 #else
   syminfo_t *syminfo; void *eip;
-  outf("Handling exception #1...\n");
   assert(register_variable == 42);
   assert(exc_current->ex_info&KEXCEPTIONINFO_SEGFAULT_WRITE);
   assert(!(exc_current->ex_info&KEXCEPTIONINFO_SEGFAULT_INSTR_FETCH));
   assertf(exc_current->ex_ptr[0] == (void *)0xdeadbeef,"%p",exc_current->ex_ptr[0]);
-  outf("Handling exception #2...\n");
+  tb_printeip((void *)tls_self->u_exstate.eip);
   tb_printebp((void *)tls_self->u_exstate.ebp);
-  outf("Handling exception #3...\n");
   eip = (void *)tls_self->u_exstate.eip;
   /* Figure out some symbol information about the EIP. */
   syminfo = mod_addrinfo(MOD_ALL,eip,NULL,0,MOD_SYMINFO_NONE);

@@ -116,19 +116,13 @@ exc_tbprintex(int tp_only, void *closure) {
   if __unlikely(error != 0) return error;
   /* Print some additional informations. */
   switch (exno) {
-   {
-    static char const *yesno[] = {"Yes(1)","No(0)"};
    case KEXCEPTION_SEGFAULT:
-    error = format_printf(&tbprint_callback,closure
-                         ,"Address: %p\n"
-                          "Present: %s\n"
-                          "Writing: %s\n"
-                          "Execute: %s\n"
-                         ,uthread->u_exinfo.ex_ptr[0]
-                         ,yesno[!!(uthread->u_exinfo.ex_info&KEXCEPTIONINFO_SEGFAULT_PRESENT)]
-                         ,yesno[!!(uthread->u_exinfo.ex_info&KEXCEPTIONINFO_SEGFAULT_WRITE)]
-                         ,yesno[!!(uthread->u_exinfo.ex_info&KEXCEPTIONINFO_SEGFAULT_INSTR_FETCH)]);
-   } break;
+    error = format_printf(&tbprint_callback,closure,"\tAttempted to %s%s memory at %#p\n",
+                         (uthread->u_exinfo.ex_info&KEXCEPTIONINFO_SEGFAULT_INSTR_FETCH) ? "execute" :
+                         (uthread->u_exinfo.ex_info&KEXCEPTIONINFO_SEGFAULT_WRITE) ? "write" : "read",
+                         (uthread->u_exinfo.ex_info&KEXCEPTIONINFO_SEGFAULT_PRESENT) ? "" : " unmapped",
+                          uthread->u_exinfo.ex_ptr[0]);
+    break;
 
    default:
 #if KEXINFO_PTR_COUNT == 4
