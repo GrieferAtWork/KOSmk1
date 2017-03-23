@@ -20,31 +20,38 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+#ifndef __TRACEBACK_INTERNAL_H__
+#define __TRACEBACK_INTERNAL_H__ 1
 
+#include <kos/compiler.h>
+#include <kos/config.h>
+#include <traceback.h>
 
-#include <kos/syslog.h>
-#include <stdio.h>
-#include <stdarg.h>
+__DECL_BEGIN
 
-#define NAME(name) _test__##name
-#define TEST(name) __public void NAME(name)(void)
+struct dtracebackentry {
+ void const *tb_eip;
+ void const *tb_esp;
+};
+struct tbtrace {
+ size_t                 tb_entryc;
+ struct dtracebackentry tb_entryv[1024];
+};
 
-static __attribute_unused void outf(char const *fmt, ...) {
- va_list args;
- va_start(args,fmt);
- k_vsyslogf(KLOG_INFO,fmt,args);
- va_end(args);
- va_start(args,fmt);
- vprintf(fmt,args);
- va_end(args);
-}
+extern __noinline int
+tbcapture_walkcount(void const *__restrict instruction_pointer,
+                    void const *__restrict frame_address,
+                    size_t frame_index, size_t *closure);
 
+extern __noinline int
+tbcapture_walkcollect(void const *__restrict instruction_pointer,
+                      void const *__restrict frame_address,
+                      size_t frame_index, struct tbtrace *tb);
 
-#include <assert.h>
-#include <string.h>
-#include <errno.h>
-#define ASSERT_ERRNO(expr) \
- { errno = 0; if (!(expr)) assertf(0,"Operation " #expr " failed: %d: %s",errno,strerror(errno)); }
+extern int
+tbprint_callback(char const *data,
+                 size_t max_data,
+                 void *closure);
+__DECL_END
 
-
-
+#endif /* !__TRACEBACK_INTERNAL_H__ */

@@ -1400,7 +1400,8 @@ __ktranslator_qwexec_impl(struct ktranslator *__restrict self,
   ? __ktranslator_exec(self,addr,maxbytes,rwbytes,writable)\
   : __xblock({ __user void const *__addr = (addr); __size_t const __maxbytes = (maxbytes);\
                __xreturn KPAGEDIR_CAN_QUICKACCESS(__addr,__maxbytes)\
-                ? (*(rwbytes) = __maxbytes,__ktranslator_qexec(self,__addr,writable))\
+                ? (*(rwbytes) = (__addr = __ktranslator_qexec(self,__addr,writable)) != NULL\
+                  ? __maxbytes : 0,(__user void *)__addr)\
                 : __ktranslator_exec(self,__addr,__maxbytes,rwbytes,writable);\
     }))
 #define ktranslator_wexec(self,addr,maxbytes,rwbytes) \
@@ -1408,8 +1409,9 @@ __ktranslator_qwexec_impl(struct ktranslator *__restrict self,
   ? __ktranslator_wexec(self,addr,maxbytes,rwbytes)\
   : __xblock({ __user void *__addr = (addr); __size_t const __maxbytes = (maxbytes);\
                __xreturn KPAGEDIR_CAN_QUICKACCESS(__addr,__maxbytes)\
-                ? (*(rwbytes) = __maxbytes,__ktranslator_qwexec(self,addr))\
-                : __ktranslator_wexec(self,addr,maxbytes,rwbytes);\
+                ? (*(rwbytes) = (__addr = __ktranslator_qwexec(self,__addr)) != NULL\
+                  ? __maxbytes : 0,__addr)\
+                : __ktranslator_wexec(self,__addr,__maxbytes,rwbytes);\
     }))
 #define ktranslator_qexec   __ktranslator_qexec
 #define ktranslator_qwexec  __ktranslator_qwexec
@@ -1660,7 +1662,8 @@ __kshm_w1qtranslateuser_impl(struct kshm const *__restrict self,
   ? __kshm_translateuser(self,epd,addr,maxbytes,rwbytes,writable)\
   : __xblock({ __user void const *__addr = (addr); __size_t const __maxbytes = (maxbytes);\
                __xreturn KPAGEDIR_CAN_QUICKACCESS(__addr,__maxbytes)\
-                ? (*(rwbytes) = __maxbytes,__kshm_qtranslateuser(self,epd,addr,writable))\
+                ? (*(rwbytes) = (__addr = __kshm_qtranslateuser(self,epd,__addr,writable))\
+                  ? __maxbytes : 0,(__user void *)__addr)\
                 : __kshm_translateuser(self,epd,__addr,__maxbytes,rwbytes,writable);\
     }))
 #define kshm_wtranslateuser(self,epd,addr,maxbytes,rwbytes) \
@@ -1668,7 +1671,8 @@ __kshm_w1qtranslateuser_impl(struct kshm const *__restrict self,
   ? __kshm_wtranslateuser(self,epd,addr,maxbytes,rwbytes)\
   : __xblock({ __user void *__addr = (addr); __size_t const __maxbytes = (maxbytes);\
                __xreturn KPAGEDIR_CAN_QUICKACCESS(__addr,__maxbytes)\
-                ? (*(rwbytes) = __maxbytes,__kshm_qwtranslateuser(self,epd,addr))\
+                ? (*(rwbytes) = (__addr = __kshm_qwtranslateuser(self,epd,__addr))\
+                  ? __maxbytes : 0,__addr)\
                 : __kshm_wtranslateuser(self,epd,__addr,__maxbytes,rwbytes);\
     }))
 #define kshm_qtranslateuser   __kshm_qtranslateuser

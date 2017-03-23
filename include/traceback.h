@@ -29,13 +29,16 @@
 __DECL_BEGIN
 
 #ifndef __ASSEMBLY__
-#ifndef __pdebug_stackwalker_defined
-#define __pdebug_stackwalker_defined 1
+#ifndef __ptbwalker_defined
+#define __ptbwalker_defined 1
 typedef int (*ptbwalker) __P((void const *__restrict __instruction_pointer,
                               void const *__restrict __frame_address,
                               __size_t __frame_index, void *__closure));
-#endif
+#endif /* !__ptbwalker_defined */
+#ifndef __ptberrorhandler_defined
+#define __ptberrorhandler_defined 1
 typedef int (*ptberrorhandler) __P((int __error, void const *__arg, void *__closure));
+#endif /* !__ptberrorhandler_defined */
 #endif /* !__ASSEMBLY__ */
 
 /* Values for 'ERROR' recognized by ptberrorhandler-callbacks. */
@@ -68,6 +71,7 @@ extern int tbdef_error __P((int __error, void const *__arg, void *__closure));
 // Print a traceback, using 'tbdef_print'
 extern                int tb_print      __P((void));
 extern                int tb_printex    __P((__size_t __skip));
+extern __nonnull((1)) int tb_printeip   __P((void const *__eip));
 extern __nonnull((1)) int tb_printebp   __P((void const *__ebp));
 extern __nonnull((1)) int tb_printebpex __P((void const *__ebp, __size_t __skip));
 
@@ -75,6 +79,7 @@ extern __nonnull((1)) int tb_printebpex __P((void const *__ebp, __size_t __skip)
 // Manually walk a stack, executing the provided callbacks.
 extern                int tb_walk      __P((ptbwalker __callback, ptberrorhandler __handle_error, void *__closure));
 extern                int tb_walkex    __P((ptbwalker __callback, ptberrorhandler __handle_error, void *__closure, __size_t __skip));
+extern __nonnull((1)) int tb_walkeip   __P((void const *__eip, ptbwalker __callback, ptberrorhandler __handle_error, void *__closure));
 extern __nonnull((1)) int tb_walkebp   __P((void const *__ebp, ptbwalker __callback, ptberrorhandler __handle_error, void *__closure));
 extern __nonnull((1)) int tb_walkebpex __P((void const *__ebp, ptbwalker __callback, ptberrorhandler __handle_error, void *__closure, __size_t __skip));
 
@@ -87,10 +92,10 @@ struct tbtrace;
 //                that can be used in further calls to 'tbtrace_walk' and
 //               'tbtrace_print', before being freed through use of 'free'.
 // @return: NULL: Not enough available memory (errno is set to ENOMEM)
-extern __malloccall struct tbtrace *tbtrace_capture __P((void));
-extern __malloccall struct tbtrace *tbtrace_captureex __P((__size_t __skip));
-extern __malloccall struct tbtrace *tbtrace_captureebp __P((void const *__ebp));
-extern __malloccall struct tbtrace *tbtrace_captureebpex __P((void const *__ebp, __size_t __skip));
+extern __wunused __malloccall struct tbtrace *tbtrace_capture __P((void));
+extern __wunused __malloccall struct tbtrace *tbtrace_captureex __P((__size_t __skip));
+extern __wunused __malloccall struct tbtrace *tbtrace_captureebp __P((void const *__ebp));
+extern __wunused __malloccall struct tbtrace *tbtrace_captureebpex __P((void const *__ebp, __size_t __skip));
 
 //////////////////////////////////////////////////////////////////////////
 // Walk/Print a previously captured traceback.

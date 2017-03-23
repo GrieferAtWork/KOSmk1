@@ -170,7 +170,7 @@ handle_intr:
 #endif
  goto buffer_is_empty;
 end_rpos:
- (void)(bufend = bufend); /* It is always initialized! */
+ //(void)(bufend = bufend); /* It is always initialized! */
  assert(bufend == self->ib_buffer+self->ib_size);
  assert(start_rpos >= self->ib_buffer && start_rpos <= bufend);
  assert(rpos >= self->ib_buffer && rpos <= bufend);

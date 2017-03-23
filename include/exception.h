@@ -26,6 +26,7 @@
 #include <kos/config.h>
 #ifndef __KERNEL__
 #include <kos/compiler.h>
+#ifndef __ASSEMBLY__
 #include <kos/exception.h>
 
 #ifdef __STDC_PURE__
@@ -33,6 +34,17 @@
 #endif
 
 __DECL_BEGIN
+
+#ifndef __ptbwalker_defined
+#define __ptbwalker_defined 1
+typedef int (*ptbwalker) __P((void const *__restrict __instruction_pointer,
+                              void const *__restrict __frame_address,
+                              __size_t __frame_index, void *__closure));
+#endif /* !__ptbwalker_defined */
+#ifndef __ptberrorhandler_defined
+#define __ptberrorhandler_defined 1
+typedef int (*ptberrorhandler) __P((int __error, void const *__arg, void *__closure));
+#endif /* !__ptberrorhandler_defined */
 
 typedef kexno_t        exno_t;
 typedef struct kexinfo exception_t;
@@ -44,6 +56,23 @@ extern void exc_throw_resumeable __P((exception_t const *__restrict __exception)
 extern void exc_raise_resumeable __P((exno_t __exception_number));
 extern __noreturn void exc_rethrow __P((void));
 extern __noreturn void exc_continue __P((void));
+
+//////////////////////////////////////////////////////////////////////////
+// Helper functions for walking/printing/capturing
+// tracebacks from finally/exception handlers:
+// >> __try {
+// >>   ((char *)0xdeadbeef) = 42;
+// >> } __except (1) {
+// >>   exc_tbprint(0);
+// >> }
+// @param: TP_ONLY: Only print the traceback; don't include error description/additional info.
+extern int exc_tbwalk __P((ptbwalker __callback, ptberrorhandler __handle_error, void *__closure));
+extern int exc_tbprint __P((int __tp_only));
+extern int exc_tbprintex __P((int __tp_only, void *__closure));
+extern __wunused __malloccall struct tbtrace *exc_tbcapture __P((void));
+extern __wunused char const *exc_getname __P((exno_t __exception_number));
+
+
 
 #define exc_try       KEXCEPT_TRY
 #define exc_try_h     KEXCEPT_TRY_H
@@ -77,6 +106,7 @@ extern         int exc_handling(void); /*< Returns non-ZERO(0) if an unhandled e
 
 __DECL_END
 
+#endif /* !__ASSEMBLY__ */
 #endif /* !__KERNEL__ */
 
 #endif /* !__EXCEPTION_H__ */

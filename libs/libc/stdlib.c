@@ -277,28 +277,6 @@ __DECL_END
 #include <stdarg.h>
 __DECL_BEGIN
 
-static void crash_out(char const *fmt, ...) {
- va_list args;
- va_start(args,fmt);
- vdprintf(STDERR_FILENO,fmt,args);
- va_end(args);
- va_start(args,fmt);
- k_vsyslogf(KLOG_ERROR,fmt,args);
- va_end(args);
-}
-
-__public __noreturn void __kexcept_unhandled(void) {
- struct kexinfo *info = kexcept_current;
- /* Dump exception information. */
- crash_out("Unhandled exception: %I32u (%I32x) (%I32x) (%p,%p,%p,%p)\n"
-          ,info->ex_no,info->ex_no,info->ex_info
-          ,info->ex_ptr[0],info->ex_ptr[1]
-          ,info->ex_ptr[2],info->ex_ptr[3]);
- _exit(EXIT_FAILURE);
-}
-
-
-
 
 /* Make these public */
 __public long syscall(long sysno, ...);

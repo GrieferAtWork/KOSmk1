@@ -29,27 +29,36 @@
 #include <malloc.h>
 #include <mod.h>
 #include <proc.h>
+#include <traceback.h>
 
 TEST(exceptions) {
  /* Here to ensure all registers are either dead, or preserved. */
  register int register_variable = 42;
-
+ //tb_print();
  __try {
   /* Time to mess things up! */
   char *p = (char *)0xdeadbeef;
   for (;;) { assert(register_variable == 42); *p++ = '\xAA'; }
  } __except (exc_code() == KEXCEPTION_SEGFAULT) {
+#if 1
+  exc_tbprint(0);
+#else
   syminfo_t *syminfo; void *eip;
+  outf("Handling exception #1...\n");
   assert(register_variable == 42);
   assert(exc_current->ex_info&KEXCEPTIONINFO_SEGFAULT_WRITE);
   assert(!(exc_current->ex_info&KEXCEPTIONINFO_SEGFAULT_INSTR_FETCH));
   assertf(exc_current->ex_ptr[0] == (void *)0xdeadbeef,"%p",exc_current->ex_ptr[0]);
+  outf("Handling exception #2...\n");
+  tb_printebp((void *)tls_self->u_exstate.ebp);
+  outf("Handling exception #3...\n");
   eip = (void *)tls_self->u_exstate.eip;
   /* Figure out some symbol information about the EIP. */
   syminfo = mod_addrinfo(MOD_ALL,eip,NULL,0,MOD_SYMINFO_NONE);
   assert(syminfo);
   assert(syminfo->si_base == (void *)&NAME(exceptions));
   free(syminfo);
+#endif
   assert(register_variable == 42);
  }
  assert(register_variable == 42);

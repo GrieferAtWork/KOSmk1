@@ -90,12 +90,12 @@ kprocperm_initcopy(struct kprocperm *__restrict self,
 #if KCONFIG_HAVE_TASK_NAMES
  self->pp_namemax = katomic_load(right->pp_namemax);
 #endif
- self->pp_pipemax = katomic_load(self->pp_pipemax);
- self->pp_thrdmax = katomic_load(self->pp_thrdmax);
+ self->pp_pipemax = katomic_load(right->pp_pipemax);
+ self->pp_thrdmax = katomic_load(right->pp_thrdmax);
  for (i = 0; i != KPERM_FLAG_GROUPCOUNT; ++i) {
   self->pp_flags[i] = katomic_load(right->pp_flags[i]);
  }
- self->pp_state = katomic_load(self->pp_state);
+ self->pp_state = katomic_load(right->pp_state);
  return KE_OK;
 }
 

@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <kos/kernel/fs/vfs-dev.h>
 #include <kos/kernel/util/string.h>
+#include <kos/syslog.h>
 
 __DECL_BEGIN
 
@@ -105,6 +106,8 @@ __crit __ref struct kpipe *kpipe_new(size_t max_size) {
  __ref struct kpipe *result;
  KTASK_CRIT_MARK
  /* Create the pipe INode. */
+ k_syslogf(KLOG_DEBUG,"proc_max_pipe_size = %Iu\n",
+           kprocperm_getpipemax(kproc_getperm(kproc_self())));
 #if 1
  result = (__ref struct kpipe *)__kinode_alloc((struct ksuperblock *)&kvfs_dev,&kpipe_type,
                                                &kpipesuper_type,
@@ -152,6 +155,11 @@ kpipefile_read(struct kpipefile *__restrict self,
                __user void *buf, size_t bufsize,
                __kernel size_t *__restrict rsize) {
  /* TODO: Blocking behavior can be configured through fcntl. */
+ k_syslogf(KLOG_INFO,"PIPE.READ: %p..%p %p %p\n",
+           self->pr_pipe->p_iobuf.ib_buffer,
+           __kiobuf_bufend(&self->pr_pipe->p_iobuf),
+           self->pr_pipe->p_iobuf.ib_rpos,
+           self->pr_pipe->p_iobuf.ib_wpos);
  return kiobuf_user_read(&self->pr_pipe->p_iobuf,buf,bufsize,rsize,
                          KIO_BLOCKFIRST|KIO_NONE);
 }
@@ -159,9 +167,21 @@ static kerrno_t
 kpipefile_write(struct kpipefile *__restrict self,
                 __user void const *buf, size_t bufsize,
                 __kernel size_t *__restrict wsize) {
+ kerrno_t error;
  /* TODO: Blocking behavior can be configured through fcntl. */
- return kiobuf_user_write(&self->pr_pipe->p_iobuf,buf,bufsize,wsize,
-                          KIO_BLOCKFIRST|KIO_NONE);
+ k_syslogf(KLOG_INFO,"PIPE.WRITE1: %p..%p %p %p\n",
+           self->pr_pipe->p_iobuf.ib_buffer,
+           __kiobuf_bufend(&self->pr_pipe->p_iobuf),
+           self->pr_pipe->p_iobuf.ib_rpos,
+           self->pr_pipe->p_iobuf.ib_wpos);
+ error = kiobuf_user_write(&self->pr_pipe->p_iobuf,buf,bufsize,wsize,
+                           KIO_BLOCKFIRST|KIO_NONE);
+ k_syslogf(KLOG_INFO,"PIPE.WRITE2: %p..%p %p %p\n",
+           self->pr_pipe->p_iobuf.ib_buffer,
+           __kiobuf_bufend(&self->pr_pipe->p_iobuf),
+           self->pr_pipe->p_iobuf.ib_rpos,
+           self->pr_pipe->p_iobuf.ib_wpos);
+ return error;
 }
 static kerrno_t
 kpipefile_flush(struct kpipefile *__restrict self) {

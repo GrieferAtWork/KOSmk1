@@ -288,8 +288,8 @@ extern char const *_mallblock_getaddr_d(struct _mallblock_d const *__restrict se
 #define _mallblock_getaddr_d(self) ((void const *)__mallblock_getattrib_d(self,__MALLBLOCK_ATTRIB_ADDR))
 #endif
 
-#ifndef __pdebug_stackwalker_defined
-#define __pdebug_stackwalker_defined 1
+#ifndef __ptbwalker_defined
+#define __ptbwalker_defined 1
 typedef int (*ptbwalker) __P((void const *__restrict __instruction_pointer,
                               void const *__restrict __frame_address,
                               __size_t __frame_index, void *__closure));

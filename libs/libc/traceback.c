@@ -48,6 +48,7 @@
 #include <unistd.h>
 #include <mod.h>
 #endif /* __KERNEL__ */
+#include "traceback-internal.h"
 
 __DECL_BEGIN
 
@@ -58,17 +59,17 @@ __DECL_BEGIN
 #define PRINT(...) fprintf(stderr,__VA_ARGS__)
 #endif
 
-static int
+int
 tbprint_callback(char const *data,
                  size_t max_data,
                  void *closure) {
+ max_data = strnlen(data,max_data);
  if (closure) {
 #ifdef __KERNEL__
   kerrno_t error = kfile_kernel_writeall((struct kfile *)closure,data,
-                                         strnlen(data,max_data)*sizeof(char));
+                                         max_data*sizeof(char));
   return KE_ISERR(error) ? error : 0;
 #else
-  max_data = strnlen(data,max_data);
   __evalexpr(fwrite(data,sizeof(char),max_data,(FILE *)closure));
 #endif
  } else {
@@ -77,7 +78,7 @@ tbprint_callback(char const *data,
   serial_printn(SERIAL_01,data,max_data);
 #else
   k_syslog(KLOG_ERROR,data,max_data);
-  if (write(STDERR_FILENO,data,strnlen(data,max_data)*sizeof(char)) < 0) return -1;
+  if (write(STDERR_FILENO,data,max_data*sizeof(char)) < 0) return -1;
 #endif
  }
  return 0;
@@ -94,6 +95,7 @@ tbdef_print(void const *__restrict instruction_pointer,
                      ,((uintptr_t)instruction_pointer)-1,frame_index,frame_address,instruction_pointer);
 #else
  int error; syminfo_t *sym; char buffer[512];
+ memset(buffer,0,sizeof(buffer));
            sym = mod_addrinfo(MOD_ALL,instruction_pointer,(syminfo_t *)buffer,sizeof(buffer),MOD_SYMINFO_ALL);
  if (!sym) sym = mod_addrinfo(MOD_ALL,instruction_pointer,NULL,0,MOD_SYMINFO_ALL);
  if (!sym) {
@@ -158,6 +160,23 @@ __local _syscall2(kerrno_t,kmem_validate,void const *__restrict,addr,__size_t,by
 #endif
 #endif
 
+__public int
+tb_walkeip(void const *eip, ptbwalker callback,
+           ptberrorhandler handle_error, void *closure) {
+ int temp;
+ if (KE_ISERR(kmem_validatebyte((byte_t const *)eip))) {
+  if (!handle_error) return TRACEBACK_STACKERROR_EIP;
+  temp = (*handle_error)(TRACEBACK_STACKERROR_EIP,eip,closure);
+  if (temp != 0) return temp;
+ }
+ if (callback) {
+  /* Call the stack entry enumerator */
+  temp = (*callback)(eip,NULL,0,closure);
+  if (temp != 0) return temp;
+ }
+ return 0;
+}
+
 static int
 debug_dostackwalk(struct stackframe *start, ptbwalker callback,
                   ptberrorhandler handle_error, void *closure, size_t skip) {
@@ -211,26 +230,18 @@ __public            int tb_walkebp(void const *ebp, ptbwalker callback, ptberror
 __public            int tb_walkebpex(void const *ebp, ptbwalker callback, ptberrorhandler handle_error, void *closure, size_t skip) { return debug_dostackwalk((struct stackframe *)ebp,callback,handle_error,closure,skip); }
 __public __noinline int tb_print(void)                              { return tb_walkex(&tbdef_print,&tbdef_error,NULL,1); }
 __public __noinline int tb_printex(size_t skip)                     { return tb_walkex(&tbdef_print,&tbdef_error,NULL,skip+1); }
+__public            int tb_printeip(void const *eip)                { return tb_walkeip(eip,&tbdef_print,&tbdef_error,NULL); }
 __public            int tb_printebp(void const *ebp)                { return tb_walkebpex(ebp,&tbdef_print,&tbdef_error,NULL,0); }
 __public            int tb_printebpex(void const *ebp, size_t skip) { return tb_walkebpex(ebp,&tbdef_print,&tbdef_error,NULL,skip); }
 
-struct dtracebackentry {
- void const *tb_eip;
- void const *tb_esp;
-};
-struct tbtrace {
- size_t                 tb_entryc;
- struct dtracebackentry tb_entryv[1024];
-};
-
-static __noinline int
+__noinline int
 tbcapture_walkcount(void const *__restrict __unused(instruction_pointer),
                     void const *__restrict __unused(frame_address),
                     size_t frame_index, size_t *closure) {
  if (frame_index >= *closure) *closure = frame_index+1;
  return 0;
 }
-static __noinline int
+__noinline int
 tbcapture_walkcollect(void const *__restrict instruction_pointer,
                       void const *__restrict frame_address,
                       size_t frame_index, struct tbtrace *tb) {

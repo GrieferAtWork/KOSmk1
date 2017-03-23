@@ -315,9 +315,17 @@ free_pagetable:
     // Complicated case: Free only a range, then check if the entire table can be freed
     begin = x86_pde_getpte(pde);
     end = (iter = begin)+ptid;
+    assert(iter <= end);
     while (iter != end) { if (iter->present) { --free_area; break; } ++iter; }
-    if (free_area) {
-     end = (iter = begin+ptid+pdenusing)-(1024-(ptid+pdenusing));
+    if __unlikely(free_area) {
+     end = (iter = begin+ptid+pdenusing)+(1024-(ptid+pdenusing));
+     assertf(iter <= end
+            ,"iter      = %p\n"
+             "end       = %p\n"
+             "begin     = %p\n"
+             "ptid      = %Iu\n"
+             "pdenusing = %Iu\n"
+            ,iter,end,begin,ptid,pdenusing);
      while (iter != end) { if (iter->present) { --free_area; break; } ++iter; }
      // Full range below & above is free. --> Can free the entire table
      if (free_area) goto free_pagetable;

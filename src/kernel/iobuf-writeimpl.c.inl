@@ -25,6 +25,7 @@
 #define USER_MEMORY
 __DECL_BEGIN
 #endif
+#include <kos\syslog.h>
 
 
 #ifdef USER_MEMORY
@@ -82,7 +83,7 @@ buffer_is_full:
   write_pos = (size_t)(self->ib_wpos-self->ib_buffer);
   new_buffer_size = self->ib_size+(bufsize-max_write);
   new_buffer_size = min(new_buffer_size,self->ib_maxsize);
-  //printf("Realloc for %Iu bytes (%Iu)\n",bufsize,new_buffer_size);
+  //printf("Realloc for %Iu bytes (%Iu; %Iu)\n",bufsize,new_buffer_size,self->ib_maxsize);
   assert(new_buffer_size >= self->ib_size);
   assert(new_buffer_size <= self->ib_maxsize);
   if (new_buffer_size != self->ib_size) {
@@ -94,10 +95,13 @@ buffer_is_full:
           new_buffer_size-self->ib_size);
 #endif
    self->ib_buffer = new_buffer;
-   self->ib_size = new_buffer_size;
-   /* Be careful to preserve the an empty-buffer state. */
-   self->ib_rpos = new_buffer+((self->ib_rpos == bufend) ? new_buffer_size : read_pos);
+   /* Be careful to preserve the an empty-buffer state.
+    * NOTE: The check against the old 'self->ib_size' is required to
+    *       prevent an incorrect empty-buffer state from being detected
+    *       when this is the first time the I/O-buffer is written to. */
+   self->ib_rpos = new_buffer+((self->ib_rpos == bufend && __likely(self->ib_size)) ? new_buffer_size : read_pos);
    self->ib_wpos = new_buffer+write_pos;
+   self->ib_size = new_buffer_size;
    bufend = new_buffer+new_buffer_size;
   } else if (!max_write) {
    goto end;
@@ -125,7 +129,10 @@ buffer_is_full:
  *(uintptr_t *)&buf += max_write;
  bufsize -= max_write;
  assert(bufsize);
+ assert((self->ib_wpos == bufend) ||
+        (self->ib_wpos == self->ib_rpos));
  if (self->ib_wpos != bufend) {
+  max_write = 0;
   goto buffer_is_full;
  }
  /* Copy into the lower portion */

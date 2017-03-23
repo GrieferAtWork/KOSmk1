@@ -278,7 +278,7 @@ __DECL_BEGIN
 KSYSCALL_DEFINE3(kerrno_t,k_syslog,int,level,__user char const *,s,size_t,maxlen) {
  struct kproc *caller = kproc_self();
  int allowed_level = kprocperm_getlogpriv(kproc_getperm(caller));
- //if __unlikely(level < allowed_level) return KE_ACCES;     /* You're not allowed to log like this! */
+ if __unlikely(level < allowed_level) return KE_ACCES;     /* You're not allowed to log like this! */
  if __unlikely(k_sysloglevel < level) return KS_UNCHANGED; /* Your log level is currently disabled. */
  if __unlikely(level >= KLOG_COUNT)   return KE_NOSYS;     /* That's not a valid level. */
  return k_dosyslog_u(caller,level,s,maxlen);

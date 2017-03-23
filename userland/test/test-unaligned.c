@@ -32,6 +32,7 @@ static char data[] = "<<Unaligned-text>>";
 
 TEST(unaligned) {
  size_t pagesize;
+ ssize_t s;
  char *p,*unaligned;
  char buf[sizeof(data)];
  int pipes[2];
@@ -52,12 +53,16 @@ TEST(unaligned) {
  ASSERT_ERRNO(pipe(pipes) != -1);
 
  /* Write some data through the pipe. */
- ASSERT_ERRNO(write(pipes[1],unaligned,sizeof(data)) == sizeof(data));
+ s = write(pipes[1],unaligned,sizeof(data));
+ ASSERT_ERRNO(s != -1);
+ assertf(s == sizeof(data),"%Id",s);
  assertf(!memcmp(data,unaligned,sizeof(data)),"%.?q != %.?q",
          sizeof(data),data,sizeof(data),unaligned); /* Sanity check: Write didn't modify the buffer. */
 
  /* Read the previously written data back. */
- ASSERT_ERRNO(read(pipes[0],buf,sizeof(data)) == sizeof(data));
+ s = read(pipes[0],buf,sizeof(data));
+ ASSERT_ERRNO(s != -1);
+ assertf(s == sizeof(data),"%Id",s);
  ASSERT_ERRNO(close(pipes[0]) != -1);
  ASSERT_ERRNO(close(pipes[1]) != -1);
 
