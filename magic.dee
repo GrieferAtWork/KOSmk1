@@ -360,7 +360,7 @@ function deemon_preprocess_file(input,o,deps_output,args) {
 	p.stdout = w;
 	p.start();
 	w.close();
-	local used_o = o|file.open("temp.c","w");
+	local used_o = o;
 	for (local line: r) {
 		local lno,name;
 		try lno,name = line.scanf("#line %[^ ] \"%[^\"]\"")...;
