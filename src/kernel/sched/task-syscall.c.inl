@@ -97,17 +97,17 @@ KSYSCALL_DEFINE_EX2(c,kerrno_t,ktask_abssleep,int,taskfd,
 KSYSCALL_DEFINE_EX3(c,kerrno_t,ktask_terminate,int,taskfd,
                     void *,exitcode,ktaskopflag_t,flags) {
  struct kfdentry fdentry; kerrno_t error;
- struct kproc *caller = kproc_self();
  KTASK_CRIT_MARK
- if (!kproc_hasflag(caller,KPERM_FLAG_SUSPEND_RESUME)) return KE_ACCES;
- error = kproc_getfd(caller,taskfd,&fdentry);
- if __unlikely(KE_ISERR(error)) return error;
- error = kfdentry_terminate(&fdentry,exitcode,flags);
- kfdentry_quit(&fdentry);
+ error = kproc_getfd(kproc_self(),taskfd,&fdentry);
+ if __likely(KE_ISOK(error)) {
+  error = kfdentry_terminate(&fdentry,exitcode,flags);
+  kfdentry_quit(&fdentry);
+ }
  return error;
 }
 
-KSYSCALL_DEFINE_EX2(c,kerrno_t,ktask_suspend,int,taskfd,ktaskopflag_t,flags) {
+KSYSCALL_DEFINE_EX2(c,kerrno_t,ktask_suspend,
+                    int,taskfd,ktaskopflag_t,flags) {
  struct kfdentry fdentry; kerrno_t error;
  struct kproc *caller = kproc_self();
  KTASK_CRIT_MARK
@@ -122,8 +122,10 @@ KSYSCALL_DEFINE_EX2(c,kerrno_t,ktask_suspend,int,taskfd,ktaskopflag_t,flags) {
 KSYSCALL_DEFINE_EX2(c,kerrno_t,ktask_resume,
                     int,taskfd,ktaskopflag_t,flags) {
  struct kfdentry fdentry; kerrno_t error;
+ struct kproc *caller = kproc_self();
  KTASK_CRIT_MARK
- error = kproc_getfd(kproc_self(),taskfd,&fdentry);
+ if (!kproc_hasflag(caller,KPERM_FLAG_SUSPEND_RESUME)) return KE_ACCES;
+ error = kproc_getfd(caller,taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) return error;
  error = kfdentry_resume(&fdentry,flags);
  kfdentry_quit(&fdentry);

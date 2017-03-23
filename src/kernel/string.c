@@ -32,6 +32,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <format-printer.h>
+#include <kos/syslog.h>
 
 __DECL_BEGIN
 
@@ -76,11 +77,31 @@ struct user_vsnprintf_data {
  __kernel char     *k_bufpos; /*< [?..1] Start of the current kernel-buffer part. */
  size_t             k_bufsiz; /*< Amount of available bytes starting at 'k_bufpos'. */
 };
+
+__local __size_t
+fix_x86_strnlenb(__u8 const *__s, __size_t __maxchars) {
+ register __size_t __result;
+ if (!__maxchars) return 0;
+ __asm_volatile__("cld\n"         /* clear direction flag. */
+                  "repne scasb\n" /* perform the string operation. */
+                  "jnz 1f\n"      /* If we didn't find it, don't decrement the result. */
+                  "inc %%ecx\n"   /* Adjust the counter to really point to the end of the string. */
+                  "1:\n"
+                  : "=c" (__result)
+                  : "c" (__maxchars)
+                  , "D" (__s), "a" (0)
+                  : "memory");
+ return __maxchars-__result;
+}
+
+
+
 static int
 user_vsnprintf_callback(__kernel char const *s, size_t maxlen,
                         struct user_vsnprintf_data *data) {
  size_t copysize;
  maxlen = strnlen(s,maxlen)*sizeof(char);
+ //k_syslogf(KLOG_INFO,"Part: %p %.?q (len: %Iu)\n",s,maxlen,s,maxlen);
  for (;;) {
   copysize = min(maxlen,data->k_bufsiz);
   SHM_MEMCPY(data->k_bufpos,s,copysize);

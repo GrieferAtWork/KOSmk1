@@ -392,6 +392,7 @@ __karch_small_memcmp(void const *__a, void const *__b, __size_t __bytes) {
 #endif
   default: __karch_small_memcmp_too_large();
  }
+ return 0;
 #undef __CMP
 }
 

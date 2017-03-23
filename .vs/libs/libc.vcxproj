@@ -104,8 +104,8 @@
     <OutDir>$(SolutionDir)..\</OutDir>
     <IncludePath>$(SolutionDir)..\include</IncludePath>
     <IntDir>$(SolutionDir)..\build\.vs\$(ProjectName)\$(Platform)-$(Configuration)\</IntDir>
-    <NMakeReBuildCommandLine>rundll</NMakeReBuildCommandLine>
-    <NMakeBuildCommandLine>rundll</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>rundll32</NMakeReBuildCommandLine>
+    <NMakeBuildCommandLine>rundll32</NMakeBuildCommandLine>
     <ReferencePath>
     </ReferencePath>
     <LibraryPath>

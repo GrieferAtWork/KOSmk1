@@ -70,6 +70,7 @@ KSYSCALL_DEFINE6(__user void *,kmem_map,__user void *,hint,size_t,length,
  if __unlikely(KE_ISERR(error)) { hint = (void *)(uintptr_t)-1; goto end; }
  if (!(flags&MAP_FIXED)) {
   /* For non-fixed mappings, find a suitable free range. */
+  assert(isaligned((uintptr_t)hint,PAGEALIGN));
   hint = kpagedir_findfreerange(kproc_getpagedir(procself),pages,hint);
   if __unlikely(hint == KPAGEDIR_FINDFREERANGE_ERR) goto err_unlock;
  }
@@ -88,13 +89,14 @@ err_unlock:
 
 KSYSCALL_DEFINE5(kerrno_t,kmem_mapdev,__user void **,hint_and_result,
                  __size_t,length,int,prot,int,flags,__kernel void *,physptr) {
- void *hint,*aligned_physptr,*result;
+ __user void *hint,*result;
+ __kernel void *aligned_physptr;
  size_t alignment_offset;
  struct ktask *caller = ktask_self();
  struct kproc *procself = ktask_getproc(caller);
  __ref struct kshmregion *region; size_t pages; kerrno_t error;
  /* Fix the given hint. */
- aligned_physptr  = (void *)alignd((uintptr_t)physptr,PAGEALIGN);
+ aligned_physptr  = (__kernel void *)alignd((uintptr_t)physptr,PAGEALIGN);
  alignment_offset = ((uintptr_t)physptr-(uintptr_t)aligned_physptr);
  length          += alignment_offset;
  prot            &= (KSHMREGION_FLAG_EXEC|KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE); /*< Don't reveal the hidden flags. */
@@ -103,12 +105,14 @@ KSYSCALL_DEFINE5(kerrno_t,kmem_mapdev,__user void **,hint_and_result,
  if __unlikely(copy_from_user(&hint,hint_and_result,sizeof(hint))) return KE_FAULT;
  if (flags&MAP_FIXED) {
   void *aligned_hint;
-  aligned_hint    = (void *)alignd((uintptr_t)hint,PAGEALIGN);
+  aligned_hint = (void *)alignd((uintptr_t)hint,PAGEALIGN);
   if (((uintptr_t)aligned_hint-(uintptr_t)hint) != alignment_offset
       ) return KE_INVAL; /*< Impossible alignment requirements. */
   hint = aligned_hint;
  } else if (!hint) {
   hint = KPAGEDIR_MAPANY_HINT_UDEV;
+ } else {
+  hint = (__user void *)alignd((uintptr_t)hint,PAGEALIGN);
  }
  /* Calculate the min amount of pages. */
  pages = ceildiv(length,PAGESIZE);
@@ -125,6 +129,7 @@ KSYSCALL_DEFINE5(kerrno_t,kmem_mapdev,__user void **,hint_and_result,
  if __unlikely(KE_ISERR(error)) goto end;
  if (!(flags&MAP_FIXED)) {
   /* For non-fixed mappings, find a suitable free range. */
+  assert(isaligned((uintptr_t)hint,PAGEALIGN));
   hint = kpagedir_findfreerange(kproc_getpagedir(procself),pages,hint);
   if __unlikely(hint == KPAGEDIR_FINDFREERANGE_ERR) { error = KE_NOSPC; goto end_unlock; }
  }

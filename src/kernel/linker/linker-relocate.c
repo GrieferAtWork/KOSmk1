@@ -112,7 +112,7 @@ __dlsym(struct kproc *__restrict proc, struct kprocmodule *__restrict start_modu
 #define LOG(level,...) k_syslogf_prefixfile(level,reloc_module->pm_lib->sh_file,__VA_ARGS__)
 
 
-__local void
+static void
 kreloc_elf32_rel_exec(Elf32_Rel const *relv, size_t relc,
                       struct ksymlist *__restrict symbols,
                       struct kshm *__restrict memspace,
@@ -202,7 +202,7 @@ rel_next:;
 
 
 
-__local void
+static void
 kreloc_pe_import_exec(struct krelocvec const *__restrict self,
                       struct kshm *__restrict memspace,
                       struct kproc *__restrict proc,
@@ -255,7 +255,7 @@ kreloc_pe_import_exec(struct krelocvec const *__restrict self,
 #undef relv
 }
 
-__local void
+static void
 kreloc_pe32_reloc_exec(struct krelocvec const *__restrict self,
                        struct kshm *__restrict memspace,
                        struct kproc *__restrict proc,

@@ -59,7 +59,7 @@ void kernel_initialize_syscall(void) {
  * - 'kmem_validate' is called a lot when mall generates tracebacks.
  * - Logging 'k_syslog' would defeat the point, since it's already about logging. */
 #define SYSCALL_SHOULDTRACE(callid) \
- ((callid) != SYS_kmem_validate && \
+ (/*(callid) != SYS_kmem_validate && */\
   (callid) != SYS_k_syslog)
 
 static void print_arg(char const *type, const char const *name, __uintptr_t value) {
@@ -129,10 +129,14 @@ void __ksyscall_enter_d(struct kirq_registers *__restrict regs, struct ksyscall_
   uintptr_t *iter,*end;
   char const *const *name,*const *type;
   switch (entry->sc_argc) {
-   default: if (copy_from_user(args+3,(__user void *)regs->regs.ebp,(entry->sc_argc-3)*sizeof(uintptr_t))) memset(args+3,0,(entry->sc_argc-3)*sizeof(uintptr_t));
-   case 3:  args[2] = regs->regs.edx;
-   case 2:  args[1] = regs->regs.ecx;
-   case 1:  args[0] = regs->regs.ebx;
+   default:
+    if (copy_from_user(args+5,(__user void *)regs->regs.ebp,(entry->sc_argc-5)*sizeof(uintptr_t)))
+                memset(args+5,0,(entry->sc_argc-5)*sizeof(uintptr_t));
+   case 5: args[4] = regs->regs.edi;
+   case 4: args[3] = regs->regs.esi;
+   case 3: args[2] = regs->regs.ebx;
+   case 2: args[1] = regs->regs.edx;
+   case 1: args[0] = regs->regs.ecx;
   }
   k_dosyslogf(SYSCALL_TRACE_LEVEL,NULL,NULL,"[syscall] Calling %Iu:%s(",entry->sc_id,entry->sc_name);
   end = (iter = args)+entry->sc_argc;

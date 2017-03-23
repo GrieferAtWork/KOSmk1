@@ -52,6 +52,7 @@ local remote = false;
 local run_only = false;
 local hosted = false;
 local optimize = false;
+local optimize_level = "-O2";
 local single = false;
 local ndebug = false;
 local addr2line_exe = "bin/kos_kernel.bin";
@@ -135,6 +136,8 @@ local default_attrib = dict {
 		"-Wall",
 		"-Wno-nonnull-compare",
 		"-Wno-comment",
+		"-Wno-strict-aliasing",
+		//"-save-temps",
 		//"-no-integrated-cpp",
 	},
 	.include = list {
@@ -298,6 +301,11 @@ if (args) {
 			sources_files.append(fs::path::abs(a,cwd));
 		}
 	}
+}
+
+if (optimize && !ndebug) {
+	/* Prevent O3 from removing stackframes. */
+	default_attrib["flags"].append("-fno-omit-frame-pointer");
 }
 
 fs::chdir(fs::path::head(__FILE__));
@@ -527,7 +535,7 @@ function parse_single_source(path,attrib,filename,fp_last_changed) {
 		(for (local name,value: defines) "-D"+name+"="+(value ?: "1"))...,
 		((is_asm_compiler(compiler) || filename.endswith(".S")) ? ["-D__ASSEMBLY__"] : [])...,
 		(for (local x: include_paths) "-I"+x)...,
-		(optimize ? ["-O3"] : [])...,
+		(optimize ? [optimize_level,"-Wno-maybe-uninitialized"] : [])...,
 		(ndebug ? ["-DNDEBUG"] : ["-fstack-protector-strong","-g"])...,
 		more_flags...,
 		"-MMD","-c",filename,
@@ -833,7 +841,7 @@ do_compile_userland:
 	if ("bin/libs" !in libpaths) libpaths.append("bin/libs");
 	local p = process(executables[linker],[
 		"-static-libgcc",
-		"-o",output,(optimize ? ["-O2"] : [])...,
+		"-o",output,(optimize ? [optimize_level] : [])...,
 		"-nostdlib",
 		(for (local l: libpaths) "-L"+l)...,
 		options.get("linker_flags",[])...,
@@ -911,7 +919,7 @@ do_compile_sharedlib:
 	libpaths.append("binutils/build-gcc-i686-elf/i686-elf/libgcc");
 	local p = process(executables[linker],[
 		(for (local l: libpaths) "-L"+l)...,
-		//"-static-libgcc",(optimize ? ["-O2"] : [])...,
+		//"-static-libgcc",(optimize ? [optimize_level] : [])...,
 		"-nostdlib","-shared","-o",output,
 		options.get("linker_flags",[])...,objects...,
 		get_proj_libs(libpaths,libs,mode)...,
@@ -961,7 +969,7 @@ do_compile_kernel:
 				"-static-libgcc",
 				"-T","src/kernel/arch/x86/linker.ld",
 				"-o",output,"-ffreestanding",
-				(optimize ? ["-O2"] : [])...,
+				(optimize ? [optimize_level] : [])...,
 				"-nostdlib",
 				(for (local l: libpaths) "-L"+l)...,
 				proj.options.get("flags",[])...,

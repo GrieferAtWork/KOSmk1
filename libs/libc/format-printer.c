@@ -207,7 +207,7 @@ next:
     enum printf_length length;
     unsigned int flags;
     size_t width,precision;
-    if (format_begin != iter) {
+    if (format_begin != iter-1) {
      print(format_begin,((size_t)(iter-format_begin))-1);
     }
     flags = PRINTF_FLAG_NONE;

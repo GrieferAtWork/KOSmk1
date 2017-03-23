@@ -240,12 +240,9 @@ void __kirq_default_handler(struct kirq_registers *regs) {
             info ? info->isi_name : NULL);
   serial_print(SERIAL_01,"########### Registers:\n");
   kirq_print_registers(regs);
-#define GETREG(name) __xblock({ void *temp; __asm_volatile__("movl %%" name ", %0" : "=r"(temp)); __xreturn temp; })
-  printf("cr0     = % 8I32x\n",GETREG("cr0"));
-//printf("cr1     = % 8I32x\n",GETREG("cr1"));
-  printf("cr2     = % 8I32x\n",GETREG("cr2"));
-  printf("cr3     = % 8I32x\n",GETREG("cr3"));
-#undef GETREG
+  printf("cr0     = % 8I32x\n",x86_getcr0());
+  printf("cr2     = % 8Ix\n",  x86_getcr2());
+  printf("cr3     = % 8Ix\n",  x86_getcr3());
 #ifdef __DEBUG__
   serial_printf(SERIAL_01,"########### Location (EIP):\n"
                 "#!$ addr2line(%p) '{file}({line}) : {func} : %p'\n",
@@ -360,9 +357,9 @@ void x86_interrupt_handler(struct kirq_registers *regs) {
          "Invalid signal: %u|%u",regs->regs.intno,regs->regs.ecode);
  handler = katomic_load(interrupt_handlers[regs->regs.intno]);
 #if 0
- printf("Calling handler %u (%u) %p\n",regs->regs.intno,
-        regs->regs.intno >= 32 ? regs->regs.intno-32 : regs->regs.intno,
-        handler);
+ serial_printf(SERIAL_01,"Calling handler %u (%u) %p\n",regs->regs.intno,
+               regs->regs.intno >= 32 ? regs->regs.intno-32 : regs->regs.intno,
+               handler);
  //kirq_print_registers(regs);
  //tb_print();
 #endif

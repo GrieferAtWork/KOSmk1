@@ -55,6 +55,7 @@
 #include <proc.h>
 #include <sched.h>
 #include <sys/mman.h>
+#include <kos/syslog.h>
 #endif
 #endif /* !__CONFIG_MIN_LIBC__ */
 
@@ -153,7 +154,11 @@ __public ssize_t read(int fd, void *__restrict buf, size_t bufsize) {
 }
 __public ssize_t write(int fd, void const *__restrict buf, size_t bufsize) {
  kerrno_t error; size_t rsize;
+#if 1 /* TODO: Remove me. */
+ assert(bufsize <= SSIZE_MAX);
+#else
  if __unlikely(bufsize > SSIZE_MAX) bufsize = (size_t)SSIZE_MAX;
+#endif
  error = kfd_write(fd,buf,bufsize,&rsize);
  if __likely(KE_ISOK(error)) return (ssize_t)rsize;
 #ifdef __CONFIG_MIN_BSS__

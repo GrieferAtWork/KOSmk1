@@ -136,8 +136,8 @@ kpagedir_setflags(struct kpagedir *__restrict self,
 // @return: * :                         The virtual address the given physical range was mapped to.
 // @return: KPAGEDIR_FINDFREERANGE_ERR: Failed to find an unused are big enough to map the given range.
 extern __nonnull((1)) __user void *
-kpagedir_findfreerange(struct kpagedir const *__restrict self,
-                       __size_t pages, __user void const *hint);
+kpagedir_findfreerange(struct kpagedir const *__restrict self, __size_t pages,
+                       __pagealigned __user void const *hint);
 #define KPAGEDIR_FINDFREERANGE_ERR ((__user void *)(__uintptr_t)-1)
 
 //////////////////////////////////////////////////////////////////////////

@@ -23,12 +23,13 @@
 #ifndef __KOS_KERNEL_SYSCONF_C__
 #define __KOS_KERNEL_SYSCONF_C__ 1
 
-#include <kos/sysconf.h>
 #include <kos/errno.h>
+#include <kos/kernel/pageframe.h>
 #include <kos/kernel/paging.h>
 #include <kos/kernel/proc.h>
+#include <kos/kernel/syslog.h>
 #include <kos/kernel/task.h>
-#include <kos/kernel/pageframe.h>
+#include <kos/sysconf.h>
 #include <limits.h>
 
 __DECL_BEGIN
@@ -104,6 +105,12 @@ long k_sysconf(int name) {
   case _SC_UINT_MAX          : return UINT_MAX;
   case _SC_ULONG_MAX         : return ULONG_MAX;
   case _SC_USHRT_MAX         : return USHRT_MAX;
+#ifdef __DEBUG__
+  case 1000: case 1001: case 1002:
+  case 1003: case 1004: case 1005:
+  case 1006: case 1007:
+   return katomic_xch(k_sysloglevel,name-1000);
+#endif
   default: break;
  }
  return KE_INVAL;

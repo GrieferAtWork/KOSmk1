@@ -65,7 +65,7 @@ __DECL_BEGIN
 #endif
 
 
-#if defined(__KERNEL__) && defined(KLOG_RAW)
+#if defined(__KERNEL__) && defined(KLOG_RAW) && 0
 #   define ASSERT_PRINTF(...)           (k_syslogf(KLOG_RAW,__VA_ARGS__),tty_printf(__VA_ARGS__))
 #   define ASSERT_VPRINTF(format,args) (k_vsyslogf(KLOG_RAW,format,args),tty_vprintf(format,args))
 #elif defined(__KERNEL__)
@@ -111,7 +111,7 @@ void __assertion_failedxvf(__LIBC_DEBUG_X_PARAMS_ char const *expr,
  /*serial_print(SERIAL_01,"\n");*/
 #endif
  ASSERT_PRINTF("===================================================\n"
-               "    Assertion failed:\n");
+               "    Assertion failed %p:\n",__dbg);
  if (__LIBC_DEBUG_X_FILE || __LIBC_DEBUG_X_FUNC) {
   ASSERT_PRINTF("    " KDEBUG_SOURCEPATH_PREFIX "%s(%d) : %s : %s\n"
                ,__LIBC_DEBUG_X_FILE,__LIBC_DEBUG_X_LINE
@@ -122,11 +122,12 @@ void __assertion_failedxvf(__LIBC_DEBUG_X_PARAMS_ char const *expr,
  ASSERT_PRINTF("===================================================\n");
  if (fmt) {
   ASSERT_VPRINTF(fmt,args);
-  ASSERT_PRINTF("\n");
+  ASSERT_PRINTF("\n"
+                "===================================================\n");
  }
- ASSERT_PRINTF("===================================================\n");
 #ifdef __DEBUG__
  tb_printex(skip+2);
+ ASSERT_PRINTF("===================================================\n");
 #endif
 #ifdef __KERNEL__
  {

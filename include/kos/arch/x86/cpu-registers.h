@@ -134,13 +134,13 @@ __forcelocal __u32 x86_geteflags(void) {
  register __u32 __eflags;
  __asm__("pushfl\n"
          "popl %0\n"
-         : "=rg" (__eflags));
+         : "=g" (__eflags));
  return __eflags;
 }
 __forcelocal void x86_seteflags(__u32 __value) {
  __asm__("pushl %0\n"
          "popfl\n"
-         : "=rg" (__value));
+         : "=g" (__value));
 }
 #endif
 #endif /* !__ASSEMBLY__ */

@@ -238,7 +238,7 @@ kpagedir_isunmapped(struct kpagedir const *__restrict self,
 
 __user void *
 kpagedir_findfreerange(struct kpagedir const *__restrict self, size_t pages,
-                       __user void const *hint) {
+                       __pagealigned __user void const *hint) {
  uintptr_t iter; int attr;
  kassertobj(self);
  assertf(isaligned((uintptr_t)hint,PAGEALIGN),"Address not aligned: %p",hint);

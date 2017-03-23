@@ -776,7 +776,7 @@ ktask_raise_irq_exception(struct ktask *__restrict self,
   case KARCH_X64_IRQ_PF:
    exinfo.ex_no = KEXCEPTION_X86_IRQ(KARCH_X64_IRQ_PF);
    exinfo.ex_info = regs->regs.ecode&0x00000012; /* write+instr_fetch. */
-   __asm__("movl %%cr2, %0\n" : "=r" (exinfo.ex_ptr[0]));
+   exinfo.ex_ptr[0] = x86_getcr2();
    if (regs->regs.ecode&0x00000001) { /* Present. */
     struct kshmbranch *branch;
     struct kproc *proc = ktask_getproc(self);

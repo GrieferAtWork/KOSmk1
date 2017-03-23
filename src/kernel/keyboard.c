@@ -155,9 +155,13 @@ static void kb_irq_handler(struct kirq_registers *__restrict regs) {
  scan = inb(PS2_DATA);
  switch (scan) {
   case 0x00: case 0xfa:
-  case 0xfe: case 0xff: return;
+  case 0xfe: case 0xff:
+   break;
+  default:
+   keyboard_sendscan(scan);
+   break;
  }
- keyboard_sendscan(scan);
+ __asm_volatile__("" : : : "memory"); /*< Why does this fix this? */
 }
 
 

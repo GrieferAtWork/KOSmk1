@@ -34,6 +34,7 @@
 #include <kos/task.h>
 #include <sys/types.h>
 #include <stddef.h>
+#include <kos/syslog.h>
 
 __DECL_BEGIN
 

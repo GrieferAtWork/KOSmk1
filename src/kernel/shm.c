@@ -1165,6 +1165,11 @@ kshmbranch_remap(struct kshmbranch const *__restrict self,
   }
  } else {
   struct kshmpart *part;
+  page_flags = 0;
+  if (region_flags&KSHMREGION_FLAG_WRITE) page_flags |= PAGEDIR_FLAG_READ_WRITE;
+  if (region_flags&KSHMREGION_FLAG_READ)  page_flags |= PAGEDIR_FLAG_USER;
+  else page_flags |= PAGEDIR_FLAG_READ_WRITE;
+map_normal:
   part = self->sb_cluster_min->sc_part;
   /* Find the first mapped part. */
   while (part_offset >= part->sp_pages) {
@@ -1173,11 +1178,6 @@ kshmbranch_remap(struct kshmbranch const *__restrict self,
    assert(part != region->sre_chunk.sc_partv+
                   region->sre_chunk.sc_partc);
   }
-  page_flags = 0;
-  if (region_flags&KSHMREGION_FLAG_WRITE) page_flags |= PAGEDIR_FLAG_READ_WRITE;
-  if (region_flags&KSHMREGION_FLAG_READ)  page_flags |= PAGEDIR_FLAG_USER;
-  else page_flags |= PAGEDIR_FLAG_READ_WRITE;
-map_normal:
   for (;;) {
    map_pages = min(remaning_pages,part->sp_pages);
    /* Remap the physical part of this region. */
@@ -2575,6 +2575,7 @@ kshm_mapautomatic_inherited_unlocked(struct kshm *__restrict self,
  KTASK_CRIT_MARK
  kassert_kshm(self);
  assert(krwlock_iswritelocked(&self->s_lock));
+ assert(isaligned((uintptr_t)hint,PAGEALIGN));
  kassertobj(user_address);
  kassert_kshmregion(region);
  if __unlikely((*user_address = kpagedir_findfreerange(
@@ -2694,7 +2695,7 @@ void kshm_pf_handler(struct kirq_registers *__restrict regs) {
  if __unlikely(!caller) goto def_handler;
  assertf(caller->t_flags&KTASK_FLAG_USERTASK,
          "But we've already checked for ring #3");
- __asm_volatile__("movl %%cr2, %0" : "=g" (address_in_question));
+ address_in_question = x86_getcr2();
  kassert_ktask(caller);
  caller_process = caller->t_proc;
  kassert_kproc(caller_process);

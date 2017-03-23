@@ -96,10 +96,14 @@ tbdef_print(void const *__restrict instruction_pointer,
  int error; syminfo_t *sym; char buffer[512];
            sym = mod_addrinfo(MOD_ALL,instruction_pointer,(syminfo_t *)buffer,sizeof(buffer),MOD_SYMINFO_ALL);
  if (!sym) sym = mod_addrinfo(MOD_ALL,instruction_pointer,NULL,0,MOD_SYMINFO_ALL);
- if (!sym) format_printf(&tbprint_callback,closure,
-                         "??" "?(??" "?) : ??" "? : [%Ix][%p] : %p (Unknown: %s)\n",
-                         strerror(errno));
- else {
+ if (!sym) {
+  error = format_printf(&tbprint_callback,closure,
+                        "??" "?(??" "?) : ??" "? : [%Ix][%p] : %p (Unknown: %d:%s)\n",
+                        frame_index,frame_address,
+                        instruction_pointer,errno,
+                        strerror(errno));
+
+ } else {
   error = format_printf(&tbprint_callback,closure,
                         "%s(%u) : %s : [%Ix][%p] : %p\n",
                         sym->si_file ? sym->si_file : "??" "?",

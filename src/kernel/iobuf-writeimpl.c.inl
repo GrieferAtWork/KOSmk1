@@ -103,6 +103,7 @@ buffer_is_full:
    goto end;
   }
  }
+ assert(!bufsize || self->ib_buffer != bufend);
  /* Copy into the upper portion */
  max_write = (size_t)(bufend-self->ib_wpos);
  if (self->ib_rpos > self->ib_wpos) {
@@ -140,7 +141,9 @@ buffer_is_full:
  *wsize += max_write;
  assert(max_write <= bufsize);
  assert(self->ib_wpos <= self->ib_rpos);
- assert(self->ib_wpos < bufend);
+ assert(self->ib_wpos < bufend ||
+       (self->ib_wpos == bufend &&
+        self->ib_rpos == bufend));
  if (bufsize == max_write) goto end_ok;
  assert(self->ib_wpos == self->ib_rpos);
  *(uintptr_t *)&buf += max_write;

@@ -90,14 +90,16 @@ __local __u64 *x86_strendq(__u64 const *__s) { x86_strendX("q",__s); return (__u
 #undef x86_strendX
 
 __local __u8 *x86_strnendb(__u8 const *__s, __size_t __maxchars) {
- __asm_volatile__("cld\n"            /* clear direction flag. */
-                  "repne scasb\n"    /* perform the string operation. */
-                  "jnz 1f\n"         /* If we didn't find it, don't decrement the result. */
-                  "dec %%edi\n"      /* Adjust the counter to really point to the end of the string. */
-                  "1:\n"
-                  : "+D" (__s)
-                  : "c" (__maxchars), "a" (0)
-                  : "memory");
+ if __likely(__maxchars) {
+  __asm_volatile__("cld\n"            /* clear direction flag. */
+                   "repne scasb\n"    /* perform the string operation. */
+                   "jnz 1f\n"         /* If we didn't find it, don't decrement the result. */
+                   "dec %%edi\n"      /* Adjust the counter to really point to the end of the string. */
+                   "1:\n"
+                   : "+D" (__s)
+                   : "c" (__maxchars), "a" (0)
+                   : "memory");
+ }
  return (__u8 *)__s;
 }
 #define x86_strnendX(length,size,s,maxchars) \
@@ -109,10 +111,10 @@ __local __u8 *x86_strnendb(__u8 const *__s, __size_t __maxchars) {
                   : "+D" (s)\
                   : "c" (maxchars), "a" (0)\
                   : "memory")
-__local __u16 *x86_strnendw(__u16 const *__s, __size_t __maxchars) { x86_strnendX("w",2,__s,__maxchars); return (__u16 *)__s; }
-__local __u32 *x86_strnendl(__u32 const *__s, __size_t __maxchars) { x86_strnendX("l",4,__s,__maxchars); return (__u32 *)__s; }
+__local __u16 *x86_strnendw(__u16 const *__s, __size_t __maxchars) { if __likely(__maxchars) x86_strnendX("w",2,__s,__maxchars); return (__u16 *)__s; }
+__local __u32 *x86_strnendl(__u32 const *__s, __size_t __maxchars) { if __likely(__maxchars) x86_strnendX("l",4,__s,__maxchars); return (__u32 *)__s; }
 #ifdef __x86_64__
-__local __u64 *x86_strnendq(__u64 const *__s, __size_t __maxchars) { x86_strnendX("q",8,__s,__maxchars); return (__u64 *)__s; }
+__local __u64 *x86_strnendq(__u64 const *__s, __size_t __maxchars) { if __likely(__maxchars) x86_strnendX("q",8,__s,__maxchars); return (__u64 *)__s; }
 #endif
 #undef x86_strnendX
 
@@ -132,35 +134,39 @@ __local __size_t x86_strlenq(__u64 const *__s) { register __size_t __result; x86
 #undef x86_strlenX
 
 __local __size_t x86_strnlenb(__u8 const *__s, __size_t __maxchars) {
- register __size_t __result = __maxchars;
+ register __size_t __result;
+ if __unlikely(!__maxchars) return 0;
  __asm_volatile__("cld\n"         /* clear direction flag. */
                   "repne scasb\n" /* perform the string operation. */
                   "jnz 1f\n"      /* If we didn't find it, don't decrement the result. */
                   "inc %%ecx\n"   /* Adjust the counter to really point to the end of the string. */
                   "1:\n"
-                  : "+c" (__result)
-                  : "D" (__s), "a" (0)
+                  : "=c" (__result)
+                  : "c" (__maxchars)
+                  , "D" (__s), "a" (0)
                   : "memory");
  return __maxchars-__result;
 }
 
-#define x86_strnlenX(length,size,s,result) \
+#define x86_strnlenX(length,size,s,result,maxchars) \
  __asm_volatile__("cld\n"                   /* clear direction flag. */\
                   "repne scas" length "\n"  /* perform the string operation. */\
                   "jnz 1f\n"                /* If we didn't find it, don't decrement the result. */\
                   "add $" #size ", %%ecx\n" /* Adjust the counter to really point to the end of the string. */\
                   "1:\n"\
-                  : "+c" (result)\
-                  : "D" (s), "a" (0)\
+                  : "=c" (result)\
+                  : "c" (maxchars)\
+                  , "D" (s), "a" (0)\
                   : "memory")
-__local __size_t x86_strnlenw(__u16 const *__s, __size_t __maxchars) { register __size_t __result = __maxchars; x86_strnlenX("w",2,__s,__result); return __maxchars-__result; }
-__local __size_t x86_strnlenl(__u32 const *__s, __size_t __maxchars) { register __size_t __result = __maxchars; x86_strnlenX("l",4,__s,__result); return __maxchars-__result; }
+__local __size_t x86_strnlenw(__u16 const *__s, __size_t __maxchars) { register __size_t __result; if __unlikely(!__maxchars) return 0; x86_strnlenX("w",2,__s,__result,__maxchars); return __maxchars-__result; }
+__local __size_t x86_strnlenl(__u32 const *__s, __size_t __maxchars) { register __size_t __result; if __unlikely(!__maxchars) return 0; x86_strnlenX("l",4,__s,__result,__maxchars); return __maxchars-__result; }
 #ifdef __x86_64__
-__local __size_t x86_strnlenq(__u64 const *__s, __size_t __maxchars) { register __size_t __result = __maxchars; x86_strnlenX("q",8,__s,__result); return __maxchars-__result; }
+__local __size_t x86_strnlenq(__u64 const *__s, __size_t __maxchars) { register __size_t __result; if __unlikely(!__maxchars) return 0; x86_strnlenX("q",8,__s,__result,__maxchars); return __maxchars-__result; }
 #endif
 #undef x86_strnlenX
 
 __local void *x86_memchrb(void const *__p, __u8 __needle, __size_t __bytes) {
+ if __unlikely(!__bytes) return NULL;
  __asm_volatile__("cld\n"              /* clear direction flag. */
                   "repne scasb\n"      /* perform the string operation. */
                   "jz 1f\n"            /* Skip the NULL-return if we did find it. */
@@ -185,14 +191,15 @@ __local void *x86_memchrb(void const *__p, __u8 __needle, __size_t __bytes) {
                   : "c" (bytes)\
                   , "a" (needle)\
                   : "memory")
-__local void *x86_memchrw(void const *__p, __u16 __needle, __size_t __words)  { x86_memchrX("w",2,__p,__needle,__words); return (char *)__p; }
-__local void *x86_memchrl(void const *__p, __u32 __needle, __size_t __dwords) { x86_memchrX("l",4,__p,__needle,__dwords); return (char *)__p; }
+__local void *x86_memchrw(void const *__p, __u16 __needle, __size_t __words)  { if __unlikely(!__words)  return NULL; x86_memchrX("w",2,__p,__needle,__words); return (char *)__p; }
+__local void *x86_memchrl(void const *__p, __u32 __needle, __size_t __dwords) { if __unlikely(!__dwords) return NULL; x86_memchrX("l",4,__p,__needle,__dwords); return (char *)__p; }
 #ifdef __x86_64__
-__local void *x86_memchrq(void const *__p, __u64 __needle, __size_t __qwords) { x86_memchrX("q",8,__p,__needle,__qwords); return (char *)__p; }
+__local void *x86_memchrq(void const *__p, __u64 __needle, __size_t __qwords) { if __unlikely(!__qwords) return NULL; x86_memchrX("q",8,__p,__needle,__qwords); return (char *)__p; }
 #endif
 #undef x86_memchrX
 
 __local void *x86_memrchrb(void const *__p, __u8 __needle, __size_t __bytes) {
+ if __unlikely(!__bytes) return NULL;
  __p = (void const *)((__uintptr_t)__p+(__bytes-1));
  __asm_volatile__("std\n"                  /* set direction flag. */
                   "repne scasb\n"          /* perform the string operation. */
@@ -218,10 +225,10 @@ __local void *x86_memrchrb(void const *__p, __u8 __needle, __size_t __bytes) {
                   : "c" (bytes)\
                   , "a" (needle)\
                   : "memory")
-__local void *x86_memrchrw(void const *__p, __u16 __needle, __size_t __words)  { __p = (void const *)((__uintptr_t)__p+((__words-1)*2));  x86_memrchrX("w",2,__p,__needle,__words);  return (void *)__p; }
-__local void *x86_memrchrl(void const *__p, __u32 __needle, __size_t __dwords) { __p = (void const *)((__uintptr_t)__p+((__dwords-1)*4)); x86_memrchrX("l",4,__p,__needle,__dwords); return (void *)__p; }
+__local void *x86_memrchrw(void const *__p, __u16 __needle, __size_t __words)  { if __unlikely(!__words)  return NULL; __p = (void const *)((__uintptr_t)__p+((__words-1)*2));  x86_memrchrX("w",2,__p,__needle,__words);  return (void *)__p; }
+__local void *x86_memrchrl(void const *__p, __u32 __needle, __size_t __dwords) { if __unlikely(!__dwords) return NULL; __p = (void const *)((__uintptr_t)__p+((__dwords-1)*4)); x86_memrchrX("l",4,__p,__needle,__dwords); return (void *)__p; }
 #ifdef __x86_64__
-__local void *x86_memrchrq(void const *__p, __u64 __needle, __size_t __qwords) { __p = (void const *)((__uintptr_t)__p+((__qwords-1)*8)); x86_memrchrX("q",8,__p,__needle,__qwords); return (void *)__p; }
+__local void *x86_memrchrq(void const *__p, __u64 __needle, __size_t __qwords) { if __unlikely(!__qwords) return NULL; __p = (void const *)((__uintptr_t)__p+((__qwords-1)*8)); x86_memrchrX("q",8,__p,__needle,__qwords); return (void *)__p; }
 #endif
 #undef x86_memrchrX
 
@@ -237,11 +244,11 @@ __local void *x86_memrchrq(void const *__p, __u64 __needle, __size_t __qwords) {
                   , "+a" (result)\
                   : "c" (bytes)\
                   : "memory")
-__local __s8  x86_memcmpb(void const *__a, void const *_b, __size_t __bytes)  { register __s8  __result = 0; x86_memcmpX("b",1,"al", __a,_b,__bytes, __result); return __result; }
-__local __s16 x86_memcmpw(void const *__a, void const *_b, __size_t __words)  { register __s16 __result = 0; x86_memcmpX("w",2,"ax", __a,_b,__words, __result); return __result; }
-__local __s32 x86_memcmpl(void const *__a, void const *_b, __size_t __dwords) { register __s32 __result = 0; x86_memcmpX("l",4,"eax",__a,_b,__dwords,__result); return __result; }
+__local __s8  x86_memcmpb(void const *__a, void const *_b, __size_t __bytes)  { register __s8  __result = 0; if __likely(__bytes) x86_memcmpX("b",1,"al", __a,_b,__bytes, __result); return __result; }
+__local __s16 x86_memcmpw(void const *__a, void const *_b, __size_t __words)  { register __s16 __result = 0; if __likely(__words) x86_memcmpX("w",2,"ax", __a,_b,__words, __result); return __result; }
+__local __s32 x86_memcmpl(void const *__a, void const *_b, __size_t __dwords) { register __s32 __result = 0; if __likely(__dwords) x86_memcmpX("l",4,"eax",__a,_b,__dwords,__result); return __result; }
 #ifdef __x86_64__
-__local __s64 x86_memcmpq(void const *__a, void const *_b, __size_t __qwords) { register __s64 __result = 0; x86_memcmpX("q",8,"rax",__a,_b,__qwords,__result); return __result; }
+__local __s64 x86_memcmpq(void const *__a, void const *_b, __size_t __qwords) { register __s64 __result = 0; if __likely(__qwords) x86_memcmpX("q",8,"rax",__a,_b,__qwords,__result); return __result; }
 #endif
 #undef x86_memcmpX
 

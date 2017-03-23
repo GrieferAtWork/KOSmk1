@@ -29,6 +29,7 @@
 #include <sys/io.h>
 #include <kos/compiler.h>
 #include <kos/kernel/serial.h>
+#include <kos/kernel/debug.h>
 #include <stdint.h>
 #include <format-printer.h>
 #if SERIAL_CAN_USE_OUTS
@@ -64,8 +65,9 @@ size_t serial_printn(int device, char const *data, size_t maxchars) {
  char const *iter,*end; char ch;
  end = (iter = data)+maxchars;
  while (iter != end) {
-  if ((ch = *iter++) == '\0') break;
-  while (is_transmit_empty(device) == 0);
+  kassertbyte(iter);
+  if __unlikely((ch = *iter++) == '\0') break;
+  while (!is_transmit_empty(device));
   outb(device,(unsigned char)ch); 
  }
  return (size_t)(iter-data);
@@ -73,13 +75,15 @@ size_t serial_printn(int device, char const *data, size_t maxchars) {
 }
 size_t serial_prints(int device, char const *data, size_t datasize) {
 #if SERIAL_CAN_USE_OUTS
+ kassertmem(data,datasize);
  outsb(device,data,datasize);
 #else
  char const *iter,*end; char ch;
+ kassertmem(data,datasize);
  end = (iter = data)+datasize;
  while (iter != end) {
   ch = *iter++;
-  while (is_transmit_empty(device) == 0);
+  while (!is_transmit_empty(device));
   outb(device,(unsigned char)ch); 
  }
 #endif
