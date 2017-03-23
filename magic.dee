@@ -337,6 +337,16 @@ function read_dependency_file(fp) {
 	}
 }
 
+const DEATH_TEXT = "END_NOW_YOU_BLASTING_IDIOT";
+function start_death_waiter(process,pipe) {
+	thread([]{
+		try while (!process.terminated()) thread.sleep(20);
+		catch (...) return;
+		try pipe.write(DEATH_TEXT);
+		catch (...);
+		pipe.close();
+	}).start();
+}
 
 local running_compilers = [];
 #define wait_all_compilers() \
@@ -349,36 +359,40 @@ function deemon_preprocess_file(input,o,deps_output,args) {
 		"-D__GNUC_MINOR__=2",
 		"-D__GNUC_PATCH__=0",
 		"-D__STDC__=1",
-		"-D__int8=char",
-		"-D__int16=short",
-		"-D__int32=int",
-		"\"-D__int64=long long\"",
 		args...,input]);
 	local r,w = pipe.new()...;
-	local const absroot = fs::path::head(__FILE__);
+	local absroot = fs::getcwd().replace("\\","/");
 	local dependencies = dict();
+#if 0
+	p.stdout = o;
+#else
 	p.stdout = w;
 	p.start();
-	w.close();
+	//w.close();
 	local used_o = o;
+	start_death_waiter(p,w);
 	for (local line: r) {
 		local lno,name;
+		if (line == DEATH_TEXT) break;
 		try lno,name = line.scanf("#line %[^ ] \"%[^\"]\"")...;
 		catch (...) {
+			//if (line.strip()) print repr line;
 			used_o.write(line);
 			continue;
 		}
 		name = name.replace("\\\\","\\");
 		name = name.replace("\\","/");
-		name = name.lsstrip("E:/c/kos/kos/");
-		o.write("#line "+lno+" \""+name+"\"\n");
+		name = name.lsstrip(absroot).lstrip("/");
+		used_o.write("#line "+lno+" \""+name+"\"\n");
 		dependencies[name] = none;
 	}
+done:
 	r.close();
-	o.close();
+#endif
 	p.join();
+	o.close();
 	local d = file.open(deps_output,"w");
-	d.write("foobar:");
+	d.write(input+":");
 	for (local dep,none: dependencies) {
 		d.write(" \\\n "+dep);
 	}
@@ -386,46 +400,52 @@ function deemon_preprocess_file(input,o,deps_output,args) {
 	d.close();
 }
 
-function run_compiler_process(proc) {
+function run_compiler_process(proc,close_pipe...) {
+	if (close_pipe) close_pipe = close_pipe[0];
+	local r,w = none...;
 	if (format_messages_to_msvc) {
-		local r,w = pipe.new()...;
+		r,w = pipe.new()...;
 		proc.stderr = w;
 		proc.start();
+		if (close_pipe) close_pipe.close();
 		w.close();
-		for (local line: r) {
-			if (line.startswith("include") || line.startswith("src") ||
-			    line.startswith("userland") || line.startswith("libs")) {
-				local filename,lno,col,rest;
-				try filename,lno,col,rest = line.scanf("%[^:]:%[^:]:%[^:]:%[^]")...;
-				catch (...) { print line,; continue; }
-				if (col.isalnum()) {
-					print "..\\"+filename+"("+lno+","+col+") : "+rest,;
-				} else {
-					print "..\\"+filename+"("+lno+") : "+col+" : "+rest,;
-				}
-			} else if (line.startswith("/cygdrive/")) {
-				local filename,lno,rest;
-				line = line[#"/cygdrive/":];
-				local drive,none,path = line.partition("/")...;
-				try filename,lno,rest = path.scanf("%[^:]:%[^:]:%[^]")...;
-				catch (...) { print line,; continue; }
-				path = drive.upper()+":\\"+filename.replace("/","\\");
-				rest = rest.strip();
-				if (!rest.lower().startswith("error") &&
-				    !rest.lower().startswith("warning")) {
-					rest = "Error : "+rest;
-				}
-				print path+"("+lno+") : "+rest;
-			} else {
-				print line,;
-			}
-		}
 	} else {
 		proc.start();
+		if (close_pipe) close_pipe.close();
 	}
 	while (#running_compilers >= max_compilers_processes) thread.sleep(1);
 	running_compilers.append(proc);
 	local t = thread([]{
+		if (format_messages_to_msvc) {
+			for (local line: r) {
+				if (line.startswith("include") || line.startswith("src") ||
+					line.startswith("userland") || line.startswith("libs")) {
+					local filename,lno,col,rest;
+					try filename,lno,col,rest = line.scanf("%[^:]:%[^:]:%[^:]:%[^]")...;
+					catch (...) { print line,; continue; }
+					if (col.isalnum()) {
+						print "..\\"+filename+"("+lno+","+col+") : "+rest,;
+					} else {
+						print "..\\"+filename+"("+lno+") : "+col+" : "+rest,;
+					}
+				} else if (line.startswith("/cygdrive/")) {
+					local filename,lno,rest;
+					line = line[#"/cygdrive/":];
+					local drive,none,path = line.partition("/")...;
+					try filename,lno,rest = path.scanf("%[^:]:%[^:]:%[^]")...;
+					catch (...) { print line,; continue; }
+					path = drive.upper()+":\\"+filename.replace("/","\\");
+					rest = rest.strip();
+					if (!rest.lower().startswith("error") &&
+						!rest.lower().startswith("warning")) {
+						rest = "Error : "+rest;
+					}
+					print path+"("+lno+") : "+rest;
+				} else {
+					print line,;
+				}
+			}
+		}
 		local error = proc.join();
 		running_compilers.remove(proc);
 		if (error != 0) {
@@ -443,11 +463,12 @@ function run_c_compiler_process(proc,input,deps_output,pp_args) {
 		try {
 			deemon_preprocess_file(input,code_w,deps_output,pp_args);
 		} catch (e...) {
-			print "Preprocessor crashed:",repr e;
+			print "TPP preprocessor crashed:",repr e;
+			sys.exit(1);
 		}
 	}).start();
 	proc.stdin = code_r;
-	return run_compiler_process(proc);
+	return run_compiler_process(proc,code_r);
 }
 
 
