@@ -289,19 +289,67 @@ static void invert_all(void) {
 }
 
 
+static void term_doscroll(void) {
+ memmove(vga_buf,vga_bufsecondline,
+        (VGA_SIZE-VGA_WIDTH)*sizeof(cell_t));
+ memcpy(vga_lastline,vga_spaceline,VGA_WIDTH*sizeof(cell_t));
+ vga_bufpos = vga_lastline;
+}
+static void term_doput(char ch) {
+ if (vga_bufpos == vga_bufend) {
+  /* Scroll at the end of the terminal */
+  term_doscroll();
+#if INVERT_CURSOR_AFTER_MOVE
+  if (cursor_blink_enabled) {
+   cursor_inverted = 1;
+   *vga_bufpos++ = INVCHR(ch);
+   BLIT();
+   vga_bufpos[-1] = CHR(ch);
+  } else
+#endif
+  {
+   *vga_bufpos++ = CHR(ch);
+   BLIT();
+  }
+ } else {
+  *vga_bufpos = CHR(ch);
+  BLIT_CUR();
+#if INVERT_CURSOR_AFTER_MOVE
+  if (cursor_blink_enabled) {
+   cursor_inverted = 1;
+   ++vga_bufpos;
+   if (vga_bufpos != vga_bufend) {
+    BLIT_CUR_INV();
+   }
+  } else
+#endif
+  {
+   ++vga_bufpos;
+   BLIT_CUR();
+  }
+ }
+}
+
 static void TERM_CALL term_putc(struct term *__unused(t), char ch) {
  /* v This introducing lag is actually something that's currently intended. */
  //k_syslogf(KLOG_MSG,"%c",ch);
  BEGIN_MOVE_CUR()
  switch (ch) {
-  case TERM_CR: CR(); goto end_moved;
+  case TERM_CR: CR(); break;
   case TERM_LF:
    //printf(":AFTER LS: %d\n",vga_bufpos == vga_bufend);
-   if (vga_bufpos == vga_bufend) goto scroll_one;
-   else { LF(); goto end_moved; }
+   if (vga_bufpos != vga_bufend) LF();
+   else term_doscroll();
    break;
-  case TERM_BACK: BACK(); goto end_moved; break;
-  case TERM_TAB:  SET_CUR_X(align(GET_CUR_X(),TERM_TABSIZE)); break;
+  case TERM_BACK:
+   BACK();
+   break;
+  {
+   size_t chrs;
+  case TERM_TAB:
+   chrs = TERM_TABSIZE-(GET_CUR_X() % TERM_TABSIZE);
+   while (chrs--) term_doput(' ');
+  } break;
 #ifdef TERM_BELL
   {
    struct timespec rem;
@@ -313,47 +361,7 @@ static void TERM_CALL term_putc(struct term *__unused(t), char ch) {
    break;
   }
 #endif
-  default: break;
- }
- if (vga_bufpos == vga_bufend) {
-scroll_one:
-  // Scroll at the end of the terminal
-  memmove(vga_buf,vga_bufsecondline,
-         (VGA_SIZE-VGA_WIDTH)*sizeof(cell_t));
-  memcpy(vga_lastline,vga_spaceline,VGA_WIDTH*sizeof(cell_t));
-  vga_bufpos = vga_lastline;
-#if INVERT_CURSOR_AFTER_MOVE
-  if (ch != '\n') {
-   if (cursor_blink_enabled) {
-    cursor_inverted = 1;
-    *vga_bufpos++ = INVCHR(ch);
-    BLIT();
-    vga_bufpos[-1] = CHR(ch);
-   } else {
-    *vga_bufpos++ = CHR(ch);
-    BLIT();
-   }
-  } else {
-   BLIT();
-  }
-#else
-  if (ch != '\n') *vga_bufpos++ = CHR(ch);
-  BLIT();
-#endif
- } else {
-  *vga_bufpos = CHR(ch);
-  BLIT_CUR();
-  ++vga_bufpos;
-end_moved:
-  assert(vga_bufpos <= vga_bufend);
-#if INVERT_CURSOR_AFTER_MOVE
-  if (cursor_blink_enabled) {
-   cursor_inverted = 1;
-   if (vga_bufpos != vga_bufend) {
-    BLIT_CUR_INV();
-   }
-  }
-#endif
+  default: term_doput(ch); break;
  }
  END_MOVE_CUR()
 }
