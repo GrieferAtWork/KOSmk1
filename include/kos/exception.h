@@ -391,7 +391,7 @@ typedef __u32 kexno_t;
 //       Without a handler, exceptions raised by the kernel
 //       will cause the process to be terminated and
 //       various human-readable information about
-extern __noreturn void __kexcept_unhandled(void);
+extern __noreturn void __kos_unhandled_exception(void);
 
 
 #ifdef __INTELLISENSE__
@@ -415,7 +415,7 @@ __local __noreturn void kexcept_rethrow __D0() {
          "Not handling any exceptions right now");
  /* Load the exception handler. */
  handler = (struct kexrecord *)_tls_getl(8);
- if __unlikely(!handler) __kexcept_unhandled();
+ if __unlikely(!handler) __kos_unhandled_exception();
  /* Invoke the exception handler. */
  __asm_volatile__("mov %0, %%esp\n"
                   "pop %%" __KEXCEPT_HANDLER_ADDR "\n"

@@ -46,8 +46,9 @@ struct kshlib;
 struct kprocmodule {
  KOBJECT_HEAD
  __u32                      pm_loadc;   /*< Amount of times this module was loaded (When this reaches ZERO(0), the module unloaded). */
-#define KPROCMODULE_FLAG_NONE  0x00000000
-#define KPROCMODULE_FLAG_RELOC 0x00000001 /*< [set_once] Module was relocated. */
+#define KPROCMODULE_FLAG_NONE       0x00000000
+#define KPROCMODULE_FLAG_RELOC      0x00000001 /*< [set_once] Module was relocated. */
+#define KPROCMODULE_FLAG_UEH_CALLED 0x00000100 /*< [set_once] This module's unhandled exception handler was called. */
  __u32                      pm_flags;   /*< Module flags. */
  __ref struct kshlib       *pm_lib;     /*< [0..1] Shared library associated with this module (NULL for unloaded modules). */
 union{

@@ -214,8 +214,6 @@ kshmbranch_print(struct kshmbranch *__restrict branch,
 
 
 void __kirq_default_handler(struct kirq_registers *regs) {
- //assert(ktask_self() != NULL);
- //printf("INTERADDR = %p\n",regs->esp);
  if (regs->regs.intno < 32) {
   struct kirq_siginfo const *info;
   struct ktask *caller = ktask_self();
@@ -225,9 +223,12 @@ void __kirq_default_handler(struct kirq_registers *regs) {
   if (kirq_registers_isuser(regs) &&
      (caller && ktask_isusertask(caller))) {
    if (KE_ISOK(ktask_raise_irq_exception(caller,regs))) return;
-   /* TODO: Don't cause kernel panic at this point.
-    *     - It's not out fault and we can just
-    *       terminate the associated process! */
+   else {
+    /* A user-space task without any unused remaining
+     * unhandled exception handlers just crashed. */
+    ktask_unhandled_irq_exception(caller,regs);
+    __compiler_unreachable();
+   }
   }
 
   k_syslogf(KLOG_ERROR,"\nTask: %I32u|%Iu: %s"

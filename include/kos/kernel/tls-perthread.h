@@ -94,7 +94,8 @@ extern void ktlspt_setname(struct ktlspt *__restrict self,
 // @return: KE_FAULT: The userspace exception handler chain contained a
 //                    faulty pointer that prevented dereferencing of
 //                    the non-NULL handler entry.
-// @return: KE_NOENT: No userspace exception handler was defined.
+// @return: KE_NOENT: No userspace exception handler was defined, nor does any
+//                    loaded module export a function '__kos_unhandled_exception'.
 extern __wunused __nonnull((1,2,3)) kerrno_t
 ktask_raise_exception(struct ktask *__restrict self,
                       struct kirq_registers *__restrict regs,
@@ -106,11 +107,21 @@ ktask_raise_exception(struct ktask *__restrict self,
 // @return: KE_FAULT: The userspace exception handler chain contained a
 //                    faulty pointer that prevented dereferencing of
 //                    the non-NULL handler entry.
-// @return: KE_NOENT: No userspace exception handler was defined.
+// @return: KE_NOENT: No userspace exception handler was defined, nor does
+//                    any loaded module export a function '__kos_unhandled_exception'.
 // @return: KE_INVAL: No userspace exception number associated with the IRQ error.
 extern __wunused __nonnull((1,2)) kerrno_t
 ktask_raise_irq_exception(struct ktask *__restrict self,
                           struct kirq_registers *__restrict regs);
+
+//////////////////////////////////////////////////////////////////////////
+// Special handling for non-handleable IRQ exceptions:
+// >> Perform some minimalistic, non-blocking logging and
+//    terminate the entire process associated with 'self'.
+// WARNING: This function will not return if 'self == ktask_self()'
+extern __nonnull((1,2)) void
+ktask_unhandled_irq_exception(struct ktask *__restrict self,
+                              struct kirq_registers const *__restrict regs);
 
 #endif /* !__ASSEMBLY__ */
 

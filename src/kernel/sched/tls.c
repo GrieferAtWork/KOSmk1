@@ -26,6 +26,7 @@
 #include <kos/compiler.h>
 #include <kos/kernel/debug.h>
 #include <kos/kernel/proc.h>
+#include <kos/kernel/linker.h>
 #include <kos/kernel/shm.h>
 #include <kos/kernel/task.h>
 #include <kos/kernel/tls-perthread.h>
@@ -37,6 +38,7 @@
 #include <string.h>
 #include <strings.h>
 #include <kos/exception.h>
+#include <kos/mod.h>
 #if !KCONFIG_HAVE_TASK_STATS_START
 #include <kos/kernel/time.h>
 #endif /* !KCONFIG_HAVE_TASK_STATS_START */
@@ -703,6 +705,75 @@ ktlspt_setname(struct ktlspt *__restrict self,
  strncpy(uthread->u_name,name,KUTHREAD_NAMEMAX);
 }
 
+
+static __crit __user void *
+kproc_get_next_ueh_bymodule(struct kproc *__restrict self, kmodid_t modid) {
+ static char const *ueh_names[] = {
+  /* Various spellings from difference linkers/languages. */
+  "__kos_unhandled_exception",
+  "___kos_unhandled_exception",
+  "__impl____kos_unhandled_exception",NULL};
+ char const *name,**iter; void *result;
+ for (iter = ueh_names; (name = *iter) != NULL; ++iter) {
+  size_t name_size = strlen(name);
+  result = kproc_dlsymex_unlocked(self,modid,name,name_size,
+                                  ksymhash_of(name,name_size));
+  if (result) return result;
+ }
+ return NULL;
+}
+
+static __crit __user void *
+kproc_get_next_ueh_unlocked(struct kproc *__restrict self, __user void *caller_eip) {
+#define TRY_SEARCH(id) \
+ (!(katomic_fetchor(self->p_modules.pms_modv[id].pm_flags,\
+                    KPROCMODULE_FLAG_UEH_CALLED)&\
+                    KPROCMODULE_FLAG_UEH_CALLED))
+ kmodid_t first_id,modid,maxid; __user void *result;
+ if __unlikely(KE_ISERR(kproc_getmodat_unlocked(self,&first_id,caller_eip))) first_id = 0;
+ maxid = self->p_modules.pms_moda;
+ if (TRY_SEARCH(first_id)) {
+  result = kproc_get_next_ueh_bymodule(self,first_id);
+  if (result != NULL) return result;
+ }
+
+ /* Search above. */
+ for (modid = first_id+1; modid < maxid; ++modid) if (TRY_SEARCH(modid)) {
+  result = kproc_get_next_ueh_bymodule(self,modid);
+  if (result != NULL) return result;
+ }
+ /* Search below. */
+ if (first_id != 0) {
+  modid = first_id-1;
+  for (;;) {
+   if (TRY_SEARCH(modid)) {
+    result = kproc_get_next_ueh_bymodule(self,modid);
+    if (result != NULL) return result;
+   }
+   if (!modid) break;
+   --modid;
+  }
+ }
+#undef TRY_SEARCH
+ return NULL;
+}
+
+static __user void *
+kproc_get_next_ueh(struct kproc *__restrict self, __user void *caller_eip) {
+ void *result;
+ KTASK_CRIT_BEGIN
+ KTASK_NOINTR_BEGIN
+ if __likely(KE_ISOK(kproc_lock(self,KPROC_LOCK_MODS))) {
+  result = kproc_get_next_ueh_unlocked(self,caller_eip);
+  kproc_unlock(self,KPROC_LOCK_MODS);
+ } else {
+  result = NULL;
+ }
+ KTASK_NOINTR_END
+ KTASK_CRIT_END
+ return result;
+}
+
 kerrno_t
 ktask_raise_exception(struct ktask *__restrict self,
                       struct kirq_registers *__restrict regs,
@@ -737,10 +808,18 @@ ktask_raise_exception(struct ktask *__restrict self,
  if __unlikely(KE_ISERR(error)) return error;
  /* If the copy failed, check why it did. */
  if __unlikely(copy_error) {
-  return exaddr ? KE_FAULT : KE_NOENT;
+  void *default_exception_handler;
+  /* Search for an unhandled exception handler. */
+  default_exception_handler = kproc_get_next_ueh(ktask_getproc(self),
+                                                (__user void *)regs->regs.eip);
+  /* If no handler was found, return an error code. */
+  if (!default_exception_handler) return exaddr ? KE_FAULT : KE_NOENT;
+  exrecord.eh_handler = (kexhandler_t)default_exception_handler;
+  exaddr = NULL;
+ } else {
+  /* Update the exception handler chain. */
+  uthread->u_exh = exrecord.eh_prev;
  }
- /* Update the exception handler chain. */
- uthread->u_exh = exrecord.eh_prev;
  /* Fill in user-accessible exception state information. */
  uthread->u_exstate.edi    = regs->regs.edi;
  uthread->u_exstate.esi    = regs->regs.esi;
@@ -754,10 +833,51 @@ ktask_raise_exception(struct ktask *__restrict self,
  uthread->u_exstate.eflags = regs->regs.eflags;
  memcpy(&uthread->u_exinfo,exinfo,sizeof(struct kexinfo));
  /* Update the given registers to mirror the used handler. */
- regs->regs.useresp = (uintptr_t)(__user void *)(exaddr+1);
- regs->regs.eip     = (uintptr_t)(__user void *)exrecord.eh_handler;
+ if (exaddr) {
+  regs->regs.useresp = (uintptr_t)(__user void *)(exaddr+1);
+ }
+ regs->regs.eip = (uintptr_t)(__user void *)exrecord.eh_handler;
  return error;
 }
+
+
+#define IRQ_EXCEPTION_EXIT_CODE(int_no) \
+ (void *)(((__uintptr_t)1 << ((__SIZEOF_POINTER__*8)-4))+(__uintptr_t)(int_no))
+
+void
+ktask_unhandled_irq_exception(struct ktask *__restrict self,
+                              struct kirq_registers const *__restrict regs) {
+ static char const *fmt = "Terminating process %I32d with %p after failure to handle IRQ exception %I32d\n";
+ struct kproc *proc;
+ struct ktask *root_task;
+ void *exitcode;
+ __ref struct kshlib *root_exe;
+ KTASK_CRIT_BEGIN
+ kassert_ktask(self);
+ kassertobj(regs);
+ proc = ktask_getproc(self);
+ /* Special exitcode containing the INT number. */
+ exitcode = IRQ_EXCEPTION_EXIT_CODE(regs->regs.intno);
+ /* Try to log at least something about what happened. */
+ if ((root_exe = kproc_getrootexe(proc)) != NULL) {
+  k_syslogf_prefixfile(KLOG_ERROR,root_exe->sh_file,fmt,
+                       proc->p_pid,exitcode,regs->regs.intno);
+  kshlib_decref(root_exe);
+ } else {
+  k_syslogf(KLOG_ERROR,fmt,proc->p_pid,exitcode,regs->regs.intno);
+ }
+ proc = ktask_getproc(self);
+ root_task = kproc_getroottask(proc);
+ if __unlikely(!root_task) {
+  ktask_terminateex_k(self,exitcode,KTASKOPFLAG_RECURSIVE);
+ } else {
+  ktask_terminateex_k(root_task,exitcode,KTASKOPFLAG_RECURSIVE);
+  ktask_decref(root_task);
+ }
+ /* The following line will not return if 'self == ktask_self()'. */
+ KTASK_CRIT_END
+}
+
 
 kerrno_t
 ktask_raise_irq_exception(struct ktask *__restrict self,

@@ -35,6 +35,7 @@ TEST(exceptions) {
  /* Here to ensure all registers are either dead, or preserved. */
  register int register_variable = 42;
  //tb_print();
+ /* Time to mess things up! */
  __try {
   /* Time to mess things up! */
   char *p = (char *)0xdeadbeef;

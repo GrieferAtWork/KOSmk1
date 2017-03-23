@@ -144,7 +144,21 @@ exc_tbprintex(int tp_only, void *closure) {
  return exc_tbwalk(&tbdef_print,&tbdef_error,closure);
 }
 
-__public __noreturn void __kexcept_unhandled(void) {
+/* This function has _very_ special meaning, because
+ * it is what the kernel will execute by default when
+ * searching for an unhandled exception handler.
+ * NOTE: Searching for such a handler follows reverse KMODID_NEXT
+ *       rules, meaning that each module could theoretically define
+ *       its own unhandled exception handler, although when not
+ *       defined, the kernel will simply choose the next handler.
+ * WARNING: Once inside an unhandled exception handler, there is
+ *          no way to recover and return to executing normal code
+ *          within the same module.
+ *          Note though, that it is technically possible to
+ *          unload, then re-load the module who's unhandled
+ *          exception handler was invoked to reset this restriction.
+ */
+__public __noreturn void __kos_unhandled_exception(void) {
  static char const text[] = "UNHANDLED EXCEPTION:\n";
  tbprint_callback(text,__COMPILER_STRINGSIZE(text),NULL);
  exc_tbprintex(0,NULL);
