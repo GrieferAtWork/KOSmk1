@@ -321,6 +321,63 @@ __DECL_BEGIN
 //       >> }
 #ifdef __INTELLISENSE__
 /* These keywords and how I implement their semantics are equivalent to SEH. */
+#elif defined(__TPP_EVAL) && __has_extension(__tpp_pragma_tpp_exec__)
+/* Best case: this preprocessor can emulate recursion:
+ * Use tpp_exec + __TPP_EVAL to emulate recursion:
+ * >> __try {
+ * >>   __try {
+ * >>     *(char *)0xdeadbeef = 42;
+ * >>   } __finally {
+ * >>     printf("In finally\n");
+ * >>   }
+ * >> } __except (1) {
+ * >>   printf("In except\n");
+ * >> }
+ */
+
+/* Avert your eyes! The following macros are capable of re-refining others.
+ * So unless you really know what you're expecting to find here, don't try
+ * too to find the exact path of what is happening here:
+ * >> __EXC_LEVEL: The current level of indirection.
+ *   - Incremented by __try
+ *   - Decremented by __finally and __except
+ * >> __EXC_UNIQUE[level]: An unique identifier for a given level.
+ *   - Incremented by __try with 'level = __EXC_LEVEL'
+ *   - There exists an infinite amount of these macros (e.g.: '__EXC_UNIQUE1' or '__EXC_UNIQUE12')
+ *   - Dynamically allocated as indirection of __try-blocks increase.
+ * >> __EXC_LABEL_NAME
+ *   - Generates a label name as follows:
+ *     EXPAND(__EXC_LEVEL)##_##EXPAND(__EXC_UNIQUE##EXPAND(__EXC_LEVEL))
+ *     e.g.: '1_4' for first-level indirection; 4th time use.
+ */
+#define __EXC_LEVEL     0
+#define __EXC_INCUNIQUE(level) \
+__compiler_pragma(tpp_exec("#undef __EXC_UNIQUE" #level "\n\
+#define __EXC_UNIQUE" #level " " __PP_STR(__TPP_EVAL(__EXC_UNIQUE##level+1)) "\n"))
+
+#define __EXC_PP_BEGIN \
+__compiler_pragma(tpp_exec("#undef __EXC_LEVEL\n\
+#define __EXC_LEVEL " __PP_STR(__TPP_EVAL(__EXC_LEVEL+1)) "\n"))\
+__compiler_pragma(tpp_exec("\
+#ifdef __EXC_UNIQUE" __PP_STR(__EXC_LEVEL) "\n\
+__EXC_INCUNIQUE(" __PP_STR(__EXC_LEVEL) ")\n\
+#else\n\
+#define __EXC_UNIQUE" __PP_STR(__EXC_LEVEL) " 0\n\
+#endif\n"))
+
+#define __EXC_PP_END \
+__compiler_pragma(tpp_exec("\
+#undef __EXC_LEVEL\n\
+#define __EXC_LEVEL " __PP_STR(__TPP_EVAL(__EXC_LEVEL-1)) "\n"))
+
+#define __EXC_LABEL_NAME_IMPL4(level,unique) level##_##unique
+#define __EXC_LABEL_NAME_IMPL3(level,unique) __EXC_LABEL_NAME_IMPL4(level,unique)
+#define __EXC_LABEL_NAME_IMPL2(level) __EXC_LABEL_NAME_IMPL3(__EXC_LEVEL,__EXC_UNIQUE##level)
+#define __EXC_LABEL_NAME_IMPL(level) __EXC_LABEL_NAME_IMPL2(level)
+#define __EXC_LABEL_NAME   __EXC_LABEL_NAME_IMPL(__EXC_LEVEL)
+#define __try    __EXC_PP_BEGIN KEXCEPT_TRY(__EXC_LABEL_NAME)
+#define __finally               KEXCEPT_FINALLY(__EXC_LABEL_NAME) __EXC_PP_END
+#define __except(should_handle) KEXCEPT_EXCEPT(__EXC_LABEL_NAME,should_handle) __EXC_PP_END
 #elif defined(__COUNTER__) || defined(__TPP_COUNTER)
 /* Try to use some TPP extensions
  * >> If both __TPP_COUNTER and __TPP_EVAL are present,

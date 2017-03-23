@@ -62,6 +62,9 @@
 #endif /* __cplusplus */
 
 // Compiler
+#ifdef __TPP_VERSION__
+#include "compiler-tpp.h"
+#endif /* __TPP_VERSION__ */
 #ifdef __GNUC__
 #include "compiler-gcc.h"
 #endif /* __GNUC__ */

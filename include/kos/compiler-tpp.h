@@ -20,28 +20,23 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_SYMBOL_H__
-#define __KOS_SYMBOL_H__ 1
 
-#include <kos/config.h>
-#include <kos/compiler.h>
-
-#if defined(__SYMBOL_NEED_UNDERSCORE) ||\
-    defined(NEED_UNDERSCORE)
-#   define __SYM(sym) _##sym
-#elif defined(__SYMBOL_NO_UNDERSCORE) ||\
-      defined(NO_UNDERSCORE)
-#   define __SYM(sym) sym
-#elif defined(__USER_LABEL_PREFIX__)
-#   define __SYM3(x,sym) x##sym
-#   define __SYM2(x,sym) __SYM3(x,sym)
-#   define __SYM(sym)    __SYM2(__USER_LABEL_PREFIX__,sym)
-#else
-#   define __SYM(sym)    sym
+#ifndef __compiler_pragma
+#define __PRIVATE_COMPILER_PRAGMA(x) _Pragma(#x)
+#define __compiler_pragma(x) __PRIVATE_COMPILER_PRAGMA(x)
 #endif
 
-#ifdef __ASSEMBLY__
-#define _S   __SYM
+#ifdef __DEEMON__
+/* Using deemon as preprocessor. */
+#pragma warning(disable: 1) /* Redefining builtin keyword. */
+
+#define __int8       char
+#define __int16      short
+#define __int32      int
+#define __int64      long long
+#define __signed     signed
+#define __unsigned   unsigned
+#define __signed__   signed
+#define __unsigned__ unsigned
 #endif
 
-#endif /* !__KOS_SYMBOL_H__ */

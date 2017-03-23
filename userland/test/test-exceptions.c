@@ -31,15 +31,19 @@
 #include <proc.h>
 #include <traceback.h>
 
+
 TEST(exceptions) {
  /* Here to ensure all registers are either dead, or preserved. */
  register int register_variable = 42;
  //tb_print();
- /* Time to mess things up! */
  __try {
-  /* Time to mess things up! */
-  char *p = (char *)0xdeadbeef;
-  for (;;) { assert(register_variable == 42); *p++ = '\xAA'; }
+  __try {
+   /* Time to mess things up! */
+   char *p = (char *)0xdeadbeef;
+   for (;;) { assert(register_variable == 42); *p++ = '\xAA'; }
+  } __finally {
+   printf("In finally\n");
+  }
  } __except (exc_code() == KEXCEPTION_SEGFAULT) {
 #if 1
   exc_tbprint(0);

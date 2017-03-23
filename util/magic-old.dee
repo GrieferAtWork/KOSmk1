@@ -59,7 +59,8 @@ local addr2line_exe = "bin/kos_kernel.bin";
 local kernel_args = [];
 local rebuild_on_dot_sources_changed = false;
 //local addr2line_exe = "bin/userland/ls";
-local always_use_deemon_preprocessor = false;
+
+#define USE_CUSTOM_CC1 1
 
 // Amount of parallel instance of gcc
 // >> Drastically reduces compilation time
@@ -116,8 +117,18 @@ local sources_files = default_sources_files;
 
 local default_attrib = dict {
 	.define = {
-		"__KOS__"           : "1",
 		"__"+arch+"__"      : "1",
+#if 1
+		/* Emulate some tpp-style extensions. */
+		"__DATE_DAY__"      : str __DATE_DAY__,
+		"__DATE_WDAY__"     : str __DATE_WDAY__,
+		"__DATE_YDAY__"     : str __DATE_YDAY__,
+		"__DATE_MONTH__"    : str __DATE_MONTH__,
+		"__DATE_YEAR__"     : str __DATE_YEAR__,
+		"__TIME_HOUR__"     : str __TIME_HOUR__,
+		"__TIME_MIN__"      : str __TIME_MIN__,
+		"__TIME_SEC__"      : str __TIME_SEC__,
+#endif
 		"_FILE_OFFSET_BITS" : "64",
 	},
 	//.libs = list {},
@@ -131,6 +142,11 @@ local default_attrib = dict {
 		"-Wno-comment",
 		"-Wno-strict-aliasing",
 		//"-save-temps",
+#if USE_CUSTOM_CC1
+		"-no-integrated-cpp",
+		"-D__SYMBOL_NO_UNDERSCORE",
+		//"-Butil"
+#endif
 	},
 	.include = list {
 		"include",
@@ -143,13 +159,6 @@ local default_attrib = dict {
 function parse_attrib_marker(attrib,marker) {
 	local pe_linker_flags = ["-Wl,-e__start"];
 	switch (marker) {
-		case "cpp":
-			attrib.pop("tpp");
-			return true;
-		case "tpp":
-			attrib["tpp"] = true;
-			return true;
-			
 		case "elf":
 			marker = "i386-elf";
 		case "i386-elf":
@@ -342,48 +351,33 @@ local running_compilers = [];
 #define wait_all_compilers() \
 	({ while (#running_compilers) thread.sleep(1); })
 
-/* Preprocess a file 'i' using the deemon preprocessor and output everything to 'o' */
-function deemon_preprocess_file(input,o,deps_output,args) {
-	local p = process("deemon",[
-		"-D__GNUC__=6",
-		"-D__GNUC_MINOR__=2",
-		"-D__GNUC_PATCH__=0",
-		"-D__STDC__=1",
-		"-D__int8=char",
-		"-D__int16=short",
-		"-D__int32=int",
-		"\"-D__int64=long long\"",
-		args...,input]);
+/* Preprocess a file 'i' using the deemon preprocessor and output everything to 'o'
+ * The function yields a list of all file dependencies.
+ * WARNING: 'i' must be a file.io file, or pipe.
+ * WARNING: The same dependency may be returned more than once. */
+function deemon_preprocess_file(i,o,args) {
+	local p = process("deemon",[args...,"/dev/stdin"]);
 	local r,w = pipe.new()...;
 	local const absroot = fs::path::head(__FILE__);
-	local dependencies = dict();
+	p.stdin = i;
 	p.stdout = w;
 	p.start();
 	w.close();
-	local used_o = o|file.open("temp.c","w");
 	for (local line: r) {
 		local lno,name;
 		try lno,name = line.scanf("#line %[^ ] \"%[^\"]\"")...;
 		catch (...) {
-			used_o.write(line);
+			o.write(line);
 			continue;
 		}
 		name = name.replace("\\\\","\\");
 		name = name.replace("\\","/");
 		name = name.lsstrip("E:/c/kos/kos/");
 		o.write("#line "+lno+" \""+name+"\"\n");
-		dependencies[name] = none;
+		yield name;
 	}
-	r.close();
-	o.close();
 	p.join();
-	local d = file.open(deps_output,"w");
-	d.write("foobar:");
-	for (local dep,none: dependencies) {
-		d.write(" \\\n "+dep);
-	}
-	d.write("\n");
-	d.close();
+	r.close();
 }
 
 function run_compiler_process(proc) {
@@ -436,18 +430,6 @@ function run_compiler_process(proc) {
 	t.start();
 	if (::single) t.join();
 	return t;
-}
-function run_c_compiler_process(proc,input,deps_output,pp_args) {
-	local code_r,code_w = pipe.new()...;
-	thread([]{
-		try {
-			deemon_preprocess_file(input,code_w,deps_output,pp_args);
-		} catch (e...) {
-			print "Preprocessor crashed:",repr e;
-		}
-	}).start();
-	proc.stdin = code_r;
-	return run_compiler_process(proc);
 }
 
 
@@ -585,43 +567,21 @@ function parse_single_source(path,attrib,filename,fp_last_changed) {
 		fp_last_changed)) return; // No changes required
 
 	_force_changed_files.append(object_file);
-	local pp_args = [
+	yield pack(project,filename,object_file,executables[compiler],[
+		(for (local x: libpaths) "-L"+x)...,
 		(for (local name,value: defines) "-D"+name+"="+(value ?: "1"))...,
+		((is_asm_compiler(compiler) || filename.endswith(".S")) ? ["-D__ASSEMBLY__"] : [])...,
 		(for (local x: include_paths) "-I"+x)...,
-	];
-	if (is_asm_compiler(compiler) || filename.endswith(".S")) pp_args.append("-D__ASSEMBLY__");
-	local compiler_args = [(for (local x: libpaths) "-L"+x)...];
-	if (optimize) compiler_args.append(optimize_level,"-Wno-maybe-uninitialized");
-	if (ndebug) pp_args.append("-DNDEBUG");
-	else compiler_args.append("-fstack-protector-strong","-g");
-	compiler_args.extend(more_flags);
-	compiler_args.append("-MMD","-c");
-	local use_deemon = always_use_deemon_preprocessor || attrib.get("tpp");
-	if (!use_deemon) {
-		/* Emulate some tpp-style extensions. */
-		compiler_args.append(
-			"-D__DATE_DAY__="+str __DATE_DAY__,
-			"-D__DATE_WDAY__="+str __DATE_WDAY__,
-			"-D__DATE_YDAY__="+str __DATE_YDAY__,
-			"-D__DATE_MONTH__="+str __DATE_MONTH__,
-			"-D__DATE_YEAR__="+str __DATE_YEAR__,
-			"-D__TIME_HOUR__="+str __TIME_HOUR__,
-			"-D__TIME_MIN__="+str __TIME_MIN__,
-			"-D__TIME_SEC__="+str __TIME_SEC__);
-		compiler_args.extend(pp_args);
-		compiler_args.append(filename);
-	}  else {
-		pp_args.append("-E");
-		compiler_args.append("-xc","-");
-	}
-	if (gen_pp) compiler_args.append("-E");
-	if (gen_asm) compiler_args.append("-S");
-	compiler_args.append("-o",gen_asm ? object_file+".S" : gen_pp ? object_file+".E" : object_file);
-	if (!use_deemon) {
-		compiler_args.append("-MF",dependency_file);
-	}
-	yield pack(project,filename,object_file,dependency_file,
-	           executables[compiler],compiler_args,use_deemon,pp_args);
+		(optimize ? [optimize_level,"-Wno-maybe-uninitialized"] : [])...,
+		(ndebug ? ["-DNDEBUG"] : ["-fstack-protector-strong","-g"])...,
+		more_flags...,
+		"-MMD","-c",filename,
+		(gen_pp ? ["-E"] : [])...,
+		(gen_asm ? ["-S"] : [])...,
+		"-o",gen_asm ? object_file+".S" :
+		     gen_pp ? object_file+".E" : object_file,
+		"-MF",dependency_file,
+	]);
 }
 
 function parse_wmatch_source(path,attrib,filename,fp_last_changed) {
@@ -751,18 +711,11 @@ function parse_dot_sources(filename) {
 }
 
 function compile_dot_sources(filename) {
-	for (local project,sourcefile,object_file,
-	     dependency_file,compiler,args,use_deemon,pp_args:
-	     parse_dot_sources(filename)) {
+	for (local project,sourcefile,object_file,compiler,args: parse_dot_sources(filename)) {
 		local error;
+		print "Compiling:",sourcefile;
 		local p = process(compiler,[" "+args[0],args[1:]...]);
-		if (use_deemon) {
-			print "Compiling (TPP):",sourcefile;
-			run_c_compiler_process(p,sourcefile,dependency_file,pp_args);
-		} else {
-			print "Compiling:",sourcefile;
-			run_compiler_process(p);
-		}
+		run_compiler_process(p);
 	}
 }
 
