@@ -257,19 +257,19 @@ __local __s64 x86_memcmpq(void const *__a, void const *_b, __size_t __qwords) { 
  * like (mem|str)chr, (mem|str)cmp.
  * (I think) even something like strstr, and strspn and memmem. */
 
-#define __karch_raw_ffs     x86_ffs
-#define __karch_raw_memcpy  x86_memcpyb
+#define __karch_raw_ffs      x86_ffs
+#define __karch_raw_memcpy   x86_memcpyb
 #define __karch_raw_memset(dst,byte,bytes) \
  x86_memsetb(dst,(__u8)(byte),bytes)
-#define __karch_raw_memcpyb x86_memcpyb
-#define __karch_raw_memcpyw x86_memcpyw
-#define __karch_raw_memcpyl x86_memcpyl
-#define __karch_raw_memsetb x86_memsetb
-#define __karch_raw_memsetw x86_memsetw
-#define __karch_raw_memsetl x86_memsetl
+#define __karch_raw_memcpy_b x86_memcpyb
+#define __karch_raw_memcpy_w x86_memcpyw
+#define __karch_raw_memcpy_l x86_memcpyl
+#define __karch_raw_memset_b x86_memsetb
+#define __karch_raw_memset_w x86_memsetw
+#define __karch_raw_memset_l x86_memsetl
 #ifdef __x86_64__
-#define __karch_raw_memcpyq x86_memcpyq
-#define __karch_raw_memsetq x86_memsetq
+#define __karch_raw_memcpy_q x86_memcpyq
+#define __karch_raw_memset_q x86_memsetq
 #endif /* __x86_64__ */
 #define __karch_raw_strend(s)     (char *)x86_strendb((__u8 *)(s))
 #define __karch_raw_strnend(s,n)  (char *)x86_strnendb((__u8 *)(s),n)
@@ -278,28 +278,28 @@ __local __s64 x86_memcmpq(void const *__a, void const *_b, __size_t __qwords) { 
 
 #define __karch_raw_memchr(dst,byte,bytes) \
  x86_memchrb(dst,(__u8)(byte),bytes)
-#define __karch_raw_memchrb x86_memchrb
-#define __karch_raw_memchrw x86_memchrw
-#define __karch_raw_memchrl x86_memchrl
+#define __karch_raw_memchr_b x86_memchrb
+#define __karch_raw_memchr_w x86_memchrw
+#define __karch_raw_memchr_l x86_memchrl
 #ifdef __x86_64__
-#define __karch_raw_memchrq x86_memchrq
+#define __karch_raw_memchr_q x86_memchrq
 #endif
 
 #define __karch_raw_memrchr(dst,byte,bytes) \
  x86_memrchrb(dst,(__u8)(byte),bytes)
-#define __karch_raw_memrchrb x86_memrchrb
-#define __karch_raw_memrchrw x86_memrchrw
-#define __karch_raw_memrchrl x86_memrchrl
+#define __karch_raw_memrchr_b x86_memrchrb
+#define __karch_raw_memrchr_w x86_memrchrw
+#define __karch_raw_memrchr_l x86_memrchrl
 #ifdef __x86_64__
-#define __karch_raw_memrchrq x86_memrchrq
+#define __karch_raw_memrchr_q x86_memrchrq
 #endif
 
-#define __karch_raw_memcmp  x86_memcmpb
-#define __karch_raw_memcmpb x86_memcmpb
-#define __karch_raw_memcmpw x86_memcmpw
-#define __karch_raw_memcmpl x86_memcmpl
+#define __karch_raw_memcmp   x86_memcmpb
+#define __karch_raw_memcmp_b x86_memcmpb
+#define __karch_raw_memcmp_w x86_memcmpw
+#define __karch_raw_memcmp_l x86_memcmpl
 #ifdef __x86_64__
-#define __karch_raw_memcmpq x86_memcmpq
+#define __karch_raw_memcmp_q x86_memcmpq
 #endif
 
 __DECL_END

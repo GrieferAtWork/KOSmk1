@@ -484,12 +484,15 @@ __DECL_END
 #define karch_strnlen __karch_raw_strnlen
 #endif
 
+
+/* TODO: Constant-optimized version */
 #ifdef __karch_raw_memchr_b
 #define karch_memchr  __karch_raw_memchr_b
 #elif defined(__karch_raw_memchr)
 #define karch_memchr  __karch_raw_memchr
 #endif
 
+/* TODO: Constant-optimized version */
 #ifdef __karch_raw_memrchr_b
 #define karch_memrchr __karch_raw_memrchr_b
 #elif defined(__karch_raw_memrchr)
@@ -520,8 +523,8 @@ __karch_memmem_##mnemonic(void const *__haystack, __size_t __haystacklen,\
  __haystackend = (void const *)((__uintptr_t)__haystack+(__haystacklen-__needlelen));\
  __key         = *(__u8 *)__needle;\
  __needlelen  /= length;\
- while ((__candidate = karch_memchr(__haystack,\
-        (__uintptr_t)__haystackend-(__uintptr_t)__haystack,__key)) != NULL) {\
+ while ((__candidate = karch_memchr(__haystack,__key,\
+        (__uintptr_t)__haystackend-(__uintptr_t)__haystack)) != NULL) {\
   /* Check the candidate for really being a match. */\
   if (!__karch_raw_memcmp_##mnemonic(__candidate,__needle,__needlelen)) return (void *)__candidate;\
   /* Continue searching 1 byte after the candidate. */\
@@ -539,8 +542,8 @@ __karch_memmem_##mnemonic##1(void const *__haystack, __size_t __haystacklen,\
  __key         = *(__u8 *)__needle;\
  ++*(__uintptr_t *)&__needle,--__needlelen;\
  __needlelen /= length;\
- while ((__candidate = karch_memchr(__haystack,\
-        (__uintptr_t)__haystackend-(__uintptr_t)__haystack,__key)) != NULL) {\
+ while ((__candidate = karch_memchr(__haystack,__key,\
+        (__uintptr_t)__haystackend-(__uintptr_t)__haystack)) != NULL) {\
   /* Check the candidate for really being a match. */\
   if (!__karch_raw_memcmp_##mnemonic((void const *)((__uintptr_t)__candidate+1),\
                                      __needle,__needlelen)) return (void *)__candidate;\
@@ -671,8 +674,8 @@ __karch_memrmem_##mnemonic(void const *__haystack, __size_t __haystacklen,\
  __haystackend = (void const *)((__uintptr_t)__haystack+(__haystacklen-__needlelen));\
  __key         = *(__u8 *)__needle;\
  __needlelen  /= length;\
- while ((__candidate = karch_memrchr(__haystack,\
-        (__uintptr_t)__haystackend-(__uintptr_t)__haystack,__key)) != NULL) {\
+ while ((__candidate = karch_memrchr(__haystack,__key,\
+        (__uintptr_t)__haystackend-(__uintptr_t)__haystack)) != NULL) {\
   /* Check the candidate for really being a match. */\
   if (!__karch_raw_memcmp_##mnemonic(__candidate,__needle,__needlelen)) return (void *)__candidate;\
   /* Continue searching, but stop at this candidate. */\
@@ -690,8 +693,8 @@ __karch_memrmem_##mnemonic##1(void const *__haystack, __size_t __haystacklen,\
  __key         = *(__u8 *)__needle;\
  ++*(__uintptr_t *)&__needle,--__needlelen;\
  __needlelen /= length;\
- while ((__candidate = karch_memrchr(__haystack,\
-        (__uintptr_t)__haystackend-(__uintptr_t)__haystack,__key)) != NULL) {\
+ while ((__candidate = karch_memrchr(__haystack,__key,\
+        (__uintptr_t)__haystackend-(__uintptr_t)__haystack)) != NULL) {\
   /* Check the candidate for really being a match. */\
   if (!__karch_raw_memcmp_##mnemonic((void const *)((__uintptr_t)__candidate+1),\
                                      __needle,__needlelen)) return (void *)__candidate;\
