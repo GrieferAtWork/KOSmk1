@@ -92,10 +92,27 @@ again:
 #endif /* KCONFIG_HAVE_DEBUG_TRACKEDDDIST */
   return error;
  }
+
  /* Failed to receive data. - Must unregister the ticket due to that failure.
   * NOTE: The race condition between here and after vrecv is what is handled by 'KS_NODATA'. */
  ksignal_lock_c(&self->ad_nbdat,KSIGNAL_LOCK_WAIT);
- assert(kaddist_hasreadyticket(self,ticket) != NO);
+ if (error == KE_TIMEDOUT || error == KE_INTR) {
+  /* Special case: The calling thread timed out, or was interrupted:
+   *            >> Very rare, but now we must manually check if
+   *               the ticket is still registered as ready,
+   *               as the interrupt/timeout can have occurred
+   *               either before or after data was send, meaning
+   *               that the ticket is currently in an undefined state.
+   *            >> Yet only if it is registers must we remove it.
+   */
+  struct kaddistticket *iter = self->ad_tiready;
+  for (; iter; iter = iter->dt_next) {
+   if (iter == ticket) goto delete_ready_ticket;
+  }
+  goto end;
+ }
+delete_ready_ticket:
+ assertf(kaddist_hasreadyticket(self,ticket) != NO,"%d",error);
  assert(self->ad_ready);
  assert((ticket->dt_prev != NULL) == (ticket != self->ad_tiready));
  --self->ad_ready;
