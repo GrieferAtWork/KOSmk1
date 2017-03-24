@@ -185,15 +185,13 @@ for (local o: ops) {
 #   define DEBUGNOP         nop
 #   define STACKOFF         __SIZEOF_POINTER__
 #   define STACKARG(i)   (((i)+2)*__SIZEOF_POINTER__)(%ebp)
-#   define STACKADDR(reg,i) movI %ebp, reg; addl $(((i)+2)*__SIZEOF_POINTER__), reg
-#   define STACKBEGIN       pushI %ebp; movI %esp, %ebp;
+#   define STACKBEGIN       push %ebp; mov %esp, %ebp;
 #   define STACKEND         leave
-//#   define STACKEND       movI %ebp, %esp; popI %ebp;
+//#   define STACKEND       mov %ebp, %esp; pop %ebp;
 #else
 #   define DEBUGNOP         /* nothing */
 #   define STACKOFF         0
 #   define STACKARG(i)   (((i)+1)*__SIZEOF_POINTER__)(%esp)
-#   define STACKADDR(reg,i) movI %ebp, reg; addl $(((i)+1)*__SIZEOF_POINTER__), reg
 #   define STACKBEGIN       /* nothing */
 #   define STACKEND         /* nothing */
 #endif

@@ -713,12 +713,24 @@ kproc_get_next_ueh_bymodule(struct kproc *__restrict self, kmodid_t modid) {
   "__kos_unhandled_exception",
   "___kos_unhandled_exception",
   "__impl____kos_unhandled_exception",NULL};
- char const *name,**iter; void *result;
+ char const *name,**iter; struct kshlib *lib;
+ struct kprocmodule *module; struct ksymbol const *symbol;
+ assert(modid < self->p_modules.pms_moda);
+ module = &self->p_modules.pms_modv[modid];
+ lib = module->pm_lib;
+ kassert_kshlib(lib);
  for (iter = ueh_names; (name = *iter) != NULL; ++iter) {
   size_t name_size = strlen(name);
-  result = kproc_dlsymex_unlocked(self,modid,name,name_size,
-                                  ksymhash_of(name,name_size));
-  if (result) return result;
+  size_t name_hash = ksymhash_of(name,name_size);
+  /* Search for a symbol in the public and weak hashtable.
+   * NOTE: Don't search through private symbols
+   *   >> Those are likely to only be available in debug builds
+   *      of the application, as well as being restricted to ELF. */
+               symbol = ksymtable_lookupname_h(&lib->sh_publicsym,name,name_size,name_hash);
+  if (!symbol) symbol = ksymtable_lookupname_h(&lib->sh_weaksym,name,name_size,name_hash);
+  if (symbol && symbol->s_shndx != SHN_UNDEF) {
+   return (__user void *)((uintptr_t)module->pm_base+symbol->s_addr);
+  }
  }
  return NULL;
 }

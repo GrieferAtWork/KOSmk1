@@ -30,6 +30,7 @@
 #include <format-printer.h>
 #include <kos/compiler.h>
 #include <kos/exception.h>
+#include <kos/symbol.h>
 #include <kos/syscall.h>
 #include <kos/syscallno.h>
 #include <malloc.h>
@@ -166,10 +167,10 @@ exc_tbprintex(int tp_only, void *closure) {
  *          exception handler was invoked to reset this restriction.
  */
 #define TLS(offset) "%" __TLS_REGISTER_S ":(" __PP_STR(offset) ")"
-__asm__(".text\n"
-        ".globl	__kos_unhandled_exception\n"
-        ".type __kos_unhandled_exception, @function\n"
-        "__kos_unhandled_exception:\n"
+__asm__("    .text\n"
+        "    .globl	" __PP_STR(__SYM(__kos_unhandled_exception)) "\n"
+        "    .type " __PP_STR(__SYM(__kos_unhandled_exception)) ", @function\n"
+        "" __PP_STR(__SYM(__kos_unhandled_exception)) ":\n"
         /* If the exception occurred because of an out-of-bounds stack
          * pointer, reset the stack to ensure that the exception handler
          * will be able to function properly:
@@ -280,8 +281,8 @@ __asm__(".text\n"
         "    add $" __PP_STR(UEH_STACKRESERVE) ", %eax\n" 
         "    mov %eax, %esp\n" 
         /* Lets do this! */
-        "    jmp ueh_handler\n"
-        ".size __kos_unhandled_exception, . - __kos_unhandled_exception\n"
+        "    jmp " __PP_STR(__SYM(ueh_handler)) "\n"
+        ".size " __PP_STR(__SYM(__kos_unhandled_exception)) ", . - " __PP_STR(__SYM(__kos_unhandled_exception)) "\n"
 );
 #ifdef KFD_HAVE_BIARG_POSITIONS
 static __attribute_used __uintptr_t mini_mmap_stack[2];

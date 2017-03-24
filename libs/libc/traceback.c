@@ -78,7 +78,7 @@ tbprint_callback(char const *data,
   serial_printn(SERIAL_01,data,max_data);
 #else
   k_syslog(KLOG_ERROR,data,max_data);
-  if (write(STDERR_FILENO,data,max_data*sizeof(char)) < 0) return -1;
+  write(STDERR_FILENO,data,max_data*sizeof(char));
 #endif
  }
  return 0;

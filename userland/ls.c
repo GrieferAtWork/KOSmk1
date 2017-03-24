@@ -134,7 +134,6 @@ static void usage(char *name, int ret) {
 
 int main(int argc, char *argv[]) {
  int optc;
- k_syslogf(KLOG_INFO,"Begin LS\n");
  while ((optc = getopt(argc,argv,"lar?")) != -1) {
   switch (optc) {
    case 'l': long_mode = 1; break;
@@ -149,7 +148,6 @@ int main(int argc, char *argv[]) {
  else while (optind < argc) {
   ls_path(argv[optind++]);
  }
- k_syslogf(KLOG_INFO,"End LS\n");
  return EXIT_SUCCESS;
 }
 
