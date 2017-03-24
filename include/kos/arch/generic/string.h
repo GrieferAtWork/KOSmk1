@@ -36,7 +36,7 @@
 
 #ifndef karch_ffs
 #ifdef __karch_raw_ffs
-#include <kos/kernel/types.h>
+#include <kos/types.h>
 __DECL_BEGIN
 
 __forcelocal __wunused __constcall
@@ -91,7 +91,7 @@ __DECL_END
 
 #ifndef karch_memcpy
 #ifdef __karch_raw_memcpy
-#include <kos/kernel/types.h>
+#include <kos/types.h>
 __DECL_BEGIN
 
 extern __attribute_error("Size is too large for small memcpy()")
@@ -194,7 +194,7 @@ __DECL_END
 
 #ifndef karch_memset
 #ifdef __karch_raw_memset
-#include <kos/kernel/types.h>
+#include <kos/types.h>
 #include <stdint.h>
 __DECL_BEGIN
 
@@ -291,6 +291,7 @@ __DECL_END
 #ifdef __karch_raw_memcmp
 #include <kos/endian.h>
 #include <stdint.h>
+#include <kos/types.h>
 #if __BYTE_ORDER == __LITTLE_ENDIAN || \
     __BYTE_ORDER == __BIG_ENDIAN
 __DECL_BEGIN
@@ -468,36 +469,349 @@ __DECL_END
 #endif /* !karch_memcmp */
 
 
-#ifdef __karch_raw_strend
-#define karch_strend  __karch_raw_strend
+#ifndef karch_memchr
+#ifdef __karch_raw_memchr
+#include <kos/types.h>
+
+__DECL_BEGIN
+
+extern __attribute_error("Size is too large for small memchr()")
+void __karch_small_memchr_too_large(void);
+
+#define __KARCH_SMALL_MEMCHR_MAXSIZE   8
+__forcelocal void *
+__karch_small_memchr(void const *__haystack, int __needle, __size_t __bytes) {
+#define __BYTE(i)  if (((__u8 *)__haystack)[i] == __needle) return (__u8 *)__haystack+(i)
+ if (__bytes >= 1) __BYTE(0);
+ if (__bytes >= 2) __BYTE(1);
+ if (__bytes >= 3) __BYTE(2);
+ if (__bytes >= 4) __BYTE(3);
+ if (__bytes >= 5) __BYTE(4);
+ if (__bytes >= 6) __BYTE(5);
+ if (__bytes >= 7) __BYTE(6);
+ if (__bytes >= 8) __BYTE(7);
+ if (__bytes >= 9) __karch_small_memchr_too_large();
+#undef __BYTE
+ return NULL;
+}
+__forcelocal void *
+__karch_constant_memchr(void const *__haystack, int __needle, __size_t __bytes) {
+ if (__bytes <= __KARCH_SMALL_MEMCHR_MAXSIZE) {
+  return __karch_small_memchr(__haystack,__needle,__bytes);
+ }
+#ifdef __karch_raw_memchr_b
+ return __karch_raw_memchr_b(__haystack,__needle,__bytes);
+#else
+ return __karch_raw_memchr(__haystack,__needle,__bytes);
 #endif
+}
+
+#define karch_memchr(haystack,needle,bytes) \
+ (__builtin_constant_p(bytes)\
+  ? __karch_constant_memchr(haystack,needle,bytes)\
+  :      __karch_raw_memchr(haystack,needle,bytes))
+
+__DECL_END
+#endif /* __karch_raw_memchr */
+#endif /* !karch_memchr */
+
+#ifndef karch_memrchr
+#ifdef __karch_raw_memrchr
+#include <kos/types.h>
+
+__DECL_BEGIN
+
+extern __attribute_error("Size is too large for small memrchr()")
+void __karch_small_memrchr_too_large(void);
+
+#define __KARCH_SMALL_MEMCHR_MAXSIZE   8
+__forcelocal void *
+__karch_small_memrchr(void const *__haystack, int __needle, __size_t __bytes) {
+#define __BYTE(i)  if (((__u8 *)__haystack)[i] == __needle) return (__u8 *)__haystack+(i)
+ switch (__bytes) {
+  case 0: return NULL;
+  case 8: __BYTE(7); /* fallthrough */
+  case 7: __BYTE(6); /* fallthrough */
+  case 6: __BYTE(5); /* fallthrough */
+  case 5: __BYTE(4); /* fallthrough */
+  case 4: __BYTE(3); /* fallthrough */
+  case 3: __BYTE(2); /* fallthrough */
+  case 2: __BYTE(1); /* fallthrough */
+  case 1: __BYTE(0); /* fallthrough */
+  default: __karch_small_memrchr_too_large();
+ }
+#undef __BYTE
+ return NULL;
+}
+__forcelocal void *
+__karch_constant_memrchr(void const *__haystack, int __needle, __size_t __bytes) {
+ if (__bytes <= __KARCH_SMALL_MEMCHR_MAXSIZE) {
+  return __karch_small_memrchr(__haystack,__needle,__bytes);
+ }
+#ifdef __karch_raw_memrchr_b
+ return __karch_raw_memrchr_b(__haystack,__needle,__bytes);
+#else
+ return __karch_raw_memrchr(__haystack,__needle,__bytes);
+#endif
+}
+
+#define karch_memrchr(haystack,needle,bytes) \
+ (__builtin_constant_p(bytes)\
+  ? __karch_constant_memrchr(haystack,needle,bytes)\
+  :      __karch_raw_memrchr(haystack,needle,bytes))
+
+__DECL_END
+#endif /* __karch_raw_memrchr */
+#endif /* !karch_memrchr */
+
+#ifndef karch_memend
+#ifdef __karch_raw_memend
+extern __attribute_error("Size is too large for small memend()")
+void __karch_small_memend_too_large(void);
+
+#define __KARCH_SMALL_MEMEND_MAXSIZE   8
+__forcelocal void *
+__karch_small_memend(void const *__haystack, int __needle, __size_t __bytes) {
+#define __BYTE(i)  if (((__u8 *)__haystack)[i] == __needle) return (__u8 *)__haystack+(i)
+ if (!__bytes) return (void *)__haystack;
+ if (__bytes >= 1) __BYTE(0);
+ if (__bytes >= 2) __BYTE(1);
+ if (__bytes >= 3) __BYTE(2);
+ if (__bytes >= 4) __BYTE(3);
+ if (__bytes >= 5) __BYTE(4);
+ if (__bytes >= 6) __BYTE(5);
+ if (__bytes >= 7) __BYTE(6);
+ if (__bytes >= 8) __BYTE(7);
+ if (__bytes >= 9) __karch_small_memend_too_large();
+#undef __BYTE
+ return (__u8 *)__haystack+8;
+}
+__local __wunused void *
+__karch_constant_memend(void const *__haystack, int __needle, __size_t __bytes) {
+ if (__bytes < __KARCH_SMALL_MEMEND_MAXSIZE) {
+  return __karch_small_memend(__haystack,__needle,__bytes);
+ }
+#ifdef __karch_raw_strnend
+ if (__builtin_constant_p(__needle) && !__needle) {
+  return (void *)__karch_raw_strnend((char *)haystack,bytes);
+ }
+#endif /* __karch_raw_strnend */
+ return __karch_raw_memend(__haystack,__needle,__bytes);
+}
 
 #ifdef __karch_raw_strnend
-#define karch_strnend __karch_raw_strnend
+#   define karch_memend(haystack,needle,bytes) \
+ (__builtin_constant_p(bytes)\
+  ? __karch_constant_memend(haystack,needle,bytes)\
+  : ((__builtin_constant_p(needle) && !(needle))\
+  ? (void *)__karch_raw_strnend((char *)(haystack),bytes)\
+  : __karch_raw_memend(haystack,needle,bytes))
+#else
+#   define karch_memend(haystack,needle,bytes) \
+ (__builtin_constant_p(bytes)\
+  ? __karch_constant_memend(haystack,needle,bytes)\
+  :      __karch_raw_memend(haystack,needle,bytes))
 #endif
+#endif
+#endif /* !karch_memend */
 
-#ifdef __karch_raw_strlen
-#define karch_strlen  __karch_raw_strlen
+#ifndef karch_memrend
+#ifdef __karch_raw_memrend
+extern __attribute_error("Size is too large for small memrend()")
+void __karch_small_memrend_too_large(void);
+
+#define __KARCH_SMALL_MEMREND_MAXSIZE   8
+__forcelocal void *
+__karch_small_memrend(void const *__haystack, int __needle, __size_t __bytes) {
+#define __BYTE(i)  if (((__u8 *)__haystack)[i] == __needle) return (__u8 *)__haystack+(i)
+ switch (__bytes) {
+  case 0: return (void *)__haystack;
+  case 8: __BYTE(7); /* fallthrough */
+  case 7: __BYTE(6); /* fallthrough */
+  case 6: __BYTE(5); /* fallthrough */
+  case 5: __BYTE(4); /* fallthrough */
+  case 4: __BYTE(3); /* fallthrough */
+  case 3: __BYTE(2); /* fallthrough */
+  case 2: __BYTE(1); /* fallthrough */
+  case 1: __BYTE(0); /* fallthrough */
+  default: __karch_small_memrend_too_large();
+ }
+#undef __BYTE
+ return (__u8 *)__haystack+8;
+}
+__local __wunused void *
+__karch_constant_memrend(void const *__haystack, int __needle, __size_t __bytes) {
+ if (__bytes < __KARCH_SMALL_MEMREND_MAXSIZE) {
+  return __karch_small_memrend(__haystack,__needle,__bytes);
+ }
+ return __karch_raw_memrend(__haystack,__needle,__bytes);
+}
+#define karch_memrend(haystack,needle,bytes) \
+ (__builtin_constant_p(bytes)\
+  ? __karch_constant_memrend(haystack,needle,bytes)\
+  :      __karch_raw_memrend(haystack,needle,bytes))
 #endif
+#endif /* !karch_memrend */
+
+#ifndef karch_memlen
+#ifdef __karch_raw_memlen
+extern __attribute_error("Size is too large for small memlen()")
+void __karch_small_memlen_too_large(void);
+
+#define __KARCH_SMALL_MEMLEN_MAXSIZE   8
+__forcelocal __size_t
+__karch_small_memlen(void const *__haystack, int __needle, __size_t __bytes) {
+#define __BYTE(i)  if (((__u8 *)__haystack)[i] == __needle) return i
+ if (!__bytes) return 0;
+ if (__bytes >= 1) __BYTE(0);
+ if (__bytes >= 2) __BYTE(1);
+ if (__bytes >= 3) __BYTE(2);
+ if (__bytes >= 4) __BYTE(3);
+ if (__bytes >= 5) __BYTE(4);
+ if (__bytes >= 6) __BYTE(5);
+ if (__bytes >= 7) __BYTE(6);
+ if (__bytes >= 8) __BYTE(7);
+ if (__bytes >= 9) __karch_small_memlen_too_large();
+#undef __BYTE
+ return 8;
+}
+__local __wunused __size_t
+__karch_constant_memlen(void const *__haystack, int __needle, __size_t __bytes) {
+ if (__bytes < __KARCH_SMALL_MEMLEN_MAXSIZE) {
+  return __karch_small_memlen(__haystack,__needle,__bytes);
+ }
+#ifdef __karch_raw_strnlen
+ if (__builtin_constant_p(__needle) && !__needle) {
+  return __karch_raw_strnlen((char *)haystack,bytes);
+ }
+#endif /* __karch_raw_strnend */
+ return __karch_raw_memlen(__haystack,__needle,__bytes);
+}
 
 #ifdef __karch_raw_strnlen
-#define karch_strnlen __karch_raw_strnlen
+#   define karch_memlen(haystack,needle,bytes) \
+ (__builtin_constant_p(bytes)\
+  ? __karch_constant_memlen(haystack,needle,bytes)\
+  : ((__builtin_constant_p(needle) && !(needle))\
+  ? __karch_raw_strnlen((char *)(haystack),bytes)\
+  : __karch_raw_memlen(haystack,needle,bytes))
+#else
+#   define karch_memlen(haystack,needle,bytes) \
+ (__builtin_constant_p(bytes)\
+  ? __karch_constant_memlen(haystack,needle,bytes)\
+  :      __karch_raw_memlen(haystack,needle,bytes))
 #endif
-
-
-/* TODO: Constant-optimized version */
-#ifdef __karch_raw_memchr_b
-#define karch_memchr  __karch_raw_memchr_b
-#elif defined(__karch_raw_memchr)
-#define karch_memchr  __karch_raw_memchr
 #endif
+#endif /* !karch_memlen */
 
-/* TODO: Constant-optimized version */
-#ifdef __karch_raw_memrchr_b
-#define karch_memrchr __karch_raw_memrchr_b
-#elif defined(__karch_raw_memrchr)
-#define karch_memrchr __karch_raw_memrchr
+#ifndef karch_memrlen
+#ifdef __karch_raw_memrlen
+extern __attribute_error("Size is too large for small memrlen()")
+void __karch_small_memrlen_too_large(void);
+
+#define __KARCH_SMALL_MEMRLEN_MAXSIZE   8
+__forcelocal __size_t
+__karch_small_memrlen(void const *__haystack, int __needle, __size_t __bytes) {
+#define __BYTE(i)  if (((__u8 *)__haystack)[i] == __needle) return i
+ switch (__bytes) {
+  case 0: return 0;
+  case 8: __BYTE(7); /* fallthrough */
+  case 7: __BYTE(6); /* fallthrough */
+  case 6: __BYTE(5); /* fallthrough */
+  case 5: __BYTE(4); /* fallthrough */
+  case 4: __BYTE(3); /* fallthrough */
+  case 3: __BYTE(2); /* fallthrough */
+  case 2: __BYTE(1); /* fallthrough */
+  case 1: __BYTE(0); /* fallthrough */
+  default: __karch_small_memrlen_too_large();
+ }
+#undef __BYTE
+ return 8;
+}
+__local __wunused void *
+__karch_constant_memrlen(void const *__haystack, int __needle, __size_t __bytes) {
+ if (__bytes < __KARCH_SMALL_MEMRLEN_MAXSIZE) {
+  return __karch_small_memrlen(__haystack,__needle,__bytes);
+ }
+ return __karch_raw_memrlen(__haystack,__needle,__bytes);
+}
+
+#define karch_memrlen(haystack,needle,bytes) \
+ (__builtin_constant_p(bytes)\
+  ? __karch_constant_memrlen(haystack,needle,bytes)\
+  :      __karch_raw_memrlen(haystack,needle,bytes))
 #endif
+#endif /* !karch_memrlen */
+
+#ifndef karch_umemend
+#ifdef __karch_raw_umemend
+#ifdef __karch_raw_strend
+#   define karch_umemend(haystack,needle) \
+ ((__builtin_constant_p(needle) && !(needle))\
+  ? (void *)__karch_raw_strend((char const *)(haystack))\
+  : __karch_raw_umemend(haystack,needle))
+#else
+#   define karch_umemend     __karch_raw_umemend
+#endif
+#endif
+#endif /* !karch_umemend */
+
+#ifndef karch_umemrend
+#ifdef __karch_raw_umemrend
+#   define karch_umemrend    __karch_raw_umemrend
+#endif
+#endif /* !karch_umemrend */
+
+#ifndef karch_umemlen
+#ifdef __karch_raw_umemlen
+#ifdef __karch_raw_strend
+#   define karch_umemlen(haystack,needle) \
+ ((__builtin_constant_p(needle) && !(needle))\
+  ? __karch_raw_strlen((char const *)(haystack))\
+  : __karch_raw_umemlen(haystack,needle))
+#else
+#   define karch_umemlen     __karch_raw_umemlen
+#endif
+#endif
+#endif /* !karch_umemlen */
+
+#ifndef karch_umemrlen
+#ifdef __karch_raw_umemrlen
+#   define karch_umemrlen    __karch_raw_umemrlen
+#endif
+#endif /* !karch_umemrlen */
+
+#ifndef karch_strend
+#ifdef __karch_raw_strend
+#   define karch_strend      __karch_raw_strend
+#elif defined(karch_umemend)
+#   define karch_strend(s)  (char *)karch_umemend(s,0)
+#endif
+#endif /* !karch_strend */
+
+#ifndef karch_strlen
+#ifdef __karch_raw_strlen
+#   define karch_strlen      __karch_raw_strlen
+#elif defined(karch_umemlen)
+#   define karch_strlen(s)   karch_umemlen(s,0)
+#endif
+#endif /* !karch_strlen */
+
+#ifndef karch_strnend
+#ifdef __karch_raw_strnend
+#   define karch_strnend       __karch_raw_strnend
+#elif defined(karch_memend)
+#   define karch_strnend(s,n) (char *)karch_memend(s,0,n)
+#endif
+#endif /* !karch_strend */
+
+#ifndef karch_strnlen
+#ifdef __karch_raw_strnlen
+#   define karch_strnlen      __karch_raw_strnlen
+#elif defined(karch_memlen)
+#   define karch_strnlen(s,n) karch_memlen(s,0,n)
+#endif
+#endif /* !karch_strlen */
 
 
 
@@ -510,7 +824,7 @@ __DECL_END
 #if (defined(__karch_raw_memcmp) || defined(__karch_raw_memcmp_b)) &&\
     (defined(__karch_raw_memcmp_w) || defined(__karch_raw_memcmp_l) ||\
      defined(__karch_raw_memcmp_q))
-#include <kos/kernel/types.h>
+#include <kos/types.h>
 /* Implement a fast 'memmem' using 'memcmp' and 'memchr' */
 __DECL_BEGIN
 
@@ -661,7 +975,7 @@ __DECL_END
 #if (defined(__karch_raw_memcmp) || defined(__karch_raw_memcmp_b)) &&\
     (defined(__karch_raw_memcmp_w) || defined(__karch_raw_memcmp_l) ||\
      defined(__karch_raw_memcmp_q))
-#include <kos/kernel/types.h>
+#include <kos/types.h>
 /* Implement a fast 'memrmem' using 'memcmp' and 'memrchr' */
 __DECL_BEGIN
 

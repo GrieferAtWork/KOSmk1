@@ -172,6 +172,8 @@ void test_write_file(void) {
 #include <kos/kernel/arch/x86/realmode.h>
 #include <hw/video/vga.h>
 
+#include <kos/arch/x86/string.h>
+
 void test_vga(void) {
  struct realmode_regs regs;
  struct vgastate mode;

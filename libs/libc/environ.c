@@ -46,7 +46,7 @@ __DECL_BEGIN
 #ifdef __KERNEL__
 __public int setenv(char const *__restrict name,
                     char const *value, int overwrite) {
- return kprocenv_setenv(&kproc_kernel()->p_environ,
+ return kprocenv_kernel_setenv(&kproc_kernel()->p_environ,
                         name,(size_t)-1,value,(size_t)-1,overwrite);
 }
 __public int unsetenv(char const *__restrict name) {

@@ -57,7 +57,7 @@ kproc_setenv_ck(struct kproc *__restrict self,
  KTASK_CRIT_MARK
  kassert_kproc(self);
  if __unlikely(KE_ISERR(error = kproc_lock(self,KPROC_LOCK_ENVIRON))) return error;
- error = kprocenv_setenv(&self->p_environ,name,namemax,value,valuemax,override);
+ error = kprocenv_kernel_setenv(&self->p_environ,name,namemax,value,valuemax,override);
  kproc_unlock(self,KPROC_LOCK_ENVIRON);
  return error;
 }

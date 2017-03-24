@@ -93,10 +93,11 @@ __local void kfdman_close_cloexec(struct kfdman *self) {
  }
 }
 
-__local kerrno_t
+__local __crit kerrno_t
 kprocenv_init_from_execargs(struct kprocenv *self, size_t max_mem,
                             struct kexecargs *args, int args_members_are_kernel) {
  kerrno_t error;
+ KTASK_CRIT_MARK
  kobject_initzero(self,KOBJECT_MAGIC_PROCENV);
  kassertobj(args);
  self->pe_memmax = max_mem;
@@ -104,8 +105,16 @@ kprocenv_init_from_execargs(struct kprocenv *self, size_t max_mem,
   ? kprocenv_setargv  (self,args->ea_argc,args->ea_argv,args->ea_arglenv)
   : kprocenv_setargv_u(self,args->ea_argc,args->ea_argv,args->ea_arglenv);
  if __unlikely(KE_ISERR(error)) return error;
- args->ea_environ = NULL;
- // TODO: Initialize environ
+ if (args->ea_environ) {
+  assert(!args_members_are_kernel);
+#if 1 /* TODO */
+  args->ea_environ = NULL;
+#else
+  error = kprocenv_setenvv_uc(self,args->ea_envc,
+                              args->ea_environ,
+                              args->ea_envlenv);
+#endif
+ }
  return error;
 }
 

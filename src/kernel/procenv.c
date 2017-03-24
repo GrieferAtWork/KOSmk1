@@ -55,6 +55,23 @@ kenventry_new(char const *name, size_t name_size,
  return result;
 }
 
+__crit struct kenventry *
+kenventry_new_user(__user char const *name, __size_t name_max,
+                   __user char const *value, __size_t value_max,
+                   __size_t mem_allowed) {
+ struct ktranslator trans;
+ struct kenventry *result;
+ KTASK_CRIT_MARK
+ if __unlikely(KE_ISERR(ktranslator_init(&trans,ktask_self()))
+               ) return KENVENTRY_NEW_USER_DESTROYED;
+
+ result = NULL; /* TODO */
+
+ ktranslator_quit(&trans);
+ return result;
+}
+
+
 #define kenventry_copy(self) \
  (struct kenventry *)memdup(self,offsetof(struct kenventry,ee_name)+\
                             kenventry_memsz(self))
@@ -226,10 +243,10 @@ kprocenv_getenv(struct kprocenv const *__restrict self,
 
 
 __crit kerrno_t
-kprocenv_setenv_c(struct kprocenv *__restrict self,
-                  char const *__restrict name, size_t name_max,
-                  char const *__restrict value, size_t value_max,
-                  int override) {
+kprocenv_kernel_setenv_c(struct kprocenv *__restrict self,
+                         __kernel char const *__restrict name, size_t name_max,
+                         __kernel char const *__restrict value, size_t value_max,
+                         int override) {
  struct kenventry *bucket,**buckptr,*newentry;
  size_t hash,newmem;
  KTASK_CRIT_MARK
@@ -246,6 +263,7 @@ kprocenv_setenv_c(struct kprocenv *__restrict self,
    // Existing entry
    if (!override) return KE_EXISTS;
    newmem  = self->pe_memcur;
+   assert(newmem >= kenventry_memsz(bucket));
    newmem -= kenventry_memsz(bucket);
    newmem += (name_max+value_max+2)*sizeof(char);
    if __unlikely(newmem > self->pe_memmax) return KE_ACCES;
@@ -272,6 +290,16 @@ kprocenv_setenv_c(struct kprocenv *__restrict self,
  newentry->ee_next = *buckptr;
  *buckptr = newentry;
  return KE_OK;
+}
+__crit kerrno_t
+kprocenv_user_setenv_c(struct kprocenv *__restrict self,
+                       __user char const *name, size_t name_max,
+                       __user char const *value, size_t value_max,
+                       int override) {
+ KTASK_CRIT_MARK
+ kassert_kprocenv(self);
+ /* TODO */
+ return KE_NOSYS;
 }
 
 __crit kerrno_t
@@ -310,7 +338,7 @@ kprocenv_putenv_c(struct kprocenv *__restrict self,
   return kprocenv_delenv(self,text,text_max);
  }
  // Overwrite an existing variable/Set a new variable
- return kprocenv_setenv(self,text,(size_t)(equals_sign-text),text,(size_t)-1,1);
+ return kprocenv_kernel_setenv(self,text,(size_t)(equals_sign-text),text,(size_t)-1,1);
 }
 
 __crit kerrno_t
@@ -472,6 +500,16 @@ kprocenv_setargv_cu(struct kprocenv *__restrict self, size_t max_argc,
  return error;
 }
 
+__crit kerrno_t
+kprocenv_setenvv_uc(struct kprocenv *__restrict self, __size_t max_envc,
+                    char const __user *const __user *envv,
+                    __size_t const __user *max_envlenv) {
+ kassert_kprocenv(self);
+ /* TODO */
+
+ return KE_OK;
+}
+
 
 
 
@@ -507,7 +545,7 @@ kernel_parse_arg(char const *__restrict arg,
  }
  k_syslogf(KLOG_INFO,"[CMD] setenv(%.?q,%.?q)\n",
            name_size,arg,value_size,value);
- error = kprocenv_setenv(env,arg,name_size,value,value_size,0);
+ error = kprocenv_kernel_setenv(env,arg,name_size,value,value_size,0);
  if (error == KE_EXISTS) {
   k_syslogf(KLOG_ERROR,"[CMD] Argument %.?q was already defined as '%#.?q=%#q'\n",
             len,arg,name_size,arg,kprocenv_getenv(env,arg,name_size));

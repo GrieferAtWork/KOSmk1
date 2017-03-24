@@ -56,6 +56,9 @@
 #ifdef karch_memcpy
 #define SHM_MEMCPY karch_memcpy
 #endif
+#ifdef karch_memchr
+#define SHM_MEMCHR karch_memchr
+#endif
 #endif
 
 #ifndef SHM_MEMSET
@@ -63,6 +66,9 @@
 #endif
 #ifndef SHM_MEMCPY
 #define SHM_MEMCPY memcpy
+#endif
+#ifndef SHM_MEMCHR
+#define SHM_MEMCHR memchr
 #endif
 
 
@@ -1583,6 +1589,43 @@ ktranslator_memset_w(struct ktranslator *__restrict self,
 }
 #endif
 
+//////////////////////////////////////////////////////////////////////////
+// Return the first instance of a given byte in a given user-space string.
+// @return: NULL:                     The given text doesn't contain the sought after byte.
+// @return: KTRANSLATOR_MEMCHR_FAULT: The given pointer is faulty.
+// @return: * :                       The user-space pointer to the first instance of 'needle'
+#define KTRANSLATOR_MEMCHR_FAULT  ((__user void *)(__uintptr_t)-(__intptr_t)1)
+#ifdef __INTELLISENSE__
+extern __wunused __user void *
+ktranslator_memchr(struct ktranslator *__restrict self,
+                   __user void const *p, int needle, __size_t bytes);
+#else
+extern __wunused __user void *
+__ktranslator_memchr_impl(struct ktranslator *__restrict self,
+                          __user void const *p, int needle, __size_t bytes);
+__local __wunused __user void *
+__ktranslator_qmemchr_impl(struct ktranslator *__restrict self,
+                           __user void const *p, int needle, __size_t bytes) {
+ __kernel void *kp = ktranslator_qexec(self,p,0),*k_pos;
+ if __unlikely(!kp) return KTRANSLATOR_MEMCHR_FAULT;
+ return (k_pos = SHM_MEMCHR(kp,needle,bytes))
+  ? (__user void *)((__uintptr_t)p+((__uintptr_t)k_pos-(__uintptr_t)kp))
+  : NULL;
+}
+__local __wunused __user void *
+ktranslator_memchr(struct ktranslator *__restrict self,
+                   __user void const *p, int needle, __size_t bytes) {
+ if (__builtin_constant_p(bytes) && !KPAGEDIR_MAYBE_QUICKACCESS(bytes)) {
+  return bytes ? __ktranslator_memchr_impl(self,p,needle,bytes) : 0;
+ } else if (KPAGEDIR_CAN_QUICKACCESS(p,bytes)) {
+  return __ktranslator_qmemchr_impl(self,p,needle,bytes);
+ } else {
+  return __ktranslator_memchr_impl(self,p,needle,bytes);
+ }
+}
+
+
+#endif
 
 
 #ifdef __INTELLISENSE__

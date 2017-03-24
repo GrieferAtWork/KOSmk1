@@ -318,6 +318,23 @@ __ktranslator_memset_w_impl(struct ktranslator *__restrict self,
 }
 
 
+__user void *
+__ktranslator_memchr_impl(struct ktranslator *__restrict self,
+                          __user void const *p, int needle,
+                          size_t bytes) {
+ size_t maxbytes; __kernel void *kp,*found_p;
+ while ((kp = ktranslator_exec(self,p,bytes,&maxbytes,0)) != NULL) {
+  assert(maxbytes <= bytes);
+  found_p = SHM_MEMCHR(kp,needle,maxbytes);
+  if (found_p) return (__user void *)((uintptr_t)p+((uintptr_t)found_p-(uintptr_t)kp));
+  if ((bytes -= maxbytes) == 0) break;
+  *(uintptr_t *)&p += maxbytes;
+ }
+ return bytes ? KTRANSLATOR_MEMCHR_FAULT : NULL;
+}
+
+
+
 __DECL_END
 
 #endif /* !__KOS_KERNEL_SHM_TRANSFER_C_INL__ */

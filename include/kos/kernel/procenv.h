@@ -67,6 +67,23 @@ struct kenventry {
 #define kenventry_memsz(self) (((self)->ee_namsize+strlen(kenventry_value(self))+2)*sizeof(char))
 
 
+//////////////////////////////////////////////////////////////////////////
+// Allocate and return a new environment table entry
+// @return: KENVENTRY_NEW_USER_NOMEM:     Not enough available memory.
+// @return: KENVENTRY_NEW_USER_TOO_LARGE: The resulting length of the entry is greater than 'mem_allowed'.
+// @return: KENVENTRY_NEW_USER_FAULT:     A faulty pointer was given.
+// @return: KENVENTRY_NEW_USER_DESTROYED: The SHM manager of the calling thread was closed.
+// @return: * :                           The new environment table entry.
+extern __crit __wunused __malloccall struct kenventry *
+kenventry_new_user(__user char const *name, __size_t name_max,
+                   __user char const *value, __size_t value_max,
+                   __size_t mem_allowed);
+#define KENVENTRY_NEW_USER_NOMEM       ((struct kenventry *)NULL)
+#define KENVENTRY_NEW_USER_TOO_LARGE   ((struct kenventry *)(__uintptr_t)-1)
+#define KENVENTRY_NEW_USER_FAULT       ((struct kenventry *)(__uintptr_t)-2)
+#define KENVENTRY_NEW_USER_DESTROYED   ((struct kenventry *)(__uintptr_t)-3)
+
+
 struct kprocenv {
  KOBJECT_HEAD
  __size_t          pe_memmax;                  /*< Max amount of bytes allowed to be allocated for environment variables+arguments+argument vector. */
@@ -134,13 +151,33 @@ kprocenv_getenv(struct kprocenv const *__restrict self,
 // @return: KE_EXISTS: 'override' is ZERO and the given name already exists.
 // @return: KE_ACCES:  Allocating a new entry for the given variable would exceed the allowed maximum.
 // @return: KE_NOMEM:  Not enough memory to complete the operation.
+#ifdef __INTELLISENSE__
+extern __wunused __nonnull((1,2,4)) kerrno_t
+kprocenv_kernel_setenv(struct kprocenv *__restrict self,
+                       __kernel char const *__restrict name, __size_t name_max,
+                       __kernel char const *__restrict value, __size_t value_max,
+                       int override);
+extern __wunused __nonnull((1,2,4)) kerrno_t
+kprocenv_user_setenv(struct kprocenv *__restrict self,
+                     __kernel char const *__restrict name, __size_t name_max,
+                     __kernel char const *__restrict value, __size_t value_max,
+                     int override);
+#else
 extern __crit __wunused __nonnull((1,2,4)) kerrno_t
-kprocenv_setenv_c(struct kprocenv *__restrict self,
-                  char const *__restrict name, __size_t name_max,
-                  char const *__restrict value, __size_t value_max,
-                  int override);
-#define kprocenv_setenv(self,name,name_max,value,value_max,override) \
- KTASK_CRIT(kprocenv_setenv_c(self,name,name_max,value,value_max,override))
+kprocenv_kernel_setenv_c(struct kprocenv *__restrict self,
+                         __kernel char const *__restrict name, __size_t name_max,
+                         __kernel char const *__restrict value, __size_t value_max,
+                         int override);
+extern __crit __wunused __nonnull((1)) kerrno_t
+kprocenv_user_setenv_c(struct kprocenv *__restrict self,
+                       __user char const *name, __size_t name_max,
+                       __user char const *value, __size_t value_max,
+                       int override);
+#define kprocenv_kernel_setenv(self,name,name_max,value,value_max,override) \
+ KTASK_CRIT(kprocenv_kernel_setenv_c(self,name,name_max,value,value_max,override))
+#define kprocenv_user_setenv(self,name,name_max,value,value_max,override) \
+ KTASK_CRIT(kprocenv_user_setenv_c(self,name,name_max,value,value_max,override))
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 // Delete a given environment variable.
@@ -199,6 +236,13 @@ kprocenv_setargv_cu(struct kprocenv *__restrict self, __size_t max_argc,
  KTASK_CRIT(kprocenv_setargv_c(self,max_argc,argv,max_arglenv))
 #define kprocenv_setargv_u(self,max_argc,argv,max_arglenv) \
  KTASK_CRIT(kprocenv_setargv_cu(self,max_argc,argv,max_arglenv))
+
+
+extern __crit __nonnull((1)) kerrno_t
+kprocenv_setenvv_uc(struct kprocenv *__restrict self, __size_t max_envc,
+                    char const __user *const __user *envv,
+                    __size_t const __user *max_envlenv);
+
 #endif /* !__ASSEMBLY__ */
 
 __DECL_END

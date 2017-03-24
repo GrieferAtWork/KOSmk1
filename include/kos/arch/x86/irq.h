@@ -31,21 +31,14 @@ __DECL_BEGIN
 
 #ifdef __KERNEL__
 #ifdef __ASSEMBLY__
-#define __karch_raw_irq_enable()  sti
-#define __karch_raw_irq_disable() cli
-#define __karch_raw_irq_idle()    hlt
+#define karch_irq_enable()  sti
+#define karch_irq_disable() cli
+#define karch_irq_idle()    hlt
 #else
-#define __karch_raw_irq_enable()    __asm__("sti" : : : "memory")
-#define __karch_raw_irq_disable()   __asm__("cli" : : : "memory")
-#define __karch_raw_irq_idle()      __asm__("hlt" : : : "memory")
-#define __karch_raw_irq_enabled()  (x86_geteflags()&X86_EFLAGS_IF)
-#endif
-
-#define karch_irq_enable  __karch_raw_irq_enable
-#define karch_irq_disable __karch_raw_irq_disable
-#define karch_irq_idle    __karch_raw_irq_idle
-#ifdef __karch_raw_irq_enabled
-#define karch_irq_enabled __karch_raw_irq_enabled
+#define karch_irq_enable()   __asm__("sti" : : : "memory")
+#define karch_irq_disable()  __asm__("cli" : : : "memory")
+#define karch_irq_idle()     __asm__("hlt" : : : "memory")
+#define karch_irq_enabled()  (x86_geteflags()&X86_EFLAGS_IF)
 #endif
 #endif
 
