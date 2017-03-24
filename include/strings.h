@@ -147,13 +147,27 @@ memset __P((void *__restrict __dst,
 #endif /* !__memset_defined */
 #endif /* !karch_memset || DEBUG */
 
-#if defined(__GNUC__) || __has_builtin(__builtin_ffs)
-#   define ffs   __builtin_ffs
-#elif defined(karch_ffs)
-#   define ffs   karch_ffs
-#else
+#ifdef arch_ffs
+#   undef  ffs
+#   define ffs     arch_ffs
+#elif !defined(__STRING_C__)
+#ifdef __CONFIG_MIN_LIBC__
+#ifndef __ffsx_defined
+#define __ffsx_defined 1
+extern __wunused __constcall int _ffs8  __P((__u8 __i));
+extern __wunused __constcall int _ffs16 __P((__u16 __i));
+extern __wunused __constcall int _ffs32 __P((__u32 __i));
+extern __wunused __constcall int _ffs64 __P((__u64 __i));
+#endif /* !__ffsx_defined */
+#undef  ffs
+#define ffs   __PP_CAT_2(_ffs,__PP_MUL8(__SIZEOF_INT__))
+#else /* __CONFIG_MIN_LIBC__ */
+#ifndef __ffs_defined
+#define __ffs_defined 1
 extern __wunused __constcall int ffs __P((int __i));
-#endif
+#endif /* !__ffs_defined */
+#endif /* !__CONFIG_MIN_LIBC__ */
+#endif /* ... */
 
 #endif /* !__INTELLISENSE__ */
 

@@ -20,14 +20,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_ARCH_STRING_H__
-#define __KOS_ARCH_STRING_H__ 1
+#ifndef __KOS_ARCH_GENERIC_STRING_COMMON_H__
+#define __KOS_ARCH_GENERIC_STRING_COMMON_H__ 1
 
-#include <kos/compiler.h>
-#include <kos/arch.h>
-#ifdef KOS_ARCH_HAVE_STRING_H
-#include KOS_ARCH_INCLUDE(string.h)
-#endif
-#include <kos/arch/generic/string.h>
 
-#endif /* !__KOS_ARCH_STRING_H__ */
+/* Size limits used to determine string-operations large
+ * enough to qualify use of a w/l/q arch-operation, even
+ * if that means having to produce additional alignment code. */
+#define __ARCH_STRING_LARGE_LIMIT_8  (1 << 12)
+#define __ARCH_STRING_LARGE_LIMIT_4  (1 << 10)
+#define __ARCH_STRING_LARGE_LIMIT_2  (1 << 5)
+
+#define __ARCH_STRING_SMALL_LIMIT  8
+
+#endif /* !__KOS_ARCH_GENERIC_STRING_COMMON_H__ */

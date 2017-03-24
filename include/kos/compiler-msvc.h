@@ -63,6 +63,9 @@
 #ifndef __compiler_assume
 #define __compiler_assume   __assume
 #endif
+#ifndef __compiler_alignof
+#define __compiler_alignof  __alignof
+#endif
 
 #ifndef __compiler_unreachable
 #define __compiler_unreachable() __assume(0)

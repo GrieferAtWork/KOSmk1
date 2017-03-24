@@ -99,34 +99,9 @@ __DECL_END
 #if !defined(__INTELLISENSE__) && defined(__LIBC_USE_ARCH_OPTIMIZATIONS)
 #include <kos/arch/string.h>
 /* Pull in arch-specific, optimized string operations */
-#ifdef karch_memchr
-#undef memchr
-#define memchr    karch_memchr
-#endif /* karch_memchr */
-#ifdef karch_memcpy
-#undef memcpy
-#define memcpy     karch_memcpy
-#endif /* karch_memcpy */
-#ifdef karch_memccpy
-#undef memccpy
-#undef _memccpy
-#define memccpy   karch_memccpy
-#define _memccpy  karch_memccpy
-#endif /* karch_memccpy */
-#ifdef karch_memcmp
-#undef memcmp
-#define memcmp    karch_memcmp
-#endif /* karch_memcmp */
-#ifndef __CONFIG_MIN_LIBC__
-#ifdef karch_memicmp
-#undef _memicmp
-#define _memicmp   karch_memicmp
-#ifndef __STDC_PURE__
-#undef memicmp
-#define memicmp    karch_memicmp
-#endif /* !__STDC_PURE__ */
-#endif /* karch_memicmp */
-#endif /* !__CONFIG_MIN_LIBC__ */
+#define memchr    arch_memchr
+#define memcpy    arch_memcpy
+#define memcmp    arch_memcmp
 #endif /* __LIBC_USE_ARCH_OPTIMIZATIONS */
 
 #endif /* !__ASSEMBLY__ */

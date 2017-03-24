@@ -429,7 +429,7 @@ __declspec(noreturn) void __builtin_longjmp(void *, int);
 
 
 #define __builtin_offsetof(s,m) (__SIZE_TYPE__)(&((s*)0)->m)
-#define __builtin_constant_p(x) 0
+#define __builtin_constant_p(x) ((void)(x),0)
 
 template<bool> struct ____INTELLISENE_static_if_helper {};
 template<> struct ____INTELLISENE_static_if_helper<true> { bool __is_true__(); };

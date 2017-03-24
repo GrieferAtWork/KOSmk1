@@ -189,8 +189,10 @@
 #endif
 
 #ifndef __COMPILER_ALIAS
-#define __COMPILER_ALIAS(new_name,old_name) \
+#define __COMPILER_ALIAS2(new_name,old_name) \
  __typeof__(old_name) new_name __attribute__((/*__weak__,*/ __alias__(#old_name)));
+#define __COMPILER_ALIAS(new_name,old_name) \
+ __COMPILER_ALIAS2(new_name,old_name)
 #endif
 
 

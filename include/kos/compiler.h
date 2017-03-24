@@ -129,6 +129,13 @@
 #   define __NO_compiler_assume
 #   define __compiler_assume(expr) (void)0
 #endif
+#ifndef __compiler_alignof
+#if defined(__GNUC__) || __has_builtin(__builtin_offsetof)
+#    define __compiler_alignof(T)    __builtin_offsetof(struct{T __x;char __s;},__s)
+#else
+#    define __compiler_alignof(T)  ((__size_t)(&((struct{T __x;char __s;} *)0)->__s))
+#endif
+#endif
 #ifndef __COMPILER_ARRAYSIZE
 #   define __COMPILER_ARRAYSIZE(x)  (sizeof(x)/sizeof(*(x)))
 #endif

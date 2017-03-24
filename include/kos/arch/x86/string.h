@@ -26,19 +26,41 @@
 #include <kos/compiler.h>
 
 #ifndef __ASSEMBLY__
+#include <__null.h>
 #include <kos/types.h>
 
 __DECL_BEGIN
 
-__local int x86_ffs(int i) {
- register int result = 0,temp;
- __asm__("bsf %2,%1\n"
+__local int x86_ffs16(__u16 i) {
+ register __u16 result = 0,temp;
+ __asm__("bsfw %2,%1\n"
          "jz 1f\n"
+#if __SIZEOF_POINTER__ == 2
          "lea 1(%1),%0\n"
+#else
+         "mov %1, %0\n"
+         "inc %0\n"
+#endif
          "1:"
          : "=&a" (result), "=r" (temp)
          : "rm" (i));
- return result;
+ return (int)result;
+}
+
+__local int x86_ffs32(__u32 i) {
+ register __u32 result = 0,temp;
+ __asm__("bsfl %2,%1\n"
+         "jz 1f\n"
+#if __SIZEOF_POINTER__ == 4
+         "lea 1(%1),%0\n"
+#else
+         "mov %1, %0\n"
+         "inc %0\n"
+#endif
+         "1:"
+         : "=&a" (result), "=r" (temp)
+         : "rm" (i));
+ return (int)result;
 }
 
 
@@ -259,68 +281,64 @@ __local __size_t x86_memlenq(__u64 const *__haystack, __u64 __needle, __size_t _
 #undef x86_strnlenX
 
 
+#define __arch_memcpy(dst,src,bytes)          x86_memcpyb(dst,src,bytes)
+#define __arch_memset(dst,byte,bytes)         x86_memsetb(dst,(__u8)(byte),bytes)
+#define __arch_memchr(haystack,needle,bytes)  x86_memchrb(haystack,(__u8)(needle),bytes)
+#define __arch_memrchr(haystack,needle,bytes) x86_memrchrb(haystack,(__u8)(needle),bytes)
 
+#define __arch_memend(haystack,needle,bytes)  x86_memendb(haystack,(__u8)(needle),bytes)
+#define __arch_memlen(haystack,needle,bytes)  x86_memlenb(haystack,(__u8)(needle),bytes)
+#define __arch_umemend(haystack,needle)       x86_umemendb(haystack,(__u8)(needle))
+#define __arch_umemlen(haystack,needle)       x86_umemlenb(haystack,(__u8)(needle))
+//todo? #define __arch_memrend(haystack,needle,bytes) x86_memrendb(haystack,(__u8)(needle),bytes)
+//todo? #define __arch_memrlen(haystack,needle,bytes) x86_memrlenb(haystack,(__u8)(needle),bytes)
+//todo? #define __arch_umemrend(haystack,needle)      x86_umemrendb(haystack,(__u8)(needle))
+//todo? #define __arch_umemrlen(haystack,needle)      x86_umemrlenb(haystack,(__u8)(needle))
 
+#define __arch_ffs16    x86_ffs16
+#define __arch_ffs32    x86_ffs32
 
-/* TODO: We can implement a _LOT_ more string routines,
- * like (mem|str)chr, (mem|str)cmp.
- * (I think) even something like strstr, and strspn and memmem. */
-
-#define __karch_raw_ffs      x86_ffs
-#define __karch_raw_memcpy   x86_memcpyb
-
-#define __karch_raw_memset(dst,byte,bytes)         x86_memsetb(dst,(__u8)(byte),bytes)
-#define __karch_raw_memchr(haystack,needle,bytes)  x86_memchrb(haystack,(__u8)(needle),bytes)
-#define __karch_raw_memrchr(haystack,needle,bytes) x86_memrchrb(haystack,(__u8)(needle),bytes)
-
-#define __karch_raw_memend(haystack,needle,bytes)  x86_memendb(haystack,(__u8)(needle),bytes)
-#define __karch_raw_memlen(haystack,needle,bytes)  x86_memlenb(haystack,(__u8)(needle),bytes)
-//TODO: #define __karch_raw_memrend(haystack,needle,bytes) x86_memrendb(haystack,(__u8)(needle),bytes)
-//TODO: #define __karch_raw_memrlen(haystack,needle,bytes) x86_memrlenb(haystack,(__u8)(needle),bytes)
-#define __karch_raw_umemend(haystack,needle)       x86_umemendb(haystack,(__u8)(needle))
-#define __karch_raw_umemlen(haystack,needle)       x86_umemlenb(haystack,(__u8)(needle))
-//TODO: #define __karch_raw_umemrend(haystack,needle)      x86_umemrendb(haystack,(__u8)(needle))
-//TODO: #define __karch_raw_umemrlen(haystack,needle)      x86_umemrlenb(haystack,(__u8)(needle))
-
-#define __karch_raw_memcpy_b x86_memcpyb
-#define __karch_raw_memcpy_w x86_memcpyw
-#define __karch_raw_memcpy_l x86_memcpyl
-#define __karch_raw_memset_b x86_memsetb
-#define __karch_raw_memset_w x86_memsetw
-#define __karch_raw_memset_l x86_memsetl
+#define __arch_memcpy_b x86_memcpyb
+#define __arch_memcpy_w x86_memcpyw
+#define __arch_memcpy_l x86_memcpyl
+#define __arch_memset_b x86_memsetb
+#define __arch_memset_w x86_memsetw
+#define __arch_memset_l x86_memsetl
 
 #ifdef __x86_64__
-#define __karch_raw_memcpy_q x86_memcpyq
-#define __karch_raw_memset_q x86_memsetq
+#define __arch_memcpy_q x86_memcpyq
+#define __arch_memset_q x86_memsetq
 #endif /* __x86_64__ */
 
 
-#define __karch_raw_memchr_b x86_memchrb
-#define __karch_raw_memchr_w x86_memchrw
-#define __karch_raw_memchr_l x86_memchrl
+#define __arch_memchr_b x86_memchrb
+#define __arch_memchr_w x86_memchrw
+#define __arch_memchr_l x86_memchrl
 #ifdef __x86_64__
-#define __karch_raw_memchr_q x86_memchrq
+#define __arch_memchr_q x86_memchrq
 #endif
 
-#define __karch_raw_memrchr_b x86_memrchrb
-#define __karch_raw_memrchr_w x86_memrchrw
-#define __karch_raw_memrchr_l x86_memrchrl
+#define __arch_memrchr_b x86_memrchrb
+#define __arch_memrchr_w x86_memrchrw
+#define __arch_memrchr_l x86_memrchrl
 #ifdef __x86_64__
-#define __karch_raw_memrchr_q x86_memrchrq
+#define __arch_memrchr_q x86_memrchrq
 #endif
 
-#define __karch_raw_memcmp   x86_memcmpb
-#define __karch_raw_memcmp_b x86_memcmpb
-#define __karch_raw_memcmp_w x86_memcmpw
-#define __karch_raw_memcmp_l x86_memcmpl
+#define __arch_memcmp   x86_memcmpb
+#define __arch_memcmp_b x86_memcmpb
+#define __arch_memcmp_w x86_memcmpw
+#define __arch_memcmp_l x86_memcmpl
 #ifdef __x86_64__
-#define __karch_raw_memcmp_q x86_memcmpq
+#define __arch_memcmp_q x86_memcmpq
 #endif
 
 __DECL_END
 
 /* Autocomplete string functions using generic constant optimizations. */
+#ifndef __INTELLISENSE__
 #include <kos/arch/generic/string.h>
+#endif
 #endif /* !__ASSEMBLY__ */
 
 #endif /* !__KOS_ARCHX86_STRING_H__ */

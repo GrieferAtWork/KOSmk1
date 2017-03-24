@@ -34,6 +34,9 @@
 #include <stdarg.h>
 #include <kos/config.h>
 #include <kos/types.h>
+#ifdef __LIBC_USE_ARCH_OPTIMIZATIONS
+#include <kos/arch/string.h>
+#endif
 
 #ifdef __COMPILER_HAVE_PRAGMA_PUSH_MACRO
 #ifdef strdup
@@ -207,10 +210,13 @@ memset __P((void *__restrict __dst,
             int __byte, __size_t __bytes));
 #endif
 
-extern __retnonnull __nonnull((1,2)) void *memmove __P((void *__dst, void const *__src, __size_t __bytes));
+extern __retnonnull __nonnull((1,2)) void *
+memmove __P((void *__dst, void const *__src, __size_t __bytes));
+
 #ifndef __memcmp_defined
 #define __memcmp_defined 1
-extern __wunused __purecall __nonnull((1,2)) int memcmp __P((void const *__a, void const *__b, __size_t __bytes));
+extern __wunused __purecall __nonnull((1,2)) int
+memcmp __P((void const *__a, void const *__b, __size_t __bytes));
 #endif /* !__memcmp_defined */
 
 extern __retnonnull __nonnull((1,2)) char *strcpy __P((char *__dst, char const *__src));
@@ -235,14 +241,71 @@ extern "C++" {
 extern __wunused __purecall __nonnull((1)) void *memchr(void *__restrict __p, int __needle, size_t __bytes) __asmname("memchr");
 extern __wunused __purecall __nonnull((1)) void const *memchr(void const *__restrict __p, int __needle, size_t __bytes) __asmname("memchr");
 #endif
+#ifndef __memrchr_defined
+#define __memrchr_defined 1
 extern __wunused __purecall __nonnull((1)) void *memrchr(void *__restrict __p, int __needle, size_t __bytes) __asmname("memrchr");
 extern __wunused __purecall __nonnull((1)) void const *memrchr(void const *__restrict __p, int __needle, size_t __bytes) __asmname("memrchr");
+#endif
+#ifndef ___umemend_defined
+#define ___umemend_defined 1
+extern __wunused __purecall __nonnull((1)) void *_umemend(void *__restrict __haystack, int __needle) __asmname("_umemend");
+extern __wunused __purecall __nonnull((1)) void const *_umemend(void const *__restrict __haystack, int __needle) __asmname("_umemend");
+#endif
+#ifndef ___memend_defined
+#define ___memend_defined 1
+extern __wunused __purecall __nonnull((1)) void *_memend(void *__restrict __haystack, int __needle, __size_t __bytes) __asmname("_memend");
+extern __wunused __purecall __nonnull((1)) void const *_memend(void const *__restrict __haystack, int __needle, __size_t __bytes) __asmname("_memend");
+#endif
 
+#ifndef __memmem_defined
+#define __memmem_defined 1
 extern __wunused __purecall __nonnull((1,3)) void *memmem(void *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen) __asmname("memmem");
 extern __wunused __purecall __nonnull((1,3)) void const *memmem(void const *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen) __asmname("memmem");
+#endif /* !__memmem_defined */
+
+#ifndef ___memrmem_defined
+#define ___memrmem_defined 1
 extern __wunused __purecall __nonnull((1,3)) void *_memrmem(void *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen) __asmname("_memrmem");
 extern __wunused __purecall __nonnull((1,3)) void const *_memrmem(void const *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen) __asmname("_memrmem");
+#endif /* !___memrmem_defined */
 
+#ifndef ___memidx_defined
+#define ___memidx_defined 1
+/* In a vector of 'ELEMCOUNT' elements, each aligned by 'ELEMALIGN' and sized 'ELEMSIZE',
+ * search for one equal to 'PATTERN' and return a pointer to it, or NULL if it doesn't exist. */
+extern __wunused __purecall __nonnull((1,3)) void *_memidx(void *__vector, __size_t __elemcount, void const *__pattern, __size_t __elemsize, __size_t __elemalign) __asmname("_memidx");
+extern __wunused __purecall __nonnull((1,3)) void const *_memidx(void const *__vector, __size_t __elemcount, void const *__pattern, __size_t __elemsize, __size_t __elemalign) __asmname("_memidx");
+#endif /* !___memidx_defined */
+#if !defined(__INTELLISENSE__) && defined(__LIBC_USE_ARCH_OPTIMIZATIONS) && defined(arch_memidx)
+template<class __T> __wunused __purecall __nonnull((1,3)) __T *_memidx(__T *__vector, __size_t __elemcount, __T const &__pattern) { return (__T *)arch_memidx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T> __wunused __purecall __nonnull((1,3)) __T const *_memidx(__T const *__vector, __size_t __elemcount, __T const &__pattern) { return (__T const *)arch_memidx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T *_memidx(__T (&__vector)[__S], __T const &__pattern) { return (__T *)arch_memidx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T const *_memidx(__T (&__vector)[__S], __T const &__pattern) { return (__T const *)arch_memidx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+#else
+template<class __T> __wunused __purecall __nonnull((1,3)) __T *_memidx(__T *__vector, __size_t __elemcount, __T const &__pattern) { return (__T *)_memidx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T> __wunused __purecall __nonnull((1,3)) __T const *_memidx(__T const *__vector, __size_t __elemcount, __T const &__pattern) { return (__T const *)_memidx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T *_memidx(__T (&__vector)[__S], __T const &__pattern) { return (__T *)_memidx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T const *_memidx(__T (&__vector)[__S], __T const &__pattern) { return (__T const *)_memidx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+#endif
+
+#ifndef ___memridx_defined
+#define ___memridx_defined 1
+/* In a vector of 'ELEMCOUNT' elements, each aligned by 'ELEMALIGN' and sized 'ELEMSIZE',
+ * search for one equal to 'PATTERN' and return a pointer to it, or NULL if it doesn't exist. */
+extern __wunused __purecall __nonnull((1,3)) void *_memridx(void *__vector, __size_t __elemcount, void const *__pattern, __size_t __elemsize, __size_t __elemalign) __asmname("_memridx");
+extern __wunused __purecall __nonnull((1,3)) void const *_memridx(void const *__vector, __size_t __elemcount, void const *__pattern, __size_t __elemsize, __size_t __elemalign) __asmname("_memridx");
+#endif /* !___memridx_defined */
+#if !defined(__INTELLISENSE__) && defined(__LIBC_USE_ARCH_OPTIMIZATIONS) && defined(arch_memridx)
+template<class __T> __wunused __purecall __nonnull((1,3)) __T *_memridx(__T *__vector, __size_t __elemcount, __T const &__pattern) { return (__T *)arch_memridx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T> __wunused __purecall __nonnull((1,3)) __T const *_memridx(__T const *__vector, __size_t __elemcount, __T const &__pattern) { return (__T const *)arch_memridx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T *_memridx(__T (&__vector)[__S], __T const &__pattern) { return (__T *)arch_memridx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T const *_memridx(__T (&__vector)[__S], __T const &__pattern) { return (__T const *)arch_memridx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+#else
+template<class __T> __wunused __purecall __nonnull((1,3)) __T *_memridx(__T *__vector, __size_t __elemcount, __T const &__pattern) { return (__T *)_memridx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T> __wunused __purecall __nonnull((1,3)) __T const *_memridx(__T const *__vector, __size_t __elemcount, __T const &__pattern) { return (__T const *)_memridx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T *_memridx(__T (&__vector)[__S], __T const &__pattern) { return (__T *)_memridx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T const *_memridx(__T (&__vector)[__S], __T const &__pattern) { return (__T const *)_memridx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+#endif
 
 #ifndef __strchr_defined
 #define __strchr_defined 1
@@ -284,6 +347,39 @@ extern __wunused __purecall __retnonnull __nonnull((1)) char const *_strend(char
 extern __wunused __purecall __retnonnull __nonnull((1)) char *_strnend(char *__restrict __s, __size_t __maxchars) __asmname("_strnend");
 extern __wunused __purecall __retnonnull __nonnull((1)) char const *_strnend(char const *__restrict __s, __size_t __maxchars) __asmname("_strnend");
 #ifndef __STDC_PURE__
+/* In a vector of 'ELEMCOUNT' elements, each aligned by 'ELEMALIGN' and sized 'ELEMSIZE',
+ * search for one equal to 'PATTERN' and return a pointer to it, or NULL if it doesn't exist. */
+extern __wunused __purecall __nonnull((1,3)) void *memidx(void *__vector, __size_t __elemcount, void const *__pattern, __size_t __elemsize, __size_t __elemalign) __asmname("_memidx");
+extern __wunused __purecall __nonnull((1,3)) void const *memidx(void const *__vector, __size_t __elemcount, void const *__pattern, __size_t __elemsize, __size_t __elemalign) __asmname("_memidx");
+extern __wunused __purecall __nonnull((1,3)) void *memridx(void *__vector, __size_t __elemcount, void const *__pattern, __size_t __elemsize, __size_t __elemalign) __asmname("_memridx");
+extern __wunused __purecall __nonnull((1,3)) void const *memridx(void const *__vector, __size_t __elemcount, void const *__pattern, __size_t __elemsize, __size_t __elemalign) __asmname("_memridx");
+#if !defined(__INTELLISENSE__) && defined(__LIBC_USE_ARCH_OPTIMIZATIONS) && defined(arch_memidx)
+template<class __T> __wunused __purecall __nonnull((1,3)) __T *memidx(__T *__vector, __size_t __elemcount, __T const &__pattern) { return (__T *)arch_memidx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T> __wunused __purecall __nonnull((1,3)) __T const *memidx(__T const *__vector, __size_t __elemcount, __T const &__pattern) { return (__T const *)arch_memidx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T *memidx(__T (&__vector)[__S], __T const &__pattern) { return (__T *)arch_memidx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T const *memidx(__T (&__vector)[__S], __T const &__pattern) { return (__T const *)arch_memidx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+#else
+template<class __T> __wunused __purecall __nonnull((1,3)) __T *memidx(__T *__vector, __size_t __elemcount, __T const &__pattern) { return (__T *)_memidx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T> __wunused __purecall __nonnull((1,3)) __T const *memidx(__T const *__vector, __size_t __elemcount, __T const &__pattern) { return (__T const *)_memidx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T *memidx(__T (&__vector)[__S], __T const &__pattern) { return (__T *)_memidx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T const *memidx(__T (&__vector)[__S], __T const &__pattern) { return (__T const *)_memidx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+#endif
+#if !defined(__INTELLISENSE__) && defined(__LIBC_USE_ARCH_OPTIMIZATIONS) && defined(arch_memridx)
+template<class __T> __wunused __purecall __nonnull((1,3)) __T *memridx(__T *__vector, __size_t __elemcount, __T const &__pattern) { return (__T *)arch_memridx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T> __wunused __purecall __nonnull((1,3)) __T const *memridx(__T const *__vector, __size_t __elemcount, __T const &__pattern) { return (__T const *)arch_memridx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T *memridx(__T (&__vector)[__S], __T const &__pattern) { return (__T *)arch_memridx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T const *memridx(__T (&__vector)[__S], __T const &__pattern) { return (__T const *)arch_memridx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+#else
+template<class __T> __wunused __purecall __nonnull((1,3)) __T *memridx(__T *__vector, __size_t __elemcount, __T const &__pattern) { return (__T *)_memridx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T> __wunused __purecall __nonnull((1,3)) __T const *memridx(__T const *__vector, __size_t __elemcount, __T const &__pattern) { return (__T const *)_memridx(__vector,__elemcount,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T *memridx(__T (&__vector)[__S], __T const &__pattern) { return (__T *)_memridx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+template<class __T, __size_t __S> __wunused __purecall __nonnull((1,3)) __T const *memridx(__T (&__vector)[__S], __T const &__pattern) { return (__T const *)_memridx(__vector,__S,&__pattern,sizeof(__T),__compiler_alignof(__T)); }
+#endif
+
+extern __wunused __purecall __nonnull((1)) void *memend(void *__restrict __haystack, int __needle, __size_t __bytes) __asmname("_memend");
+extern __wunused __purecall __nonnull((1)) void const *memend(void const *__restrict __haystack, int __needle, __size_t __bytes) __asmname("_memend");
+extern __wunused __purecall __nonnull((1)) void *umemend(void *__restrict __haystack, int __needle) __asmname("_umemend");
+extern __wunused __purecall __nonnull((1)) void const *umemend(void const *__restrict __haystack, int __needle) __asmname("_umemend");
 extern __wunused __purecall __nonnull((1)) char *strnchr(char *__restrict __haystack, __size_t __max_haychars, int __needle) __asmname("_strnchr");
 extern __wunused __purecall __nonnull((1)) char const *strnchr(char const *__restrict __haystack, __size_t __max_haychars, int __needle) __asmname("_strnchr");
 extern __wunused __purecall __nonnull((1)) char *strnrchr(char *__restrict __haystack, __size_t __max_haychars, int __needle) __asmname("_strnrchr");
@@ -312,12 +408,48 @@ extern __wunused __purecall __retnonnull __nonnull((1)) char const *strnend(char
 #else /* C++ */
 #ifndef __memchr_defined
 #define __memchr_defined 1
-extern __wunused __purecall __nonnull((1)) void *memchr __P((void const *__restrict __p, int __needle, size_t __bytes));
+extern __wunused __purecall __nonnull((1)) void *
+memchr __P((void const *__restrict __p, int __needle, size_t __bytes));
 #endif
-extern __wunused __purecall __nonnull((1)) void *memrchr __P((void const *__restrict __p, int __needle, size_t __bytes));
+#ifndef __memrchr_defined
+#define __memrchr_defined 1
+extern __wunused __purecall __nonnull((1)) void *
+memrchr __P((void const *__restrict __p, int __needle, size_t __bytes));
+#endif
+#ifndef ___umemend_defined
+#define ___umemend_defined 1
+extern __wunused __retnonnull __purecall __nonnull((1)) void *
+_umemend __P((void const *__restrict __haystack, int __needle));
+#endif
+#ifndef ___memend_defined
+#define ___memend_defined 1
+extern __wunused __retnonnull __purecall __nonnull((1)) void *
+_memend __P((void const *__restrict __haystack,
+             int __needle, __size_t __bytes));
+#endif
 
-extern __wunused __purecall __nonnull((1,3)) void *memmem __P((void const *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen));
+#ifndef __memmem_defined
+#define __memmem_defined 1
+extern __wunused __purecall __nonnull((1,3)) void *
+memmem __P((void const *__haystack, size_t __haystacklen,
+            void const *__needle, size_t __needlelen));
+#endif /* !__memmem_defined */
+
+#ifndef ___memrmem_defined
+#define ___memrmem_defined 1
 extern __wunused __purecall __nonnull((1,3)) void *_memrmem __P((void const *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen));
+#endif /* !___memrmem_defined */
+
+#ifndef ___memidx_defined
+#define ___memidx_defined 1
+/* In a vector of 'ELEMCOUNT' elements, each aligned by 'ELEMALIGN' and sized 'ELEMSIZE',
+ * search for one equal to 'PATTERN' and return a pointer to it, or NULL if it doesn't exist. */
+extern __wunused __purecall __nonnull((1,3)) void *_memidx __P((void const *__vector, __size_t __elemcount, void const *__pattern, __size_t __elemsize, __size_t __elemalign));
+#endif /* !___memidx_defined */
+#ifndef ___memridx_defined
+#define ___memridx_defined 1
+extern __wunused __purecall __nonnull((1,3)) void *_memridx __P((void const *__vector, __size_t __elemcount, void const *__pattern, __size_t __elemsize, __size_t __elemalign));
+#endif /* !___memidx_defined */
 
 #ifndef __strchr_defined
 #define __strchr_defined 1
@@ -344,6 +476,10 @@ extern __wunused __purecall __retnonnull __nonnull((1)) char *_strend __P((char 
 extern __wunused __purecall __retnonnull __nonnull((1)) char *_strnend __P((char const *__restrict __s, __size_t __maxchars));
 #ifndef __STDC_PURE__
 #ifndef __NO_asmname
+extern __wunused __purecall __nonnull((1,3)) void *memidx __P((void const *__vector, __size_t __elemcount, void const *__pattern, __size_t __elemsize, __size_t __elemalign)) __asmname("_memidx");
+extern __wunused __purecall __nonnull((1,3)) void *memridx __P((void const *__vector, __size_t __elemcount, void const *__pattern, __size_t __elemsize, __size_t __elemalign)) __asmname("_memridx");
+extern __wunused __purecall __nonnull((1)) void *memend __P((void const *__restrict __haystack, int __needle, __size_t __bytes)) __asmname("_memend");
+extern __wunused __purecall __nonnull((1)) void *umemend __P((void const *__restrict __haystack, int __needle)) __asmname("_umemend");
 extern __wunused __purecall __nonnull((1,3)) void *memrmem __P((void const *__haystack, size_t __haystacklen, void const *__needle, size_t __needlelen)) __asmname("_memrmem");
 extern __wunused __purecall __nonnull((1)) char *strnchr __P((char const *__restrict __haystack, __size_t __max_haychars, int __needle)) __asmname("_strnchr");
 extern __wunused __purecall __nonnull((1)) char *strnrchr __P((char const *__restrict __haystack, __size_t __max_haychars, int __needle)) __asmname("_strnrchr");
@@ -356,6 +492,10 @@ extern __wunused __purecall __nonnull((1,3)) char *strnrpbrk __P((char const *__
 extern __wunused __purecall __retnonnull __nonnull((1)) char *strend __P((char const *__restrict __s)) __asmname("_strend");
 extern __wunused __purecall __retnonnull __nonnull((1)) char *strnend __P((char const *__restrict __s, __size_t __maxchars)) __asmname("_strnend");
 #else /* !__NO_asmname */
+#   define memidx    _memidx
+#   define memridx   _memridx
+#   define memend    _memend
+#   define umemend   _umemend
 #   define memrmem   _memrmem
 #   define strnchr   _strnchr
 #   define strnrchr  _strnrchr
@@ -370,6 +510,42 @@ extern __wunused __purecall __retnonnull __nonnull((1)) char *strnend __P((char 
 #endif /* __NO_asmname */
 #endif /* !__STDC_PURE__*/
 #endif /* C */
+
+#ifndef ___umemlen_defined
+#define ___umemlen_defined 1
+extern __wunused __purecall __nonnull((1)) __size_t
+_umemlen __P((void const *__restrict __haystack, int __needle));
+#endif
+#ifndef ___memlen_defined
+#define ___memlen_defined 1
+extern __wunused __purecall __nonnull((1)) __size_t
+_memlen __P((void const *__restrict __haystack,
+             int __needle, __size_t __bytes));
+#endif
+
+#ifndef __STDC_PURE__
+#ifndef __umemlen_defined
+#define __umemlen_defined 1
+#ifndef __NO_asmname
+extern __wunused __purecall __nonnull((1)) __size_t
+umemlen __P((void const *__restrict __haystack,
+             int __needle)) __asmname("_umemlen");
+#else
+#define umemlen  _umemlen
+#endif
+#endif /* !__umemlen_defined */
+#ifndef __memlen_defined
+#define __memlen_defined 1
+#ifndef __NO_asmname
+extern __wunused __purecall __nonnull((1)) __size_t
+memlen __P((void const *__restrict __haystack,
+            int __needle, __size_t __bytes))
+            __asmname("_memlen");
+#else
+#define memlen  _memlen
+#endif
+#endif /* !__memlen_defined */
+#endif /* !__STDC_PURE__ */
 
 extern __wunused __purecall __nonnull((1)) __size_t strlen __P((char const *__restrict __s));
 extern __wunused __purecall __nonnull((1)) __size_t strnlen __P((char const *__restrict __s, __size_t __maxchars));
@@ -842,23 +1018,57 @@ extern char *strerror __P((int __eno));
 extern char *strerror_r __P((int __eno, char *__restrict __buf, __size_t __buflen));
 #endif
 
-#if defined(__GNUC__) || __has_builtin(__builtin_ffsl)
-#   define ffsl   __builtin_ffsl
-#elif defined(karch_ffsl)
-#   define ffsl   karch_ffsl
-#else
-extern __wunused __constcall int ffsl __P((long __i));
-#endif
 
+#ifdef arch_ffs
+#   define _ffs8   arch_ffs
+#   define _ffs16  arch_ffs
+#   define _ffs32  arch_ffs
+#   define _ffs64  arch_ffs
+#   define _ffs    arch_ffs
+#   undef  ffs
+#   define ffs     arch_ffs
+#   define ffsl    arch_ffs
+#   define ffsll   arch_ffs
+#elif !defined(__STRING_C__)
+#ifndef __ffsx_defined
+#define __ffsx_defined 1
+extern __wunused __constcall int _ffs8  __P((__u8 __i));
+extern __wunused __constcall int _ffs16 __P((__u16 __i));
+extern __wunused __constcall int _ffs32 __P((__u32 __i));
+extern __wunused __constcall int _ffs64 __P((__u64 __i));
+#endif /* !__ffsx_defined */
+#ifdef __CONFIG_MIN_LIBC__
+#ifndef __NO_asmname
+#ifndef __ffs_defined
+#define __ffs_defined 1
+extern __wunused __constcall int ffs __P((int __i))
+ __asmname(__PP_STR(__PP_CAT_2(_ffs,__PP_MUL8(__SIZEOF_INT__))));
+#endif /* !__ffs_defined */
+extern __wunused __constcall int ffsl __P((long __i))
+ __asmname(__PP_STR(__PP_CAT_2(_ffs,__PP_MUL8(__SIZEOF_LONG__))));
 #ifndef __NO_longlong
-#if defined(__GNUC__) || __has_builtin(__builtin_ffsll)
-#   define ffsll   __builtin_ffsll
-#elif defined(karch_ffsll)
-#   define ffsll   karch_ffsll
-#else
-extern __wunused __constcall int ffsll __P((long long __i));
-#endif
+extern __wunused __constcall int ffsll __P((long long __i))
+ __asmname(__PP_STR(__PP_CAT_2(_ffs,__PP_MUL8(__SIZEOF_LONG_LONG__))));
 #endif /* !__NO_longlong */
+#else /* !__NO_asmname */
+#undef  ffs
+#define ffs    __PP_CAT_2(_ffs,__PP_MUL8(__SIZEOF_INT__))
+#define ffsl   __PP_CAT_2(_ffs,__PP_MUL8(__SIZEOF_LONG__))
+#ifndef __NO_longlong
+#define ffsll  __PP_CAT_2(_ffs,__PP_MUL8(__SIZEOF_LONG_LONG__))
+#endif /* !__NO_longlong */
+#endif /* __NO_asmname */
+#else /* __CONFIG_MIN_LIBC__ */
+#ifndef __ffs_defined
+#define __ffs_defined 1
+extern __wunused __constcall int ffs __P((int __i));
+#endif /* !__ffs_defined */
+extern __wunused __constcall int ffsl __P((long __i));
+#ifndef __NO_longlong
+extern __wunused __constcall int ffsll __P((long long __i));
+#endif /* !__NO_longlong */
+#endif /* !__CONFIG_MIN_LIBC__ */
+#endif /* ... */
 
 #ifdef _WIN32
 #undef memcpy_s
@@ -883,208 +1093,41 @@ __DECL_END
 #undef __ATTRIBUTE_ALIGNED_DEFAULT
 
 #if !defined(__INTELLISENSE__) && defined(__LIBC_USE_ARCH_OPTIMIZATIONS)
-#include <kos/arch/string.h>
 /* Pull in arch-specific, optimized string operations */
-#ifdef karch_memcpy
-#undef memcpy
-#define memcpy    karch_memcpy
-#endif /* karch_memcpy */
-#ifdef karch_memccpy
-#undef memccpy
-#define memccpy   karch_memccpy
-#endif /* karch_memccpy */
-#ifdef karch_memmove
-#define memmove   karch_memmove
-#endif /* karch_memmove */
-#ifdef karch_memset
-#define memset    karch_memset
-#endif /* karch_memset */
-#ifdef karch_memcmp
-#undef memcmp
-#define memcmp    karch_memcmp
-#endif /* karch_memcmp */
-#ifdef karch_strcpy
-#define strcpy    karch_strcpy
-#endif /* karch_strcpy */
-#ifdef karch_strncpy
-#define strncpy   karch_strncpy
-#endif /* karch_strncpy */
-#ifdef karch_strend
-#define _strend   karch_strend
+#   define memcpy                arch_memcpy
+#   define memset                arch_memset
+#   define memcmp                arch_memcmp
+#   define memchr                arch_memchr
+#   define memrchr               arch_memrchr
+#   define memmem                arch_memmem
+#   define _memrmem              arch_memrmem
+#   define _memend               arch_memend
+#   define _memlen               arch_memlen
+#   define _umemend              arch_umemend
+#   define _umemlen              arch_umemlen
+#   define _strlen(s)            arch_umemlen(s,'\0')
+#   define _strnlen(s,n)         arch_memlen(s,'\0',n)
+#   define _strend(s)    (char *)arch_umemend(s,'\0')
+#   define _strnend(s,n) (char *)arch_memend(s,'\0',n)
 #ifndef __STDC_PURE__
-#define strend    karch_strend
+#   define memrmem               arch_memrmem
+#   define memend                arch_memend
+#   define memlen                arch_memlen
+#   define umemend               arch_umemend
+#   define umemlen               arch_umemlen
+#   define strlen(s)             arch_umemlen(s,'\0')
+#   define strnlen(s,n)          arch_memlen(s,'\0',n)
+#   define strend(s)     (char *)arch_umemend(s,'\0')
+#   define strnend(s,n)  (char *)arch_memend(s,'\0',n)
 #endif /* !__STDC_PURE__ */
-#endif /* karch_strend */
-#ifdef karch_strnend
-#define _strnend  karch_strnend
+#if !(defined(__cplusplus) && !defined(__NO_asmname) && !defined(__STRING_C__))
+#   define _memidx               arch_memidx
+#   define _memridx              arch_memridx
 #ifndef __STDC_PURE__
-#define strnend   karch_strnend
+#   define memidx                arch_memidx
+#   define memridx               arch_memridx
 #endif /* !__STDC_PURE__ */
-#endif /* karch_strnend */
-#ifdef karch_strlen
-#define strlen    karch_strlen
-#endif /* karch_strlen */
-#ifdef karch_strnlen
-#define strnlen   karch_strnlen
-#endif /* karch_strnlen */
-#ifdef karch_strcmp
-#define strcmp    karch_strcmp
-#endif /* karch_strcmp */
-#ifdef karch_strncmp
-#define strncmp   karch_strncmp
-#endif /* karch_strncmp */
-#ifdef karch_strspn
-#define strspn    karch_strspn
-#endif /* karch_strspn */
-#ifdef karch_strnspn
-#define _strnspn  karch_strnspn
-#ifndef __STDC_PURE__
-#define strnspn   karch_strnspn
-#endif /* !__STDC_PURE__ */
-#endif /* karch_strnspn */
-#ifdef karch_strcspn
-#define strcspn   karch_strcspn
-#endif /* karch_strcspn */
-#ifdef karch_strncspn
-#define _strncspn karch_strncspn
-#ifndef __STDC_PURE__
-#define strncspn  karch_strncspn
-#endif /* !__STDC_PURE__ */
-#endif /* karch_strncspn */
-#undef _strset
-#ifdef karch_strset
-#define _strset   karch_strset
-#elif defined(karch_memset) && defined(karch_strlen)
-#define _strset(dst,ch) \
- __xblock({ char *const __dst = (dst); \
-            __xreturn (char *)karch_memset(__dst,ch,karch_strlen(__dst));\
- })
-#endif /* karch_strset */
-#if defined(_strset) && !defined(__STDC_PURE__)
-#undef strset
-#define strset  _strset
-#endif /* _strset && !__STDC_PURE__ */
-#undef _strnset
-#ifdef karch_strnset
-#define _strnset  karch_strnset
-#elif defined(karch_memset) && defined(karch_strnlen)
-#define _strnset(dst,ch,maxlen) \
- __xblock({ char *const __dst = (dst); \
-            __xreturn (char *)karch_memset(__dst,ch,karch_strnlen(__dst,maxlen));\
- })
-#endif /* karch_strnset */
-#ifdef karch_memrev
-#define _memrev  karch_memrev
-#ifndef __STDC_PURE__
-#define memrev   karch_memrev
-#endif /* !__STDC_PURE__ */
-#endif /* karch_memrev */
-#if defined(_strnset) && !defined(__STDC_PURE__)
-#undef strnset
-#define strnset  _strnset
-#endif /* _strnset && !__STDC_PURE__ */
-#ifdef karch_memchr
-#undef memchr
-#define memchr    karch_memchr
-#endif /* karch_memchr */
-#ifdef karch_memrchr
-#define memrchr   karch_memrchr
-#endif /* karch_memrchr */
-#ifdef karch_memmem
-#define memmem    karch_memmem
-#endif /* karch_memmem */
-#ifdef karch_memrmem
-#define _memrmem  karch_memrmem
-#ifndef __STDC_PURE__
-#define memrmem   karch_memrmem
-#endif /* !__STDC_PURE__ */
-#endif /* karch_memrmem */
-#ifdef karch_strchr
-#undef strchr
-#define strchr    karch_strchr
-#endif /* karch_strchr */
-#ifdef karch_strnchr
-#define _strnchr  karch_strnchr
-#ifndef __STDC_PURE__
-#define strnchr   karch_strnchr
-#endif /* !__STDC_PURE__ */
-#endif /* karch_strnchr */
-#ifdef karch_strrchr
-#undef strrchr
-#define strrchr   karch_strrchr
-#endif /* karch_strrchr */
-#ifdef karch_strnrchr
-#define _strnrchr karch_strnrchr
-#ifndef __STDC_PURE__
-#define strnrchr  karch_strnrchr
-#endif /* !__STDC_PURE__ */
-#endif /* karch_strnrchr */
-#ifdef karch_strstr
-#define strstr    karch_strstr
-#endif /* karch_strstr */
-#ifdef karch_strrstr
-#define _strrstr  karch_strrstr
-#ifndef __STDC_PURE__
-#define strrstr   karch_strrstr
-#endif /* !__STDC_PURE__ */
-#endif /* karch_strrstr */
-#ifdef karch_strnstr
-#define _strnstr  karch_strnstr
-#ifndef __STDC_PURE__
-#define strnstr   karch_strnstr
-#endif /* !__STDC_PURE__ */
-#endif /* karch_strnstr */
-#ifdef karch_strnrstr
-#define _strnrstr karch_strnrstr
-#ifndef __STDC_PURE__
-#define strnrstr  karch_strnrstr
-#endif /* !__STDC_PURE__ */
-#endif /* karch_strnrstr */
-#ifdef karch_strpbrk
-#define strpbrk   karch_strpbrk
-#endif /* karch_strpbrk */
-#ifdef karch_strrpbrk
-#define _strrpbrk karch_strrpbrk
-#ifndef __STDC_PURE__
-#define strrpbrk  karch_strrpbrk
-#endif /* !__STDC_PURE__ */
-#endif /* karch_strrpbrk */
-#ifdef karch_strnpbrk
-#define _strnpbrk karch_strnpbrk
-#ifndef __STDC_PURE__
-#define strnpbrk  karch_strnpbrk
-#endif /* !__STDC_PURE__ */
-#endif /* karch_strnpbrk */
-#ifdef karch_strnrpbrk
-#define _strnrpbrk karch_strnrpbrk
-#ifndef __STDC_PURE__
-#define strnrpbrk  karch_strnrpbrk
-#endif /* !__STDC_PURE__ */
-#endif /* karch_strnrpbrk */
-
-#ifndef __CONFIG_MIN_LIBC__
-#ifdef karch_stricmp
-#define _stricmp   karch_stricmp
-#ifndef __STDC_PURE__
-#define stricmp    karch_stricmp
-#endif /* !__STDC_PURE__ */
-#endif /* karch_stricmp */
-#ifdef karch_memicmp
-#undef _memicmp
-#define _memicmp   karch_memicmp
-#ifndef __STDC_PURE__
-#undef memicmp
-#define memicmp    karch_memicmp
-#endif /* !__STDC_PURE__ */
-#endif /* karch_memicmp */
-#ifdef karch_strincmp
-#define _strincmp karch_strincmp
-#ifndef __STDC_PURE__
-#define strincmp  karch_strincmp
-#endif /* !__STDC_PURE__ */
-#endif /* karch_strincmp */
-#endif /* !__CONFIG_MIN_LIBC__ */
-
+#endif /* !CXX... */
 #endif /* __LIBC_USE_ARCH_OPTIMIZATIONS */
 
 #ifdef __COMPILER_HAVE_PRAGMA_PUSH_MACRO
