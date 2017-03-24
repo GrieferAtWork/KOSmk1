@@ -98,7 +98,7 @@ handle_intr:
      if __unlikely(KE_ISERR(error)) goto end_always;
      /* Must check for the block-first flag again
       * if we had to release the read-lock. */
-     if __unlikely(error == KS_UNLOCKED &&
+     if __unlikely(error != KS_UNLOCKED ||
                    self->ib_flags&KIOBUF_FLAG_INTR_BLOCKFIRST) {
       self->ib_flags &= ~(KIOBUF_FLAG_INTR_BLOCKFIRST);
       krwlock_endwrite(&self->ib_rwlock);
