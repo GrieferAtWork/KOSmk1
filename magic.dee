@@ -337,13 +337,13 @@ function read_dependency_file(fp) {
 	}
 }
 
-const DEATH_TEXT = "END_NOW_YOU_BLASTING_IDIOT";
+const DEATH_TEXT = "END_NOW_YOU_BLASTING_IDIOT\n";
 function start_death_waiter(process,pipe) {
 	thread([]{
 		try while (!process.terminated()) thread.sleep(20);
-		catch (...) return;
+		catch (e...) print "Failed to query process state:",repr e;
 		try pipe.write(DEATH_TEXT);
-		catch (...);
+		catch (e...) print "Failed to send death text:",repr e;
 		pipe.close();
 	}).start();
 }
@@ -355,6 +355,7 @@ local running_compilers = [];
 /* Preprocess a file 'i' using the deemon preprocessor and output everything to 'o' */
 function deemon_preprocess_file(input,o,deps_output,args) {
 	local p = process("deemon",[
+		"-nostdinc",
 		"-D__GNUC__=6",
 		"-D__GNUC_MINOR__=2",
 		"-D__GNUC_PATCH__=0",
@@ -633,6 +634,7 @@ function parse_single_source(path,attrib,filename,fp_last_changed) {
 		compiler_args.append(filename);
 	}  else {
 		pp_args.append("-E");
+		//compiler_args.append("-fpreprocessed");
 		compiler_args.append("-xc","-");
 	}
 	if (gen_pp) compiler_args.append("-E");

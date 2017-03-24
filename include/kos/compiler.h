@@ -71,6 +71,7 @@
 #ifdef _MSC_VER
 #include "compiler-msvc.h"
 #endif /* _MSC_VER */
+#include "compiler-predef.h"
 
 // Ansi vs. Non-Ansi
 #if defined(__STDC__) || defined(__cplusplus) || \

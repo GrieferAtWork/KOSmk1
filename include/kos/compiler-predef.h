@@ -20,32 +20,31 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_ENDIAN_H__
-#define __KOS_ENDIAN_H__ 1
 
-#undef __BYTE_ORDER
-#undef __LITTLE_ENDIAN
-#undef __BIG_ENDIAN
-#undef __PDP_ENDIAN
+/* Predefined macros. */
 
-/* Some libraries define these macros for themself with different meaning.
- * Try not to confuse them and don't define anything is those cases. */
-#ifndef __BYTE_ORDER
-#if defined(__i386__) || defined(__i386) || defined(i386)\
- || defined(i486) || defined(intel) || defined(x86)\
- || defined(i86pc) || defined(__alpha) || defined(__osf__)
-# define __BYTE_ORDER 1234
-#elif 1
-# define __BYTE_ORDER 4321
-#elif defined(__BYTEORDER__)
-# define __BYTE_ORDER __BYTEORDER__
+#ifndef __SIZEOF_POINTER__
+#if defined(__i386__)
+#   define __SIZEOF_POINTER__ 4
+#elif defined(__x86_64__)
+#   define __SIZEOF_POINTER__ 8
 #else
-# error "Unknown endian"
+#   error "FIXME"
 #endif
+#endif /* !__SIZEOF_POINTER__ */
+
+#ifndef __SIZEOF_SHORT__
+#define __SIZEOF_SHORT__ 2
 #endif
-
-#define	__LITTLE_ENDIAN	1234
-#define	__BIG_ENDIAN	   4321
-#define	__PDP_ENDIAN	   3412
-
-#endif /* !__KOS_ENDIAN_H__ */
+#ifndef __SIZEOF_INT__
+#define __SIZEOF_INT__ 4
+#endif
+#ifndef __SIZEOF_LONG__
+#define __SIZEOF_LONG__ __SIZEOF_POINTER__
+#endif
+#ifndef __SIZEOF_SIZE_T__
+#define __SIZEOF_SIZE_T__ __SIZEOF_POINTER__
+#endif
+#ifndef __SIZEOF_LONG_LONG__
+#define __SIZEOF_LONG_LONG__ 8
+#endif

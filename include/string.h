@@ -117,7 +117,7 @@ extern __crit __wunused __nonnull((1)) __attribute_vaformat(__printf__,1,0) __ma
  * for them on most platforms) it is nearly impossible not to waste the stack
  * space that was originally allocated for the arguments (Because in cdecl, the
  * callee is responsible for argument cleanup).
- * Duplicate as fu$k!
+ * String duplicate as fu$k!
  * ANYWAYS: Since its the stack, it shouldn't really matter, but please be advised
  *          that use of these functions fall under the same restrictions as all
  *          other alloca-style functions.
@@ -157,7 +157,7 @@ extern __wunused __retnonnull __malloccall __attribute_vaformat(__printf__,1,0) 
  * >>      result = (char *)__builtin_alloca(s);\
  * >>      snprintf(result,s,__VA_ARGS__);\
  * >>      result;\
- * >>   })\
+ * >>   })
  */
 #define _strdupaf(...) \
  __xblock({ char *const __sdares = _strdupaf(__VA_ARGS__);\
