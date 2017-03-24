@@ -25,17 +25,21 @@
 
 #include <kos/config.h>
 #ifndef __KERNEL__
+#include "traceback-internal.h"
+#include <exception.h>
+#include <format-printer.h>
 #include <kos/compiler.h>
 #include <kos/exception.h>
-#include <exception.h>
-#include <traceback.h>
+#include <kos/syscall.h>
+#include <kos/syscallno.h>
 #include <malloc.h>
+#include <proc-tls.h>
 #include <proc.h>
 #include <stddef.h>
-#include <unistd.h>
 #include <stdlib.h>
-#include <format-printer.h>
-#include "traceback-internal.h"
+#include <sys/mman.h>
+#include <traceback.h>
+#include <unistd.h>
 
 __DECL_BEGIN
 
@@ -139,10 +143,13 @@ exc_tbprintex(int tp_only, void *closure) {
     break;
   }
   if __unlikely(error != 0) return error;
-
  }
  return exc_tbwalk(&tbdef_print,&tbdef_error,closure);
 }
+
+/* Minimum amount of stack space that should be reserved for UEH handler. */
+#define UEH_STACKRESERVE  2048
+
 
 /* This function has _very_ special meaning, because
  * it is what the kernel will execute by default when
@@ -158,10 +165,158 @@ exc_tbprintex(int tp_only, void *closure) {
  *          unload, then re-load the module who's unhandled
  *          exception handler was invoked to reset this restriction.
  */
-__public __noreturn void __kos_unhandled_exception(void) {
- static char const text[] = "UNHANDLED EXCEPTION:\n";
+#define TLS(offset) "%" __TLS_REGISTER_S ":(" __PP_STR(offset) ")"
+__asm__(".text\n"
+        ".globl	__kos_unhandled_exception\n"
+        ".type __kos_unhandled_exception, @function\n"
+        "__kos_unhandled_exception:\n"
+        /* If the exception occurred because of an out-of-bounds stack
+         * pointer, reset the stack to ensure that the exception handler
+         * will be able to function properly:
+         * Note though, that in doing this we might end up breaking some data.
+         * >> if (esp > tls_self->u_stackend) {
+         * >>   // Overflow above (Very rare, but indicates some pretty
+         * >>   // severe error; potentially originating in assembly).
+         * >>reset_stack_above:
+         * >>   void *stack_used = tls_self->u_stackbegin+UEH_STACKRESERVE;
+         * >>   if (stack_use > tls_self->u_stackend) stack_use = tls_self->u_stackend;
+         * >>   esp = stack_use;
+         * >> } else if (esp <= tls_self->u_stackbegin+UEH_STACKRESERVE) {
+         * >>reset_stack_below:
+         * >>   // (Ab-)use the TLS control block as temporary stack after
+         * >>   // stack overflow to prevent overwriting existing data.
+         * >>   // But make sure that the stack reserve fits into the upper TCB.
+         * >>   size_t pagesize = k_sysconf(_SC_PAGE_SIZE);
+         * >>   if (pagesize < KUTHREAD_SIZEOF+UEH_STACKRESERVE) goto reset_stack_above;
+         * >>   esp = (char *)tls_self+pagesize;
+         * >> } else {
+         * >>   // Stack is still in-bounds with an acceptable margin
+         * >> }
+         * >>validate_esp:
+         * >> if (kmem_validate(esp,UEH_STACKRESERVE) != KE_OK) {
+         * >>   // I though I repaired the stack, but I guess it's still broken...
+         * >>   // >> Last (and unlikely to success) chance: Allocate a new stack now...
+         * >>#ifdef KFD_HAVE_BIARG_POSITIONS
+         * >>   void *newstack = kmem_map(NULL,UEH_STACKRESERVE,PROT_READ|PROT_WRITE,MAP_ANONYMOUS,-1,0,0);
+         * >>#else
+         * >>   void *newstack = kmem_map(NULL,UEH_STACKRESERVE,PROT_READ|PROT_WRITE,MAP_ANONYMOUS,-1,0);
+         * >>#endif
+         * >>   // No point in checking if it worked. - There's nothing we can do if it didn't...
+         * >>   esp = newstack+UEH_STACKRESERVE;
+         * >> }
+         * >> ueh_handler();
+         */
+        "    mov " TLS(KUTHREAD_OFFSETOF_STACKBEGIN) ", %eax\n"
+        "    mov " TLS(KUTHREAD_OFFSETOF_STACKEND)   ", %ecx\n"
+        "    add $" __PP_STR(UEH_STACKRESERVE)       ", %eax\n"
+        "    cmp %ecx, %esp\n"
+        "    ja  reset_stack_above\n"
+        "    cmp %eax, %esp\n"
+        "    jbe reset_stack_below\n"
+        "    jmp validate_esp\n"
+        "reset_stack_above:\n"
+        /* Try to run the handler in the lower (end) region of the stack,
+         * thus reducing the chances that executing it will overwrite
+         * some of the data it is trying to dump:
+         * >> void *stack_use = tls_self->u_stackbegin+UEH_STACKRESERVE;
+         * >> // Make sure not to place the ESP out-of-bounds now:
+         * >> // >> If the stack is too small for the reserved area, just use the whole stack.
+         * >> if (stack_use > tls_self->u_stackend) stack_use = tls_self->u_stackend;
+         * >> esp = stack_use;
+         */
+        "    cmp %ecx, %eax\n"
+        "    jna use_reserve\n" /* if (!(stack_use > tls_self->u_stackend)) goto use_reserve; */
+        "    mov %ecx, %eax\n"  /* stack_use = tls_self->u_stackend; */
+        "use_reserve:\n"
+        "    mov %eax, %esp\n"  /* Set ESP to point into the reserved area of the stack. */
+        "    jmp validate_esp\n"
+        "reset_stack_below:\n"
+        /* The stack pointer is located below the limit.
+         * This situation will likely arise if a stack overflow happened.
+         * >> To prevent the real stack from being damaged, attempt to
+         *    use the upper part of the TCB as make-shift stack.
+         * NOTE: But make sure it's large enough!
+         */
+        "    mov $" __PP_STR(SYS_k_sysconf) ", %eax\n" 
+        "    mov $" __PP_STR(_SC_PAGE_SIZE) ", %ecx\n" 
+        "    int $" __PP_STR(__SYSCALL_INTNO) "\n" 
+        /* PAGESIZE should now be stored in %eax */
+        "    cmp $(" __PP_STR(KUTHREAD_SIZEOF+UEH_STACKRESERVE) "), %eax\n" 
+        "    jb  reset_stack_above\n" /* if (pagesize < KUTHREAD_SIZEOF+UEH_STACKRESERVE) goto use_lower_stack; */
+        /* We can use the TCB block as stack. */
+        "    mov " TLS(0) ", %esp\n"
+        "    add %esp,       %eax\n"
+
+        /* Sanity check: validate that the fixed ESP will actually work. */
+        "validate_esp:\n"
+        "    mov $" __PP_STR(SYS_kmem_validate) ", %eax\n" 
+        "    mov %esp, %ecx\n" 
+        "    mov $" __PP_STR(UEH_STACKRESERVE)  ", %edx\n" 
+        "    int $" __PP_STR(__SYSCALL_INTNO)   "\n" 
+        /* If the memory is valid, EAX now equals KE_OK */
+        "    cmp $(" __PP_STR(KE_OK) "), %eax\n" 
+        "    je ueh_handler\n" /* if (kmem_validate(esp,UEH_STACKRESERVE) == KE_OK) ueh_handler(); */
+        /* Something went wrong (A lot)
+         * >> But we've still got a shot by trying to allocate a completely new stack!
+         * NOTE: Since calling 'kmem_map' requires a lot of arguments (7), we have to hack together a small stack here. */
+#ifdef KFD_HAVE_BIARG_POSITIONS
+        "    lea (mini_mmap_stack+" __PP_STR(__SIZEOF_POINTER__*2) "), %esp\n"
+#else
+        "    lea (mini_mmap_stack+" __PP_STR(__SIZEOF_POINTER__*1) "), %esp\n"
+#endif
+        "    mov $(" __PP_STR(SYS_kmem_map)         "), %eax\n"
+        "    mov $(" "0"                            "), %ecx\n" /* hint */
+        "    mov $(" __PP_STR(UEH_STACKRESERVE)     "), %edx\n" /* length */
+        "    mov $(" __PP_STR(PROT_READ|PROT_WRITE) "), %ebx\n" /* prot */
+        "    mov $(" __PP_STR(MAP_ANONYMOUS)        "), %esi\n" /* flags */
+        "    mov $(" __PP_STR(-1)                   "), %edi\n" /* fd */
+        "    pushl $0\n" /* offset */
+#ifdef KFD_HAVE_BIARG_POSITIONS
+        "    pushl $0\n" /* offset */
+#endif
+        "    int $" __PP_STR(__SYSCALL_INTNO)  "\n" 
+        /* If the syscall worked, a pointer to the memory base is now stored in EAX.
+         * Yet since there's no point in checking if it worked, we simply don't do so. */
+        "    add $" __PP_STR(UEH_STACKRESERVE) ", %eax\n" 
+        "    mov %eax, %esp\n" 
+        /* Lets do this! */
+        "    jmp ueh_handler\n"
+        ".size __kos_unhandled_exception, . - __kos_unhandled_exception\n"
+);
+#ifdef KFD_HAVE_BIARG_POSITIONS
+static __attribute_used __uintptr_t mini_mmap_stack[2];
+#else
+static __attribute_used __uintptr_t mini_mmap_stack[1];
+#endif
+#undef TLS
+
+static __attribute_used __noreturn
+void ueh_handler(void) {
+ /* Called from the assembly above. */
+ static char const tty_begin[] = "\033[31;107m"; /*< Dark-red on white. */
+ static char const tty_end[]   = "\033[m";
+ static char const text[]      = "UNHANDLED EXCEPTION:\n";
+ int stderr_is_a_tty = 0;
+ size_t wsize;
+ /* Figure out if stderr is a tty.
+  * - If it is, we can do some color highlighting.
+  * NOTE: We wrap this is a try-block to prevent KOS from
+  *       just terminating the app if it would crash again. */
+ exc_try(itty) {
+  stderr_is_a_tty = isatty(STDERR_FILENO);
+  if (stderr_is_a_tty) {
+   kfd_write(STDERR_FILENO,tty_begin,sizeof(tty_begin)-sizeof(char),&wsize);
+  }
+ } exc_except(itty,1) {
+ }
  tbprint_callback(text,__COMPILER_STRINGSIZE(text),NULL);
  exc_tbprintex(0,NULL);
+ if (stderr_is_a_tty) {
+  exc_try(itty2) {
+   kfd_write(STDERR_FILENO,tty_end,sizeof(tty_end)-sizeof(char),&wsize);
+  } exc_except(itty2,1) {
+  }
+ }
  _exit(EXIT_FAILURE);
 }
 

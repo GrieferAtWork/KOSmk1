@@ -42,7 +42,7 @@ TEST(exceptions) {
    char *p = (char *)0xdeadbeef;
    for (;;) { assert(register_variable == 42); *p++ = '\xAA'; }
   } __finally {
-   printf("In finally\n");
+   outf("In finally\n");
   }
  } __except (exc_code() == KEXCEPTION_SEGFAULT) {
 #if 1

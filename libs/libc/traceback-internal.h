@@ -26,6 +26,7 @@
 #include <kos/compiler.h>
 #include <kos/config.h>
 #include <traceback.h>
+#include <stddef.h>
 
 __DECL_BEGIN
 
