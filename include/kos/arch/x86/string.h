@@ -66,8 +66,7 @@ __local int x86_ffs32(__u32 i) {
 
 
 #define x86_memcpyX(length,dst,src,bytes) \
- __asm_volatile__("cld\n"\
-                  "rep movs" length "\n" : \
+ __asm_volatile__("rep movs" length "\n" : \
                   : "c" (bytes)\
                   , "S" (src)\
                   , "D" (dst)\
@@ -81,8 +80,7 @@ __local void *x86_memcpyq(void *__restrict __dst, void const *__restrict __src, 
 #undef x86_memcpyX
 
 #define x86_memsetX(length,dst,byte,bytes) \
- __asm_volatile__("cld\n"\
-                  "rep stos" length "\n" : \
+ __asm_volatile__("rep stos" length "\n" : \
                   : "c" (bytes)\
                   , "D" (dst)\
                   , "a" (byte)\
@@ -98,8 +96,7 @@ __local void *x86_memsetq(void *__restrict __dst, __u32 __qword, __size_t __qwor
 
 __local void *x86_memchrb(void const *__p, __u8 __needle, __size_t __bytes) {
  if __unlikely(!__bytes) return NULL;
- __asm_volatile__("cld\n"              /* clear direction flag. */
-                  "repne scasb\n"      /* perform the string operation. */
+ __asm_volatile__("repne scasb\n"      /* perform the string operation. */
                   "jz 1f\n"            /* Skip the NULL-return if we did find it. */
                   "xor %%edi, %%edi\n" /* If we didn't find it, return NULL. */
                   "inc %%edi\n"        /* ... */
@@ -112,8 +109,7 @@ __local void *x86_memchrb(void const *__p, __u8 __needle, __size_t __bytes) {
 }
 
 #define x86_memchrX(length,s,p,needle,bytes) \
- __asm_volatile__("cld\n"                   /* clear direction flag. */\
-                  "repne scas" length "\n"  /* perform the string operation. */\
+ __asm_volatile__("repne scas" length "\n"  /* perform the string operation. */\
                   "jz 1f\n"                 /* Skip the NULL-return if we did find it. */\
                   "xor %%edi, %%edi\n"      /* If we didn't find it, return NULL. */\
                   "add $" #s ", %%edi\n"    /* ... */\
@@ -132,12 +128,13 @@ __local void *x86_memchrq(void const *__p, __u64 __needle, __size_t __qwords) { 
 __local void *x86_memrchrb(void const *__p, __u8 __needle, __size_t __bytes) {
  if __unlikely(!__bytes) return NULL;
  __p = (void const *)((__uintptr_t)__p+(__bytes-1));
- __asm_volatile__("std\n"                  /* set direction flag. */
-                  "repne scasb\n"          /* perform the string operation. */
-                  "jz 1f\n"                /* Skip the NULL-return if we did find it. */
-                  "xor %%edi, %%edi\n"     /* If we didn't find it, return NULL. */
-                  "dec %%edi\n"            /* ... */
-                  "1: inc %%edi\n"         /* Walk forward to the character in question. */
+ __asm_volatile__("std\n"              /* Set the direction flag. */
+                  "repne scasb\n"      /* perform the string operation. */
+                  "jz 1f\n"            /* Skip the NULL-return if we did find it. */
+                  "xor %%edi, %%edi\n" /* If we didn't find it, return NULL. */
+                  "dec %%edi\n"        /* ... */
+                  "1: inc %%edi\n"     /* Walk forward to the character in question. */
+                  "cld\n"              /* Reset the direction flag. */
                   : "+D" (__p)
                   : "c" (__bytes)
                   , "a" (__needle)
@@ -146,12 +143,13 @@ __local void *x86_memrchrb(void const *__p, __u8 __needle, __size_t __bytes) {
 }
 
 #define x86_memrchrX(length,s,p,needle,bytes) \
- __asm_volatile__("std\n"                   /* set direction flag. */\
+ __asm_volatile__("std\n"                   /* Set the direction flag. */\
                   "repne scas" length "\n"  /* perform the string operation. */\
                   "jz 1f\n"                 /* Skip the NULL-return if we did find it. */\
                   "xor %%edi, %%edi\n"      /* If we didn't find it, return NULL. */\
                   "sub $" #s ", %%edi\n"    /* ... */\
                   "1: add $" #s ", %%edi\n" /* Walk back to the character in question. */\
+                  "cld\n"                   /* Reset the direction flag. */\
                   : "+D" (p)\
                   : "c" (bytes)\
                   , "a" (needle)\
@@ -164,8 +162,7 @@ __local void *x86_memrchrq(void const *__p, __u64 __needle, __size_t __qwords) {
 #undef x86_memrchrX
 
 #define x86_memcmpX(length,size,ax_name,a,b,bytes,result) \
- __asm_volatile__("cld\n"\
-                  "repe cmps" length "\n"\
+ __asm_volatile__("repe cmps" length "\n"\
                   "jz 1f\n"\
                   "mov" length " -" #size "(%%edi), %%" ax_name "\n"\
                   "sub" length " -" #size "(%%esi), %%" ax_name "\n"\
@@ -186,8 +183,7 @@ __local __s64 x86_memcmpq(void const *__a, void const *_b, __size_t __qwords) { 
 
 
 #define x86_umemendX(length,haystack,needle) \
- __asm_volatile__("cld\n"                  /* clear direction flag. */\
-                  "repne scas" length "\n" /* perform the string operation. */\
+ __asm_volatile__("repne scas" length "\n" /* perform the string operation. */\
                   : "+D" (haystack)\
                   : "a" (needle)\
                   , "c" (~(__uintptr_t)0)\
@@ -201,8 +197,7 @@ __local void *x86_umemendq(void const *__haystack, __u64 __needle) { x86_umemend
 #undef x86_umemendX
 
 #define x86_umemlenX(length,haystack,needle,result) \
- __asm_volatile__("cld\n"\
-                  "repne scas" length "\n"\
+ __asm_volatile__("repne scas" length "\n"\
                   : "=c" (result)\
                   : "D" (haystack), "a" (needle)\
                   , "c" (~(__uintptr_t)0)\
@@ -217,8 +212,7 @@ __local __size_t x86_umemlenq(void const *__haystack, __u64 __needle) { register
 
 __local void *x86_memendb(void const *__haystack, __u8 __needle, __size_t __maxbytes) {
  if __likely(__maxbytes) {
-  __asm_volatile__("cld\n"            /* clear direction flag. */
-                   "repne scasb\n"    /* perform the string operation. */
+  __asm_volatile__("repne scasb\n"    /* perform the string operation. */
                    "jnz 1f\n"         /* If we didn't find it, don't decrement the result. */
                    "dec %%edi\n"      /* Adjust the counter to really point to the end of the string. */
                    "1:\n"
@@ -230,8 +224,7 @@ __local void *x86_memendb(void const *__haystack, __u8 __needle, __size_t __maxb
  return (void *)__haystack;
 }
 #define x86_memendX(length,size,haystack,needle,maxchars) \
- __asm_volatile__("cld\n"                  /* clear direction flag. */\
-                  "repne scas" length "\n" /* perform the string operation. */\
+ __asm_volatile__("repne scas" length "\n" /* perform the string operation. */\
                   "jnz 1f\n"               /* If we didn't find it, don't decrement the result. */\
                   "sub $" #size " %%edi\n" /* Adjust the counter to really point to the end of the string. */\
                   "1:\n"\
@@ -249,8 +242,7 @@ __local void *x86_memendq(void const *__haystack, __u64 __needle, __size_t __max
 __local __size_t x86_memlenb(void const *__haystack, __u8 __needle, __size_t __maxchars) {
  register __size_t __result;
  if __unlikely(!__maxchars) return 0;
- __asm_volatile__("cld\n"         /* clear direction flag. */
-                  "repne scasb\n" /* perform the string operation. */
+ __asm_volatile__("repne scasb\n" /* perform the string operation. */
                   "jnz 1f\n"      /* If we didn't find it, don't decrement the result. */
                   "inc %%ecx\n"   /* Adjust the counter to really point to the end of the string. */
                   "1:\n"
@@ -263,8 +255,7 @@ __local __size_t x86_memlenb(void const *__haystack, __u8 __needle, __size_t __m
 }
 
 #define x86_memlenX(length,size,haystack,needle,maxchars,result) \
- __asm_volatile__("cld\n"                   /* clear direction flag. */\
-                  "repne scas" length "\n"  /* perform the string operation. */\
+ __asm_volatile__("repne scas" length "\n"  /* perform the string operation. */\
                   "jnz 1f\n"                /* If we didn't find it, don't decrement the result. */\
                   "add $" #size ", %%ecx\n" /* Adjust the counter to really point to the end of the string. */\
                   "1:\n"\
@@ -284,8 +275,7 @@ __local __size_t x86_memlenq(__u64 const *__haystack, __u64 __needle, __size_t _
  * >> Useful for calculating checksums. */
 __local __byte_t x86_memsum __D2(void const *,__base,size_t,__size) {
  register __u16 __sum = 0;
- __asm__("    cld\n"           /* Make sure 'lods*' moves forwards. */
-         "    shr %%ecx\n"     /* Shift the least significant bit into CF (set if 'size' is uneven) (Set ZF is size is zero). */
+ __asm__("    shr %%ecx\n"     /* Shift the least significant bit into CF (set if 'size' is uneven) (Set ZF is size is zero). */
          "    jnc 1f\n"        /* 'size' was even (don't need to read 1 byte). */
          "    lodsb\n"         /* Read one byte into EAX (to align 'size' to words) (Doesn't affect flags). */
          "    mov %%al, %b0\n" /* Store the first byte (Doesn't affect flags). */
@@ -306,8 +296,7 @@ __local __byte_t x86_memsum __D2(void const *,__base,size_t,__size) {
 __local __retnonnull __nonnull((1,2)) void *x86_memcpy
 __D3(void *__restrict,__dst,void const *__restrict,__src,__size_t,__bytes) {
  /* General-purpose memcpy (Can transfer any size and works very good with large ones) */
- __asm_volatile__("    cld\n"
-                  "    shr %%ecx\n"
+ __asm_volatile__("    shr %%ecx\n"
                   "    jnc 1f\n"    /* 'bytes' was even (don't need to move alignment byte). */
                   "    movsb\n"     /* Copy alignment byte ('BYTES' is now properly aligned by 2). */
                   "1:  shr %%ecx\n"
@@ -332,25 +321,25 @@ __D3(void *,__dst,void const *,__src,__size_t,__bytes) {
                   "    je 9f\n"            /* DST == SRC --> No transfer necessary. */
 #endif
                                            /* DST <  SRC --> The equivalent of a regular memcpy. */
-                  "    cld\n"
                   "    shr %%ecx\n"
                   "    jnc 1f\n"    /* 'bytes' was even (don't need to move alignment byte). */
                   "    movsb\n"     /* Copy alignment byte ('BYTES' is now properly aligned by 2). */
                   "1:  shr %%ecx\n"
-                  "    jnc 8f\n"    /* 'bytes' was even (don't need to move alignment byte). */
+                  "    jnc 2f\n"    /* 'bytes' was even (don't need to move alignment byte). */
                   "    movsw\n"     /* Copy alignment byte ('BYTES' is now properly aligned by 4). */
-                  "    jmp 8\n"
+                  "2:  rep movsl\n"
+                  "    jmp 9f\n"
 
                   "5:  std\n" /* DST(EDI) > SRC(ESI) */
                   "    add %%ecx, %%edi\n" /* Move the DST and SRC pointer to the back. */
                   "    add %%ecx, %%esi\n" /* *ditto*. */
                   "    shr %%ecx\n"
-                  "    jnc 2f\n"    /* 'bytes' was even (don't need to move alignment byte). */
+                  "    jnc 6f\n"    /* 'bytes' was even (don't need to move alignment byte). */
                   "    dec %%edi\n" /* Adjust to point to the last relevant byte. */
                   "    dec %%esi\n" /* *ditto*. */
                   "    movb (%%esi), %b0\n" /* Copy alignment byte ('BYTES' is now properly aligned by 2). */
                   "    movb %b0, (%%edi)\n"     
-                  "2:  shr %%ecx\n"
+                  "6:  shr %%ecx\n"
                   "    jnc 7f\n"    /* 'bytes' was even (don't need to move alignment byte). */
                   "    sub $2, %%edi\n"
                   "    sub $2, %%esi\n"
@@ -358,8 +347,8 @@ __D3(void *,__dst,void const *,__src,__size_t,__bytes) {
                   "    movw %w0, (%%edi)\n"     
                   "7:  sub $4, %%edi\n"
                   "    sub $4, %%esi\n"
-                  /* Common end: Move the majority of the memory block (either forward, or reverse). */
-                  "8:  rep movsl\n"
+                  "    rep movsl\n"
+                  "    cld\n"
                   "9:\n"
                   : "=&r" (__temp)
                   : "D" (__dst)
@@ -371,9 +360,8 @@ __D3(void *,__dst,void const *,__src,__size_t,__bytes) {
 
 __local __retnonnull __nonnull((1)) void *x86_memset4
 __D3(void *__restrict,__dst,__u32,__dword,__size_t,__bytes) {
- /* General-purpose memclr (Zero-out any size and works very good with large ones) */
- __asm_volatile__("    cld\n"
-                  "    shr %%ecx\n"
+ /* General-purpose memset (with 4-byte codeword) */
+ __asm_volatile__("    shr %%ecx\n"
                   "    jnc 1f\n"    /* 'bytes' was even (don't need to move alignment byte). */
                   "    stosb\n"     /* Fill alignment byte ('BYTES' is now properly aligned by 2). */
                   "1:  shr %%ecx\n"
@@ -392,8 +380,7 @@ __local __retnonnull __nonnull((1)) void *x86_memset
 __D3(void *__restrict,__dst,int,__byte,__size_t,__bytes) {
  /* General-purpose memset (Can fill any size and works very good with large ones) */
  register __u16 __temp;
- __asm_volatile__("    cld\n"
-                  "    shr %%ecx\n"
+ __asm_volatile__("    shr %%ecx\n"
                   "    jnc 1f\n"          /* 'bytes' was even (don't need to move alignment byte). */
                   "    stosb\n"           /* Fill alignment byte ('BYTES' is now properly aligned by 2). */
                   "1:  movb %%al, %%ah\n" /* Copy 0x00ff into 0xff00 in the fill register. */
@@ -416,8 +403,7 @@ __local __wunused __nonnull((1,2)) int x86_memcmp
 __D3(void const *__restrict,__a,void const *__restrict,__b,__size_t,__bytes) {
  register int __result = 0;
  /* General-purpose memcmp (Most effective for large quantities of memory). */
- __asm_volatile__("    cld\n"
-                  "    shr %%ecx\n" /* Align by 2. */
+ __asm_volatile__("    shr %%ecx\n" /* Align by 2. */
                   "    jnc 1f\n"    /* BYTES was already aligned by 2. */
                   "    cmpsb\n"     /* Compare 1 byte for 2-byte alignment offset. */
                   "    jne 11f\n"   /* First byte mismatch. */

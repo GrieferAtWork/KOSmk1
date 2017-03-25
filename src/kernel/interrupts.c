@@ -215,6 +215,7 @@ kshmbranch_print(struct kshmbranch *__restrict branch,
 
 void __kirq_default_handler(struct kirq_registers *regs) {
  if (regs->regs.intno < 32) {
+  static int in_kernel_panic = 0;
   struct kirq_siginfo const *info;
   struct ktask *caller = ktask_self();
   info = kirq_getsiginfo(regs->regs.intno);
@@ -230,6 +231,8 @@ void __kirq_default_handler(struct kirq_registers *regs) {
     __compiler_unreachable();
    }
   }
+  if (katomic_xch(in_kernel_panic,1)) return;
+  tty_clear();
 
   k_syslogf(KLOG_ERROR,"\nTask: %I32u|%Iu: %s"
             "\nException code received %u|%u\n>> [%s] %s\n",
