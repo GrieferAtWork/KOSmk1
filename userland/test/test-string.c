@@ -52,7 +52,7 @@ __forcelocal void test_strings(size_t s) {
  x = malloc(s); assert(x);
  ok_memset(p,0xaa,s);
  //outf("x = %p; p = %p; s = %Iu\n",x,p,s);
- x86_memcpy(x,p,s);
+ arch_memcpy(x,p,s);
  t = ok_memcmp(p,x,s);   assertf(!t,"%Iu %d %.?q %.?q",s,t,s,p,s,x);
  t = arch_memcmp(p,x,s); assertf(!t,"%Iu %d",s,t);
  ok_memset(x,0x00,s),t = ok_memcmp(p,x,s);

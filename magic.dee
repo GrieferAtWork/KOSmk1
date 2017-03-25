@@ -52,7 +52,7 @@ local remote = false;
 local run_only = false;
 local hosted = false;
 local optimize = false;
-local optimize_level = "-O2";
+local optimize_level = "-O3";
 local single = false;
 local ndebug = false;
 local addr2line_exe = "bin/kos_kernel.bin";
@@ -130,6 +130,7 @@ local default_attrib = dict {
 		"-Wno-nonnull-compare",
 		"-Wno-comment",
 		"-Wno-strict-aliasing",
+		"-Wno-format",
 		//"-save-temps",
 	},
 	.include = list {
@@ -249,12 +250,12 @@ while (args && args.front().startswith("-")) {
 		case "-E":
 		case "--gen-pp":
 			::gen_pp = true;
-			::force = true;
+			//::force = true;
 			break;
 		case "-S":
 		case "--asm":
 			::gen_asm = true;
-			::force = true;
+			//::force = true;
 			break;
 		case "--remote":
 			::remote = true;
@@ -613,7 +614,10 @@ function parse_single_source(path,attrib,filename,fp_last_changed) {
 	];
 	if (is_asm_compiler(compiler) || filename.endswith(".S")) pp_args.append("-D__ASSEMBLY__");
 	local compiler_args = [(for (local x: libpaths) "-L"+x)...];
-	if (optimize) compiler_args.append(optimize_level,"-Wno-maybe-uninitialized");
+	if (optimize) {
+		compiler_args.append(optimize_level,"-Wno-maybe-uninitialized");
+		pp_args.append("-D__OPTIMIZE__="+optimize_level.lsstrip("-D"));
+	}
 	if (ndebug) pp_args.append("-DNDEBUG");
 	else compiler_args.append("-fstack-protector-strong","-g");
 	compiler_args.extend(more_flags);
@@ -1075,7 +1079,7 @@ do_compile_kernel:
 			local p = process(executables[default_c],[
 				"-static-libgcc",
 				"-T","src/kernel/arch/x86/linker.ld",
-				"-o",output,"-ffreestanding",
+				"-o",output,
 				(optimize ? [optimize_level] : [])...,
 				"-nostdlib",
 				(for (local l: libpaths) "-L"+l)...,

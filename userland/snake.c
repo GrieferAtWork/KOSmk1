@@ -142,12 +142,13 @@ static int process_input(void) {
  s = read(IN,buf,sizeof(buf));
  if (s <= 0) return 0;
  for (end = (iter = buf)+s; iter != end;) {
-  if (handle("\033[D")) { my_snake.dir = DIR_LEFT; }
-  if (handle("\033[C")) { my_snake.dir = DIR_RIGHT; }
-  if (handle("\033[A")) { my_snake.dir = DIR_UP; }
-  if (handle("\033[B")) { my_snake.dir = DIR_DOWN; }
-  if (handle("k")) extend(20);
-  if (handle("\3")) return 0;
+       if (handle("\033[D")) { my_snake.dir = DIR_LEFT; }
+  else if (handle("\033[C")) { my_snake.dir = DIR_RIGHT; }
+  else if (handle("\033[A")) { my_snake.dir = DIR_UP; }
+  else if (handle("\033[B")) { my_snake.dir = DIR_DOWN; }
+  else if (handle("k")) extend(20);
+  else if (handle("\3")) return 0;
+  else ++iter;
  }
 #undef handle
  return 1;

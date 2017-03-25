@@ -1134,6 +1134,41 @@ __DECL_END
 #endif /* !CXX... */
 #endif /* __LIBC_USE_ARCH_OPTIMIZATIONS */
 
+#if defined(__GNUC__) && !defined(__INTELLISENSE__) && !defined(__STRING_C__)
+/* Bring some gcc-specific compiler-optimizations into the game. */
+#undef strlen
+#undef strend
+#undef strnlen
+#undef strnend
+#define __constant_strlen        __builtin_strlen
+#define __constant_strnlen(s,maxlen)  \
+ __xblock({ __size_t const __n = (maxlen);\
+            __size_t const __mn = __builtin_strlen(s);\
+            __xreturn __mn < __n ? __mn : __n;\
+ })
+#define __constant_strend(s)         ((s)+__constant_strlen(s))
+#define __constant_strnend(s,maxlen) ((s)+__constant_strnlen(s,maxlen))
+#ifdef __LIBC_USE_ARCH_OPTIMIZATIONS
+#   define strlen(s)            (__builtin_constant_p(s) ? __constant_strlen(s) : arch_umemlen(s,'\0'))
+#   define strnlen(s,maxlen)    (__builtin_constant_p(s) ? __constant_strnlen(s,maxlen) : arch_memlen(s,'\0',maxlen))
+#   define strend(s)            (__builtin_constant_p(s) ? __constant_strend(s) : (char *)arch_umemend(s,'\0'))
+#   define strnend(s,maxlen)    (__builtin_constant_p(s) ? __constant_strnend(s) : (char *)arch_memend(s,'\0',maxlen))
+#ifndef __arch_generic_memchr
+#   define strchr(s,c)          (__builtin_constant_p(s) ? (char *)arch_memchr(s,c,__constant_strlen(s)) : strchr(s,c))
+#   define strnchr(s,maxlen,c)  (__builtin_constant_p(s) ? (char *)arch_memchr(s,c,__constant_strnlen(s,maxlen)) : strnchr(s,maxlen,c))
+#endif /* !__arch_generic_memchr */
+#ifndef __arch_generic_memrchr
+#   define strrchr(s,c)         (__builtin_constant_p(s) ? (char *)arch_memrchr(s,c,__constant_strlen(s)) : strrchr(s,c))
+#   define strnrchr(s,maxlen,c) (__builtin_constant_p(s) ? (char *)arch_memrchr(s,c,__constant_strnlen(s,maxlen)) : strnrchr(s,maxlen,c))
+#endif /* !__arch_generic_memrchr */
+#else /* __LIBC_USE_ARCH_OPTIMIZATIONS */
+#   define strlen(s)            (__builtin_constant_p(s) ? __constant_strlen(s) : strlen(s))
+#   define strnlen(s,maxlen)    (__builtin_constant_p(s) ? __constant_strnlen(s,maxlen) : strnlen(s,maxlen))
+#   define strend(s)            (__builtin_constant_p(s) ? __constant_strend(s) : strend(s))
+#   define strnend(s,maxlen)    (__builtin_constant_p(s) ? __constant_strnend(s,maxlen) : strnend(s,maxlen))
+#endif /* !__LIBC_USE_ARCH_OPTIMIZATIONS */
+#endif /* __GNUC__... */
+
 #ifdef __COMPILER_HAVE_PRAGMA_PUSH_MACRO
 /* Restore user-defined malloc-macros */
 #ifdef __string_h_strndup_defined

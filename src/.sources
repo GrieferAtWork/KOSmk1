@@ -5,6 +5,7 @@
 [define(__CONFIG_MIN_BSS__ = 1)] \
 [define(__CONFIG_MIN_LIBC__ = 1)] \
 [define(__BUILDING_KERNEL__ = 1)] \
+[flags(-ffreestanding)] \
 [libs(kdisasm)] \
 {
 	[arch = i386] {
