@@ -81,7 +81,7 @@ arch_memchr __D3(void const *__restrict,__haystack,
      __bytes <= __ARCH_STRING_SMALL_LIMIT) {
   return __arch_small_memchr(__haystack,__needle,__bytes);
  }
- return __arch_memchr(__haystack,__needle,__bytes);
+ return (void *)__arch_memchr(__haystack,__needle,__bytes);
 }
 
 
@@ -114,7 +114,7 @@ arch_memchr_w __D3(void const *__restrict,__haystack,
      __words <= __ARCH_STRING_SMALL_LIMIT) {
   return __arch_small_memchr_w(__haystack,__needle,__words);
  }
- return __arch_memchr_w(__haystack,__needle,__words);
+ return (void *)__arch_memchr_w(__haystack,__needle,__words);
 }
 #endif /* __arch_memchr_w */
 
@@ -145,7 +145,7 @@ arch_memchr_l __D3(void const *__restrict,__haystack,
      __dwords <= __ARCH_STRING_SMALL_LIMIT) {
   return __arch_small_memchr_l(__haystack,__needle,__dwords);
  }
- return __arch_memchr_l(__haystack,__needle,__dwords);
+ return (void *)__arch_memchr_l(__haystack,__needle,__dwords);
 }
 #endif /* __arch_memchr_l */
 
@@ -176,7 +176,7 @@ arch_memchr_q __D3(void const *__restrict,__haystack,
      __qwords <= __ARCH_STRING_SMALL_LIMIT) {
   return __arch_small_memchr_q(__haystack,__needle,__qwords);
  }
- return __arch_memchr_q(__haystack,__needle,__qwords);
+ return (void *)__arch_memchr_q(__haystack,__needle,__qwords);
 }
 #endif /* __arch_memchr_q */
 

@@ -61,7 +61,7 @@ arch_umemend __D2(void const *__restrict,__haystack,int,__needle) {
   return (void *)__arch_strend((char const *)__haystack);
  }
 #endif
- return __arch_umemend(__haystack,__needle);
+ return (void *)__arch_umemend(__haystack,__needle);
 }
 
 

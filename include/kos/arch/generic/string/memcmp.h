@@ -165,7 +165,7 @@ __D3(void const *,__a,void const *,__b,__size_t,__bytes) {
  /* Optimizations for qword/dword/word-aligned sizes. */
 #ifdef __arch_memcmp_q
  if (!(__bytes%8)) return __arch_getfirstnzbyte_64(__arch_memcmp_q(__a,__b,__bytes/8));
-#if __KARCH_SMALL_MEMSET_MAXSIZE >= 8
+#if __ARCH_STRING_SMALL_LIMIT >= 8
  if (__bytes >= __ARCH_STRING_LARGE_LIMIT_8) {
   /* Special optimization: Large memset. */
   __size_t __offset = __bytes % 8;
@@ -175,11 +175,11 @@ __D3(void const *,__a,void const *,__b,__size_t,__bytes) {
                         (void *)((__uintptr_t)__b+__offset),
                          __bytes/8));
  }
-#endif /* __KARCH_SMALL_MEMSET_MAXSIZE >= 8 */
+#endif /* __ARCH_STRING_SMALL_LIMIT >= 8 */
 #endif /* __arch_memcmp_q */
 #ifdef __arch_memcmp_l
  if (!(__bytes%4)) return __arch_getfirstnzbyte_32(__arch_memcmp_l(__a,__b,__bytes/4));
-#if __KARCH_SMALL_MEMSET_MAXSIZE >= 4
+#if __ARCH_STRING_SMALL_LIMIT >= 4
  if (__bytes >= __ARCH_STRING_LARGE_LIMIT_4) {
   /* Special optimization: Large memset. */
   __size_t __offset = __bytes % 4;
@@ -189,11 +189,11 @@ __D3(void const *,__a,void const *,__b,__size_t,__bytes) {
                         (void *)((__uintptr_t)__b+__offset),
                          __bytes/4));
  }
-#endif /* __KARCH_SMALL_MEMSET_MAXSIZE >= 4 */
+#endif /* __ARCH_STRING_SMALL_LIMIT >= 4 */
 #endif /* __arch_memcmp_l */
 #ifdef __arch_memcmp_w
  if (!(__bytes%2)) return __arch_getfirstnzbyte_16(__arch_memcmp_w(__a,__b,__bytes/2));
-#if __KARCH_SMALL_MEMSET_MAXSIZE >= 2
+#if __ARCH_STRING_SMALL_LIMIT >= 2
  if (__bytes >= __ARCH_STRING_LARGE_LIMIT_2) {
   /* Special optimization: Large memset. */
   __size_t __offset = __bytes % 2;
@@ -203,7 +203,7 @@ __D3(void const *,__a,void const *,__b,__size_t,__bytes) {
                         (void *)((__uintptr_t)__b+__offset),
                          __bytes/2));
  }
-#endif /* __KARCH_SMALL_MEMSET_MAXSIZE >= 4 */
+#endif /* __ARCH_STRING_SMALL_LIMIT >= 4 */
 #endif /* __arch_memcmp_w */
  /* Fallback. */
  return __arch_memcmp(__a,__b,__bytes);

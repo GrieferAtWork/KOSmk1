@@ -271,10 +271,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "string", "string", "{D1EB47
 		..\include\kos\arch\generic\string\memidx.h = ..\include\kos\arch\generic\string\memidx.h
 		..\include\kos\arch\generic\string\memlen.h = ..\include\kos\arch\generic\string\memlen.h
 		..\include\kos\arch\generic\string\memmem.h = ..\include\kos\arch\generic\string\memmem.h
+		..\include\kos\arch\generic\string\memmove.h = ..\include\kos\arch\generic\string\memmove.h
 		..\include\kos\arch\generic\string\memrchr.h = ..\include\kos\arch\generic\string\memrchr.h
 		..\include\kos\arch\generic\string\memridx.h = ..\include\kos\arch\generic\string\memridx.h
 		..\include\kos\arch\generic\string\memrmem.h = ..\include\kos\arch\generic\string\memrmem.h
 		..\include\kos\arch\generic\string\memset.h = ..\include\kos\arch\generic\string\memset.h
+		..\include\kos\arch\generic\string\memsum.h = ..\include\kos\arch\generic\string\memsum.h
 	EndProjectSection
 EndProject
 Global

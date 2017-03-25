@@ -20,33 +20,27 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include "helper.h"
-#include <malloc.h>
-#include <mod.h>
-#include <string.h>
+#ifndef __KOS_KERNEL_CPU_H__
+#define __KOS_KERNEL_CPU_H__ 1
 
-typedef void (*test_t)(void);
-static void run_test(test_t test) {
- syminfo_t *sym = mod_addrinfo(MOD_SELF,test,NULL,0,MOD_SYMINFO_ALL);
- char *name = sym ? sym->si_name : NULL;
- if (name && !memcmp(name,"_test__",7)) name += 7;
- printf("\033[32m");
- outf("%s(%d) : %s : %p : Running test\n",
-      sym ? sym->si_file : NULL,
-      sym ? sym->si_line+1 : 0,name,test);
- free(sym);
- printf("\033[m");
- (*test)();
-}
+#include <kos/config.h>
+#ifdef __KERNEL__
+#include <kos/compiler.h>
+
+__DECL_BEGIN
+
+#ifndef __ASSEMBLY__
+
+//////////////////////////////////////////////////////////////////////////
+// Search for additional CPUs the system might offer
+extern void kernel_initialize_cpu(void);
 
 
-int main(void) {
-#define RUN(name) { extern TEST(name); run_test(&NAME(name)); }
- RUN(exceptions);
- RUN(quote);
- RUN(tls);
- RUN(unaligned);
- RUN(strings);
-#undef RUN
- return 0;
-}
+
+#endif /* !__ASSEMBLY__ */
+
+__DECL_END
+#endif /* __KERNEL__ */
+
+
+#endif /* !__KOS_KERNEL_CPU_H__ */

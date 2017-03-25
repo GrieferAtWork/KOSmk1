@@ -26,6 +26,7 @@
 #include <assert.h>
 #include <kos/errno.h>
 #include <kos/kernel/dev/socket.h>
+#include <kos/kernel/cpu.h>
 #include <kos/kernel/fpu.h>
 #include <kos/kernel/fs/fs.h>
 #include <kos/kernel/fs/vfs.h>
@@ -227,6 +228,7 @@ void test_vga(void) {
  realmode_interrupt(BIOS_INTNO_VGA,&regs);
 }
 
+
 void kernel_main(void) {
 
  // TODO: Parse explicit environ input in exec
@@ -247,6 +249,7 @@ void kernel_main(void) {
  kernel_initialize_hpet();
  kernel_initialize_tty();
  kernel_initialize_serial();
+ kernel_initialize_cpu();
  kernel_initialize_raminfo(); /*< NOTE: Also initializes arguments/environ. */
  ksyslog_addtty();
  kernel_initialize_syslog();
@@ -263,6 +266,7 @@ void kernel_main(void) {
  kernel_initialize_syscall();
  kernel_initialize_vga();
  assert(!karch_irq_enabled());
+
 
 #define RUN(x) extern void x(void); x()
  //RUN(test_interrupts);

@@ -261,9 +261,7 @@ memccpy(void *__restrict dst,
     !defined(__CONFIG_MIN_LIBC__)
 #undef memmove
 __public void *
-memmove(void *dst,
-        void const *src,
-        size_t bytes) {
+memmove(void *dst, void const *src, size_t bytes) {
  __STRING_ASSERTMEM(dst,bytes);
  __STRING_ASSERTMEM(src,bytes);
  {
@@ -295,17 +293,57 @@ memmove(void *dst,
 __public void *
 memset(void *__restrict dst,
        int byte, size_t bytes) {
+ __STRING_ASSERTMEM(dst,bytes);
+ {
 #if defined(arch_memset) && \
    !defined(__arch_generic_memset)
- __STRING_ASSERTMEM(dst,bytes);
- return arch_memset(dst,byte,bytes);
+  return arch_memset(dst,byte,bytes);
 #else
- byte_t *iter,*end;
- __STRING_ASSERTMEM(dst,bytes);
- end = (iter = (byte_t *)dst)+bytes;
- while (iter != end) *iter++ = (byte_t)byte;
- return dst;
+#if __SIZEOF_INT__ == 4
+#   define INT_MASK  0x01010101
+#elif __SIZEOF_INT__ == 2
+#   define INT_MASK  0x0101
+#elif __SIZEOF_INT__ == 1
+#   define INT_MASK  0x01
+#elif __SIZEOF_INT__ == 8
+#   define INT_MASK  0x0101010101010101
 #endif
+#ifdef INT_MASK
+  /* memset ints at-a-time. */
+  int *iter,*end,mask = INT_MASK*byte;
+  end = (iter = (int *)dst)+bytes/__SIZEOF_INT__;
+  while (iter != end) *iter++ = mask;
+#if __SIZEOF_INT__ >= 2
+  switch (bytes % __SIZEOF_INT__) {
+#if __SIZEOF_INT__ >= 8
+   case 7: ((__u32 *)iter)[0] = (__u32)(0x01010101*byte);
+           ((__u16 *)iter)[2] = (__u16)(0x0101*byte);
+           ((__u8  *)iter)[6] = (__u8 )(0x01*byte); break;
+   case 6: ((__u32 *)iter)[0] = (__u32)(0x01010101*byte);
+           ((__u16 *)iter)[2] = (__u16)(0x0101*byte); break;
+   case 5: ((__u32 *)iter)[0] = (__u32)(0x01010101*byte);
+           ((__u8  *)iter)[4] = (__u8 )(0x01*byte); break;
+   case 4: ((__u32 *)iter)[0] = (__u32)(0x01010101*byte); break;
+#endif
+#if __SIZEOF_INT__ >= 4
+   case 3: ((__u16 *)iter)[0] = (__u16)(0x0101*byte);
+           ((__u8  *)iter)[2] = (__u8)(0x01*byte); break;
+   case 2: ((__u16 *)iter)[0] = (__u16)(0x0101*byte); break;
+#endif
+   case 1: ((__u8  *)iter)[0] = (__u8 )(0x01*byte); break;
+   default: break;
+  }
+#endif
+  return dst;
+#undef INT_MASK
+#else /* INT_MASK */
+  byte_t *iter,*end;
+  end = (iter = (byte_t *)dst)+bytes;
+  while (iter != end) *iter++ = (byte_t)byte;
+  return dst;
+#endif /* !INT_MASK */
+#endif
+ }
 }
 #endif
 
@@ -415,8 +453,7 @@ _memrmem(void const *haystack, size_t haystacklen,
    !defined(__arch_generic_memrmem)
  __STRING_ASSERTMEM(haystack,haystacklen);
  __STRING_ASSERTMEM(needle,needlelen);
- return arch_memrmem(haystack,haystacklen,
-                      needle,needlelen);
+ return arch_memrmem(haystack,haystacklen,needle,needlelen);
 #else
  byte_t *iter,*end,*result = NULL;
  __STRING_ASSERTMEM(haystack,haystacklen);
@@ -440,9 +477,6 @@ __public void *
 _memidx(void const *vector, size_t elemcount,
         void const *pattern, size_t elemsize,
         size_t elemalign) {
- assertf(elemalign >= elemsize,
-         "Invalid element properties: %Iu < %Iu",
-         elemalign,elemsize);
  assertf(elemalign,"Invalid element alignment: ZERO(0)");
  __STRING_ASSERTMEM(vector,elemcount*elemalign);
  __STRING_ASSERTMEM(pattern,elemsize);

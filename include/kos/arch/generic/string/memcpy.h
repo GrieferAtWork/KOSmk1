@@ -52,9 +52,9 @@ memcpy __P((void *__restrict __dst,
 extern __attribute_error("Size is too large for small memcpy()")
 void __arch_small_memcpy_too_large __P((void));
 
+#define __X(T,i) ((T *)__dst)[i] = ((T const *)__src)[i]
 __forcelocal __retnonnull __nonnull((1,2)) void *__arch_small_memcpy
 __D3(void *__restrict,__dst,void const *__restrict,__src,__size_t,__bytes) {
-#define __X(T,i) ((T *)__dst)[i] = ((T const *)__src)[i]
  switch (__bytes) {
   case 0:                                        break;
   case 1: __X(__u8,0);                           break;
@@ -72,7 +72,6 @@ __D3(void *__restrict,__dst,void const *__restrict,__src,__size_t,__bytes) {
   default: __arch_small_memcpy_too_large();
  }
  return __dst;
-#undef __X
 }
 
 __forcelocal __retnonnull __nonnull((1,2)) void *__arch_constant_memcpy
@@ -80,6 +79,68 @@ __D3(void *__restrict,__dst,void const *__restrict,__src,__size_t,__bytes) {
  /* Special optimization: Small memcpy. */
  if (__bytes <= __ARCH_STRING_SMALL_LIMIT) {
   return __arch_small_memcpy(__dst,__src,__bytes);
+ }
+ /* Additional optimizations for ~nice~ byte sizes */
+ switch (__bytes) {
+  case 9:
+  case 10:
+  case 11:
+#if __SIZEOF_POINTER__ >= 8
+   __X(__u64,0);
+#else
+   __X(__u32,0);
+   __X(__u32,1);
+#endif
+   if (__bytes == 9) __X(__u8,8);
+   if (__bytes >= 10) __X(__u16,4);
+   if (__bytes == 11) __X(__u8,10);
+   return __dst;
+  case 12:
+  case 13:
+  case 14:
+#if __SIZEOF_POINTER__ >= 8
+   __X(__u64,0);
+#else
+   __X(__u32,0);
+   __X(__u32,1);
+#endif
+   __X(__u32,2);
+   if (__bytes == 13) __X(__u8,12);
+   if (__bytes == 14) __X(__u16,6);
+   return __dst;
+  case 16:
+  case 17:
+  case 18:
+  case 20:
+#if __SIZEOF_POINTER__ >= 8
+   __X(__u64,0);
+   __X(__u64,1);
+#else
+   __X(__u32,0);
+   __X(__u32,1);
+   __X(__u32,2);
+   __X(__u32,3);
+#endif
+   if (__bytes == 17) __X(__u8,16);
+   if (__bytes == 18) __X(__u16,8);
+   if (__bytes == 20) __X(__u32,4);
+   return __dst;
+#if __SIZEOF_POINTER__ >= 8
+  case 24:
+  case 25:
+  case 26:
+  case 28:
+  case 32:
+   __X(__u64,0);
+   __X(__u64,1);
+   __X(__u64,2);
+   if (__bytes == 25) __X(__u8,24);
+   if (__bytes == 26) __X(__u16,12);
+   if (__bytes == 28) __X(__u32,6);
+   if (__bytes == 32) __X(__u64,3);;
+   return __dst;
+#endif
+  default: break;
  }
 #ifdef __arch_memcpy_q
  /* Special optimization: 8-byte aligned memcpy. */
@@ -90,8 +151,8 @@ __D3(void *__restrict,__dst,void const *__restrict,__src,__size_t,__bytes) {
   __size_t __offset = __bytes % 8;
   __arch_small_memcpy(__dst,__src,__offset);
   return __arch_memcpy_q((void *)((__uintptr_t)__dst+__offset),
-                              (void *)((__uintptr_t)__src+__offset),
-                               __bytes/8);
+                         (void *)((__uintptr_t)__src+__offset),
+                          __bytes/8);
  }
 #endif /* __ARCH_STRING_SMALL_LIMIT >= 8 */
 #endif /* __arch_memcpy_q */
@@ -104,8 +165,8 @@ __D3(void *__restrict,__dst,void const *__restrict,__src,__size_t,__bytes) {
   __size_t __offset = __bytes % 4;
   __arch_small_memcpy(__dst,__src,__offset);
   return __arch_memcpy_l((void *)((__uintptr_t)__dst+__offset),
-                              (void *)((__uintptr_t)__src+__offset),
-                               __bytes/4);
+                         (void *)((__uintptr_t)__src+__offset),
+                          __bytes/4);
  }
 #endif /* __ARCH_STRING_SMALL_LIMIT >= 4 */
 #endif /* __arch_memcpy_l */
@@ -117,23 +178,20 @@ __D3(void *__restrict,__dst,void const *__restrict,__src,__size_t,__bytes) {
   __size_t __offset = __bytes % 2;
   __arch_small_memcpy(__dst,__src,__offset);
   return __arch_memcpy_w((void *)((__uintptr_t)__dst+__offset),
-                              (void *)((__uintptr_t)__src+__offset),
-                               __bytes/2);
+                         (void *)((__uintptr_t)__src+__offset),
+                          __bytes/2);
  }
 #endif /* __ARCH_STRING_SMALL_LIMIT >= 2 */
 #endif /* __arch_memcpy_w */
  /* Fallback: Perform a regular, old memcpy(). */
  return __arch_memcpy(__dst,__src,__bytes);
 }
+#undef __X
 
 
 #define arch_memcpy   arch_memcpy
 __forcelocal __retnonnull __nonnull((1,2)) void *arch_memcpy
 __D3(void *__restrict,__dst,void const *__restrict,__src,__size_t,__bytes) {
- if (__builtin_constant_p(__dst == __src) && (__dst == __src)) {
-  /* Special case: DST and SRC are known to be equal. */
-  return __dst;
- }
  return __builtin_constant_p(__bytes)
   ? __arch_constant_memcpy(__dst,__src,__bytes)
   :          __arch_memcpy(__dst,__src,__bytes);

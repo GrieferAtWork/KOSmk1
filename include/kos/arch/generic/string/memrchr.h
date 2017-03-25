@@ -117,7 +117,7 @@ arch_memrchr_w __D3(void const *__restrict,__haystack,
      __bytes <= __ARCH_STRING_SMALL_LIMIT) {
   return __arch_small_memrchr_w(__haystack,__needle,__bytes);
  }
- return __arch_memrchr_w(__haystack,__needle,__bytes);
+ return (void *)__arch_memrchr_w(__haystack,__needle,__bytes);
 }
 #endif /* __arch_memrchr_w */
 
@@ -150,7 +150,7 @@ arch_memrchr_l __D3(void const *__restrict,__haystack,
      __bytes <= __ARCH_STRING_SMALL_LIMIT) {
   return __arch_small_memrchr_l(__haystack,__needle,__bytes);
  }
- return __arch_memrchr_l(__haystack,__needle,__bytes);
+ return (void *)__arch_memrchr_l(__haystack,__needle,__bytes);
 }
 #endif /* __arch_memrchr_l */
 
@@ -183,7 +183,7 @@ arch_memrchr_q __D3(void const *__restrict,__haystack,
      __bytes <= __ARCH_STRING_SMALL_LIMIT) {
   return __arch_small_memrchr_q(__haystack,__needle,__bytes);
  }
- return __arch_memrchr_q(__haystack,__needle,__bytes);
+ return (void *)__arch_memrchr_q(__haystack,__needle,__bytes);
 }
 #endif /* __arch_memrchr_q */
 

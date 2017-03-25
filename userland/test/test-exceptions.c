@@ -35,12 +35,6 @@
 TEST(exceptions) {
  /* Here to ensure all registers are either dead, or preserved. */
  register int register_variable = 42;
- //tb_print();
- char *p = (char *)0xdeadbeef;
- for (;;) {
-  assert(register_variable == 42);
-  *p++ = '\xAA';
- }
  __try {
   __try {
    /* Time to mess things up! */

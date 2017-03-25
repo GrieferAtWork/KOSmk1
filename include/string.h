@@ -210,8 +210,11 @@ memset __P((void *__restrict __dst,
             int __byte, __size_t __bytes));
 #endif
 
+#ifndef __memmove_defined
+#define __memmove_defined 1
 extern __retnonnull __nonnull((1,2)) void *
 memmove __P((void *__dst, void const *__src, __size_t __bytes));
+#endif
 
 #ifndef __memcmp_defined
 #define __memcmp_defined 1
@@ -1095,6 +1098,7 @@ __DECL_END
 #if !defined(__INTELLISENSE__) && defined(__LIBC_USE_ARCH_OPTIMIZATIONS)
 /* Pull in arch-specific, optimized string operations */
 #   define memcpy                arch_memcpy
+#   define memmove               arch_memmove
 #   define memset                arch_memset
 #   define memcmp                arch_memcmp
 #   define memchr                arch_memchr

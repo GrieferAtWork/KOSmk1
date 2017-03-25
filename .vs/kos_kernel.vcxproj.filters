@@ -294,6 +294,9 @@
     <ClInclude Include="..\include\kos\kernel\tls-perthread.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\cpu.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.c">
@@ -433,6 +436,9 @@
     </ClCompile>
     <ClCompile Include="..\src\kernel\sched\tls.c">
       <Filter>src\kernel\sched</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\kernel\cpu.c">
+      <Filter>src\kernel</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

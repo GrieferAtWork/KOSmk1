@@ -108,6 +108,17 @@ exc_tbprint(int tp_only) {
 }
 __public int
 exc_tbprintex(int tp_only, void *closure) {
+#if __SIZEOF_POINTER__ == 4
+#   define P  "%.8p"
+#elif __SIZEOF_POINTER__ == 8
+#   define P  "%.16p"
+#elif __SIZEOF_POINTER__ == 2
+#   define P  "%.4p"
+#elif __SIZEOF_POINTER__ == 1
+#   define P  "%.2p"
+#else
+#   error FIXME
+#endif
  int error;
  if (!tp_only) {
   struct kuthread *uthread = tls_self;
@@ -122,7 +133,7 @@ exc_tbprintex(int tp_only, void *closure) {
   /* Print some additional informations. */
   switch (exno) {
    case KEXCEPTION_SEGFAULT:
-    error = format_printf(&tbprint_callback,closure,"\tAttempted to %s%s memory at %#p\n",
+    error = format_printf(&tbprint_callback,closure,"\tAttempted to %s%s memory at " P "\n",
                          (uthread->u_exinfo.ex_info&KEXCEPTIONINFO_SEGFAULT_INSTR_FETCH) ? "execute" :
                          (uthread->u_exinfo.ex_info&KEXCEPTIONINFO_SEGFAULT_WRITE) ? "write" : "read",
                          (uthread->u_exinfo.ex_info&KEXCEPTIONINFO_SEGFAULT_PRESENT) ? "" : " unmapped",
@@ -144,7 +155,17 @@ exc_tbprintex(int tp_only, void *closure) {
     break;
   }
   if __unlikely(error != 0) return error;
+  error = format_printf(&tbprint_callback,closure
+                       ,"EDI: %.8I32x ESI: %.8I32x EBP: %.8I32x ESP: %.8I32x\n"
+                        "EBX: %.8I32x EDX: %.8I32x ECX: %.8I32x EAX: %.8I32x\n"
+                        "EIP: %.8I32x EFLAGS: %.8I32x\n"
+                       ,uthread->u_exstate.edi,uthread->u_exstate.esi
+                       ,uthread->u_exstate.ebp,uthread->u_exstate.esp
+                       ,uthread->u_exstate.ebx,uthread->u_exstate.edx
+                       ,uthread->u_exstate.ecx,uthread->u_exstate.eax
+                       ,uthread->u_exstate.eip,uthread->u_exstate.eflags);
  }
+#undef P
  return exc_tbwalk(&tbdef_print,&tbdef_error,closure);
 }
 

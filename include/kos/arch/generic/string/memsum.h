@@ -20,44 +20,53 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_ARCH_GENERIC_STRING_H__
-#define __KOS_ARCH_GENERIC_STRING_H__ 1
+#ifndef __KOS_ARCH_GENERIC_STRING_MEMSUM_H__
+#define __KOS_ARCH_GENERIC_STRING_MEMSUM_H__ 1
 
 #include <kos/compiler.h>
 
-#ifdef __INTELLISENSE__
-#include <kos/arch/x86/string.h>
+#ifndef __ASSEMBLY__
+#include "common.h"
+#include <kos/types.h>
+#include <stdint.h>
+
+__DECL_BEGIN
+
+#ifndef __arch_memsum
+#ifdef __arch_memsum_b
+#   define __arch_memsum  __arch_memsum_b
+#else
+#   define __arch_generic_memsum _memsum
+#   define __arch_memsum         _memsum
+#ifndef __memsum_defined
+#define __memsum_defined 1
+extern __wunused __purecall __nonnull((1)) __byte_t
+_memsum __P((void const *__restrict __p, __size_t __bytes));
+#endif
+#endif
 #endif
 
-#ifndef __ASSEMBLY__
-/* Using low-level assembly functions implemented
- * by the #include-er, generate high-level wrappers
- * for string utilities, featuring constant
- * optimizations for arguments known at compile time.
- * NOTE: The functions in this file assume and
- *       implement stdc-compliant semantics.
- */
-#include "string/ffs.h"
-#include "string/memchr.h"
-#include "string/memcmp.h"
-#include "string/memcpy.h"
-#include "string/memend.h"
-#include "string/memidx.h"
-#include "string/memlen.h"
-#include "string/memmem.h"
-#include "string/memmove.h"
-#include "string/memrchr.h"
-#include "string/memridx.h"
-#include "string/memrmem.h"
-#include "string/memset.h"
-#include "string/memsum.h"
 
-/* Helper macros for string routines. */
-#define arch_strend(s)         (char *)arch_umemend(s,'\0')
-#define arch_strlen(s)                 arch_umemlen(s,'\0')
-#define arch_strnend(s,maxlen) (char *)arch_memend(s,'\0',maxlen)
-#define arch_strnlen(s,maxlen)         arch_memlen(s,'\0',maxlen)
+__forcelocal __wunused __purecall __nonnull((1)) __byte_t
+__arch_constant_memsum __D2(void const *__restrict,__p,__size_t,__bytes) {
+ switch (__bytes) {
+  case 0: return 0;
+  case 1: return *(__byte_t *)__p;
+  case 2: return *(__byte_t *)__p+((__byte_t *)__p)[1];
+  default: break;
+ }
+ return __arch_memsum(__p,__bytes);
+}
 
+__forcelocal __wunused __purecall __nonnull((1)) __byte_t
+arch_memsum __D2(void const *__restrict,__p,__size_t,__bytes) {
+ return __builtin_constant_p(__bytes)
+   ? __arch_constant_memsum(__p,__bytes)
+   :          __arch_memsum(__p,__bytes);
+}
+
+
+__DECL_END
 #endif /* !__ASSEMBLY__ */
 
-#endif /* !__KOS_ARCH_GENERIC_STRING_H__ */
+#endif /* !__KOS_ARCH_GENERIC_STRING_MEMSUM_H__ */
