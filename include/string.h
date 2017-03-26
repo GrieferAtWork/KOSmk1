@@ -222,6 +222,21 @@ extern __wunused __purecall __nonnull((1,2)) int
 memcmp __P((void const *__a, void const *__b, __size_t __bytes));
 #endif /* !__memcmp_defined */
 
+#ifndef ___memsum_defined
+#define ___memsum_defined 1
+extern __wunused __purecall __nonnull((1)) __byte_t
+_memsum __P((void const *__restrict __p, __size_t __bytes));
+#endif
+
+#ifndef __STDC_PURE__
+#ifndef __NO_asmname
+extern __wunused __purecall __nonnull((1)) __byte_t
+memsum __P((void const *__restrict __p, __size_t __bytes)) __asmname("_memsum");
+#else
+#define memsum _memsum
+#endif
+#endif /* !__STDC_PURE__ */
+
 extern __retnonnull __nonnull((1,2)) char *strcpy __P((char *__dst, char const *__src));
 extern __retnonnull __nonnull((1,2)) char *strncpy __P((char *__dst, char const *__src, __size_t __maxchars));
 

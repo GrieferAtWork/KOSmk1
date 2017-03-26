@@ -280,7 +280,7 @@ __local __byte_t x86_memsum __D2(void const *,__base,size_t,__size) {
          "    lodsb\n"         /* Read one byte into EAX (to align 'size' to words) (Doesn't affect flags). */
          "    mov %%al, %b0\n" /* Store the first byte (Doesn't affect flags). */
          "1:  jz 3f\n"         /* If 'size' is 0, skip to the end. */
-         "2:  lodsw\n"         /* Load a word from ESP into AX and increment ESP by 2. */
+         "2:  lodsw\n"         /* Load a word from ESI into AX and increment ESI by 2. */
          "    add %%al, %b0\n" /* Add the low byte. */
          "    add %%ah, %h0\n" /* Add the high byte. */
          "    loop 2b\n"       /* Continue until ECX hits zero. */

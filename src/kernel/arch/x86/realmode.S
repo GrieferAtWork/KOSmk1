@@ -114,7 +114,7 @@ move16_irqnum:
 	mov32 MODE16_SYM(mode16_oldcr0), %eax
 	mov32 %eax, %cr0
 
-	lidt (MODE16_SYM(mode16_oldidt)) /* save old 32-bit idt pointer */
+	lidt (MODE16_SYM(mode16_oldidt)) /* load old 32-bit idt pointer */
 	jmp32 $KSEG_KERNEL_CODE, $mode16_leave
 mode16_newidt:
 	DATA16(0x03ff)     /* 256 entries, 4b each = 1K */

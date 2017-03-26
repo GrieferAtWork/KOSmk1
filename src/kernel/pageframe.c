@@ -36,6 +36,7 @@
 #include <kos/kernel/serial.h>
 #include <kos/kernel/spinlock.h>
 #include <kos/kernel/multiboot.h>
+#include <kos/kernel/cpu.h>
 
 #if defined(__i386__) || defined(__x86_64__)
 #include <kos/kernel/arch/x86/realmode.h>
@@ -52,6 +53,32 @@
 #endif
 
 __DECL_BEGIN
+
+void kpageguard_init(struct kpageguard *__restrict self, __kernel void *p, size_t s) {
+ /* TODO: try_alloc_at(): Allocate the largest region available in the given area.
+  * NOTE: This is a conundrum: Technically, there'd be a chance that the given region
+  *                            cannot be allocated as a whole, nor as a linear portion,
+  *                            but instead looks something like this:
+  *                         >> ---FFFF...FFF---
+  *                               |allocate|
+  *                            Yet we can't really implement such tracking dynamically,
+  *                            because doing so might consume the thing we're trying
+  *                            to protect...
+  */
+ if (!s) { self->pg_start = PAGEFRAME_NIL; return; }
+ /* Figure out how much we're supposed to protect. */
+ self->pg_start = (__pagealigned struct kpageframe *)alignd((uintptr_t)p,PAGEALIGN);
+ self->pg_pages = ceildiv(s+((uintptr_t)p-(uintptr_t)self->pg_start),PAGESIZE);
+ assert(self->pg_pages);
+ /* Try to allocate that protected area. */
+ self->pg_start = kpageframe_allocat(self->pg_start,self->pg_pages);
+}
+void kpageguard_quit(struct kpageguard *__restrict self) {
+ if __unlikely(self->pg_start == PAGEFRAME_NIL) return;
+ assert(isaligned((uintptr_t)self->pg_start,PAGEALIGN));
+ assert(self->pg_pages);
+ kpageframe_free(self->pg_start,self->pg_pages);
+}
 
 #if KCONFIG_HAVE_DEBUG_PAGEFRAME_MEMSET
 static int debug_fillpageframe = 0;
@@ -254,6 +281,7 @@ nocmdline:
    iter = next;
   }
  }
+ kernel_initialize_cpu();
  if (cmdline_page_v) {
   /* Implemented in '/src/kernel/procenv.c' */
   extern void kernel_initialize_cmdline(char const *cmd, size_t cmdlen);

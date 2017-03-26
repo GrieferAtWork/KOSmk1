@@ -196,6 +196,17 @@ extern void kernel_initialize_raminfo(void);
 
 extern void raminfo_addregion(__u64 start, __u64 size);
 
+
+struct kpageguard {
+ /* Used during early boot to guard bios-initialized
+  * data structures from being dynamically allocated. */
+ __pagealigned struct kpageframe *pg_start; /*< [0..1|NULL(PAGEFRAME_NIL)] First allocated guard page. */
+ size_t                           pg_pages; /*< Amount of allocated guard pages. */
+};
+
+extern void kpageguard_init(struct kpageguard *__restrict self, __kernel void *p, size_t s);
+extern void kpageguard_quit(struct kpageguard *__restrict self);
+
 __DECL_END
 #endif /* __KERNEL__ */
 

@@ -20,53 +20,42 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_ARCH_GENERIC_STRING_MEMSUM_H__
-#define __KOS_ARCH_GENERIC_STRING_MEMSUM_H__ 1
+#ifndef __HW_TIME_I8253_H__
+#define __HW_TIME_I8253_H__ 1
 
 #include <kos/compiler.h>
-
-#ifndef __ASSEMBLY__
-#include "common.h"
 #include <kos/types.h>
-#include <stdint.h>
+#include <sys/io.h>
 
 __DECL_BEGIN
 
-#ifndef __arch_memsum
-#ifdef __arch_memsum_b
-#   define __arch_memsum  __arch_memsum_b
-#else
-#   define __arch_generic_memsum _memsum
-#   define __arch_memsum         _memsum
-#ifndef ___memsum_defined
-#define ___memsum_defined 1
-extern __wunused __purecall __nonnull((1)) __byte_t
-_memsum __P((void const *__restrict __p, __size_t __bytes));
-#endif
-#endif
-#endif
+#define I8253_IOPORT_CMD  0x43
+#define I8253_IOPORT_DATA 0x40
 
 
-__forcelocal __wunused __purecall __nonnull((1)) __byte_t
-__arch_constant_memsum __D2(void const *__restrict,__p,__size_t,__bytes) {
- switch (__bytes) {
-  case 0: return 0;
-  case 1: return *(__byte_t *)__p;
-  case 2: return *(__byte_t *)__p+((__byte_t *)__p)[1];
-  default: break;
- }
- return __arch_memsum(__p,__bytes);
+#define I8253_CMD_READCOUNT 0
+
+__local __u16 i8253_readcount(void) {
+ /* TODO: Protect this function with a spinlock. */
+ outb(I8253_IOPORT_CMD,I8253_CMD_READCOUNT);
+ return (__u16)inb(I8253_IOPORT_DATA) |
+       ((__u16)inb(I8253_IOPORT_DATA) << 8);
 }
 
-__forcelocal __wunused __purecall __nonnull((1)) __byte_t
-arch_memsum __D2(void const *__restrict,__p,__size_t,__bytes) {
- return __builtin_constant_p(__bytes)
-   ? __arch_constant_memsum(__p,__bytes)
-   :          __arch_memsum(__p,__bytes);
+__local void i8253_delay10ms(void) {
+ __u16 curr_count,prev_count;
+ curr_count = i8253_readcount();
+ do {
+  prev_count = curr_count;
+  curr_count = i8253_readcount();
+ } while ((curr_count-prev_count) < 300);
+}
+
+__local void i8253_delay(unsigned int n10ms) {
+ while (n10ms--) i8253_delay10ms();
 }
 
 
 __DECL_END
-#endif /* !__ASSEMBLY__ */
 
-#endif /* !__KOS_ARCH_GENERIC_STRING_MEMSUM_H__ */
+#endif /* !__HW_TIME_I8253_H__ */

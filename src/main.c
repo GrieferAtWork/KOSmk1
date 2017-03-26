@@ -228,6 +228,77 @@ void test_vga(void) {
  realmode_interrupt(BIOS_INTNO_VGA,&regs);
 }
 
+static __attribute_used __u8 second_core_stack[4096];
+extern __u8 second_core_bootbegin[];
+extern __u8 second_core_bootend[];
+extern struct kidtpointer sc_idt;
+extern struct kidtpointer sc_gdt;
+
+#define SC_START   0x7C00 /* Abuse realmode for now... */
+#define SC_SYM(x) __PP_STR((((x)-second_core_bootbegin)+SC_START))
+
+__asm__(".code16\n"
+        "second_core_bootbegin:\n"
+        /* Setup segment registers. */
+        "    cli\n" /* Just in case... */
+        "    lgdt (" SC_SYM(sc_gdt) ")\n"
+        /* Enter protected mode. */
+        "    mov %cr0, %eax\n"
+        "    or  $0x00000001, %eax\n"
+        "    mov %eax, %cr0\n"
+        "    ljmpl $" __PP_STR(KSEG_KERNEL_CODE) ", $second_core_hibegin\n"
+        "sc_idt:\n"
+        "    .word	0\n"
+        "    .long	0\n"
+        "sc_gdt:\n"
+        "    .word	0\n"
+        "    .long	0\n"
+        "second_core_bootend:\n"
+        ".size second_core_bootbegin, . - second_core_bootbegin\n"
+        ".size second_core_bootend, 0\n"
+        ".code32\n"
+
+        "second_core_hibegin:\n"
+        "    mov $(" __PP_STR(KSEG_KERNEL_DATA) "), %ax\n"
+        "    mov %ax, %ds\n"
+        "    mov %ax, %es\n"
+        "    mov %ax, %fs\n"
+        "    mov %ax, %gs\n"
+        "    mov %ax, %ss\n"
+        "    lea (second_core_stack+4096), %esp\n"
+        "    jmp second_core_main\n"
+        ".size second_core_hibegin, . - second_core_hibegin\n"
+        "\n"
+);
+static __attribute_used void second_core_main(void) {
+ cpu_acknowledge();
+ for (;;) {
+  k_syslogf(KLOG_INFO,"[CPU #2] Here...\n");
+ }
+ cpu_stopme();
+}
+
+
+void smp_test(void) {
+ cpuid_t id; uintptr_t sc_eip; kerrno_t error;
+ if (kprocessor_c <= 1) return;
+ id = cpu_unused();
+ assert(id != CPUID_INVALID);
+ kpaging_disable();
+ __asm_volatile__("sidt (sc_idt)\n"
+                  "sgdt (sc_gdt)\n");
+ memcpy((void *)SC_START,second_core_bootbegin,
+        (uintptr_t)second_core_bootend-
+        (uintptr_t)second_core_bootbegin);
+ sc_eip = (uintptr_t)SC_START;
+ error = cpu_start(id,sc_eip);
+ assert(KE_ISOK(error));
+ for (;;) {
+  k_syslogf(KLOG_INFO,"[CPU #1] Here...\n");
+ }
+}
+
+
 
 void kernel_main(void) {
 
@@ -249,8 +320,7 @@ void kernel_main(void) {
  kernel_initialize_hpet();
  kernel_initialize_tty();
  kernel_initialize_serial();
- kernel_initialize_cpu();
- kernel_initialize_raminfo(); /*< NOTE: Also initializes arguments/environ. */
+ kernel_initialize_raminfo(); /*< NOTE: Also initializes SMP and arguments/environ. */
  ksyslog_addtty();
  kernel_initialize_syslog();
  kernel_initialize_realmode();
@@ -268,6 +338,7 @@ void kernel_main(void) {
  assert(!karch_irq_enabled());
 
 
+
 #define RUN(x) extern void x(void); x()
  //RUN(test_interrupts);
  //RUN(test_tasks);
@@ -279,7 +350,8 @@ void kernel_main(void) {
  //test_taskstat();
  //test_write_file();
  //test_vga();
- run_init();
+ smp_test();
+ //run_init();
 
  ksyslog_deltty();
  karch_irq_disable();

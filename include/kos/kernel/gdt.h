@@ -246,6 +246,7 @@ typedef __u16 kseglimit_t;
 extern __crit __nonnull((1)) ksegid_t kgdt_alloc(struct ksegment const *seg);
 extern __crit                    void kgdt_free(ksegid_t id);
 extern __crit __nonnull((2))     void kgdt_update(ksegid_t id, struct ksegment const *seg);
+extern __crit __nonnull((1))     void kgdt_get(struct kidtpointer *p);
 
 #endif
 

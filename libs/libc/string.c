@@ -470,7 +470,7 @@ _memrmem(void const *haystack, size_t haystacklen,
 
 
 #if !defined(_memidx) || \
-     defined(__arch_generic_memmem) || \
+     defined(__arch_generic_memidx) || \
     !defined(__CONFIG_MIN_LIBC__)
 #undef _memidx
 __public void *
@@ -498,16 +498,13 @@ _memidx(void const *vector, size_t elemcount,
 
 
 #if !defined(_memridx) || \
-     defined(__arch_generic_memmem) || \
+     defined(__arch_generic_memridx) || \
     !defined(__CONFIG_MIN_LIBC__)
 #undef _memridx
 __public void *
 _memridx(void const *vector, size_t elemcount,
         void const *pattern, size_t elemsize,
         size_t elemalign) {
- assertf(elemalign >= elemsize,
-         "Invalid element properties: %Iu < %Iu",
-         elemalign,elemsize);
  assertf(elemalign,"Invalid element alignment: ZERO(0)");
  __STRING_ASSERTMEM(vector,elemcount*elemalign);
  __STRING_ASSERTMEM(pattern,elemsize);
@@ -523,6 +520,28 @@ _memridx(void const *vector, size_t elemcount,
    if (!string_memcmp(iter,pattern,elemsize)) return iter;
   }
   return NULL;
+#endif
+ }
+}
+#endif
+
+
+#if !defined(_memsum) || \
+     defined(__arch_generic_memsum) || \
+    !defined(__CONFIG_MIN_LIBC__)
+#undef _memsum
+__public __byte_t
+_memsum(void const *__restrict p, size_t bytes) {
+ __STRING_ASSERTMEM(p,bytes);
+ {
+#if defined(arch_memsum) && \
+   !defined(__arch_generic_memsum)
+  return arch_memsum(vector,elemcount,patter,elemsize,elemalign);
+#else
+  byte_t *iter,*end,sum = 0;
+  end = (iter = (byte_t *)p)+bytes;
+  for (; iter != end; ++iter) sum += *iter;
+  return sum;
 #endif
  }
 }

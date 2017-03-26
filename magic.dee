@@ -1222,7 +1222,7 @@ function run_qemu(mode,kernel_binary) {
 	try qemu_exe = executables[qemu_exe]; catch (...);
 	local qemu = process(qemu_exe,[
 		(hosted ? ["-no-reboot","-no-shutdown"] : [])...,
-		"-serial","stdio",
+		"-serial","stdio","-smp","2",
 		(remote ? ["-s","-S"] : [])...,
 		"-"+mode,kernel_binary,
 		"-drive","file=disk/kos.img,format=raw,index=0,media=disk",
