@@ -12,6 +12,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\kos\kernel\addist.h" />
+    <ClInclude Include="..\include\kos\kernel\arch\x86\apic.h" />
+    <ClInclude Include="..\include\kos\kernel\arch\x86\apicdef.h" />
+    <ClInclude Include="..\include\kos\kernel\arch\x86\mpfps.h" />
     <ClInclude Include="..\include\kos\kernel\arch\x86\realmode.h" />
     <ClInclude Include="..\include\kos\kernel\closelock.h" />
     <ClInclude Include="..\include\kos\kernel\cpu.h" />

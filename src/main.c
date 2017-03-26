@@ -231,7 +231,6 @@ void test_vga(void) {
 static __attribute_used __u8 second_core_stack[4096];
 extern __u8 second_core_bootbegin[];
 extern __u8 second_core_bootend[];
-extern struct kidtpointer sc_idt;
 extern struct kidtpointer sc_gdt;
 
 #define SC_START   0x7C00 /* Abuse realmode for now... */
@@ -247,9 +246,6 @@ __asm__(".code16\n"
         "    or  $0x00000001, %eax\n"
         "    mov %eax, %cr0\n"
         "    ljmpl $" __PP_STR(KSEG_KERNEL_CODE) ", $second_core_hibegin\n"
-        "sc_idt:\n"
-        "    .word	0\n"
-        "    .long	0\n"
         "sc_gdt:\n"
         "    .word	0\n"
         "    .long	0\n"
@@ -273,7 +269,7 @@ __asm__(".code16\n"
 static __attribute_used void second_core_main(void) {
  cpu_acknowledge();
  for (;;) {
-  k_syslogf(KLOG_INFO,"[CPU #2] Here...\n");
+  k_syslogf(KLOG_INFO,"[CPU #%d] Here...\n",cpu_self());
  }
  cpu_stopme();
 }
@@ -281,12 +277,11 @@ static __attribute_used void second_core_main(void) {
 
 void smp_test(void) {
  cpuid_t id; uintptr_t sc_eip; kerrno_t error;
- if (kprocessor_c <= 1) return;
+ if (kcpu2_c <= 1) return;
  id = cpu_unused();
  assert(id != CPUID_INVALID);
  kpaging_disable();
- __asm_volatile__("sidt (sc_idt)\n"
-                  "sgdt (sc_gdt)\n");
+ __asm_volatile__("sgdt (sc_gdt)\n");
  memcpy((void *)SC_START,second_core_bootbegin,
         (uintptr_t)second_core_bootend-
         (uintptr_t)second_core_bootbegin);
@@ -294,7 +289,7 @@ void smp_test(void) {
  error = cpu_start(id,sc_eip);
  assert(KE_ISOK(error));
  for (;;) {
-  k_syslogf(KLOG_INFO,"[CPU #1] Here...\n");
+  k_syslogf(KLOG_INFO,"[CPU #%d] Here...\n",cpu_self());
  }
 }
 
@@ -350,8 +345,8 @@ void kernel_main(void) {
  //test_taskstat();
  //test_write_file();
  //test_vga();
- smp_test();
- //run_init();
+ //smp_test();
+ run_init();
 
  ksyslog_deltty();
  karch_irq_disable();

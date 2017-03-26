@@ -24,29 +24,31 @@
 #define __KOS_KERNEL_CPU_C__ 1
 
 #include <assert.h>
+#include <hw/rtc/cmos.h>
+#include <hw/rtc/i8253.h>
 #include <kos/arch/x86/cpuid.h>
+#include <kos/atomic.h>
 #include <kos/compiler.h>
 #include <kos/config.h>
+#include <kos/kernel/arch/x86/apic.h>
+#include <kos/kernel/arch/x86/apicdef.h>
+#include <kos/kernel/arch/x86/mpfps.h>
 #include <kos/kernel/cpu.h>
-#include <kos/kernel/multiboot.h>
-#include <kos/atomic.h>
+#include <kos/kernel/interrupts.h>
 #include <kos/kernel/pageframe.h>
 #include <kos/syslog.h>
-#include <hw/rtc/i8253.h>
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
 #include <sys/io.h>
 #include <sys/types.h>
-#include <hw/rtc/cmos.h>
-#include <kos/kernel/interrupts.h>
 
 __DECL_BEGIN
 
-size_t             kprocessor_c                = 0;
-struct kprocessor  kprocessor_v[KCPU_MAXCOUNT] = {{{0}},};
-struct kprocessor *kprocessor_boot             = NULL;
-__u32              lapic_addr                  = 0;
+size_t        kcpu2_c                = 0;
+struct kcpu2  kcpu2_v[KCPU_MAXCOUNT] = {{{0}},};
+struct kcpu2 *kcpu2_boot             = NULL;
+__u32         apic_base              = 0;
 
 
 static void smpinit_onecore(void); /*< Fallback initialization if no SMP info was found. */
@@ -80,12 +82,10 @@ mpfps_locate_at(void *base, size_t bytes) {
 }
 
 
-extern multiboot_info_t *__grub_mbt;
-extern unsigned int      __grub_magic;
 static struct mpfps *mpfps_locate(void) {
  struct mpfps *result;
-              result = mpfps_locate_at((void *)(uintptr_t)*(__u16 *)0x40E,1024);
- if (!result) result = mpfps_locate_at((void *)(uintptr_t)((*(__u16 *)0x413)*1024),1024);
+              result = mpfps_locate_at((void *)(uintptr_t)*(__u16 volatile *)0x40E,1024);
+ if (!result) result = mpfps_locate_at((void *)(uintptr_t)((*(__u16 volatile *)0x413)*1024),1024);
  if (!result) result = mpfps_locate_at((void *)(uintptr_t)0x0F0000,64*1024);
  return result;
 }
@@ -94,25 +94,25 @@ static struct mpfps *mpfps_locate(void) {
 
 static void smpinit_onecore(void) {
  k_syslogf(KLOG_INFO,"[SMP] No special SMP information found (Configuring for 1 core)\n");
- kprocessor_c             = 1;
- kprocessor_boot          = kprocessor_v;
- kprocessor_v->p_lapic_id = cpu_self();
+ kcpu2_c             = 1;
+ kcpu2_boot          = kcpu2_v;
+ kcpu2_v->p_lapic_id = cpu_self();
 #ifdef __x86__
- kprocessor_v->p_x86_features = x86_cpufeatures();
+ kcpu2_v->p_x86_features = x86_cpufeatures();
 #endif
- lapic_addr = 0;
+ apic_base = 0;
 }
 
 static void smpinit_default(__u8 cfg) {
  __u8 boot_apic_id;
- struct kprocessor *primary,*secondary;
+ struct kcpu2 *primary,*secondary;
  k_syslogf(KLOG_INFO,"[SMP] Default configuration: %I8x\n",cfg);
- lapic_addr      = APIC_DEFAULT_PHYS_BASE;
- boot_apic_id    = cpu_self();
- kprocessor_c    = 2;
- primary         = kprocessor_v+(boot_apic_id);
- secondary       = kprocessor_v+(3-boot_apic_id);
- kprocessor_boot = primary;
+ apic_base    = APIC_DEFAULT_PHYS_BASE;
+ boot_apic_id = cpu_self();
+ kcpu2_c      = 2;
+ primary      = kcpu2_v+(boot_apic_id);
+ secondary    = kcpu2_v+(3-boot_apic_id);
+ kcpu2_boot   = primary;
 
  primary->p_lapic_id   = boot_apic_id;
  secondary->p_lapic_id = 3-boot_apic_id;
@@ -139,12 +139,12 @@ static void smpinit_tab(struct mpcfgtab const *__restrict cfgtab) {
            cfgtab,cfgtab->tab_specrev,
            memlen(cfgtab->tab_oemid,' ',8),cfgtab->tab_oemid,
            memlen(cfgtab->tab_productid,' ',12),cfgtab->tab_productid);
- iter                 = (union mpcfg *)(cfgtab+1);
- end                  = (union mpcfg *)((uintptr_t)cfgtab+cfgtab->tab_length);
- entryc               = (size_t)cfgtab->tab_entryc;
- kprocessor_c         = 0;
- kprocessor_boot      = NULL;
- lapic_addr = cfgtab->tab_lapicaddr;
+ iter       = (union mpcfg *)(cfgtab+1);
+ end        = (union mpcfg *)((uintptr_t)cfgtab+cfgtab->tab_length);
+ entryc     = (size_t)cfgtab->tab_entryc;
+ kcpu2_c    = 0;
+ kcpu2_boot = NULL;
+ apic_base  = cfgtab->tab_lapicaddr;
  for (; iter < end && entryc; --entryc) {
   switch (iter->mc_common.cc_type) {
    case MPCFG_PROCESSOR:
@@ -153,8 +153,8 @@ static void smpinit_tab(struct mpcfgtab const *__restrict cfgtab) {
       k_syslogf(KLOG_ERROR,"[SMP] Cannot use additional processor (LAPICID %I8u): "
                            "LAPICID is too great\n",
                 iter->mc_processor.cp_lapicid);
-     } else if (kprocessor_c < KCPU_MAXCOUNT) {
-      struct kprocessor *proc = kprocessor_v+iter->mc_processor.cp_lapicid;
+     } else if (kcpu2_c < KCPU_MAXCOUNT) {
+      struct kcpu2 *proc = kcpu2_v+iter->mc_processor.cp_lapicid;
       k_syslogf(KLOG_INFO,"[SMP] Found CPU (LAPICID %I8u)\n",
                 iter->mc_processor.cp_lapicid);
       proc->p_lapic_id      = iter->mc_processor.cp_lapicid;
@@ -162,14 +162,14 @@ static void smpinit_tab(struct mpcfgtab const *__restrict cfgtab) {
       proc->p_lapic_version = iter->mc_processor.cp_lapicver;
       proc->p_state         = CPUSTATE_AVAILABLE;
       if (iter->mc_processor.cp_cpuflag & MP_PROCESSOR_BOOTPROCESSOR) {
-       if (kprocessor_boot) {
+       if (kcpu2_boot) {
         k_syslogf(KLOG_ERROR,"[SMP] Ignoring second boot processor specification (LAPICID %I8u)\n",
                   iter->mc_processor.cp_lapicid);
        } else {
-        kprocessor_boot = proc;
+        kcpu2_boot = proc;
        }
       }
-      ++kprocessor_c;
+      ++kcpu2_c;
      } else {
       k_syslogf(KLOG_ERROR,"[SMP] Cannot use additional processor (LAPICID %I8u): "
                            "Too many others already found\n",
@@ -201,25 +201,31 @@ static void smpinit_tab(struct mpcfgtab const *__restrict cfgtab) {
  }
 done:;
  /* Fix broken configurations. */
- if (!kprocessor_c) {
+ if (!kcpu2_c) {
   k_syslogf(KLOG_ERROR,"[SMP] Failed to find any processor entries in the MPCFG table (Reverting single-core)\n");
-  kprocessor_c    = 1;
-  kprocessor_boot = kprocessor_v;
+  kcpu2_c    = 1;
+  kcpu2_boot = kcpu2_v;
  }
- if (!kprocessor_boot) {
-  kprocessor_boot = &kprocessor_v[0];
+ if (!kcpu2_boot) {
+  kcpu2_boot = &kcpu2_v[0];
   k_syslogf(KLOG_ERROR,"[SMP] Failed to locate the boot processor (Assuming ID 0; LAPICID %Iu)\n",
-            kprocessor_boot->p_lapic_id);
+            kcpu2_boot->p_lapic_id);
  }
 }
 
 
+static __u32 apic_id = 0;
+extern __u8 apic_cpu_self_begin[];
+extern __u8 apic_cpu_self_end[];
+extern __u8 onecore_cpu_self_begin[];
+extern __u8 onecore_cpu_self_end[];
+
 void kernel_initialize_cpu(void) {
  struct mpfps *f = mpfps_locate();
- memset(kprocessor_v,0,KCPU_MAXCOUNT*sizeof(struct kprocessor));
- kprocessor_boot = NULL;
- lapic_addr      = 0;
- kprocessor_c    = 0;
+ memset(kcpu2_v,0,KCPU_MAXCOUNT*sizeof(struct kcpu2));
+ kcpu2_boot = NULL;
+ apic_base       = 0;
+ kcpu2_c    = 0;
  if (f) {
   k_syslogf(KLOG_INFO,"[SMP] MPFPS structure at %p (v1.%I8u)\n",
             f,f->mp_specrev);
@@ -248,21 +254,46 @@ void kernel_initialize_cpu(void) {
 nosmp:
  smpinit_onecore();
 done:
- assert(kprocessor_c >= 1);
- assert(kprocessor_boot >= kprocessor_v &&
-        kprocessor_boot <  kprocessor_v+KCPU_MAXCOUNT);
- kprocessor_boot->p_state = CPUSTATE_AVAILABLE|CPUSTATE_STARTED|CPUSTATE_RUNNING;
+ assert(kcpu2_c >= 1);
+ assert(kcpu2_boot >= kcpu2_v &&
+        kcpu2_boot <  kcpu2_v+KCPU_MAXCOUNT);
+ kcpu2_boot->p_state = CPUSTATE_AVAILABLE|CPUSTATE_STARTED|CPUSTATE_RUNNING;
+ if (apic_base) {
+  apic_id = apic_base+APIC_ID;
+ } else {
+  assert((apic_cpu_self_end-apic_cpu_self_begin) >=
+         (onecore_cpu_self_end-onecore_cpu_self_begin));
+  /* Runtime-relocation: Use a stub function always returning 0 instead. */
+  memcpy(apic_cpu_self_begin,onecore_cpu_self_begin,
+        (size_t)(onecore_cpu_self_end-onecore_cpu_self_begin));
+ }
 }
 
+__asm__(".global cpu_self\n"
+        "cpu_self:\n"
+        "apic_cpu_self_begin:\n"
+        "    mov apic_id, %eax\n"
+        "    mov (%eax),  %eax\n"
+        "    shr $24,     %eax\n"
+        "    and $0x0f,   %eax\n"
+        "    ret\n"
+        "apic_cpu_self_end:\n");
+__asm__("onecore_cpu_self_begin:\n"
+        "    xor %eax, %eax\n"
+        "    ret\n"
+        "onecore_cpu_self_end:\n");
+
+
+
 cpuid_t cpu_unused(void) {
- struct kprocessor *iter,*end;
- end = (iter = kprocessor_v)+KCPU_MAXCOUNT;
+ struct kcpu2 *iter,*end;
+ end = (iter = kcpu2_v)+KCPU_MAXCOUNT;
  for (; iter != end; ++iter) {
   assertf(iter->p_id == ((iter->p_state&CPUSTATE_AVAILABLE)
-          ? (cpuid_t)(iter-kprocessor_v) : 0),
+          ? (cpuid_t)(iter-kcpu2_v) : 0),
           "iter->p_id        = %I8u\n"
-          "iter-kprocessor_v = %Iu\n"
-         ,iter->p_id,iter-kprocessor_v);
+          "iter-kcpu2_v = %Iu\n"
+         ,iter->p_id,iter-kcpu2_v);
   if ((iter->p_state&(CPUSTATE_AVAILABLE|CPUSTATE_STARTED)) ==
                      (CPUSTATE_AVAILABLE)
       ) return iter->p_id;
@@ -273,23 +304,32 @@ cpuid_t cpu_unused(void) {
 
 static __atomic int cpu_init_lock = 0;
 kerrno_t cpu_start(cpuid_t id, __u32 start_eip) {
- int need_startup_ipi; kerrno_t error;
- struct kprocessor *cpu;
+ kerrno_t error;
  NOIRQ_BEGIN
+ while (katomic_xch(cpu_init_lock,1));
+ error = cpu_start_unlocked(id,start_eip);
+ cpu_init_lock = 0;
+ __asm_volatile__("sfence\n" : : : "memory");
+ NOIRQ_END
+ return error;
+}
+kerrno_t cpu_start_unlocked(cpuid_t id, __u32 start_eip) {
+ int need_startup_ipi; kerrno_t error; struct kcpu2 *cpu;
+ assert(!karch_irq_enabled());
  assertf(start_eip < ((__u32)1 << CPU_START_EIPBITS),"The given EIP %p is too large",start_eip);
  assertf(id < KCPU_MAXCOUNT,"Invalid CPU id (ID: %I8u)",id);
- cpu = &kprocessor_v[id];
+ cpu = &kcpu2_v[id];
  assertf(cpu->p_state&CPUSTATE_AVAILABLE,"Inactive CPU id %I8u\n",id);
- while (katomic_xch(cpu_init_lock,1));
 
  /* Set BIOS shutdown code to warm start. */
  outb(CMOS_IOPORT_CODE,0xf);
  outb(CMOS_IOPORT_DATA,0xa);
- /* Set the reset vector address. */
- *(volatile __u16 *)TRAMPOLINE_PHYS_HIGH = (__u16)(start_eip >> 4);
- *(volatile __u16 *)TRAMPOLINE_PHYS_LOW  = (__u16)(start_eip & 0xf);
 
- need_startup_ipi = ((kprocessor_v[id].p_lapic_version & 0xf0) != APICVER_82489DX);
+ /* Set the reset vector address. */
+ *(__u16 volatile *)TRAMPOLINE_PHYS_HIGH = (__u16)(start_eip >> 4);
+ *(__u16 volatile *)TRAMPOLINE_PHYS_LOW  = (__u16)(start_eip & 0xf);
+
+ need_startup_ipi = ((kcpu2_v[id].p_lapic_version & 0xf0) != APICVER_82489DX);
 
  if (need_startup_ipi) {
   /* Clear APIC errors. */
@@ -300,16 +340,15 @@ kerrno_t cpu_start(cpuid_t id, __u32 start_eip) {
  cpu->p_state = CPUSTATE_AVAILABLE;
 
  /* Turn INIT on. */
- k_syslogf(KLOG_DEBUG,"HERE %I8u\n",id);
- apic_setirqdst(id);
- apic_seticr(APIC_INT_LEVELTRIG|APIC_INT_ASSERT|APIC_DM_INIT);
+ apic_set_icr2_dest_field(id);
+ apic_set_icr(APIC_INT_LEVELTRIG|APIC_INT_ASSERT|APIC_DM_INIT);
 
  i8253_delay10ms();
  i8253_delay10ms();
 
  /* De-assert INIT. */
- apic_setirqdst(id);
- apic_seticr(APIC_INT_LEVELTRIG|APIC_DM_INIT);
+ apic_set_icr2_dest_field(id);
+ apic_set_icr(APIC_INT_LEVELTRIG|APIC_DM_INIT);
 
  if (need_startup_ipi) {
   __u32 acc_state = 0;
@@ -318,8 +357,8 @@ send_again:
   do {
    k_syslogf(KLOG_DEBUG,"[SMP] Sending startup IPI #%d\n",3-n);
    apic_writel(APIC_ESR,0);
-   apic_setirqdst(id);
-   apic_seticr(APIC_DM_STARTUP|((start_eip >> 12) & APIC_VECTOR_MASK));
+   apic_set_icr2_dest_field(id);
+   apic_set_icr(APIC_DM_STARTUP|((start_eip >> 12) & APIC_VECTOR_MASK));
    k_syslogf(KLOG_DEBUG,"[SMP] Waiting for send to finish");
    timeout = CPUINIT_IPI_TIMEOUT+1;
    for (;;) {
@@ -352,29 +391,20 @@ ipi_initialized:
  {
   int timeout = CPUINIT_ACKNOWLEDGE_RECV_TIMEOUT+1;
   cpustate_t oldstate;
-  k_syslogf(KLOG_DEBUG,"[SMP] Waiting for init acknowledgement");
   while (--timeout) {
-   if (cpu->p_state&CPUSTATE_RUNNING) {
-    k_syslogf(KLOG_DEBUG," (OK)\n");
-    goto endok; /* CPU is now running! */
-   }
+   if (cpu->p_state&CPUSTATE_RUNNING) goto endok; /* CPU is now running! */
    i8253_delay10ms();
-   k_syslogf(KLOG_DEBUG,".");
   }
   do {
    oldstate = cpu->p_state;
    if (oldstate&CPUSTATE_RUNNING) goto endok; /* That was a close one... */
   } while (!katomic_cmpxch(cpu->p_state,oldstate,CPUSTATE_AVAILABLE));
-  k_syslogf(KLOG_DEBUG," (Timed out)\n");
   k_syslogf(KLOG_ERROR,"[SMP] CPU %I8u failed to acknowledge INIT\n",id);
  }
  error = KE_TIMEDOUT;
  goto end;
 endok: error = KE_OK;
 end:
- cpu_init_lock = 0;
- __asm_volatile__("sfence\n" : : : "memory");
- NOIRQ_END
  return error;
 }
 
@@ -389,7 +419,7 @@ void cpu_stopme(void) {
 
 void cpu_acknowledge(void) {
  cpustate_t oldstate; cpuid_t selfid = cpu_self();
- struct kprocessor *cpu = &kprocessor_v[selfid];
+ struct kcpu2 *cpu = &kcpu2_v[selfid];
  int timeout = CPUINIT_ACKNOWLEDGE_SEND_TIMEOUT+1;
  while (--timeout) {
   oldstate = cpu->p_state;

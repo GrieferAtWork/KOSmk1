@@ -297,6 +297,15 @@
     <ClInclude Include="..\include\kos\kernel\cpu.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\arch\x86\apicdef.h">
+      <Filter>include\arch\x86</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\arch\x86\apic.h">
+      <Filter>include\arch\x86</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\arch\x86\mpfps.h">
+      <Filter>include\arch\x86</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.c">
