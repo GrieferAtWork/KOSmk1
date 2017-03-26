@@ -25,24 +25,53 @@
 
 #include <kos/config.h>
 
+#ifndef __ASSEMBLY__
 #ifndef __NO_PROTOTYPES
-#include <kos/compiler.h>
-#include <kos/syscall.h>
-#include <kos/errno.h>
-
 #ifdef __KERNEL__
 #include <kos/kernel/time.h>
-#else
+#else /* __KERNEL__ */
+#include <kos/compiler.h>
+#include <kos/errno.h>
+#include <kos/syscall.h>
 #include <kos/types.h>
-#endif
+#include <kos/timespec.h>
 
 __DECL_BEGIN
 
 struct timespec;
 
-#ifndef __KERNEL__
-__local _syscall1(kerrno_t,ktime_getnow,struct timespec *,ptm);
-__local _syscall1(kerrno_t,ktime_setnow,struct timespec *,ptm);
+__local kerrno_t ktime_getnow __D1(struct timespec *,__ptm) {
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+#if _TIME_T_BITS > __SIZEOF_POINTER__*8
+                  , "=c" (((__uintptr_t *)&__ptm->tv_sec)[0])
+                  , "=d" (((__uintptr_t *)&__ptm->tv_sec)[1])
+                  , "=b" (__ptm->tv_nsec)
+#else
+                  , "=c" (__ptm->tv_sec)
+                  , "=d" (__ptm->tv_nsec)
+#endif
+                  : "a" (SYS_ktime_getnow)
+                  );
+ return __error;
+}
+__local kerrno_t ktime_setnow __D1(struct timespec const *,__ptm) {
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  : "a" (SYS_ktime_setnow)
+#if _TIME_T_BITS == 64
+                  , "c" (((__u32 *)&__ptm->tv_sec)[0])
+                  , "d" (((__u32 *)&__ptm->tv_sec)[1])
+                  , "b" (__ptm->tv_nsec)
+#else
+                  , "c" (__ptm->tv_sec)
+                  , "d" (__ptm->tv_nsec)
+#endif
+                  );
+ return __error;
+}
 
 #if __SIZEOF_POINTER__ >= 8
 __local _syscall0(__u64,ktime_htick);
@@ -53,7 +82,7 @@ __local __u64 ktime_hfreq(void);
 
 __local __u64 ktime_htick(void) {
  __u32 lo,hi;
- __asm_volatile__("int $" __PP_STR(__SYSCALL_INTNO) "\n"
+ __asm_volatile__(__ASMSYSCALL_DOINT
                   : "=a" (lo), "=c" (hi)
                   : "a" (SYS_ktime_htick)
                   : "memory");
@@ -61,17 +90,18 @@ __local __u64 ktime_htick(void) {
 }
 __local __u64 ktime_hfreq(void) {
  __u32 lo,hi;
- __asm_volatile__("int $" __PP_STR(__SYSCALL_INTNO) "\n"
+ __asm_volatile__(__ASMSYSCALL_DOINT
                   : "=a" (lo), "=c" (hi)
                   : "a" (SYS_ktime_hfreq)
                   : "memory");
  return (__u64)lo | ((__u64)hi << 32);
 }
 #endif
-#endif /* !__KERNEL__ */
 
 __DECL_END
 
-#endif
+#endif /* !__KERNEL__ */
+#endif /* !__NO_PROTOTYPES */
+#endif /* !__ASSEMBLY__ */
 
 #endif /* !__KOS_TIME_H__ */

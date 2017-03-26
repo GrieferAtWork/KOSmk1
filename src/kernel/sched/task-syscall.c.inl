@@ -284,11 +284,12 @@ KSYSCALL_DEFINE_EX2(c,kerrno_t,ktask_setpriority,int,taskfd,ktaskprio_t,value) {
  return error;
 }
 
-KSYSCALL_DEFINE_EX2(c,kerrno_t,ktask_join,int,taskfd,
-                    __user void **,exitcode) {
+KSYSCALL_DEFINE_EX2(rc,kerrno_t,ktask_join,int,taskfd,
+                    ktaskopflag_t,flags) {
  kerrno_t error; struct kfdentry fdentry;
  void *kernel_exitcode;
  KTASK_CRIT_MARK
+ (void)flags; /* TODO */
  error = kproc_getfd(kproc_self(),taskfd,&fdentry);
  if __unlikely(KE_ISERR(error)) return error;
  if (fdentry.fd_type == KFDTYPE_PROC) {
@@ -320,9 +321,7 @@ KSYSCALL_DEFINE_EX2(c,kerrno_t,ktask_join,int,taskfd,
   assert(fdentry.fd_task == ktask_self());
   /* This shouldn't return, but just in case it does... */
   error = ktask_join(fdentry.fd_task,&kernel_exitcode);
-  if (KE_ISOK(error) && exitcode &&
-      copy_to_user(exitcode,&kernel_exitcode,sizeof(kernel_exitcode))
-      ) error = KE_FAULT;
+  regs->regs.ecx = (uintptr_t)kernel_exitcode;
   return error;
  }
  /* ----: Somehow instruct the tasking system to drop a reference
@@ -339,45 +338,41 @@ KSYSCALL_DEFINE_EX2(c,kerrno_t,ktask_join,int,taskfd,
   *          being forced to stay inside a critical block.
   * EDIT: This problem was solved with the introduction of the KE_INTR error. */
  error = ktask_join(fdentry.fd_task,&kernel_exitcode);
- if (KE_ISOK(error) && exitcode &&
-     copy_to_user(exitcode,&kernel_exitcode,sizeof(kernel_exitcode))
-     ) error = KE_FAULT;
+ regs->regs.ecx = (uintptr_t)kernel_exitcode;
 end_entry:
  kfdentry_quit(&fdentry);
  return error;
 }
 
-KSYSCALL_DEFINE_EX2(c,kerrno_t,ktask_tryjoin,int,taskfd,
-                    __user void **,exitcode) {
+KSYSCALL_DEFINE_EX2(rc,kerrno_t,ktask_tryjoin,int,taskfd,
+                    ktaskopflag_t,flags) {
  kerrno_t error; struct ktask *task;
  void *kernel_exitcode;
  KTASK_CRIT_MARK
+ (void)flags; /* TODO */
  task = kproc_getfdtask(kproc_self(),taskfd);
  if __unlikely(!task) return KE_BADF;
  error = ktask_tryjoin(task,&kernel_exitcode);
- if (KE_ISOK(error) && exitcode &&
-     copy_to_user(exitcode,&kernel_exitcode,sizeof(kernel_exitcode))
-     ) error = KE_FAULT;
+ regs->regs.ecx = (uintptr_t)kernel_exitcode;
  ktask_decref(task);
  return error;
 }
 
-KSYSCALL_DEFINE_EX3(c,kerrno_t,ktask_timedjoin,int,taskfd,
+KSYSCALL_DEFINE_EX3(rc,kerrno_t,ktask_timedjoin,int,taskfd,
                     __user struct timespec const *,abstime,
-                    __user void **,exitcode) {
+                    ktaskopflag_t,flags) {
  kerrno_t error; struct ktask *task;
  struct timespec kernel_abstime;
  void *kernel_exitcode;
  KTASK_CRIT_MARK
+ (void)flags; /* TODO */
  if __unlikely(copy_from_user(&kernel_abstime,abstime,
                               sizeof(struct timespec))
                ) return KE_FAULT;
  task = kproc_getfdtask(kproc_self(),taskfd);
  if __unlikely(!task) return KE_BADF;
  error = ktask_timedjoin(task,&kernel_abstime,&kernel_exitcode);
- if (KE_ISOK(error) && exitcode &&
-     copy_to_user(exitcode,&kernel_exitcode,sizeof(kernel_exitcode))
-     ) error = KE_FAULT;
+ regs->regs.ecx = (uintptr_t)kernel_exitcode;
  ktask_decref(task);
  return error;
 }

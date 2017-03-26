@@ -34,24 +34,24 @@ __DECL_BEGIN
 #define SYS_kfd_open2     3   /*< _syscall6(kerrno_t,kfd_open2,int,dfd,int,cwd,char const *,path,size_t,maxpath,openmode_t,mode,mode_t,perms); */
 #define SYS_kfd_close     4   /*< _syscall1(kerrno_t,kfd_close,int,fd); */
 #define SYS_kfd_closeall  5   /*< _syscall2(unsigned int,kfd_close,int,low,int,high); */
-#define SYS_kfd_seek      6   /*< _syscall{4|5}(kerrno_t,kfd_seek,int,fd,{__s64,off|__s32,offhi,__s32,offlo},int,whence,__u64 *,newpos); */
-#define SYS_kfd_read      7   /*< _syscall4(kerrno_t,kfd_read,int,fd,void *,buf,size_t,bufsize,size_t *,rsize); */
-#define SYS_kfd_write     8   /*< _syscall4(kerrno_t,kfd_write,int,fd,void const *,buf,size_t,bufsize,size_t *,wsize); */
-#define SYS_kfd_pread     9   /*< _syscall{5|6}(kerrno_t,kfd_pread,int,fd,{__u64,pos|__u32,poshi,__u32,poslo},void *,buf,size_t,bufsize,size_t *,rsize); */
-#define SYS_kfd_pwrite    10  /*< _syscall{5|6}(kerrno_t,kfd_pwrite,int,fd,{__u64,pos|__u32,poshi,__u32,poslo},void const *,buf,size_t,bufsize,size_t *,wsize); */
+#define SYS_kfd_seek      6   /*< _syscall{4|5}(kerrno_t,kfd_seek,int,fd,{__s64,off|__s32,off{hi|lo},__s32,off{lo|hi}},int,whence,__u64 *,newpos); */
+#define SYS_kfd_read      7   /*< _syscall3(kerrno_t,kfd_read,int,fd,void *,buf,size_t,bufsize)|special(rsize:ecx); */
+#define SYS_kfd_write     8   /*< _syscall3(kerrno_t,kfd_write,int,fd,void const *,buf,size_t,bufsize)|special(wsize:ecx); */
+#define SYS_kfd_pread     9   /*< _syscall{4|5}(kerrno_t,kfd_pread,int,fd,{__u64,pos|__u32,pos{hi|lo},__u32,pos{lo|hi}},void *,buf,size_t,bufsize)|special(rsize:ecx); */
+#define SYS_kfd_pwrite    10  /*< _syscall{4|5}(kerrno_t,kfd_pwrite,int,fd,{__u64,pos|__u32,pos{hi|lo},__u32,pos{lo|hi}},void const *,buf,size_t,bufsize)|special(wsize:ecx); */
 #define SYS_kfd_flush     11  /*< _syscall1(kerrno_t,kfd_flush,int,fd); */
 #define SYS_kfd_trunc     12  /*< _syscall{2|3}(kerrno_t,kfd_trunc,int,fd,{__u64,size|__u32,sizehi,__u32,sizelo}); */
 #define SYS_kfd_fcntl     13  /*< _syscall3(kerrno_t,kfd_fcntl,int,fd,int,cmd,void *,arg); */
 #define SYS_kfd_ioctl     14  /*< _syscall3(kerrno_t,kfd_ioctl,int,fd,kattr_t,attr,void *,arg); */
-#define SYS_kfd_getattr   15  /*< _syscall5(kerrno_t,kfd_getattr,int,fd,kattr_t,attr,void *,buf,size_t,bufsize,size_t *,reqsize); */
+#define SYS_kfd_getattr   15  /*< _syscall4(kerrno_t,kfd_getattr,int,fd,kattr_t,attr,void *,buf,size_t,bufsize)|special(reqsize:ecx); */
 #define SYS_kfd_setattr   16  /*< _syscall4(kerrno_t,kfd_setattr,int,fd,kattr_t,attr,void const *,buf,size_t,bufsize); */
 #define SYS_kfd_readdir   17  /*< _syscall3(kerrno_t,kfd_readdir,int,fd,struct kfddirent *,dent,__u32,flags); */
-#define SYS_kfd_readlink  18  /*< _syscall4(kerrno_t,kfd_readlink,int,fd,char *,buf,__size_t,bufsize,__size_t *,reqsize); */
+#define SYS_kfd_readlink  18  /*< _syscall3(kerrno_t,kfd_readlink,int,fd,char *,buf,__size_t,bufsize)|special(reqsize:ecx); */
 #define SYS_kfd_dup       19  /*< _syscall2(int,kfd_dup,int,fd,int,flags); */
 #define SYS_kfd_dup2      20  /*< _syscall3(int,kfd_dup2,int,fd,int,resfd,int,flags); */
-#define SYS_kfd_pipe      21  /*< _syscall3(kerrno_t,kfd_pipe,int *,pipefd,int,flags,__size_t,max_size); */
+#define SYS_kfd_pipe      21  /*< _syscall2(kerrno_t,kfd_pipe,int,flags,__size_t,max_size)|special(reader:ecx;writer:edx); */
 #define SYS_kfd_equals    22  /*< _syscall2(int,kfd_equals,int,fda,int,fdb); */
-#define SYS_kfd_openpty   23  /*< _syscall5(kerrno_t,kfd_openpty,int *,amaster,int *,aslave,char *,name,struct termios const *,termp,struct winsize const *,winp); */
+#define SYS_kfd_openpty   23  /*< _syscall3(kerrno_t,kfd_openpty,char *,name,struct termios const *,termp,struct winsize const *,winp)|special(amaster:ecx,aslave:edx); */
 
 #define SYS_kfs_mkdir     24 /*< _syscall4(kerrno_t,kfs_mkdir,int,dirfd,char const *,path,size_t,pathmax,mode_t,mode); */
 #define SYS_kfs_rmdir     25 /*< _syscall3(kerrno_t,kfs_rmdir,int,dirfd,char const *,path,size_t,pathmax); */
@@ -60,12 +60,12 @@ __DECL_BEGIN
 #define SYS_kfs_symlink   28 /*< _syscall5(kerrno_t,kfs_symlink,int,dirfd,char const *,target,size_t,targetmax,char const *,lnk,size_t,lnkmax); */
 #define SYS_kfs_hrdlink   29 /*< _syscall5(kerrno_t,kfs_hrdlink,int,dirfd,char const *,target,size_t,targetmax,char const *,lnk,size_t,lnkmax); */
 
-#define SYS_ktime_getnow  30 /*< _syscall1(kerrno_t,ktime_getnow,struct timespec *,ptm); */
-#define SYS_ktime_setnow  31 /*< _syscall1(kerrno_t,ktime_setnow,struct timespec *,ptm); */
+#define SYS_ktime_getnow  30 /*< _syscall0(kerrno_t,ktime_getnow)|special(out({tv_sec:ecx&edx;tv_nsec:ebx|tv_sec:ecx;tv_nsec:edx})); */
+#define SYS_ktime_setnow  31 /*< _syscall0(kerrno_t,ktime_setnow)|special(in({tv_sec:ecx&edx;tv_nsec:ebx|tv_sec:ecx;tv_nsec:edx})); */
 #define SYS_ktime_htick   32 /*< {_syscall0(__u64,ktime_htick)|special(lo:eax;hi:ecx)}; */
 #define SYS_ktime_hfreq   88 /*< {_syscall0(__u64,ktime_hfreq)|special(lo:eax;hi:ecx)}; */
 
-#define SYS_kmem_map      33 /*< _syscall6(void *,kmem_map,void *,hint,size_t,length,int,prot,int,flags,int,fd,__u64,offset); */
+#define SYS_kmem_map      33 /*< _syscall4(kerrno_t,kmem_map,void *,hint,size_t,length,int,prot_and_flags,void *,fmap})|special(result:ecx); */
 #define SYS_kmem_unmap    34 /*< _syscall2(kerrno_t,kmem_unmap,void *,addr,size_t,length); */
 #define SYS_kmem_validate 35 /*< _syscall2(kerrno_t,kmem_validate,void *__restrict,addr,size_t,bytes); */
 #define SYS_kmem_mapdev   36 /*< _syscall5(kerrno_t,kmem_mapdev,void **,hint_and_result,__size_t,length,int,prot,int,flags,void *,physptr); */
@@ -86,9 +86,9 @@ __DECL_BEGIN
 #define SYS_ktask_enumchildren 50 /*< _syscall5(kerrno_t,ktask_enumchildren,int,self,size_t *__restrict,idv,size_t,idc,size_t *,reqidc,ktaskopflag_t,flags); */
 #define SYS_ktask_getpriority  51 /*< _syscall2(kerrno_t,ktask_getpriority,int,self,ktaskprio_t *__restrict,result); */
 #define SYS_ktask_setpriority  52 /*< _syscall2(kerrno_t,ktask_setpriority,int,self,ktaskprio_t,value); */
-#define SYS_ktask_join         53 /*< _syscall3(kerrno_t,ktask_join,int,self,void **__restrict,exitcode,__u32,pending_argument); */
-#define SYS_ktask_tryjoin      54 /*< _syscall3(kerrno_t,ktask_tryjoin,int,self,void **__restrict,exitcode,__u32,pending_argument); */
-#define SYS_ktask_timedjoin    55 /*< _syscall4(kerrno_t,ktask_timedjoin,int,self,struct timespec const *__restrict,abstime,void **__restrict,exitcode,__u32,pending_argument); */
+#define SYS_ktask_join         53 /*< _syscall2(kerrno_t,ktask_join,int,self,__u32,pending_argument)|special(exitcode:ecx); */
+#define SYS_ktask_tryjoin      54 /*< _syscall2(kerrno_t,ktask_tryjoin,int,self,__u32,pending_argument)|special(exitcode:ecx); */
+#define SYS_ktask_timedjoin    55 /*< _syscall3(kerrno_t,ktask_timedjoin,int,self,struct timespec const *__restrict,abstime,__u32,pending_argument)|special(exitcode:ecx); */
 #define SYS_ktask_newthread    56 /*< _syscall4(int,ktask_newthread,ktask_threadfun_t,thread_main,void *,closure,__u32,flags,void **,arg); */
 #define SYS_ktask_newthreadi   57 /*< _syscall5(int,ktask_newthreadi,ktask_threadfun_t,thread_main,void const *,buf,size_t,bufsize,__u32,flags,void **,arg); */
 #define SYS_ktask_fork         58 /*< _syscall2(kerrno_t,ktask_fork,uintptr_t *,childfd_or_exitcode,__u32,flags); */

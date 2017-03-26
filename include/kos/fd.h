@@ -78,24 +78,6 @@
 #define KFD_STDOUT 1 /*< STDOUT_FILENO. */
 #define KFD_STDERR 2 /*< STDERR_FILENO. */
 
-#ifndef KFD_POSITION
-#if __SIZEOF_POINTER__ <= 4
-#   include <kos/endian.h>
-#   include <kos/arch.h>
-#   include <stdint.h>
-#   define KFD_HAVE_BIARG_POSITIONS
-#   define KFD_POSITION_HI(x) (__u32)(((x)&UINT64_C(0xffffffff00000000))>>32)
-#   define KFD_POSITION_LO(x)  (__u32)((x)&UINT64_C(0x00000000ffffffff))
-#if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
-#   define KFD_POSITION(x)      KFD_POSITION_HI(x),KFD_POSITION_LO(x)
-#else /* linear: down */
-#   define KFD_POSITION(x)      KFD_POSITION_LO(x),KFD_POSITION_HI(x)
-#endif /* linear: up */
-#else
-#   define KFD_POSITION(x)      x
-#endif
-#endif /* !KFD_POSITION */
-
 #ifndef SEEK_SET
 #   define SEEK_SET 0
 #endif
@@ -107,17 +89,20 @@
 #endif
 
 #ifndef __NO_PROTOTYPES
+#include <kos/arch.h>
+#include <kos/attr.h>
 #include <kos/compiler.h>
+#include <kos/endian.h>
+#include <kos/errno.h>
 #include <kos/syscall.h>
 #include <kos/types.h>
-#include <kos/errno.h>
-#include <kos/attr.h>
 #endif
 
 __DECL_BEGIN
 
 #ifndef __NO_PROTOTYPES
 
+#ifndef __ASSEMBLY__
 //////////////////////////////////////////////////////////////////////////
 // Opens a new file.
 //  - When kfd_open2 is used, any resource that previously occupied 'dfd' will be closed.
@@ -205,8 +190,19 @@ __local _syscall2(unsigned int,kfd_closeall,int,low,int,high);
 // @return: KE_OVERFLOW: Failed to acquire a reference to the descriptor due to an overflow.
 // @return: KE_NOSYS:    The given descriptor does not support stream-based reading.
 // @return: *:           Some descriptor-specific error code.
-__local _syscall4(kerrno_t,kfd_read,int,fd,void *,buf,
-                  __size_t,bufsize,__size_t *,rsize);
+__local kerrno_t kfd_read
+__D4(int,__fd,void *__restrict,__buf,__size_t,__bufsize,__size_t *,__wsize) {
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (*__wsize)
+                  : "a" (SYS_kfd_read)
+                  , "c" (__fd)
+                  , "d" (__buf)
+                  , "b" (__bufsize)
+                  : "memory");
+ return __error;
+}
 
 //////////////////////////////////////////////////////////////////////////
 // Write data to a file descriptor, such as a file.
@@ -223,8 +219,19 @@ __local _syscall4(kerrno_t,kfd_read,int,fd,void *,buf,
 // @return: KE_OVERFLOW: Failed to acquire a reference to the descriptor due to an overflow.
 // @return: KE_NOSYS:    The given descriptor does not support stream-based writing.
 // @return: *:           Some descriptor-specific error code.
-__local _syscall4(kerrno_t,kfd_write,int,fd,void const *,buf,
-                  __size_t,bufsize,__size_t *,wsize);
+__local kerrno_t kfd_write
+__D4(int,__fd,void const *__restrict,__buf,__size_t,__bufsize,__size_t *,__wsize) {
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (*__wsize)
+                  : "a" (SYS_kfd_write)
+                  , "c" (__fd)
+                  , "d" (__buf)
+                  , "b" (__bufsize)
+                  : "memory");
+ return __error;
+}
 
 //////////////////////////////////////////////////////////////////////////
 // Safely flush unwritten data to disk.
@@ -290,14 +297,43 @@ __local _syscall3(kerrno_t,kfd_ioctl,int,fd,kattr_t,attr,void *,arg);
 // @return: KE_NOSYS:    The given 'attr' was not recognized, isn't supported,
 //                       or the descriptor doesn't support getattr all-together.
 // @return: *:           Some descriptor-specific error code.
-__local _syscall5(kerrno_t,kfd_getattr,int,fd,kattr_t,attr,void *,buf,
-                  __size_t,bufsize,__size_t *,reqsize);
+__local kerrno_t kfd_getattr
+__D5(int,__fd,kattr_t,__attr,void *__restrict,__buf,
+     __size_t,__bufsize,__size_t *,__reqsize) {
+ __size_t __kernel_reqsize;
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (__kernel_reqsize)
+                  : "a" (SYS_kfd_getattr)
+                  , "c" (__fd)
+                  , "d" (__attr)
+                  , "b" (__buf)
+                  , "S" (__bufsize)
+                  : "memory");
+ if (__reqsize) *__reqsize = __kernel_reqsize;
+ return __error;
+}
 __local _syscall4(kerrno_t,kfd_setattr,int,fd,kattr_t,attr,
                   void const *,buf,__size_t,bufsize);
 
+
 // TODO: DOC
-__local _syscall4(kerrno_t,kfd_readlink,int,fd,char *,buf,
-                  __size_t,bufsize,__size_t *,reqsize);
+__local kerrno_t kfd_readlink
+__D4(int,__fd,char *__restrict,__buf,__size_t,__bufsize,__size_t *,__reqsize) {
+ __size_t __kernel_reqsize;
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (__kernel_reqsize)
+                  : "a" (SYS_kfd_readlink)
+                  , "c" (__fd)
+                  , "d" (__buf)
+                  , "b" (__bufsize)
+                  : "memory");
+ if (__reqsize) *__reqsize = __kernel_reqsize;
+ return __error;
+}
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -313,16 +349,38 @@ __local _syscall4(kerrno_t,kfd_readlink,int,fd,char *,buf,
 __local _syscall2(int,kfd_dup,int,fd,int,flags);
 __local _syscall3(int,kfd_dup2,int,fd,int,resfd,int,flags);
 
-#ifndef __ASSEMBLY__
 struct termios;
 struct winsize;
-#endif /* __ASSEMBLY__ */
 
 // TODO: DOC
 // NOTE: pipefd[0] is reader; pipefd[1] is writer.
-__local _syscall3(kerrno_t,kfd_pipe,int *,pipefd,int,flags,__size_t,max_size);
-__local _syscall5(kerrno_t,kfd_openpty,int *,amaster,int *,aslave,char *,name,
-                  struct termios const *,termp,struct winsize const *,winp);
+__local kerrno_t kfd_pipe
+__D3(int *__restrict,__pipefd,int,__flags,__size_t,__max_size) {
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (__pipefd[0])
+                  , "=d" (__pipefd[1])
+                  : "a" (SYS_kfd_pipe)
+                  , "c" (__flags)
+                  , "d" (__max_size));
+ return __error;
+}
+__local kerrno_t kfd_openpty
+__D5(int *,__amaster,int *,__aslave,char *,__name,
+     struct termios const *,__termp,struct winsize const *,__winp) {
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (*__amaster)
+                  , "=d" (*__aslave)
+                  : "a" (SYS_kfd_openpty)
+                  , "c" (__name)
+                  , "d" (__termp)
+                  , "b" (__winp)
+                  : "memory");
+ return __error;
+}
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -350,28 +408,133 @@ __local _syscall2(kerrno_t,kfd_timedwait,int,self,struct timespec const *,abstim
 // TODO: __local _syscall3(int,kfd_timedwaits,int const *,fdv,__size_t,fdc,struct timespec const *,abstime);
 
 
-// HINT: Use the 'KFD_POSITION' macro to pass position/size arguments
-#ifdef KFD_HAVE_BIARG_POSITIONS
+#if __SIZEOF_POINTER__ <= 4
 #if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
-__local _syscall5(kerrno_t,kfd_seek,int,fd,__s32,offhi,__s32,offlo,int,whence,__u64 *,newpos);
-__local _syscall6(kerrno_t,kfd_pread,int,fd,__u32,poshi,__u32,poslo,void *,buf,__size_t,bufsize,__size_t *,rsize);
-__local _syscall6(kerrno_t,kfd_pwrite,int,fd,__u32,poshi,__u32,poslo,void const *,buf,__size_t,bufsize,__size_t *,wsize);
-__local _syscall3(kerrno_t,kfd_trunc,int,fd,__u32,sizehi,__u32,sizelo);
-#else /* linear: down */
-__local _syscall5(kerrno_t,kfd_seek,int,fd,__s32,offlo,__s32,offhi,int,whence,__u64 *,newpos);
-__local _syscall6(kerrno_t,kfd_pread,int,fd,__u32,poslo,__u32,poshi,void *,buf,__size_t,bufsize,__size_t *,rsize);
-__local _syscall6(kerrno_t,kfd_pwrite,int,fd,__u32,poslo,__u32,poshi,void const *,buf,__size_t,bufsize,__size_t *,wsize);
-__local _syscall3(kerrno_t,kfd_trunc,int,fd,__u32,sizelo,__u32,sizehi);
-#endif /* linear: up */
+#define __IPART1(x)  ((__u32)((x) >> 32))
+#define __IPART2(x)  ((__u32)(x))
+#define __OPART1(x)  ((__u32 *)&(x))[1]
+#define __OPART2(x)  ((__u32 *)&(x))[0]
 #else
-__local _syscall4(kerrno_t,kfd_seek,int,fd,__s64,off,int,whence,__u64 *,newpos);
-__local _syscall5(kerrno_t,kfd_pread,int,fd,__u64,pos,void *,buf,__size_t,bufsize,__size_t *,rsize);
-__local _syscall5(kerrno_t,kfd_pwrite,int,fd,__u64,pos,void const *,buf,__size_t,bufsize,__size_t *,wsize);
-__local _syscall2(kerrno_t,kfd_trunc,int,fd,__u64,size);
+#define __IPART1(x)  ((__u32)(x))
+#define __IPART2(x)  ((__u32)((x) >> 32))
+#define __OPART1(x)  ((__u32 *)&(x))[0]
+#define __OPART2(x)  ((__u32 *)&(x))[1]
 #endif
-#endif /* !__NO_PROTOTYPES */
 
-#ifndef __ASSEMBLY__
+__local kerrno_t kfd_seek
+__D4(int,__fd,__s64,__off,int,__whence,__u64 *,__newpos) {
+ kerrno_t __error; __u64 __kernel_newpos;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (__OPART1(__kernel_newpos))
+                  , "=d" (__OPART2(__kernel_newpos))
+                  : "a" (SYS_kfd_seek)
+                  , "c" (__fd)
+                  , "d" (__IPART1(__off))
+                  , "b" (__IPART2(__off))
+                  , "S" (__whence));
+ if (__newpos) *__newpos = __kernel_newpos;
+ return __error;
+}
+__local kerrno_t kfd_pread
+__D5(int,__fd,__u64,__pos,void *,__buf,__size_t,__bufsize,__size_t *,__rsize) {
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (*__rsize)
+                  : "a" (SYS_kfd_pread)
+                  , "c" (__fd)
+                  , "d" (__IPART1(__pos))
+                  , "b" (__IPART2(__pos))
+                  , "S" (__buf)
+                  , "D" (__bufsize)
+                  : "memory");
+ return __error;
+}
+__local kerrno_t kfd_pwrite
+__D5(int,__fd,__u64,__pos,void const *,__buf,__size_t,__bufsize,__size_t *,__wsize) {
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (*__wsize)
+                  : "a" (SYS_kfd_pwrite)
+                  , "c" (__fd)
+                  , "d" (__IPART1(__pos))
+                  , "b" (__IPART2(__pos))
+                  , "S" (__buf)
+                  , "D" (__bufsize)
+                  : "memory");
+ return __error;
+}
+__local kerrno_t kfd_trunc
+__D2(int,__fd,__u64,__size) {
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  : "a" (SYS_kfd_trunc)
+                  , "c" (__fd)
+                  , "d" (__IPART1(__size))
+                  , "b" (__IPART2(__size)));
+ return __error;
+#undef __OPART2
+#undef __OPART1
+#undef __IPART2
+#undef __IPART1
+}
+#else
+__local kerrno_t kfd_seek
+__D4(int,__fd,__s64,__off,int,__whence,__u64 *,__newpos) {
+ kerrno_t __error; __u64 __kernel_newpos;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (__kernel_newpos)
+                  : "a" (SYS_kfd_seek)
+                  , "c" (__fd)
+                  , "b" (__off)
+                  , "d" (__whence));
+ if (__newpos) *__newpos = __kernel_newpos;
+ return __error;
+}
+__local kerrno_t kfd_pread
+__D5(int,__fd,__u64,__pos,void *,__buf,__size_t,__bufsize,__size_t *,__rsize) {
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (*__rsize)
+                  : "a" (SYS_kfd_pread)
+                  , "c" (__fd)
+                  , "d" (__pos)
+                  , "b" (__buf)
+                  , "S" (__bufsize)
+                  : "memory");
+ return __error;
+}
+__local kerrno_t kfd_pwrite
+__D5(int,__fd,__u64,__pos,void const *,__buf,__size_t,__bufsize,__size_t *,__wsize) {
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (*__wsize)
+                  : "a" (SYS_kfd_pwrite)
+                  , "c" (__fd)
+                  , "d" (__pos)
+                  , "b" (__buf)
+                  , "S" (__bufsize)
+                  : "memory");
+ return __error;
+}
+__local kerrno_t kfd_trunc
+__D2(int,__fd,__u64,__size) {
+ kerrno_t __error;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  : "a" (SYS_kfd_trunc)
+                  , "c" (__fd)
+                  , "d" (__size));
+ return __error;
+}
+#endif
+
 struct kfddirent {
  // NOTE: If the 'kd_namev' buffer is too small, it will be filled with
  //       as many characters as possible kd_namec, possibly leaving
@@ -385,6 +548,7 @@ struct kfddirent {
  __mode_t kd_mode;  /*< File type and permissions. */
 };
 #endif /* !__ASSEMBLY__ */
+#endif /* !__NO_PROTOTYPES */
 
 #define KFD_READDIR_FLAG_NONE    0x00000000
 #define KFD_READDIR_FLAG_PEEK    0x00000001 /*< Only retrieve the current entry. - don't advance the directory file. */

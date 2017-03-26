@@ -24,8 +24,10 @@
 #define __KOS_KERNEL_FS_FILE_C__ 1
 
 #include <fcntl.h>
+#include <kos/arch.h>
 #include <kos/attr.h>
 #include <kos/compiler.h>
+#include <kos/endian.h>
 #include <kos/errno.h>
 #include <kos/kernel/closelock.h>
 #include <kos/kernel/fs/file.h>
@@ -468,74 +470,71 @@ KSYSCALL_DEFINE_EX2(c,unsigned int,kfd_closeall,int,low,int,high) {
  return kproc_closeall(kproc_self(),low,high);
 }
 
-#ifdef KFD_HAVE_BIARG_POSITIONS
+#if __SIZEOF_POINTER__ <= 4
 #if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
-KSYSCALL_DEFINE_EX5(c,kerrno_t,kfd_seek,int,fd,__s32,offhi,
-                    __s32,offlo,int,whence,__u64 *,newpos)
+KSYSCALL_DEFINE_EX4(rc,kerrno_t,kfd_seek,int,fd,__s32,offhi,__s32,offlo,int,whence)
 #else /* linear: down */
-KSYSCALL_DEFINE_EX5(c,kerrno_t,kfd_seek,int,fd,__s32,offlo,
-                    __s32,offhi,int,whence,__u64 *,newpos)
+KSYSCALL_DEFINE_EX4(rc,kerrno_t,kfd_seek,int,fd,__s32,offlo,__s32,offhi,int,whence)
 #endif /* linear: up */
-#else /* KFD_HAVE_BIARG_POSITIONS */
-KSYSCALL_DEFINE_EX4(c,kerrno_t,kfd_seek,int,fd,__s64,off,
-                    int,whence,__u64 *,newpos)
-#endif /* !KFD_HAVE_BIARG_POSITIONS */
+#else /* __SIZEOF_POINTER__ <= 4 */
+KSYSCALL_DEFINE_EX3(rc,kerrno_t,kfd_seek,int,fd,__s64,off,int,whence)
+#endif /* __SIZEOF_POINTER__ > 4 */
 {
  __u64 kernel_newpos; kerrno_t error;
  KTASK_CRIT_MARK
-#ifdef KFD_HAVE_BIARG_POSITIONS
+#if __SIZEOF_POINTER__ <= 4
  error = kproc_seekfd(kproc_self(),fd,
                      (__s64)offhi << 32 | offlo,whence,
-                      newpos ? &kernel_newpos : NULL);
+                      &kernel_newpos);
+#if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
+ regs->regs.ecx = (__u32)(kernel_newpos >> 32);
+ regs->regs.edx = (__u32)(kernel_newpos);
+#else /* linear: down */
+ regs->regs.ecx = (__u32)(kernel_newpos);
+ regs->regs.edx = (__u32)(kernel_newpos >> 32);
+#endif /* linear: up */
 #else
  error = kproc_seekfd(kproc_self(),fd,off,whence,
-                      newpos ? &kernel_newpos : NULL);
+                      &kernel_newpos);
+ regs->regs.ecx = kernel_newpos;
 #endif
- if (__likely(KE_ISOK(error)) && newpos &&
-     __unlikely(copy_to_user(newpos,&kernel_newpos,sizeof(kernel_newpos)))
-     ) error = KE_FAULT;
  return error;
 }
 
-KSYSCALL_DEFINE_EX4(c,kerrno_t,kfd_read,int,fd,__user void *,buf,
-                    size_t,bufsize,__user size_t *,rsize) {
+KSYSCALL_DEFINE_EX3(rc,kerrno_t,kfd_read,int,fd,
+                    __user void *,buf,size_t,bufsize) {
  kerrno_t error; size_t kernel_rsize;
  KTASK_CRIT_MARK
  error = kproc_user_readfd(kproc_self(),fd,buf,bufsize,&kernel_rsize);
- if (__likely(KE_ISOK(error)) &&
-     __unlikely(copy_to_user(rsize,&kernel_rsize,sizeof(kernel_rsize)))
-     ) error = KE_FAULT;
+ regs->regs.ecx = kernel_rsize;
  return error;
 }
 
-/*< _syscall4(kerrno_t,kfd_write,int,fd,void const *,buf,size_t,bufsize,size_t *,wsize); */
-KSYSCALL_DEFINE_EX4(c,kerrno_t,kfd_write,int,fd,__user void const *,buf,
-                    size_t,bufsize,__user size_t *,wsize) {
+KSYSCALL_DEFINE_EX3(rc,kerrno_t,kfd_write,int,fd,
+                    __user void const *,buf,size_t,bufsize) {
  kerrno_t error; size_t kernel_wsize;
  KTASK_CRIT_MARK
  error = kproc_user_writefd(kproc_self(),fd,buf,bufsize,&kernel_wsize);
- if (__likely(KE_ISOK(error)) &&
-     __unlikely(copy_to_user(wsize,&kernel_wsize,sizeof(kernel_wsize)))
-     ) error = KE_FAULT;
+ regs->regs.ecx = kernel_wsize;
  return error;
 }
 
-#ifdef KFD_HAVE_BIARG_POSITIONS
+#if __SIZEOF_POINTER__ <= 4
 #if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
-KSYSCALL_DEFINE_EX6(c,kerrno_t,kfd_pread,int,fd,__u32,poshi,__u32,poslo,
-                    __user void *,buf,size_t,bufsize,__user size_t *,rsize)
+KSYSCALL_DEFINE_EX5(rc,kerrno_t,kfd_pread,int,fd,__u32,poshi,__u32,poslo,
+                    __user void *,buf,size_t,bufsize)
 #else /* linear: down */
-KSYSCALL_DEFINE_EX6(c,kerrno_t,kfd_pread,int,fd,__u32,poslo,__u32,poshi,
-                    __user void *,buf,size_t,bufsize,__user size_t *,rsize)
+KSYSCALL_DEFINE_EX5(rc,kerrno_t,kfd_pread,int,fd,__u32,poslo,__u32,poshi,
+                    __user void *,buf,size_t,bufsize)
 #endif /* linear: up */
 #else
-KSYSCALL_DEFINE_EX5(c,kerrno_t,kfd_pread,int,fd,__u64,pos,
-                    __user void *,buf,size_t,bufsize,__user size_t *,rsize)
+KSYSCALL_DEFINE_EX4(rc,kerrno_t,kfd_pread,int,fd,__u64,pos,
+                    __user void *,buf,size_t,bufsize)
 #endif
 {
  kerrno_t error; size_t kernel_rsize;
  KTASK_CRIT_MARK
-#ifdef KFD_HAVE_BIARG_POSITIONS
+#if __SIZEOF_POINTER__ <= 4
  error = kproc_user_preadfd(kproc_self(),fd,
                            (__u64)poshi << 32 | poslo,
                             buf,bufsize,&kernel_rsize);
@@ -543,28 +542,26 @@ KSYSCALL_DEFINE_EX5(c,kerrno_t,kfd_pread,int,fd,__u64,pos,
  error = kproc_user_preadfd(kproc_self(),fd,pos,
                             buf,bufsize,&kernel_rsize);
 #endif
- if (__likely(KE_ISOK(error)) &&
-     __unlikely(copy_to_user(rsize,&kernel_rsize,sizeof(kernel_rsize)))
-     ) error = KE_FAULT;
+ regs->regs.ecx = kernel_rsize;
  return error;
 }
 
-#ifdef KFD_HAVE_BIARG_POSITIONS
+#if __SIZEOF_POINTER__ <= 4
 #if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
-KSYSCALL_DEFINE_EX6(c,kerrno_t,kfd_pwrite,int,fd,__u32,poshi,__u32,poslo,
-                    __user void const *,buf,size_t,bufsize,__user size_t *,wsize)
+KSYSCALL_DEFINE_EX5(rc,kerrno_t,kfd_pwrite,int,fd,__u32,poshi,__u32,poslo,
+                    __user void const *,buf,size_t,bufsize)
 #else /* linear: down */
-KSYSCALL_DEFINE_EX6(c,kerrno_t,kfd_pwrite,int,fd,__u32,poslo,__u32,poshi,
-                    __user void const *,buf,size_t,bufsize,__user size_t *,wsize)
+KSYSCALL_DEFINE_EX5(rc,kerrno_t,kfd_pwrite,int,fd,__u32,poslo,__u32,poshi,
+                    __user void const *,buf,size_t,bufsize)
 #endif /* linear: up */
 #else
-KSYSCALL_DEFINE_EX5(c,kerrno_t,kfd_pwrite,int,fd,__u64,pos,
-                    __user void const *,buf,size_t,bufsize,__user size_t *,wsize)
+KSYSCALL_DEFINE_EX4(rc,kerrno_t,kfd_pwrite,int,fd,__u64,pos,
+                    __user void const *,buf,size_t,bufsize)
 #endif
 {
  kerrno_t error; size_t kernel_wsize;
  KTASK_CRIT_MARK
-#ifdef KFD_HAVE_BIARG_POSITIONS
+#if __SIZEOF_POINTER__ <= 4
  error = kproc_user_pwritefd(kproc_self(),fd,
                             (__u64)poshi << 32 | poslo,
                              buf,bufsize,&kernel_wsize);
@@ -572,9 +569,7 @@ KSYSCALL_DEFINE_EX5(c,kerrno_t,kfd_pwrite,int,fd,__u64,pos,
  error = kproc_user_pwritefd(kproc_self(),fd,pos,
                              buf,bufsize,&kernel_wsize);
 #endif
- if (__likely(KE_ISOK(error)) &&
-     __unlikely(copy_to_user(wsize,&kernel_wsize,sizeof(kernel_wsize)))
-     ) error = KE_FAULT;
+ regs->regs.ecx = kernel_wsize;
  return error;
 }
 
@@ -584,7 +579,7 @@ KSYSCALL_DEFINE_EX1(c,kerrno_t,kfd_flush,int,fd) {
 }
 
 /*< _syscall{2|3}(kerrno_t,kfd_trunc,int,fd,{__u64,size|__u32,sizehi,__u32,sizelo}); */
-#ifdef KFD_HAVE_BIARG_POSITIONS
+#if __SIZEOF_POINTER__ <= 4
 #if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
 KSYSCALL_DEFINE_EX3(c,kerrno_t,kfd_trunc,int,fd,__u32,sizehi,__u32,sizelo)
 #else /* linear: down */
@@ -595,7 +590,7 @@ KSYSCALL_DEFINE_EX2(c,kerrno_t,kfd_trunc,int,fd,__u64,size)
 #endif
 {
  KTASK_CRIT_MARK
-#ifdef KFD_HAVE_BIARG_POSITIONS
+#if __SIZEOF_POINTER__ <= 4
  return kproc_truncfd(kproc_self(),fd,
                      (__u64)sizehi << 32 | sizelo);
 #else
@@ -615,16 +610,12 @@ KSYSCALL_DEFINE_EX3(c,kerrno_t,kfd_ioctl,int,fd,
  return kproc_user_ioctlfd(kproc_self(),fd,cmd,arg);
 }
 
-KSYSCALL_DEFINE_EX5(c,kerrno_t,kfd_getattr,int,fd,kattr_t,attr,
-                    __user void *,buf,size_t,bufsize,
-                    __user size_t *,reqsize) {
+KSYSCALL_DEFINE_EX4(rc,kerrno_t,kfd_getattr,int,fd,kattr_t,attr,
+                    __user void *,buf,size_t,bufsize) {
  kerrno_t error; size_t kernel_reqsize;
  KTASK_CRIT_MARK
- error = kproc_user_getattrfd(kproc_self(),fd,attr,buf,bufsize,
-                              reqsize ? &kernel_reqsize : NULL);
- if (__likely(KE_ISOK(error)) && reqsize &&
-     __unlikely(copy_to_user(reqsize,&kernel_reqsize,sizeof(kernel_reqsize)))
-     ) error = KE_FAULT;
+ error = kproc_user_getattrfd(kproc_self(),fd,attr,buf,bufsize,&kernel_reqsize);
+ regs->regs.ecx = kernel_reqsize;
  return error;
 }
 
@@ -689,9 +680,8 @@ end_inode:
 }
 
 
-KSYSCALL_DEFINE_EX4(c,kerrno_t,kfd_readlink,int,fd,
-                    __user char *,buf,size_t,bufsize,
-                    __user size_t *,reqsize) {
+KSYSCALL_DEFINE_EX3(rc,kerrno_t,kfd_readlink,int,fd,
+                    __user char *,buf,size_t,bufsize) {
  struct kproc *caller = kproc_self();
  struct kfdentry entry; kerrno_t error;
  __ref struct kinode *filenode;
@@ -707,7 +697,7 @@ KSYSCALL_DEFINE_EX4(c,kerrno_t,kfd_readlink,int,fd,
  kinode_decref(filenode);
  if __unlikely(KE_ISERR(error)) return error;
  link_req = (link_name.dn_size+1)*sizeof(char);
- if (reqsize && copy_to_user(reqsize,&link_req,sizeof(link_req))) goto err_fault;
+ regs->regs.ecx = link_req;
  if (link_name.dn_name[link_name.dn_size] == '\0') {
   if (copy_to_user(buf,link_name.dn_name,min(bufsize,link_req))) goto err_fault;
  } else {

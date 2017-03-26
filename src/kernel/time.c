@@ -248,16 +248,31 @@ __DECL_END
 
 __DECL_BEGIN
 
-KSYSCALL_DEFINE1(kerrno_t,ktime_getnow,__user struct timespec *,ptm) {
+KSYSCALL_DEFINE_EX0(r,kerrno_t,ktime_getnow) {
  struct timespec tmnow;
  ktime_getnow(&tmnow);
- return __unlikely(copy_to_user(ptm,&tmnow,sizeof(tmnow))) ? KE_FAULT : KE_OK;
+#if _TIME_T_BITS > __SIZEOF_POINTER__*8
+ regs->regs.ecx = ((__uintptr_t *)&tmnow.tv_sec)[0];
+ regs->regs.edx = ((__uintptr_t *)&tmnow.tv_sec)[1];
+ regs->regs.ebx = tmnow.tv_nsec;
+#else
+ regs->regs.ecx = tmnow.tv_sec;
+ regs->regs.edx = tmnow.tv_nsec;
+#endif
+ return KE_OK;
 }
 
-KSYSCALL_DEFINE_EX1(c,kerrno_t,ktime_setnow,__user struct timespec *,ptm) {
+KSYSCALL_DEFINE_EX0(rc,kerrno_t,ktime_setnow) {
  struct timespec tmnow;
- if __unlikely(copy_from_user(&tmnow,ptm,sizeof(tmnow))) return KE_FAULT;
  if __unlikely(!kproc_hasflag(kproc_self(),KPERM_FLAG_CHTIME)) return KE_ACCES;
+#if _TIME_T_BITS > __SIZEOF_POINTER__*8
+ ((__uintptr_t *)&tmnow.tv_sec)[0] = regs->regs.ecx;
+ ((__uintptr_t *)&tmnow.tv_sec)[1] = regs->regs.edx;
+ tmnow.tv_nsec = regs->regs.ebx;
+#else
+ tmnow.tv_sec = regs->regs.ecx;
+ tmnow.tv_nsec = regs->regs.edx;
+#endif
  return ktime_hw_setnow(tmnow.tv_sec);
 }
 

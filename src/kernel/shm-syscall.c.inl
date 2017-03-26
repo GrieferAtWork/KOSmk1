@@ -33,28 +33,17 @@
 
 __DECL_BEGIN
 
-/*< _syscall6(void *,kmem_map,void *,hint,size_t,length,int,prot,int,flags,int,fd,__u64,offset); */
-#ifdef KFD_HAVE_BIARG_POSITIONS
-#if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
-KSYSCALL_DEFINE7(__user void *,kmem_map,__user void *,hint,size_t,length,
-                 int,prot,int,flags,int,fd,__u32,offhi,__u32,offlo)
-#else /* linear: down */
-KSYSCALL_DEFINE7(__user void *,kmem_map,__user void *,hint,size_t,length,
-                 int,prot,int,flags,int,fd,__u32,offlo,__u32,offhi)
-#endif /* linear: up */
-#else /* KFD_HAVE_BIARG_POSITIONS */
-KSYSCALL_DEFINE6(__user void *,kmem_map,__user void *,hint,size_t,length,
-                 int,prot,int,flags,int,fd,__u64,offset)
-#endif /* !KFD_HAVE_BIARG_POSITIONS */
-{
+struct fmap { int fd; __u64 off; };
+
+KSYSCALL_DEFINE_EX4(r,kerrno_t,kmem_map,__user void *,hint,size_t,length,
+                    int,prot_and_flags,__user struct fmap const *,finfo) {
  struct kproc *procself = kproc_self();
- __ref struct kshmregion *region; size_t pages; kerrno_t error;
- (void)fd;
-#ifdef KFD_HAVE_BIARG_POSITIONS
- (void)offlo,(void)offhi; /* TODO? */
-#else
- (void)offset; /* TODO? */
-#endif
+ __ref struct kshmregion *region;
+ size_t pages; kerrno_t error;
+ int prot,flags;
+ (void)finfo; /* TODO? */
+ prot  = (int)(prot_and_flags >> 16);
+ flags = (int)(prot_and_flags & 0xffff);
  /* Fix the given hint. */
  if (!hint) hint = KPAGEDIR_MAPANY_HINT_UHEAP;
  else hint = (void *)alignd((uintptr_t)hint,PAGEALIGN);
@@ -81,7 +70,8 @@ KSYSCALL_DEFINE6(__user void *,kmem_map,__user void *,hint,size_t,length,
 end_unlock:
  krwlock_endwrite(&procself->p_shm.s_lock);
 end: KTASK_CRIT_END
- return hint;
+ regs->regs.ecx = (uintptr_t)hint;
+ return error;
 err_unlock:
  hint = (void *)(uintptr_t)-1;
  goto end_unlock;

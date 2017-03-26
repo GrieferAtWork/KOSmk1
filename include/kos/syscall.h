@@ -70,6 +70,11 @@ __DECL_BEGIN
 #define __ASMSYSCALL7_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) __asm { __ASMSYSCALL7(id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) movl result, eax; }
 #else
 #define __ASMSYSCALL_DOINT    "int $" __PP_STR(__SYSCALL_INTNO) "\n"
+#if 1
+#define __SYSCALL_VCONTR      "m"
+#else
+#define __SYSCALL_VCONTR      "g"
+#endif
 /* TODO: Not all syscalls need the "memory" constraint (Only those dereferencing user-provided pointers do)! */
 /* TODO: Not all syscalls need the "volatile" constraint (While most need need it, those without side-effects for unused return values don't)! */
 #define __ASMSYSCALL0_DO(result,id)                                    __asm_volatile__(__ASMSYSCALL_DOINT : "=a" (result) : "a" (id) : "memory")
@@ -78,8 +83,8 @@ __DECL_BEGIN
 #define __ASMSYSCALL3_DO(result,id,arg1,arg2,arg3)                     __asm_volatile__(__ASMSYSCALL_DOINT : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2), "b" (arg3) : "memory")
 #define __ASMSYSCALL4_DO(result,id,arg1,arg2,arg3,arg4)                __asm_volatile__(__ASMSYSCALL_DOINT : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2), "b" (arg3), "S" (arg4) : "memory")
 #define __ASMSYSCALL5_DO(result,id,arg1,arg2,arg3,arg4,arg5)           __asm_volatile__(__ASMSYSCALL_DOINT : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2), "b" (arg3), "S" (arg4), "D" (arg5) : "memory")
-#define __ASMSYSCALL6_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6)      __asm_volatile__("pushl %7\n"           __ASMSYSCALL_DOINT "add $4, %%esp" : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2), "b" (arg3), "S" (arg4), "D" (arg5), "m" (arg6) : "memory")
-#define __ASMSYSCALL7_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) __asm_volatile__("pushl %8\npushl %7\n" __ASMSYSCALL_DOINT "add $8, %%esp" : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2), "b" (arg3), "S" (arg4), "D" (arg5), "m" (arg6), "m" (arg7) : "memory")
+#define __ASMSYSCALL6_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6)      __asm_volatile__("pushl %7\n"           __ASMSYSCALL_DOINT "add $4, %%esp" : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2), "b" (arg3), "S" (arg4), "D" (arg5), __SYSCALL_VCONTR (arg6) : "memory")
+#define __ASMSYSCALL7_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) __asm_volatile__("pushl %8\npushl %7\n" __ASMSYSCALL_DOINT "add $8, %%esp" : "=a" (result) : "a" (id), "c" (arg1), "d" (arg2), "b" (arg3), "S" (arg4), "D" (arg5), __SYSCALL_VCONTR (arg6), __SYSCALL_VCONTR (arg7) : "memory")
 #endif
 
 /*[[[deemon

@@ -170,7 +170,7 @@ __public ssize_t write(int fd, void const *__restrict buf, size_t bufsize) {
 }
 __public off64_t lseek64(int fd, off64_t off, int whence) {
  kerrno_t error; __u64 newpos;
- error = kfd_seek(fd,KFD_POSITION(off),whence,&newpos);
+ error = kfd_seek(fd,off,whence,&newpos);
  if __likely(KE_ISOK(error)) {
   if (newpos > (__u64)INT64_MAX) error = KE_OVERFLOW;
   else return (off64_t)newpos;
@@ -294,7 +294,7 @@ __public ssize_t pwrite(int fd, const void *__restrict buf, size_t bufsize, off_
 __public ssize_t _pread64(int fd, void *__restrict buf, size_t bufsize, __pos64_t pos) {
  kerrno_t error; size_t rsize;
  if __unlikely(bufsize > SSIZE_MAX) bufsize = (size_t)SSIZE_MAX;
- error = kfd_pread(fd,KFD_POSITION(pos),buf,bufsize,&rsize);
+ error = kfd_pread(fd,pos,buf,bufsize,&rsize);
  if __likely(KE_ISOK(error)) return (ssize_t)rsize;
 #ifdef __CONFIG_MIN_BSS__
  return error;
@@ -306,7 +306,7 @@ __public ssize_t _pread64(int fd, void *__restrict buf, size_t bufsize, __pos64_
 __public ssize_t _pwrite64(int fd, const void *__restrict buf, size_t bufsize, __pos64_t pos) {
  kerrno_t error; size_t wsize;
  if __unlikely(bufsize > SSIZE_MAX) bufsize = (size_t)SSIZE_MAX;
- error = kfd_pwrite(fd,KFD_POSITION(pos),buf,bufsize,&wsize);
+ error = kfd_pwrite(fd,pos,buf,bufsize,&wsize);
  if __likely(KE_ISOK(error)) return (ssize_t)wsize;
 #ifdef __CONFIG_MIN_BSS__
  return error;
@@ -323,9 +323,9 @@ __public int ftruncate(int fd, off_t newsize) {
 }
 __public int _ftruncate64(int fd, __pos64_t newsize) {
 #ifdef __CONFIG_MIN_BSS__
- return kfd_trunc(fd,KFD_POSITION(newsize));
+ return kfd_trunc(fd,newsize);
 #else
- kerrno_t error = kfd_trunc(fd,KFD_POSITION(newsize));
+ kerrno_t error = kfd_trunc(fd,newsize);
  if __likely(KE_ISOK(error)) return 0;
  __set_errno(-error);
  return -1;
@@ -1036,9 +1036,10 @@ __public pid_t fork(void) {
 }
 __public void *mmap(void *addr, size_t length, int prot,
                     int flags, int fd, __off_t offset) {
- void *result = kmem_map(addr,length,prot,flags,fd,KFD_POSITION(offset));
- if __unlikely(result == KMEM_MAP_FAIL) __set_errno(ENOMEM);
- return result;
+ kerrno_t error;
+ error = kmem_map(&addr,length,prot,flags,fd,offset);
+ if __unlikely(KE_ISERR(error)) __set_errno(-error);
+ return addr;
 }
 __public int munmap(void *addr, size_t length) {
  kerrno_t error = kmem_unmap(addr,length);

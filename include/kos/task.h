@@ -368,9 +368,50 @@ __local                _syscall2(kerrno_t,ktask_setpriority,ktask_t,self,ktaskpr
 //                       When given, its return value has been stored in '*exitcode'.
 // @return: KE_TIMEDOUT: The given abstime has passed, or 'ktask_tryjoin' would have blocked
 // PERMISSIONS: The caller must have GETPROP access to the task
-__local                _syscall3(kerrno_t,ktask_join,ktask_t,self,void **__restrict,exitcode,__u32,pending_argument);
-__local                _syscall3(kerrno_t,ktask_tryjoin,ktask_t,self,void **__restrict,exitcode,__u32,pending_argument);
-__local __nonnull((2)) _syscall4(kerrno_t,ktask_timedjoin,ktask_t,self,struct timespec const *__restrict,abstime,void **__restrict,exitcode,__u32,pending_argument);
+__local kerrno_t ktask_join
+__D3(ktask_t,__self,void **__restrict,__exitcode,ktaskopflag_t,__flags) {
+ kerrno_t __error;
+ void *__kernel_exitcode;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (__kernel_exitcode)
+                  : "a" (SYS_ktask_join)
+                  , "c" (__self)
+                  , "d" (__flags)
+                  : "memory");
+ if (__exitcode) *__exitcode = __kernel_exitcode;
+ return __error;
+}
+__local kerrno_t ktask_tryjoin
+__D3(ktask_t,__self,void **__restrict,__exitcode,ktaskopflag_t,__flags) {
+ kerrno_t __error;
+ void *__kernel_exitcode;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (__kernel_exitcode)
+                  : "a" (SYS_ktask_tryjoin)
+                  , "c" (__self)
+                  , "d" (__flags)
+                  : "memory");
+ if (__exitcode) *__exitcode = __kernel_exitcode;
+ return __error;
+}
+__local kerrno_t ktask_timedjoin
+__D4(ktask_t,__self,struct timespec const *__restrict,__abstime,
+     void **__restrict,__exitcode,ktaskopflag_t,__flags) {
+ kerrno_t __error;
+ void *__kernel_exitcode;
+ __asm_volatile__(__ASMSYSCALL_DOINT
+                  : "=a" (__error)
+                  , "=c" (__kernel_exitcode)
+                  : "a" (SYS_ktask_timedjoin)
+                  , "c" (__self)
+                  , "d" (__abstime)
+                  , "b" (__flags)
+                  : "memory");
+ if (__exitcode) *__exitcode = __kernel_exitcode;
+ return __error;
+}
 
 //////////////////////////////////////////////////////////////////////////
 // Get/Set the name of a given task.

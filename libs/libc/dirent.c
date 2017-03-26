@@ -190,7 +190,7 @@ __public void seekdir(DIR *dirp, long loc) {
 #else
  if __unlikely(!dirp) return;
 #endif
- kfd_seek(dirp->__d_fd,KFD_POSITION(loc),SEEK_SET,NULL);
+ kfd_seek(dirp->__d_fd,loc,SEEK_SET,NULL);
 }
 __public long telldir(DIR *dirp) {
  __u64 result; kerrno_t error;
@@ -202,7 +202,7 @@ __public long telldir(DIR *dirp) {
   return -1;
  }
 #endif
- error = kfd_seek(dirp->__d_fd,KFD_POSITION(0),SEEK_CUR,&result);
+ error = kfd_seek(dirp->__d_fd,0,SEEK_CUR,&result);
  if __unlikely(KE_ISERR(error)) {
 #ifdef __KERNEL__
   return (long)error;

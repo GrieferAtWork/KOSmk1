@@ -30,28 +30,12 @@
 #define KMEM_MAP_FAIL   ((void *)(__uintptr_t)-1)
 #ifndef __NO_PROTOTYPES
 #ifndef __KERNEL__
-#   include <kos/syscall.h>
-#   include <kos/errno.h>
-#ifndef KFD_POSITION
-#if __SIZEOF_POINTER__ <= 4
-#   include <kos/endian.h>
-#   include <kos/arch.h>
-#   include <stdint.h>
-#   define KFD_HAVE_BIARG_POSITIONS
-#   define KFD_POSITION_HI(x) (__u32)(((x)&UINT64_C(0xffffffff00000000))>>32)
-#   define KFD_POSITION_LO(x)  (__u32)((x)&UINT64_C(0x00000000ffffffff))
-#if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
-#   define KFD_POSITION(x)      KFD_POSITION_HI(x),KFD_POSITION_LO(x)
-#else /* linear: down */
-#   define KFD_POSITION(x)      KFD_POSITION_LO(x),KFD_POSITION_HI(x)
-#endif /* linear: up */
-#else
-#   define KFD_POSITION(x)      x
-#endif
-#endif /* !KFD_POSITION */
+#include <kos/syscall.h>
+#include <kos/errno.h>
 
 
 __DECL_BEGIN
+
 #ifdef __WANT_KERNEL_MEM_VALIDATE
 //////////////////////////////////////////////////////////////////////////
 // Validates a given memory range to describe valid user memory
@@ -78,16 +62,34 @@ __local _syscall5(kerrno_t,kmem_mapdev,void **,hint_and_result,
 
 //////////////////////////////////////////////////////////////////////////
 // TODO: DOC
-// TODO: some way of returning a kerrno_t?
-#ifdef KFD_HAVE_BIARG_POSITIONS
-#if (__BYTE_ORDER == __LITTLE_ENDIAN) == defined(KOS_ARCH_STACK_GROWS_DOWNWARDS)
-__local _syscall7(void   *,kmem_map,void *,hint,__size_t,length,int,prot,int,flags,int,fd,__u32,offhi,__u32,offlo);
-#else /* linear: down */
-__local _syscall7(void   *,kmem_map,void *,hint,__size_t,length,int,prot,int,flags,int,fd,__u32,offlo,__u32,offhi);
-#endif /* linear: up */
-#else
-__local _syscall6(void   *,kmem_map,void *,hint,__size_t,length,int,prot,int,flags,int,fd,__u64,offset);
-#endif
+// @return: KE_ISERR(*) : '*__hint_and_result' is set to KMEM_MAP_FAIL.
+__local kerrno_t kmem_map
+__D6(void **,__hint_and_result,__size_t,__length,
+     int,__prot,int,__flags,int,__fd,__u64,__off) {
+ kerrno_t __error;
+ if (__fd == -1) {
+  __asm_volatile__(__ASMSYSCALL_DOINT
+                   : "=a" (__error)
+                   , "+c" (*__hint_and_result)
+                   : "a" (SYS_kmem_map)
+                   , "d" (__length)
+                   , "b" ((__u32)__prot << 16 |(__u32)__flags)
+                   , "S" (0)
+                   : "memory");
+ } else {
+  struct { int __fd; __u64 __off; } __finfo = {__fd,__off};
+  __asm_volatile__(__ASMSYSCALL_DOINT
+                   : "=a" (__error)
+                   , "+c" (*__hint_and_result)
+                   : "a" (SYS_kmem_map)
+                   , "d" (__length)
+                   , "b" ((__u32)__prot << 16 |(__u32)__flags)
+                   , "S" (&__finfo)
+                   : "memory");
+ }
+ return __error;
+}
+
 __local _syscall2(kerrno_t,kmem_unmap,void *,addr,__size_t,length);
 
 __DECL_END

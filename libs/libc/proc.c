@@ -25,20 +25,21 @@
 
 #include <kos/config.h>
 #ifndef __KERNEL__
+#include <alloca.h>
 #include <assert.h>
 #include <errno.h>
-#include <alloca.h>
 #include <features.h>
 #include <kos/attr.h>
 #include <kos/compiler.h>
 #include <kos/kernel/debug.h>
+#include <kos/task-tls.h>
 #include <kos/task.h>
 #include <kos/time.h>
 #include <kos/timespec.h>
-#include <kos/task-tls.h>
 #include <malloc.h>
 #include <proc.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>

@@ -218,7 +218,7 @@ __asm__("    .text\n"
          * >> if (kmem_validate(esp,UEH_STACKRESERVE) != KE_OK) {
          * >>   // I though I repaired the stack, but I guess it's still broken...
          * >>   // >> Last (and unlikely to success) chance: Allocate a new stack now...
-         * >>#ifdef KFD_HAVE_BIARG_POSITIONS
+         * >>#if __SIZEOF_POINTER__ <= 4
          * >>   void *newstack = kmem_map(NULL,UEH_STACKRESERVE,PROT_READ|PROT_WRITE,MAP_ANONYMOUS,-1,0,0);
          * >>#else
          * >>   void *newstack = kmem_map(NULL,UEH_STACKRESERVE,PROT_READ|PROT_WRITE,MAP_ANONYMOUS,-1,0);
@@ -278,38 +278,21 @@ __asm__("    .text\n"
         /* If the memory is valid, EAX now equals KE_OK */
         "    cmp $(" __PP_STR(KE_OK) "), %eax\n" 
         "    je ueh_handler\n" /* if (kmem_validate(esp,UEH_STACKRESERVE) == KE_OK) ueh_handler(); */
-        /* Something went wrong (A lot)
-         * >> But we've still got a shot by trying to allocate a completely new stack!
-         * NOTE: Since calling 'kmem_map' requires a lot of arguments (7), we have to hack together a small stack here. */
-#ifdef KFD_HAVE_BIARG_POSITIONS
-        "    lea (mini_mmap_stack+" __PP_STR(__SIZEOF_POINTER__*2) "), %esp\n"
-#else
-        "    lea (mini_mmap_stack+" __PP_STR(__SIZEOF_POINTER__*1) "), %esp\n"
-#endif
-        "    mov $(" __PP_STR(SYS_kmem_map)         "), %eax\n"
-        "    mov $(" "0"                            "), %ecx\n" /* hint */
-        "    mov $(" __PP_STR(UEH_STACKRESERVE)     "), %edx\n" /* length */
-        "    mov $(" __PP_STR(PROT_READ|PROT_WRITE) "), %ebx\n" /* prot */
-        "    mov $(" __PP_STR(MAP_ANONYMOUS)        "), %esi\n" /* flags */
-        "    mov $(" __PP_STR(-1)                   "), %edi\n" /* fd */
-        "    pushl $0\n" /* offset */
-#ifdef KFD_HAVE_BIARG_POSITIONS
-        "    pushl $0\n" /* offset */
-#endif
+        /* Something went wrong (A lot). (Try to allocate a whole new stack) */
+        "    mov $(" __PP_STR(SYS_kmem_map)                                 "), %eax\n"
+        "    mov $(" __PP_STR(0)                                            "), %ecx\n" /* hint */
+        "    mov $(" __PP_STR(UEH_STACKRESERVE)                             "), %edx\n" /* length */
+        "    mov $(" __PP_STR((PROT_READ|PROT_WRITE) << 16 | MAP_ANONYMOUS) "), %ebx\n" /* prot_and_flags */
+        "    mov $(" __PP_STR(0)                                            "), %esi\n" /* fmap */
         "    int $" __PP_STR(__SYSCALL_INTNO)  "\n" 
-        /* If the syscall worked, a pointer to the memory base is now stored in EAX.
+        /* If the syscall worked, a pointer to the memory base is now stored in ECX.
          * Yet since there's no point in checking if it worked, we simply don't do so. */
-        "    add $" __PP_STR(UEH_STACKRESERVE) ", %eax\n" 
-        "    mov %eax, %esp\n" 
+        "    add $" __PP_STR(UEH_STACKRESERVE) ", %ecx\n" 
+        "    mov %ecx, %esp\n" 
         /* Lets do this! */
         "    jmp " __PP_STR(__SYM(ueh_handler)) "\n"
         ".size " __PP_STR(__SYM(__kos_unhandled_exception)) ", . - " __PP_STR(__SYM(__kos_unhandled_exception)) "\n"
 );
-#ifdef KFD_HAVE_BIARG_POSITIONS
-static __attribute_used __uintptr_t mini_mmap_stack[2];
-#else
-static __attribute_used __uintptr_t mini_mmap_stack[1];
-#endif
 #undef TLS
 
 static __attribute_used __noreturn

@@ -898,9 +898,7 @@ __DECL_END
 #include <kos/kernel/syscall.h>
 __DECL_BEGIN
 
-KSYSCALL_DEFINE_EX5(c,kerrno_t,kfd_openpty,
-                    __user int *,amaster,
-                    __user int *,aslave,
+KSYSCALL_DEFINE_EX3(rc,kerrno_t,kfd_openpty,
                     __user char *,name,
                     __user struct termios const *,termp,
                     __user struct winsize const *,winp) {
@@ -931,10 +929,11 @@ KSYSCALL_DEFINE_EX5(c,kerrno_t,kfd_openpty,
  /* Register the Master and Slave files as valid descriptors in the calling process. */
  error = kproc_insfd_inherited(proc_self,&fno_slave,&fd_slave);
  if __unlikely(KE_ISERR(error)) goto err4;
- if __unlikely(copy_to_user(aslave,&fno_slave,sizeof(fno_slave))) { error = KE_FAULT; goto err3; }
  error = kproc_insfd_inherited(proc_self,&fno_master,&fd_master);
  if __unlikely(KE_ISERR(error)) goto err3;
- if __unlikely(copy_to_user(amaster,&fno_master,sizeof(fno_master))) error = KE_FAULT;
+ /* Store the master/slave descriptors. */
+ regs->regs.ecx = fno_master;
+ regs->regs.edx = fno_slave;
  /* Do some finalizing cleanup... */
 end_fspty: kinode_decref((struct kinode *)fs_pty);
  return error;
