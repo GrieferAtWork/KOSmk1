@@ -31,22 +31,24 @@
 __DECL_BEGIN
 
 /* Operation codes for 'KFUTEX_RECVIF*' */
-#define KFUTEX_OPMASK         0xf
-#define KFUTEX_NOT            0x1
-#define KFUTEX_FALSE          0 /* Intentionally ZERO(0) (aka. 'false') */
-#define KFUTEX_TRUE           1 /* Intentionally ONE(1) (aka. 'true') */
-#define KFUTEX_EQUAL          0x2
-#define KFUTEX_LOWER          0x4
-#define KFUTEX_LOWER_EQUAL    0x6
-#define KFUTEX_AND            0x8
-#define KFUTEX_XOR            0xA
-#define KFUTEX_SHL            0xC
-#define KFUTEX_SHR            0xE
-#define KFUTEX_NOT_EQUAL     (KFUTEX_NOT|KFUTEX_EQUAL)
-#define KFUTEX_GREATER_EQUAL (KFUTEX_NOT|KFUTEX_LOWER)
-#define KFUTEX_GREATER       (KFUTEX_NOT|KFUTEX_LOWER_EQUAL)
-#define KFUTEX_NOT_AND       (KFUTEX_NOT|KFUTEX_AND)
-#define KFUTEX_NOT_XOR       (KFUTEX_NOT|KFUTEX_XOR)
+#  define KFUTEX_OPMASK         0xf
+#  define KFUTEX_NOT            0x1
+#  define KFUTEX_FALSE          0 /* Intentionally ZERO(0) (aka. 'false') */
+#  define KFUTEX_TRUE           1 /* Intentionally ONE(1) (aka. 'true') */
+#  define KFUTEX_EQUAL          0x2 /* 'if (*uaddr == val) { ... wait(); }' */
+#  define KFUTEX_LOWER          0x4 /* 'if (*uaddr < val) { ... wait(); }' */
+#  define KFUTEX_LOWER_EQUAL    0x6 /* 'if (*uaddr <= val) { ... wait(); }' */
+#  define KFUTEX_AND            0x8 /* 'if ((*uaddr & val) != 0) { ... wait(); }' */
+#  define KFUTEX_XOR            0xA /* 'if ((*uaddr ^ val) != 0) { ... wait(); }' */
+#  define KFUTEX_SHL            0xC /* 'if ((*uaddr << val) != 0) { ... wait(); }' */
+#  define KFUTEX_SHR            0xE /* 'if ((*uaddr >> val) != 0) { ... wait(); }' */
+#  define KFUTEX_NOT_EQUAL      0x3 /* 'if (*uaddr != val) { ... wait(); }' */
+#  define KFUTEX_GREATER_EQUAL  0x5 /* 'if (*uaddr >= val) { ... wait(); }' */
+#  define KFUTEX_GREATER        0x7 /* 'if (*uaddr > val) { ... wait(); }' */
+#  define KFUTEX_NOT_AND        0x9 /* 'if ((*uaddr & val) == 0) { ... wait(); }' */
+#  define KFUTEX_NOT_XOR        0xB /* 'if ((*uaddr ^ val) == 0) { ... wait(); }' */
+#  define KFUTEX_NOT_SHL        0xD /* 'if ((*uaddr << val) == 0) { ... wait(); }' */
+#  define KFUTEX_NOT_SHR        0xF /* 'if ((*uaddr >> val) == 0) { ... wait(); }' */
 
 /* Operation codes for 'KFUTEX_CCMD*'
  * NOTE: When 'uaddr2 == uaddr', these will be applied with atomic_compare_exchange. */
@@ -68,8 +70,8 @@ __DECL_BEGIN
 //#define KFUTEX_NOT_AND 0x09 /* '*uaddr2 = ~(*uaddr2 & val2)' */
 #  define KFUTEX_NOT_OR  0x51 /* '*uaddr2 = ~(*uaddr2 | val2)' */
 //#define KFUTEX_NOT_XOR 0x0B /* '*uaddr2 = ~(*uaddr2 ^ val2)' */
-#  define KFUTEX_NOT_SHL 0x0D /* '*uaddr2 = ~(*uaddr2 << val2)' */
-#  define KFUTEX_NOT_SHR 0x0F /* '*uaddr2 = ~(*uaddr2 >> val2)' */
+//#define KFUTEX_NOT_SHL 0x0D /* '*uaddr2 = ~(*uaddr2 << val2)' */
+//#define KFUTEX_NOT_SHR 0x0F /* '*uaddr2 = ~(*uaddr2 >> val2)' */
 
 /* Command bit flags. */
 #define _KFUTEX_MASK_CMD     0x0000000f
@@ -79,15 +81,16 @@ __DECL_BEGIN
 #define _KFUTEX_CCMD_OPSHIFT 24
 #define _KFUTEX_CCMD_OPMASK  0xff000000
 
-#define _KFUTEX_CMD_RECV    0x0 /* Wait for a set of futex objects. (NOTE: Accepts secondary commands) */
-#define _KFUTEX_CMD_SEND    0x1 /* Wake a set of futex objects. */
-#define _KFUTEX_CMD_C0      0x2 /* '_KFUTEX_CMD_RECV'+secondary command. */
-#define _KFUTEX_CMD_C1      0x3 /* '_KFUTEX_CMD_RECV'+secondary command+secondary send_one. */
-#define _KFUTEX_CMD_CX      0x4 /* '_KFUTEX_CMD_RECV'+secondary command+secondary send_all. */
+#define _KFUTEX_CMD_RECV    0x0 /* Receive a given futex object. */
+#define _KFUTEX_CMD_SEND    0x1 /* Send a given futex object. */
+#define _KFUTEX_CMD_C0      0x2 /* '_KFUTEX_CMD_RECV'+conditional-command. */
+#define _KFUTEX_CMD_C1      0x3 /* '_KFUTEX_CMD_RECV'+conditional-command+secondary send_one. */
+#define _KFUTEX_CMD_CX      0x4 /* '_KFUTEX_CMD_RECV'+conditional-command+secondary send_all. */
 
 
-/* Atomically check '(*uaddr [op] val) != 0' and start waiting if the expression is true.
- * NOTE: This check is performed before a secondary operation may be executed. */
+/* Atomically check '*uaddr [op] val' and start waiting if the expression is true (non-ZERO).
+ * NOTE: This check is performed before a secondary operation may be executed,
+ *       which will not be executed at all if the expression fails. */
 #define KFUTEX_RECVIF(op)       (_KFUTEX_CMD_RECV|((op)&0xf) << _KFUTEX_RECV_OPSHIFT)
 
 /* Secondary operations for 'KFUTEX_RECVIF' that can be or'd to it.
@@ -124,6 +127,7 @@ typedef __attribute__((__aligned__(__SIZEOF_INT__))) volatile unsigned int kfute
 //                       [uaddr2 == uaddr] The specified second futex is equal to the first,
 //                                         but the caller attempted to send & receive a single
 //                                         futex in the same atomic frame (which isn't possible).
+// NOTE: Internally, 'kfutex_cmd' is an alias for 'kfutex_ccmd|uaddr2 = uaddr|val2 = val'
 __local _syscall5(kerrno_t,kfutex_cmd,
                   kfutex_t *,uaddr,unsigned int,futex_op,
                   unsigned int,val,void *,buf,struct timespec const *,abstime);

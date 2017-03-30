@@ -451,7 +451,7 @@ reload_kernel_futex2:
      case KFUTEX_XOR    : newval = kernel_futex2_val^val2; break; /* '*uaddr2 ^= val2' */
      case KFUTEX_SHL    : newval = kernel_futex2_val<<val2; break; /* '*uaddr2 <<= val2' */
      case KFUTEX_SHR    : newval = kernel_futex2_val>>val2; break; /* '*uaddr2 >>= val2' */
-     case KFUTEX_NOT    : newval = ~(val2); break; /* '*uaddr2 = ~(*uaddr2 + val2)' */
+     case KFUTEX_NOT    : newval = ~(val2); break; /* '*uaddr2 = ~(val2)' */
      case KFUTEX_NOT_ADD: newval = ~(kernel_futex2_val+val2); break; /* '*uaddr2 = ~(*uaddr2 + val2)' */
      case KFUTEX_NOT_SUB: newval = ~(kernel_futex2_val-val2); break; /* '*uaddr2 = ~(*uaddr2 - val2)' */
      case KFUTEX_NOT_MUL: newval = ~(kernel_futex2_val*val2); break; /* '*uaddr2 = ~(*uaddr2 * val2)' */

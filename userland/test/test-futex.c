@@ -37,8 +37,8 @@ static void *thread_main(void *p) {
  char buffer[256];
  /* atomic: if (true) { ready = 1; sendall(&ready); vrecv(&ftx,buffer); } */
  outf("[THREAD] Begin receiving data\n");
- error = kfutex_ccmd(&ftx,KFUTEX_CCMD_SENDALL(KFUTEX_STORE)|
-                          KFUTEX_RECVIF(KFUTEX_TRUE),
+ error = kfutex_ccmd(&ftx,KFUTEX_RECVIF(KFUTEX_TRUE)|
+                          KFUTEX_CCMD_SENDALL(KFUTEX_STORE),
                      0,buffer,NULL,&ready,1);
  assertf(error == KE_OK,"%d",error);
  outf("[THREAD] Data: %.256q\n",buffer);
