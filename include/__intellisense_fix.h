@@ -397,6 +397,13 @@ __declspec(noreturn) void __builtin_exit(void);
 __declspec(noreturn) void __builtin__exit(void);
 __declspec(noreturn) void __builtin__Exit(void);
 
+__SIZE_TYPE__ __builtin_strlen(char const *s);
+int __builtin_strcmp(char const *a, char const *b);
+int __builtin_strncmp(char const *a, char const *b, __SIZE_TYPE__ maxchars);
+char *__builtin_strchr(char const *s, int needle);
+char *__builtin_strrchr(char const *s, int needle);
+
+
 void *__builtin_alloca(__SIZE_TYPE__ s);
 long __builtin_expect(long val, long expect);
 int __builtin_ffs(int x);

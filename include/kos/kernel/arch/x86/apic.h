@@ -36,6 +36,7 @@ __DECL_BEGIN
 #define TRAMPOLINE_PHYS_HIGH 0x469
 /* end... */
 
+extern __u32 apic_id;
 extern __u32 apic_base; /*< [0..1] Memory-mapped address of local APICs. */
 #define APIC_BASE   (apic_base)
 

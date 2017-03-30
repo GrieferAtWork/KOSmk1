@@ -20,46 +20,26 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef __KOS_KERNEL_TYPES_H__
-#define __KOS_KERNEL_TYPES_H__ 1
+#ifndef __KOS_KERNEL_TASK2_STATE_C_INL__
+#define __KOS_KERNEL_TASK2_STATE_C_INL__ 1
 
+#include <assert.h>
+#include <kos/atomic.h>
+#include <kos/compiler.h>
 #include <kos/config.h>
-#ifdef __KERNEL__
-#ifndef __ASSEMBLY__
-#include <kos/types.h>
-#include <kos/kernel/features.h>
+#include <kos/kernel/debug.h>
+#include <kos/kernel/task2.h>
 
 __DECL_BEGIN
 
-#ifndef __ktaskprio_t_defined
-#define __ktaskprio_t_defined 1
-typedef __ktaskprio_t ktaskprio_t;
-#endif
-
-typedef __u32 __kpageflag_t;
-
-#define KTASKPRIO_MIN   (-32767-1)
-#define KTASKPRIO_MAX     32767
-
-typedef __un(KCONFIG_SEMAPHORE_TICKETBITS) ksemcount_t;
-
-// Module ID
-#ifndef __kmodid_t_defined
-#define __kmodid_t_defined 1
-typedef __kmodid_t kmodid_t;
-#endif
-
-
-typedef __u8  kcpuid_t;    /*< LAPIC/CPU ID number. */
-typedef __u8  kcpustate_t; /*< Set of 'CPUSTATE_*' */
-typedef __u16 ksegid_t;
-typedef __u16 kseglimit_t;
-typedef __u16 kcpuset_t;   /*< Bitset capable of identifying 'KCPU2_MAXCOUNT' bits. */
+void __SCHED_CALL
+ktask2_ontimeout(struct ktask2 *__restrict self) {
+ kassert_ktask2(self);
+ /* Set the timed-out flag. */
+ katomic_fetchor(self->t_flags,KTASK2_FLAG_TIMEDOUT);
+}
 
 
 __DECL_END
 
-#endif /* !__ASSEMBLY__ */
-#endif /* !__KERNEL__ */
-
-#endif /* !__KOS_KERNEL_TYPES_H__ */
+#endif /* !__KOS_KERNEL_TASK2_STATE_C_INL__ */

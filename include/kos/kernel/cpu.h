@@ -32,7 +32,11 @@
 
 __DECL_BEGIN
 
-/* Max amount of CPUs that may be used. */
+/* Max amount of CPUs that may be used.
+ * NOTE: If you look at the 0x0f mask required in the apic version of 'cpu_self',
+ *       you will see that 1 << 4 (aka. 16) is actually the maximum possible _ever_.
+ *       >> So setting this to anything higher won't actually do you any good...
+ * NOTE: This also means that any ID greater than that may carry special meaning. */
 #define KCPU_MAXCOUNT   16
 
 #define CPUID_INVALID  (KCPU_MAXCOUNT)

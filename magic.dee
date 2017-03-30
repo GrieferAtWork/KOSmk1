@@ -304,7 +304,37 @@ if (args) {
 }
 
 if (optimize && !ndebug) {
-	/* Prevent O3 from removing stackframes. */
+	/* Work around a bug that prevent inline assembly assembly constraints from
+	 * realizing that an offset from EBP (aka. a normal, true stack-variable) can
+	 * be used as an option for a "g" constraint. - Defining this option allows
+	 * inline assembly for stuff like syscalls to use "m" as constraint, thus
+	 * forcing the compiler to put varargs somewhere in memory, only to copy
+	 * them again when we put them on the stack (Which is totally unnecessary)
+	 * >> The fact that this is just a bug should be proven by the fact that
+	 *    functions in debug mode usually come with a frame pointer (EBP),
+	 *    where we don't need this flag because the compiler's register allocator
+	 *    is allowed to work with EBP normally (aka. use it as base for offsets),
+	 *    and the fact that according to documentations, the "g" constraint
+	 *    should be able to make use of memory locations, such as enforced
+	 *    by "m", too, meaning that "g" ~should~ in all cases work (but doesn't)
+	 * GCC BUG #1: The register allocator doesn't consider stack offsets
+	 *             from EBP when "-fno-omit-frame-pointer" is specified.
+	 *            (Might not be a bug, but is probably part of the reason why #2 fails)
+	 * GCC BUG #2: In this situation, the "g" inline assembly constraint
+	 *             doesn't allow "m" (memory) behavior by simply fulfilling
+	 *             its constraints by putting the variable somewhere on
+	 *             the stack (aka. killing the register), but instead behaves
+	 *             as though the constraint was "r" (register-only),
+	 *             lying about the (admittedly correct) fact that all
+	 *             general purpose registers (which EBP isn't part of)
+	 *             are in use (which is OK, since I don't care if the variable
+	 *             is actually in memory, or truly on the stack)
+	 * >> This define simply causes syscalls to use the "m" constraint for
+	 *    variadic arguments to syscalls, instead of the "g" constraint, which
+	 *    works for all different situations!
+	 */
+	default_attrib["define"]["__REGISTER_ALLOCATOR_NO_OFFSET_FROM_EBP__"] = "1";
+	/* Prevent O3 from removing stackframes (This sadly causes a bug with inline assembly constraints). */
 	default_attrib["flags"].append("-fno-omit-frame-pointer");
 }
 
@@ -352,19 +382,45 @@ function start_death_waiter(process,pipe) {
 local running_compilers = [];
 #define wait_all_compilers() \
 	({ while (#running_compilers) thread.sleep(1); })
+	
+function get_gcc_version(compiler) {
+	try {
+		local p = process(compiler,["--version"]);
+		local r,w = pipe.new()...;
+		p.stdout = w;
+		p.stderr = w;
+		p.start();
+		w.close();
+		local verstr = r.readline(); /* Read the first line of text. */
+		p.join();
+		/* e.g.: "i686-elf-gcc (GCC) 6.2.0\n" */
+		return verstr.partition("gcc")[2].scanf(" ( GCC ) %d . %d . %d");
+	} catch (e...) {
+		print "Failed to determine true GCC version of",compiler,":",e;
+		return pack 6,2,0;
+	}
+}
 
 /* Preprocess a file 'i' using the deemon preprocessor and output everything to 'o' */
-function deemon_preprocess_file(input,o,deps_output,args) {
+function deemon_preprocess_file(compiler,input,o,deps_output,args) {
+	static local gcc_versions = dict();
+	local gcc_version;
+	try {
+		gcc_version = gcc_versions[compiler];
+	} catch (...) {
+		/* Dynamically determine the GCC compiler version. */
+		gcc_versions[compiler] = gcc_version = get_gcc_version(compiler);
+	}
 	local p = process("deemon",[
 		"-nostdinc",
-		"-D__GNUC__=6",
-		"-D__GNUC_MINOR__=2",
-		"-D__GNUC_PATCH__=0",
+		"-D__GNUC__="+gcc_version[0],
+		"-D__GNUC_MINOR__="+gcc_version[1],
+		"-D__GNUC_PATCH__="+gcc_version[2],
 		"-D__STDC__=1",
 		args...,input]);
 	local r,w = pipe.new()...;
 	local absroot = fs::getcwd().replace("\\","/");
-	local dependencies = dict();
+	local dependencies = list();
 #if 0
 	p.stdout = o;
 #else
@@ -386,16 +442,18 @@ function deemon_preprocess_file(input,o,deps_output,args) {
 		name = name.replace("\\","/");
 		name = name.lsstrip(absroot).lstrip("/");
 		used_o.write("#line "+lno+" \""+name+"\"\n");
-		dependencies[name] = none;
+		if (name !in dependencies) {
+			dependencies.append(name);
+		}
 	}
 done:
 	r.close();
 #endif
-	p.join();
 	o.close();
+	p.join();
 	local d = file.open(deps_output,"w");
 	d.write(input+":");
-	for (local dep,none: dependencies) {
+	for (local dep: dependencies) {
 		d.write(" \\\n "+dep);
 	}
 	d.write("\n");
@@ -418,52 +476,59 @@ function run_compiler_process(proc,close_pipe...) {
 	while (#running_compilers >= max_compilers_processes) thread.sleep(1);
 	running_compilers.append(proc);
 	local t = thread([]{
-		if (format_messages_to_msvc) {
-			for (local line: r) {
-				if (line.startswith("include") || line.startswith("src") ||
-					line.startswith("userland") || line.startswith("libs")) {
-					local filename,lno,col,rest;
-					try filename,lno,col,rest = line.scanf("%[^:]:%[^:]:%[^:]:%[^]")...;
-					catch (...) { print line,; continue; }
-					if (col.isalnum()) {
-						print "..\\"+filename+"("+lno+","+col+") : "+rest,;
+		try {
+			if (format_messages_to_msvc) {
+				for (local line: r) {
+					if (line.startswith("include") || line.startswith("src") ||
+						line.startswith("userland") || line.startswith("libs")) {
+						local filename,lno,col,rest;
+						try filename,lno,col,rest = line.scanf("%[^:]:%[^:]:%[^:]:%[^]")...;
+						catch (...) { print line,; continue; }
+						if (col.isalnum()) {
+							print "..\\"+filename+"("+lno+","+col+") : "+rest,;
+						} else {
+							print "..\\"+filename+"("+lno+") : "+col+" : "+rest,;
+						}
+					} else if (line.startswith("/cygdrive/")) {
+						local filename,lno,rest;
+						line = line[#"/cygdrive/":];
+						local drive,none,path = line.partition("/")...;
+						try filename,lno,rest = path.scanf("%[^:]:%[^:]:%[^]")...;
+						catch (...) { print line,; continue; }
+						path = drive.upper()+":\\"+filename.replace("/","\\");
+						rest = rest.strip();
+						if (!rest.lower().startswith("error") &&
+							!rest.lower().startswith("warning")) {
+							rest = "Error : "+rest;
+						}
+						print path+"("+lno+") : "+rest;
 					} else {
-						print "..\\"+filename+"("+lno+") : "+col+" : "+rest,;
+						print line,;
 					}
-				} else if (line.startswith("/cygdrive/")) {
-					local filename,lno,rest;
-					line = line[#"/cygdrive/":];
-					local drive,none,path = line.partition("/")...;
-					try filename,lno,rest = path.scanf("%[^:]:%[^:]:%[^]")...;
-					catch (...) { print line,; continue; }
-					path = drive.upper()+":\\"+filename.replace("/","\\");
-					rest = rest.strip();
-					if (!rest.lower().startswith("error") &&
-						!rest.lower().startswith("warning")) {
-						rest = "Error : "+rest;
-					}
-					print path+"("+lno+") : "+rest;
-				} else {
-					print line,;
 				}
 			}
-		}
-		local error = proc.join();
-		running_compilers.remove(proc);
-		if (error != 0) {
-			print "Process failed:",repr proc.cmd;
-			sys.exit(error);
+			local error = proc.join();
+			/* remove may fail sporadically in an SMP environment... (sorry about that) */
+			while (!running_compilers.remove(proc));
+			if (error != 0) {
+				print "Process failed:",repr proc.cmd;
+				sys.exit(error);
+			}
+		} catch (e...) {
+			print "Process failed:",e;
+			print repr proc.cmd;
+			sys.exit(1);
 		}
 	});
 	t.start();
 	if (::single) t.join();
 	return t;
 }
-function run_c_compiler_process(proc,input,deps_output,pp_args) {
+function run_c_compiler_process(proc,compiler,input,deps_output,pp_args) {
 	local code_r,code_w = pipe.new()...;
 	thread([]{
 		try {
-			deemon_preprocess_file(input,code_w,deps_output,pp_args);
+			deemon_preprocess_file(compiler,input,code_w,deps_output,pp_args);
 		} catch (e...) {
 			print "TPP preprocessor crashed:",repr e;
 			sys.exit(1);
@@ -616,7 +681,6 @@ function parse_single_source(path,attrib,filename,fp_last_changed) {
 	local compiler_args = [(for (local x: libpaths) "-L"+x)...];
 	if (optimize) {
 		compiler_args.append(optimize_level,"-Wno-maybe-uninitialized");
-		pp_args.append("-D__OPTIMIZE__="+optimize_level.lsstrip("-D"));
 	}
 	if (ndebug) pp_args.append("-DNDEBUG");
 	else compiler_args.append("-fstack-protector-strong","-g");
@@ -640,6 +704,8 @@ function parse_single_source(path,attrib,filename,fp_last_changed) {
 		pp_args.append("-E");
 		//compiler_args.append("-fpreprocessed");
 		compiler_args.append("-xc","-");
+		/* GCC will define this to tell code about the -O flag. */
+		pp_args.append("-D__OPTIMIZE__="+optimize_level.lsstrip("-O"));
 	}
 	if (gen_pp) compiler_args.append("-E");
 	if (gen_asm) compiler_args.append("-S");
@@ -785,7 +851,7 @@ function compile_dot_sources(filename) {
 		local p = process(compiler,[" "+args[0],args[1:]...]);
 		if (use_deemon) {
 			print "Compiling (TPP):",sourcefile;
-			run_c_compiler_process(p,sourcefile,dependency_file,pp_args);
+			run_c_compiler_process(p,compiler,sourcefile,dependency_file,pp_args);
 		} else {
 			print "Compiling:",sourcefile;
 			run_compiler_process(p);

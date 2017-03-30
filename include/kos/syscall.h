@@ -70,10 +70,12 @@ __DECL_BEGIN
 #define __ASMSYSCALL7_DO(result,id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) __asm { __ASMSYSCALL7(id,arg1,arg2,arg3,arg4,arg5,arg6,arg7) movl result, eax; }
 #else
 #define __ASMSYSCALL_DOINT    "int $" __PP_STR(__SYSCALL_INTNO) "\n"
-#if 1
-#define __SYSCALL_VCONTR      "m"
+#ifndef __SYSCALL_VCONTR
+#ifdef __REGISTER_ALLOCATOR_NO_OFFSET_FROM_EBP__
+#   define __SYSCALL_VCONTR   "m" /* Work around GCC bug. */
 #else
-#define __SYSCALL_VCONTR      "g"
+#   define __SYSCALL_VCONTR   "g"
+#endif
 #endif
 /* TODO: Not all syscalls need the "memory" constraint (Only those dereferencing user-provided pointers do)! */
 /* TODO: Not all syscalls need the "volatile" constraint (While most need need it, those without side-effects for unused return values don't)! */

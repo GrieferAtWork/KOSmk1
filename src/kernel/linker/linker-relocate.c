@@ -120,11 +120,11 @@ kreloc_elf32_rel_exec(Elf32_Rel const *relv, size_t relc,
                       struct kprocmodule *__restrict reloc_module,
                       struct kprocmodule *__restrict start_module) {
  Elf32_Rel const *iter,*end;
- uintptr_t new_address,base;
+ uintptr_t new_address,base,last_symaddr;
+ struct ksymbol *sym,*last_sym = NULL;
  base = (uintptr_t)reloc_module->pm_base;
  end = (iter = relv)+relc;
  for (; iter != end; ++iter) {
-  struct ksymbol *sym;
   __u8  type   = ELF32_R_TYPE(iter->r_info);
   __u32 symbol = ELF32_R_SYM(iter->r_info);
   if (symbol >= symbols->sl_symc) {
@@ -161,11 +161,18 @@ kreloc_elf32_rel_exec(Elf32_Rel const *relv, size_t relc,
      * During execution, the dynamic linker copies data associated with the
      * shared object's symbol to the location specified by the offset.
      * >> Meaning we must not search for the symbol within the current module for R_386_COPY */
-    new_address = (uintptr_t)__dlsym(proc,start_module,sym,type == R_386_COPY ? reloc_module : NULL);
-    LOG(KLOG_INSANE,"[CMD %Iu] Lookup symbol: %I32u:%s %p -> %p\n",
-        iter-relv,symbol,sym->s_name,iter->r_offset,new_address);
+    if __likely(sym == last_sym) {
+     /* No need to look up the same symbol twice in a row. */
+     new_address = last_symaddr;
+    } else {
+     new_address = (uintptr_t)__dlsym(proc,start_module,sym,type == R_386_COPY ? reloc_module : NULL);
+     LOG(KLOG_TRACE,"[CMD %Iu] Lookup symbol: %I32u:%s %p -> %p\n",
+         iter-relv,symbol,sym->s_name,iter->r_offset,new_address);
+     last_sym     = sym;
+     last_symaddr = new_address;
+    }
     /* TODO: Weak symbols may be initialized to NULL. */
-    if (new_address != 0) break;
+    if __likely(new_address != 0) break;
     LOG(KLOG_ERROR,"[CMD %Iu] Failed to find symbol: %s\n",iter-relv,sym->s_name);
    default: new_address = sym->s_addr+base;
     break;

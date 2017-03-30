@@ -25,10 +25,10 @@
 
 #include <kos/config.h>
 #ifdef __KERNEL__
-#include <kos/compiler.h>
-#include <kos/types.h>
-#include <kos/errno.h>
 #include <assert.h>
+#include <kos/compiler.h>
+#include <kos/errno.h>
+#include <kos/kernel/types.h>
 
 __DECL_BEGIN
 
@@ -236,8 +236,6 @@ STATIC_ASSERT(sizeof(struct ksegment) == 8);
 #define KSEG_ISBUILTIN(seg) ((seg) >= KSEG(KSEG_BUILTIN))
 
 #ifndef __ASSEMBLY__
-typedef __u16 ksegid_t;
-typedef __u16 kseglimit_t;
 
 //////////////////////////////////////////////////////////////////////////
 // Allocate/Free/Update a (new) descriptor index within global descriptor table.

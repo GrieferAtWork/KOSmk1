@@ -50,6 +50,19 @@
 #endif /* __KERNEL__ */
 #include "traceback-internal.h"
 
+#ifdef __KERNEL__
+#define TRACEBACK_WALK_USE_EXCEPTIONS 0
+#else
+/* Use exceptions for faster, but still safe traceback walking.
+ * >> When not used, kmem_validate must be invoked on every pointer. */
+#define TRACEBACK_WALK_USE_EXCEPTIONS 1
+#endif
+
+#if TRACEBACK_WALK_USE_EXCEPTIONS
+#include <exception.h>
+#endif
+
+
 __DECL_BEGIN
 
 
@@ -147,16 +160,14 @@ struct stackframe {
  /* Parameters... */
 };
 
-#define SAFE_USERSPACE_TRACEBACKS 1
-
 #ifndef __KERNEL__
 #ifndef __WANT_KERNEL_MEM_VALIDATE
-#if SAFE_USERSPACE_TRACEBACKS
+#if !TRACEBACK_WALK_USE_EXCEPTIONS
 #undef kmem_validate
 #undef kmem_validatebyte
 __local _syscall2(kerrno_t,kmem_validate,void const *__restrict,addr,__size_t,bytes);
 #define kmem_validatebyte(p) kmem_validate(p,1)
-#endif /* SAFE_USERSPACE_TRACEBACKS */
+#endif /* TRACEBACK_WALK_USE_EXCEPTIONS */
 #endif
 #endif
 
@@ -180,6 +191,7 @@ tb_walkeip(void const *eip, ptbwalker callback,
 static int
 debug_dostackwalk(struct stackframe *start, ptbwalker callback,
                   ptberrorhandler handle_error, void *closure, size_t skip) {
+#if !TRACEBACK_WALK_USE_EXCEPTIONS
  struct stackframe *frame,*next,*check; int temp;
  size_t didskip = 0,index = 0; frame = start;
  while (frame) {
@@ -193,6 +205,7 @@ debug_dostackwalk(struct stackframe *start, ptbwalker callback,
 #else
    if (temp != 0) return temp;
 #endif
+   break;
   }
   /* Validate the instruction pointer */
   if (KE_ISERR(kmem_validatebyte((byte_t const *)(uintptr_t)frame->eip))) {
@@ -223,7 +236,62 @@ debug_dostackwalk(struct stackframe *start, ptbwalker callback,
   frame = next;
  }
  return 0;
+#else /* !TRACEBACK_WALK_USE_EXCEPTIONS */
+ struct stackframe *frame,*next,*check;
+ void *eip; int temp;
+ size_t didskip = 0,index = 0;
+ frame = start;
+ while (frame) {
+  __try {
+   eip = frame->eip;
+   next = frame->caller;
+  } __except (1) {
+   frame = NULL;
+  }
+  if (!frame) {
+   if (!handle_error) return TRACEBACK_STACKERROR_FRAME;
+   temp = (*handle_error)(TRACEBACK_STACKERROR_FRAME,(void const *)frame,closure);
+#ifdef __KERNEL__
+   if (temp != 0 && error != KE_INVAL) return temp;
+#else
+   if (temp != 0) return temp;
+#endif
+   break;
+  }
+#if 0
+  /* Validate the instruction pointer */
+  if (KE_ISERR(kmem_validatebyte((byte_t const *)eip))) {
+   if (!handle_error) return TRACEBACK_STACKERROR_EIP;
+   temp = (*handle_error)(TRACEBACK_STACKERROR_EIP,eip,closure);
+   if (temp != 0) return temp;
+  }
+#endif
+  if (didskip < skip) ++didskip;
+  else if (callback) {
+   /* Call the stack entry enumerator */
+   temp = (*callback)(eip,frame,index++,closure);
+   if (temp != 0) return temp;
+  }
+  /* Ensure that the frame hasn't already been enumerated (looping stack) */
+  check = start;
+  for (;;) {
+   if (check == next) {
+    /* The stackframes are recursive */
+    if (!handle_error) return TRACEBACK_STACKERROR_LOOP;
+    temp = (*handle_error)(TRACEBACK_STACKERROR_LOOP,(void const *)next,closure);
+    if (temp != 0) return temp;
+    break;
+   }
+   if (check == frame) break;
+   check = check->caller;
+  }
+  frame = next;
+ }
+ return 0;
+#endif /* TRACEBACK_WALK_USE_EXCEPTIONS */
 }
+
+
 __public __noinline int tb_walk(ptbwalker callback, ptberrorhandler handle_error, void *closure) { return tb_walkex(callback,handle_error,closure,1); }
 __public __noinline int tb_walkex(ptbwalker callback, ptberrorhandler handle_error, void *closure, size_t skip) { struct stackframe *stack; __asm_volatile__("movl %%ebp, %0" : "=r" (stack)); return debug_dostackwalk(stack,callback,handle_error,closure,skip); }
 __public            int tb_walkebp(void const *ebp, ptbwalker callback, ptberrorhandler handle_error, void *closure) { return tb_walkebpex(ebp,callback,handle_error,closure,0); }

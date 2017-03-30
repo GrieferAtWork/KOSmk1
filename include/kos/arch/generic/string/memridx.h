@@ -27,6 +27,7 @@
 
 #ifndef __ASSEMBLY__
 #include "common.h"
+#include "memrmem.h"
 #include "memrchr.h"
 #include <kos/types.h>
 #include <stddef.h>
@@ -62,6 +63,9 @@ __D5(void const *,__vector,__size_t,__elemcount,
      __size_t,__elemalign) {
  /* Compile-time special case: Empty vector. */
  if (__builtin_constant_p(__elemcount) && !__elemcount) return NULL;
+ /* Compile-time special case: 1-byte alignment mirrors memmem semantics. */
+ if (__builtin_constant_p(__elemalign) && __elemalign == 1)
+  return arch_memrmem(__vector,__elemcount,__pattern,__elemsize);
  /* Compile-time special case: Known element size. */
  if (__builtin_constant_p(__elemsize)) {
   if (!__elemsize) return NULL;

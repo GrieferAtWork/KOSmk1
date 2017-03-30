@@ -24,10 +24,10 @@
 #include "helper.h"
 #include <stddef.h>
 #include <malloc.h>
+#include <string.h>
 #include <assert.h>
 #include <sys/types.h>
 #include <kos/arch/string.h>
-
 
 /* Control string functions (known to always be correct for all arguments) */
 static void *ok_memset(void *dst, int byte, size_t bytes) {

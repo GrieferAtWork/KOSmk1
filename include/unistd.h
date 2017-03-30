@@ -345,6 +345,51 @@ extern long __nt_syscall __P((long __sysno, ...)); /*< NT (windows) System call.
 extern long __unix_syscall __P((long __sysno, ...)); /*< Unix System call. */
 #endif /* __KOS_HAVE_UNIXSYSCALL */
 
+#if defined(__GNUC__) && defined(__PP_VA_NARGS)
+#ifndef __SYSCALL_VCONTR
+#ifdef __REGISTER_ALLOCATOR_NO_OFFSET_FROM_EBP__
+#   define __SYSCALL_VCONTR      "m" /* Work around GCC bug. */
+#else
+#   define __SYSCALL_VCONTR      "g"
+#endif
+#endif
+#define __COMMON_SYSCALL_ANY(text,intno,...) \
+ __xblock({ register long __result;\
+            __asm_volatile__(text:"=a"(__result):"a"(intno),__VA_ARGS__:"memory");\
+            __xreturn __result;\
+ })
+#define __COMMON_SYSCALL_SMALL(intno,...) \
+ __COMMON_SYSCALL_ANY("int $0x69\n",intno,__VA_ARGS__)
+#define __COMMON_SYSCALL_LARGE(text,size,intno,arg1,arg2,arg3,arg4,arg5,...) \
+ __COMMON_SYSCALL_ANY(text "\nint $0x69\nadd $" #size ",%%esp\n",intno,"c"(arg1),"d"(arg2),"b"(arg3),"S"(arg4),"D"(arg5),__VA_ARGS__)
+#define __PP_syscall1(intno) \
+ __xblock({ register long __result;\
+            __asm_volatile__("int $0x69\n":"=a"(__result):"a"(intno):"memory");\
+            __xreturn __result;\
+ })
+#define __PP_syscall2(intno,arg1) __COMMON_SYSCALL_SMALL(intno,"c"(arg1))
+#define __PP_syscall3(intno,arg1,arg2) __COMMON_SYSCALL_SMALL(intno,"c"(arg1),"d"(arg2))
+#define __PP_syscall4(intno,arg1,arg2,arg3) __COMMON_SYSCALL_SMALL(intno,"c"(arg1),"d"(arg2),"b"(arg3))
+#define __PP_syscall5(intno,arg1,arg2,arg3,arg4) __COMMON_SYSCALL_SMALL(intno,"c"(arg1),"d"(arg2),"b"(arg3),"S"(arg4))
+#define __PP_syscall6(intno,arg1,arg2,arg3,arg4,arg5) __COMMON_SYSCALL_SMALL(intno,"c"(arg1),"d"(arg2),"b"(arg3),"S"(arg4),"D"(arg5))
+#define __PP_syscall7(intno,arg1,arg2,arg3,arg4,arg5,arg6) __COMMON_SYSCALL_LARGE("pushl %7",4,intno,arg1,arg2,arg3,arg4,arg5,__SYSCALL_VCONTR(arg6))
+#define __PP_syscall8(intno,arg1,arg2,arg3,arg4,arg5,arg6,arg7) __COMMON_SYSCALL_LARGE("pushl %8\npushl %7",8,intno,arg1,arg2,arg3,arg4,arg5,__SYSCALL_VCONTR(arg6),__SYSCALL_VCONTR(arg7))
+#define __PP_syscallM(n,...) __PP_syscall##n(__VA_ARGS__)
+#define __PP_syscallN(n,...) __PP_syscallM(n,__VA_ARGS__)
+#define __PP_syscall(...) __PP_syscallN(__PP_VA_NARGS(__VA_ARGS__),__VA_ARGS__)
+#endif
+
+
+#if !defined(__INTELLISENSE__) && \
+     defined(__PP_syscall) &&\
+    !defined(__NO_INLINE_SYSCALL__)
+/* Compile-time optimizations for known argument counts.
+ * >> This way, we don't have to save all registers, as
+ *    well as support syscalls that look at your EIP.
+ * NOTE: A syscall() function that behaves the same
+ *       way is still always exported by libc, though. */
+#define syscall   __PP_syscall
+#endif /* ... */
 
 __DECL_END
 #endif /* !__ASSEMBLY__ */

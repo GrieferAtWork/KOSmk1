@@ -238,7 +238,6 @@ extern struct kidtpointer sc_gdt;
 
 __asm__(".code16\n"
         "second_core_bootbegin:\n"
-        /* Setup segment registers. */
         "    cli\n" /* Just in case... */
         "    lgdt (" SC_SYM(sc_gdt) ")\n"
         /* Enter protected mode. */
@@ -296,6 +295,28 @@ void smp_test(void) {
 
 
 void kernel_main(void) {
+
+ // TODO: Every CPU needs its own entry in the GDT as to allow
+ //       for an easy and efficient mapping of per-cpu memory
+ //       regions, similar to how the the new TLS engine works.
+ // TODO: Rewrite the scheduler to make use of SMP, and also
+ //       remove the chance of a task randomly being moved to
+ //       a different CPU, as was planned until now.
+ //       With these changes, ktask_self() can be simplified to one instruction:
+ //    >> __asm__("mov (KCPU_OFFSETOF_CURRENT)(%%{fs|gs}), %0" : "=r" (ktask_self));
+ //       NOTE: The segment register used should mirror that for TLS
+
+ // TODO: When switching to a kernel stack from usermode, instead of
+ //       re-calculating the physical address of the stack (since the
+ //       usermode page directory will still be set), pre-calculate
+ //       that address and store it at the base of the stack.
+ //    >> When switching to kernel-mode, the virtual address of the
+ //       kernel stack will be set properly, and instead of having
+ //       to do that long and complicated 'TRANSLATE_VADDR'-macro,
+ //       the entire address-space switch could be simlified to:
+ //    >> mov (SIZEOF_STORED_USER_REGISTERS)(%esp), %esp /*< Load the physical ESP, as stored ontop of the kernel stack */
+ //    >> lea __kpagedir_kernel, %eax                    /*< Switch to the kernel page directory. */
+ //    >> mov %eax, %cr3                                 /*< *ditto*. */
 
  // TODO: Parse explicit environ input in exec
  // TODO: Get away from a text-based GUI

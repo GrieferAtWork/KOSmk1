@@ -279,6 +279,7 @@ __DECL_BEGIN
 
 
 /* Make these public */
+#undef syscall
 __public long syscall(long sysno, ...);
 #ifdef __KOS_HAVE_NTSYSCALL
 __public long __nt_syscall(long sysno, ...);

@@ -82,6 +82,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "include", "include", "{FC82
 		..\include\stdint.h = ..\include\stdint.h
 		..\include\stdio.h = ..\include\stdio.h
 		..\include\stdlib.h = ..\include\stdlib.h
+		..\include\string-optimizations.h = ..\include\string-optimizations.h
 		..\include\string.h = ..\include\string.h
 		..\include\string_utils.h = ..\include\string_utils.h
 		..\include\strings.h = ..\include\strings.h

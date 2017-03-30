@@ -32,6 +32,8 @@
 #include <linux/syscall.h>
 #endif
 
+#undef syscall
+
 /* KOS System call.
  * >> extern long syscall(long sysno, ...); */
 #ifdef __KOS_HAVE_SYSCALL

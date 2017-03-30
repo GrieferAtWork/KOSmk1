@@ -49,6 +49,7 @@ size_t        kcpu2_c                = 0;
 struct kcpu2  kcpu2_v[KCPU_MAXCOUNT] = {{{0}},};
 struct kcpu2 *kcpu2_boot             = NULL;
 __u32         apic_base              = 0;
+__u32         apic_id                = 0;
 
 
 static void smpinit_onecore(void); /*< Fallback initialization if no SMP info was found. */
@@ -214,7 +215,6 @@ done:;
 }
 
 
-static __u32 apic_id = 0;
 extern __u8 apic_cpu_self_begin[];
 extern __u8 apic_cpu_self_end[];
 extern __u8 onecore_cpu_self_begin[];
@@ -386,7 +386,9 @@ send_again:
   /* No startup IPI required. */
  }
 ipi_initialized:
- /* Wait for the INIT to be acknowledged. */
+ /* Wait for the INIT to be acknowledged.
+  * NOTE: The race condition between here and when we actually
+  *       started the CPU is solved by a timeout in cpu_acknowledge(). */
  cpu->p_state |= CPUSTATE_STARTED;
  {
   int timeout = CPUINIT_ACKNOWLEDGE_RECV_TIMEOUT+1;
@@ -409,6 +411,15 @@ end:
 }
 
 void cpu_stopme(void) {
+ cpuid_t selfid = cpu_self();
+ struct kcpu2 *cpu = &kcpu2_v[selfid];
+ /* Reset the CPU state to ~just~ being available.
+  * >> After this point, whenever someone needs a CPU for use,
+  *    this one may be chosen randomly and be reset, causing
+  *    its instruction pointer to jump elsewhere and escape
+  *    the idle loop below. */
+ cpu->p_state = CPUSTATE_AVAILABLE;
+ /* End of the line... */
  __asm_volatile__("1:  cli\n"
                   "    hlt\n"
                   "    jmp 1b\n"
