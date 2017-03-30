@@ -220,6 +220,7 @@
     <None Include="..\src\kernel\sched\task-usercheck.c.inl" />
     <None Include="..\src\kernel\sched\task-util.c.inl" />
     <None Include="..\src\kernel\sched\task_asm.S" />
+    <None Include="..\src\kernel\shm-futex.c.inl" />
     <None Include="..\src\kernel\shm-ldt.c.inl" />
     <None Include="..\src\kernel\shm-map.c.inl" />
     <None Include="..\src\kernel\shm-mmap-impl.c.inl" />

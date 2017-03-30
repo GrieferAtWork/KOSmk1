@@ -121,6 +121,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kos", "kos", "{0BC61691-24B
 		..\include\kos\exception.h = ..\include\kos\exception.h
 		..\include\kos\fd.h = ..\include\kos\fd.h
 		..\include\kos\fs.h = ..\include\kos\fs.h
+		..\include\kos\futex.h = ..\include\kos\futex.h
 		..\include\kos\keyboard.h = ..\include\kos\keyboard.h
 		..\include\kos\mem.h = ..\include\kos\mem.h
 		..\include\kos\mod.h = ..\include\kos\mod.h

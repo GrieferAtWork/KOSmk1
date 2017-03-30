@@ -37,6 +37,7 @@
 #include <math.h>
 #include <string.h>
 #include <strings.h>
+#include <kos/endian.h>
 
 /* TODO: Make SHM branches use <kos/addrtree.h>. */
 
@@ -208,13 +209,53 @@ typedef __uintptr_t      kshmregion_cluster_t;
 #define KSHMPART_OFFSETOF_START  (__SIZEOF_POINTER__)
 #define KSHMPART_OFFSETOF_PAGES  (__SIZEOF_POINTER__+KSHMREGION_PAGE_SIZEOF)
 #ifndef __ASSEMBLY__
+typedef __uintptr_t kshmfutex_id_t; /*< This is the futex's '(kshmregion_addr_t % PAGESIZE) / KTASK_FUTEXWORD_SIZE'. */
+#define KSHMFUTEX_ALIGN  16   /* Keep the lower 4 bits unused. */
+
+#define KSHMPART_FUTEX_ADDRESS    (~(__uintptr_t)(KSHMFUTEX_ALIGN-1))
+#define KSHMPART_FUTEX_LOCKS       ((__uintptr_t)(KSHMFUTEX_ALIGN-1))
+#define KSHMPART_FUTEX_SHIFT_RCNT  0
+#define KSHMPART_FUTEX_SHIFT_WMODE 3
+#define KSHMPART_FUTEX_MASK_RCNT   0x7 /*< 0111. */
+#define KSHMPART_FUTEX_MASK_WMODE  0x8 /*< 1000. */
+union  __packed kshmfutex_ptr {
+ __uintptr_t     fp_futex;    /*< Futex chain pointer & locks. */
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+ __byte_t        fp_lockbyte;
+#elif __BYTE_ORDER == __BIG_ENDIAN
+struct __packed {
+ __byte_t        __fp_padding[__SIZEOF_POINTER__-1];
+ __byte_t        fp_lockbyte;
+};
+#endif
+};
+#define kshmfutex_ptr_get(self) ((struct kshmfutex *)((self)->fp_futex&KSHMPART_FUTEX_ADDRESS))
+extern __crit __ref struct kshmfutex *kshmfutex_ptr_getfutex(union kshmfutex_ptr *__restrict self, kshmfutex_id_t id);
+extern __crit __ref struct kshmfutex *kshmfutex_ptr_getfutex_newmissing(union kshmfutex_ptr *__restrict self, kshmfutex_id_t id);
+
+#define kassert_kshmfutex(self) kassert_ksignal(&(self)->f_sig)
+struct kshmfutex {
+ __ref union kshmfutex_ptr  f_next;   /*< [0..1] Pointer to the next futex (NOTE: Locks in this are unused). */
+       union kshmfutex_ptr *f_pself;  /*< [1..1][lock(f_next)] Pointer to the pointer that references this futex. */
+ __atomic __u32             f_refcnt; /*< [!0] Reference counter of this futex. */
+ kshmfutex_id_t             f_id;     /*< Region-local id, unique futex ID. */
+ struct ksignal             f_sig;    /*< The signal implementing futex locking. */
+};
+
+__local KOBJECT_DEFINE_INCREF(kshmfutex_incref,struct kshmfutex,f_refcnt,kassert_kshmfutex);
+__local KOBJECT_DEFINE_DECREF(kshmfutex_decref,struct kshmfutex,f_refcnt,kassert_kshmfutex,kshmfutex_destroy);
+__local KOBJECT_DEFINE_TRYINCREF(kshmfutex_tryincref,struct kshmfutex,f_refcnt,kassert_kshmfutex);
+
 struct kshmpart {
  /* WARNING: Individual pages are only allocated when the reference counter of the associated cluster is non-ZERO. */
  /* TODO: When swap/file mappings get added, we'll have to add some kind of token system that can live here (union-style w/ sp_frame). */
  __pagealigned struct kpageframe *sp_frame; /*< [1..sp_pages][const] Physical starting address of this part. */
  kshmregion_page_t                sp_start; /*< [const] Page index of the start of this part (aka. 'sum(sp_pages)' of all preceding parts). */
  __size_t                         sp_pages; /*< [!0][const] Amount of linear pages associated with this part. */
+ union kshmfutex_ptr              sp_futex; /*< Chain of futexes within this part (NOTE: Putting this here allows for futex objects to be shared through shared memory). */
+ /* TODO: Destroy futex objects when freeing SHM parts, thus waking any threads will sleeping on them. */
 };
+
 #endif /* !__ASSEMBLY__ */
 
 
@@ -475,7 +516,6 @@ kshmregion_extractpart(__ref struct kshmregion *__restrict self,
 // Fill all memory within the given region with the given byte.
 extern __crit __nonnull((1)) void
 kshmregion_memset(__ref struct kshmregion *__restrict self, int byte);
-
 #endif /* !__ASSEMBLY__ */
 
 
@@ -883,6 +923,39 @@ kshm_initfork_unlocked(struct kshm *__restrict self,
 extern __crit __wunused __nonnull((1,2)) kerrno_t
 kshm_initfork(struct kshm *__restrict self,
               struct kshm *__restrict right);
+
+
+//////////////////////////////////////////////////////////////////////////
+// Return a reference to the futex associated with a given userspace address.
+// NOTE: [kshm_getfutex_unlocked] The caller must be holding a read-lock to 'self->s_lock'.
+// @return: KE_OK:        The operation completed successfully.
+// @return: KE_FAULT:     The given 'uaddr' is faulty.
+// @return: KE_NOMEM:     [alloc_missing] No futex exists at the given address, and not enough memory was available to allocate one.
+// @return: KE_NOENT:     [alloc_missing] No futex exists at the given address.
+// @return: KE_DESTROYED: [kshm_getfutex] The SHM manager was closed as part of its process shutting down.
+// @return: KE_INTR:      [kshm_getfutex] The calling thread was interrupted.
+// @return: KE_TIMEDOUT:  [kshm_getfutex] A previously set timeout has expired.
+extern __crit __wunused __nonnull((1,3)) kerrno_t
+kshm_getfutex_unlocked(struct kshm *__restrict self, __user void *address,
+                       __ref struct kshmfutex **user_futex, int alloc_missing);
+extern __crit __wunused __nonnull((1,3)) kerrno_t
+kshm_getfutex(struct kshm *__restrict self, __user void *address,
+              __ref struct kshmfutex **user_futex, int alloc_missing);
+
+//////////////////////////////////////////////////////////////////////////
+// Perform a futex operations, as specified by 'futex_op'
+// @return: KE_OK:        [*]                The operation completed successfully.
+// @return: KE_FAULT:     [*]                The given 'uaddr' is faulty.
+// @return: KE_FAULT:     [KTASK_FUTEX_WAIT] The given 'abstime' pointer is faulty and non-NULL.
+// @return: KE_AGAIN:     [KTASK_FUTEX_WAIT] The value at '*uaddr' was equal to 'val' (the function didn't block)
+// @return: KE_TIMEDOUT:  [KTASK_FUTEX_WAIT] The given 'abstime' or a previously set timeout has expired.
+// @return: KE_NOMEM:     [*]                No futex existed at the given address, and not enough memory was available to allocate one.
+// @return: KE_INVAL:     [?]                The specified 'futex_op' is unknown.
+extern __crit __wunused __nonnull((1)) kerrno_t
+kshm_futex(struct kshm *__restrict self,
+           __user void *address, unsigned int futex_op, unsigned int val,
+           __user struct timespec *abstime,
+           __kernel unsigned int *woken_tasks);
 
 
 

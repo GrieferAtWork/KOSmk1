@@ -68,6 +68,7 @@ kshmchunk_initlinear(struct kshmchunk *__restrict self,
  self->sc_partv[0].sp_start = 0;
  self->sc_partv[0].sp_pages = pages;
  self->sc_partv[0].sp_frame = kpageframe_alloc(pages);
+ self->sc_partv[0].sp_futex.fp_futex = 0;
  if __unlikely(self->sc_partv[0].sp_frame == PAGEFRAME_NIL) goto err_r;
  self->sc_flags = flags&~(KSHMREGION_FLAG_NOFREE);
  self->sc_pages = pages;
@@ -93,6 +94,7 @@ kshmchunk_initphys(struct kshmchunk *__restrict self,
  self->sc_partv[0].sp_frame = (__pagealigned struct kpageframe *)addr;
  self->sc_partv[0].sp_start = 0;
  self->sc_partv[0].sp_pages = pages;
+ self->sc_partv[0].sp_futex.fp_futex = 0;
  return KE_OK;
 }
 
@@ -114,6 +116,7 @@ kshmchunk_initram(struct kshmchunk *__restrict self,
  partvec[0].sp_frame = kpageframe_tryalloc(pages,&total_page_count);
  partvec[0].sp_start = 0;
  partvec[0].sp_pages = total_page_count;
+ partvec[0].sp_futex.fp_futex = 0;
  if __unlikely(total_page_count != pages) {
   /* Must allocate more / failed to allocate more. */
   if __unlikely(self->sc_partv[0].sp_frame == PAGEFRAME_NIL) goto err_partvec;
@@ -134,6 +137,7 @@ err_free_got_parts:
    if __unlikely((newpartvec->sp_frame =
                   kpageframe_tryalloc(pages,&newpartvec->sp_pages)
                   ) == PAGEFRAME_NIL) goto err_free_got_parts;
+   newpartvec->sp_futex.fp_futex = 0;
    ++self->sc_partc;
    total_page_count += newpartvec->sp_pages;
    assert(total_page_count <= pages);
@@ -732,6 +736,7 @@ kshmchunk_builder_addpart(struct kshmchunk *self,
  newvec->sp_frame = start;
  newvec->sp_pages = pages;
  newvec->sc_owned = owned;
+ newvec->sp_futex.fp_futex = 0;
  return KE_OK;
 }
 #undef sc_owned
@@ -2738,10 +2743,11 @@ void kernel_initialize_copyonwrite(void) {
 __DECL_END
 
 #ifndef __INTELLISENSE__
-#include "shm-map.c.inl"
+#include "shm-futex.c.inl"
 #include "shm-ldt.c.inl"
-#include "shm-transfer.c.inl"
+#include "shm-map.c.inl"
 #include "shm-syscall.c.inl"
+#include "shm-transfer.c.inl"
 #define WRITEABLE
 #include "shm-translate.c.inl"
 #include "shm-translate.c.inl"

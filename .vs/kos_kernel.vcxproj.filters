@@ -702,5 +702,8 @@
     <None Include="..\src\kernel\shm-transfer.c.inl">
       <Filter>src\kernel</Filter>
     </None>
+    <None Include="..\src\kernel\shm-futex.c.inl">
+      <Filter>src\kernel</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -48,10 +48,12 @@ extern __u8  _tls_getb(__ptrdiff_t offset);
 extern __u16 _tls_getw(__ptrdiff_t offset);
 extern __u32 _tls_getl(__ptrdiff_t offset);
 extern __u64 _tls_getq(__ptrdiff_t offset);
+extern void *_tls_getp(__ptrdiff_t offset);
 extern void  _tls_putb(__ptrdiff_t offset, __u8  value);
 extern void  _tls_putw(__ptrdiff_t offset, __u16 value);
 extern void  _tls_putl(__ptrdiff_t offset, __u32 value);
 extern void  _tls_putq(__ptrdiff_t offset, __u64 value);
+extern void  _tls_putp(__ptrdiff_t offset, void *value);
 
 __DECL_END
 #else /* __INTELLISENSE__ */
@@ -150,6 +152,22 @@ __DECL_END
 #ifndef _tls_getq
 #   define _tls_getq(off)            ((__u64 const *)_tls_addr)[off]
 #   define _tls_putq(off,val) (void)(((__u64 *)_tls_addr)[off] = (val))
+#endif
+
+#if __SIZEOF_POINTER__ == 4
+#   define _tls_getp  (void *)_tls_getl
+#   define _tls_putp(off,val) _tls_putl(off,(__u32)(val))
+#elif __SIZEOF_POINTER__ == 8
+#   define _tls_getp  (void *)_tls_getq
+#   define _tls_putp(off,val) _tls_putq(off,(__u64)(val))
+#elif __SIZEOF_POINTER__ == 2
+#   define _tls_getp  (void *)_tls_getw
+#   define _tls_putp(off,val) _tls_putw(off,(__u16)(val))
+#elif __SIZEOF_POINTER__ == 1
+#   define _tls_getp  (void *)_tls_getb
+#   define _tls_putp(off,val) _tls_putb(off,(__u8)(val))
+#else
+#   error "FIXME"
 #endif
 
 #ifdef __kuthread_defined

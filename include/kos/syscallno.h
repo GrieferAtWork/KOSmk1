@@ -94,6 +94,7 @@ __DECL_BEGIN
 #define SYS_ktask_fork         58 /*< _syscall2(kerrno_t,ktask_fork,uintptr_t *,childfd_or_exitcode,__u32,flags); */
 #define SYS_ktask_exec         59 /*< _syscall4(kerrno_t,ktask_exec,char const *,path,__size_t,pathmax,struct kexecargs const *,args,__u32,flags); */
 #define SYS_ktask_fexec        60 /*< _syscall3(kerrno_t,ktask_fexec,int,fd,struct kexecargs const *,args,__u32,flags); */
+#define SYS_ktask_futex        61 /*< _syscall4(kerrno_t,ktask_futex,unsigned int *,uaddr,unsigned int,futex_op,unsigned int,val,struct timespec *,timeout); */
 
 #define SYS_kproc_enumfd       65  /*< _syscall4(kerrno_t,kproc_enumfd,int,self,int *__restrict,fdv,size_t,fdc,size_t *,reqfdc); */
 #define SYS_kproc_openfd       66  /*< _syscall3(int,kproc_openfd,int,self,int,fd,int,flags); */

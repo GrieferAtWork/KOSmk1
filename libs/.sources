@@ -49,6 +49,11 @@
     [project = lib:static:_elf_start][name = _start] { ./_start/start.c; }
 [pe][project = lib:static:_pe_start] [name = _start] { ./_start/start.c; }
 
+# [project = lib:static:cxxrt] {
+# 	[compiler = i686-elf-c]   ./libcxxrt/src/*.c;
+# 	[compiler = i686-elf-cxx] ./libcxxrt/src/*.cc;
+# }
+
 
 # Various shared libraries
 [project = lib:shared:fdlibm]\

@@ -77,6 +77,7 @@ typedef int kerrno_t;
 #define KE_CHANGED     (-35) /*< ERROR: A file or a specific area of memory was changed. */
 #define KE_SYNTAX      (-36) /*< ERROR: Syntax/usage error. */
 #define KE_NOBIN       (-37) /*< ERROR: Not a binary file (returned by mod_open if the file is a shebang script). */
+#define KE_AGAIN       (-38) /*< ERROR: An operation was not performed because of certain restrictions. */
 
 // NOTE: Signal codes should not be considered errors.
 //       They tell the caller about some special state a given object may be in,

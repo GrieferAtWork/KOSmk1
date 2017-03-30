@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\userland\test\test-exceptions.c" />
+    <ClCompile Include="..\..\userland\test\test-futex.c" />
     <ClCompile Include="..\..\userland\test\test-quote.c" />
     <ClCompile Include="..\..\userland\test\test-string.c" />
     <ClCompile Include="..\..\userland\test\test-tls.c" />

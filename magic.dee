@@ -394,7 +394,7 @@ function get_gcc_version(compiler) {
 		local verstr = r.readline(); /* Read the first line of text. */
 		p.join();
 		/* e.g.: "i686-elf-gcc (GCC) 6.2.0\n" */
-		return verstr.partition("gcc")[2].scanf(" ( GCC ) %d . %d . %d");
+		return verstr.partition("(GCC)")[2].scanf(" %d . %d . %d");
 	} catch (e...) {
 		print "Failed to determine true GCC version of",compiler,":",e;
 		return pack 6,2,0;

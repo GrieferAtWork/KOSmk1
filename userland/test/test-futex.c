@@ -20,34 +20,37 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include "helper.h"
-#include <malloc.h>
-#include <mod.h>
-#include <string.h>
 
-typedef void (*test_t)(void);
-static void run_test(test_t test) {
- syminfo_t *sym = mod_addrinfo(MOD_SELF,test,NULL,0,MOD_SYMINFO_ALL);
- char *name = sym ? sym->si_name : NULL;
- if (name && !memcmp(name,"_test__",7)) name += 7;
- printf("\033[32m");
- outf("%s(%d) : %s : %p : Running test\n",
-      sym ? sym->si_file : NULL,
-      sym ? sym->si_line+1 : 0,name,test);
- free(sym);
- printf("\033[m");
- (*test)();
+#include "helper.h"
+#include <kos/futex.h>
+#include <malloc.h>
+#include <proc.h>
+#include <unistd.h>
+#include <limits.h>
+
+
+static unsigned int *user_futex;
+
+static void *thread_main(void *p) {
+ outf("[THREAD] Begin waiting\n");
+ kerrno_t wait_error = ktask_futex(user_futex,KTASK_FUTEX_WAIT,0,NULL);
+ outf("[THREAD] Done waiting: %d (%d)\n",wait_error,*user_futex);
+ return p;
 }
 
 
-int main(void) {
-#define RUN(name) { extern TEST(name); run_test(&NAME(name)); }
- //RUN(exceptions);
- //RUN(quote);
- //RUN(tls);
- //RUN(unaligned);
- //RUN(strings);
- RUN(futex);
-#undef RUN
- return 0;
+TEST(futex) {
+ user_futex = (unsigned int *)malloc(sizeof(unsigned int));
+ *user_futex = 0;
+ int t = task_newthread(&thread_main,NULL,TASK_NEWTHREAD_DEFAULT);
+ outf("[MAIN] Thread spawned (Sleep a bit)\n");
+ struct timespec tmo = {1,0};
+ task_sleep(task_self(),&tmo);
+ outf("[MAIN] Waking futex\n");
+ kerrno_t error = ktask_futex(user_futex,KTASK_FUTEX_WAKE,UINT_MAX,NULL);
+ outf("[MAIN] Wake error: %d\n",error);
+ task_join(t,NULL);
+ outf("[MAIN] Joined thread\n");
+ close(t);
+ free(user_futex);
 }

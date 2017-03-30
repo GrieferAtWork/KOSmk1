@@ -139,7 +139,7 @@ print "#endif /" "* SYSCALL_PAD *" "/";
 /*     58|0x003a */ SYSCALL(ktask_fork)
 /*     59|0x003b */ SYSCALL(ktask_exec)
 /*     60|0x003c */ SYSCALL(ktask_fexec)
-/*     61|0x003d */ SYSCALL_NULL
+/*     61|0x003d */ SYSCALL(ktask_futex)
 /*     62|0x003e */ SYSCALL_NULL
 /*     63|0x003f */ SYSCALL_NULL
 /*     64|0x0040 */ SYSCALL_NULL
@@ -150,7 +150,7 @@ print "#endif /" "* SYSCALL_PAD *" "/";
 /*     69|0x0045 */ SYSCALL(kproc_openbarrier)
 /*     70|0x0046 */ SYSCALL(kproc_tlsalloc)
 /*     71|0x0047 */ SYSCALL(kproc_tlsfree)
-/*     72|0x0048 */ SYSCALL_NULL
+/*     72|0x0048 */ SYSCALL(kproc_tlsenum)
 /*     73|0x0049 */ SYSCALL(kproc_enumpid)
 /*     74|0x004a */ SYSCALL(kproc_openpid)
 /*     75|0x004b */ SYSCALL(kproc_getpid)

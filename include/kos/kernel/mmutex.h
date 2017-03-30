@@ -85,6 +85,7 @@ __local __crit void __kmmutex_free_debug(struct kmmutex *self) {
  end = (iter = self->mmx_debug)+KMMUTEX_LOCKC;
  for (; iter != end; ++iter) {
   free(iter->md_locktb);
+  iter->md_holder = NULL;
   iter->md_locktb = NULL;
  }
 }

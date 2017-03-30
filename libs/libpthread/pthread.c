@@ -31,7 +31,9 @@
 #include <kos/task.h>
 #include <pthread.h>
 #include <sched.h>
+#include <proc.h>
 #include <stdio.h>
+#include <stddef.h>
 
 __DECL_BEGIN
 
@@ -42,13 +44,15 @@ struct pthread_maindata {
  void   *arg;
 };
 
-static __noreturn void pthread_main(struct pthread_maindata *data) {
+static __noreturn void
+pthread_main(struct pthread_maindata *data) {
  ktask_exit((*data->start_routine)(data->arg));
 }
 
 
-int pthread_create(pthread_t *newthread, pthread_attr_t const *attr,
-                   void *(*start_routine)(void *), void *arg) {
+__public int
+pthread_create(pthread_t *newthread, pthread_attr_t const *attr,
+               void *(*start_routine)(void *), void *arg) {
  struct pthread_maindata closure;
  ktask_t result;
  (void)attr; // TODO
@@ -66,71 +70,70 @@ __noreturn void pthread_exit(void *retval) {
  ktask_exit(retval);
 }
 
-int pthread_join(pthread_t th, void **thread_return) {
+__public int
+pthread_join(pthread_t th, void **thread_return) {
  kerrno_t error = ktask_join(th,thread_return,0);
  if __unlikely(KE_ISERR(error)) return -error;
  kfd_close(th);
  return 0;
 }
-int pthread_tryjoin_np(pthread_t th, void **thread_return) {
+__public int
+pthread_tryjoin_np(pthread_t th, void **thread_return) {
  kerrno_t error = ktask_tryjoin(th,thread_return,0);
  if __unlikely(KE_ISERR(error)) return -error;
  kfd_close(th);
  return 0;
 }
-int pthread_timedjoin_np(pthread_t th, void **thread_return, struct timespec const *__restrict abstime) {
+__public int
+pthread_timedjoin_np(pthread_t th, void **thread_return,
+                     struct timespec const *__restrict abstime) {
  kerrno_t error = ktask_timedjoin(th,abstime,thread_return,0);
  if __unlikely(KE_ISERR(error)) return -error;
  kfd_close(th);
  return 0;
 }
-int pthread_detach(pthread_t th) {
- return -kfd_close(th);
-}
-pthread_t pthread_self(void) {
- return ktask_self();
-}
-int pthread_equal(pthread_t thread1, pthread_t thread2) {
- return thread1 == thread2 || kfd_equals(thread1,thread2);
-}
-
-int pthread_setschedprio(pthread_t target_thread, int prio) {
- return -ktask_setpriority(target_thread,prio);
-}
-int pthread_getname_np(pthread_t target_thread, char *__restrict buf, size_t buflen) {
+__public int pthread_detach(pthread_t th) { return -kfd_close(th); }
+__public pthread_t pthread_self(void) { return ktask_self(); }
+__public int pthread_equal(pthread_t thread1, pthread_t thread2) { return thread1 == thread2 || kfd_equals(thread1,thread2); }
+__public int pthread_setschedprio(pthread_t target_thread, int prio) { return -ktask_setpriority(target_thread,prio); }
+__public int pthread_getname_np(pthread_t target_thread, char *__restrict buf, size_t buflen) {
  size_t reqsize; kerrno_t error;
  error = ktask_getname(target_thread,buf,buflen,&reqsize);
  if __unlikely(KE_ISERR(error)) return -error;
  if __unlikely(reqsize > buflen) return ERANGE;
  return 0;
 }
-int pthread_setname_np(pthread_t target_thread, char const *__restrict name) {
+__public int
+pthread_setname_np(pthread_t target_thread, char const *__restrict name) {
  int error = -ktask_setname(target_thread,name);
  return KE_ISOK(error) ? 0 : -error;
 }
 
 
-int pthread_yield(void) {
+__public int pthread_yield(void) {
  ktask_yield();
  return 0;
 }
 
-int pthread_getunique_np(pthread_t *thread, pthread_id_np_t *id) {
+__public int
+pthread_getunique_np(pthread_t *thread, pthread_id_np_t *id) {
  return ((*id = ktask_gettid(*thread)) == (size_t)-1) ? EBADF : 0;
 }
 
-pthread_id_np_t pthread_getthreadid_np(void) {
+__public pthread_id_np_t pthread_getthreadid_np(void) {
  return gettid();
 }
 
-int pthread_setschedparam(pthread_t target_thread, int __unused(policy),
-                          struct sched_param const *param) {
+__public int
+pthread_setschedparam(pthread_t target_thread, int __unused(policy),
+                      struct sched_param const *param) {
  int error;
  error = ktask_setpriority(target_thread,(ktaskprio_t)param->sched_priority);
  return KE_ISOK(error) ? 0 : -error;
 }
-int pthread_getschedparam(pthread_t target_thread, int *policy,
-                          struct sched_param *param) {
+__public int
+pthread_getschedparam(pthread_t target_thread, int *policy,
+                      struct sched_param *param) {
  ktaskprio_t prio; int error;
  *policy = SCHED_RR;
  error = ktask_getpriority(target_thread,&prio);
@@ -158,10 +161,10 @@ int pthread_getschedparam(pthread_t target_thread, int *policy,
 
 
 static __atomic int clevel = 0;
-int pthread_getconcurrency(void) {
+__public int pthread_getconcurrency(void) {
  return katomic_load(clevel);
 }
-int pthread_setconcurrency(int level) {
+__public int pthread_setconcurrency(int level) {
  if __unlikely(level < 0) return EINVAL;
  katomic_store(clevel,level);
  return 0;
@@ -169,7 +172,7 @@ int pthread_setconcurrency(int level) {
 
 
 
-int pthread_once(pthread_once_t *once_control,
+__public int pthread_once(pthread_once_t *once_control,
                  void (*init_routine)(void)) {
  int oldval;
  if (!once_control || !init_routine) return EINVAL;
@@ -196,12 +199,12 @@ __public int pthread_spin_init(pthread_spinlock_t *lock,
  lock->__ps_locked = 0;
  return 0;
 }
-int pthread_spin_destroy(pthread_spinlock_t *lock) {
+__public int pthread_spin_destroy(pthread_spinlock_t *lock) {
  if __unlikely(!lock) return EINVAL;
  if __unlikely(lock->__ps_locked) return EBUSY;
  return 0;
 }
-int pthread_spin_lock(pthread_spinlock_t *lock) {
+__public int pthread_spin_lock(pthread_spinlock_t *lock) {
  __ktid_t tid = gettid();
  if __unlikely(!lock) return EINVAL;
  if (!katomic_cmpxch(lock->__ps_locked,0,1)) {
@@ -218,18 +221,51 @@ end:
  lock->__ps_holder = tid;
  return 0;
 }
-int pthread_spin_trylock(pthread_spinlock_t *lock) {
+__public int pthread_spin_trylock(pthread_spinlock_t *lock) {
  if __unlikely(!lock) return EINVAL;
  if (!katomic_cmpxch(lock->__ps_locked,0,1)) return EBUSY;
  lock->__ps_holder = gettid();
  return 0;
 }
-int pthread_spin_unlock(pthread_spinlock_t *lock) {
+__public int pthread_spin_unlock(pthread_spinlock_t *lock) {
  if __unlikely(!lock) return EINVAL;
  if __unlikely(lock->__ps_holder != gettid()) return EPERM;
  assert(lock->__ps_locked);
  lock->__ps_holder = KTID_INVALID;
  lock->__ps_locked = 0; // No need to use atomics here...
+ return 0;
+}
+
+
+static ptrdiff_t     pthread_tlsoffset = 0;
+static pthread_key_t pthread_tlsnextkey = 0;
+
+
+__public int
+pthread_key_create(pthread_key_t *key, void (*destr_function)(void *)) {
+ if (!pthread_tlsoffset) {
+  ptrdiff_t newp,oldp;
+  newp = tls_alloc(NULL,__SIZEOF_POINTER__); /* TODO: Size */
+  if __unlikely(!newp) return -errno;
+  oldp = katomic_cmpxch_val(pthread_tlsoffset,0,newp);
+  __asm_volatile__("mfence\n" : : : "memory");
+  if (oldp) tls_free(newp);
+ }
+ /* TODO: 'destr_function'. */
+ *key = katomic_fetchadd(pthread_tlsnextkey,__SIZEOF_POINTER__);
+ return 0;
+}
+__public int
+pthread_key_delete(pthread_key_t key) {
+ return 0; /* TODO */
+}
+__public void *
+pthread_getspecific(pthread_key_t key) {
+ return tls_getp(pthread_tlsoffset+key);
+}
+__public int
+pthread_setspecific(pthread_key_t key, void const *pointer) {
+ tls_putp(pthread_tlsoffset+key,(void *)pointer);
  return 0;
 }
 

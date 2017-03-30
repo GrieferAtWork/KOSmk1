@@ -65,6 +65,19 @@ struct __pthread_spinlock {
     __atomic __ktid_t     __ps_holder; /*< Thread currently holding the lock. */
 };
 
+struct __key { int __placeholder; };
+struct __pthread_attr { int __placeholder; };
+struct __pthread_cond { int __placeholder; };
+struct __pthread_condattr { int __placeholder; };
+struct __pthread_mutex { int __placeholder; };
+struct __pthread_mutexattr { int __placeholder; };
+struct __pthread_rwlock { int __placeholder; };
+struct __pthread_rwlockattr { int __placeholder; };
+struct __pthread_barrierattr { int __placeholder; };
+struct __pthread_barrier { int __placeholder; };
+
+
+
 struct timespec;
 
 extern int pthread_create(pthread_t *newthread, pthread_attr_t const *attr,
@@ -218,10 +231,10 @@ extern pthread_id_np_t pthread_getthreadid_np(void);
 // WARNING: Any future implementation that will actually call 'destr_function',
 //          will be subject to the fact that task_terminate-ing a thread will
 //          not give that thread a chance to ever execute these destructors.
-// extern int pthread_key_create(pthread_key_t *key, void (*destr_function)(void *));
-// extern int pthread_key_delete(pthread_key_t key);
-// extern void *pthread_getspecific(pthread_key_t key);
-// extern int pthread_setspecific(pthread_key_t key, void const *pointer);
+extern int pthread_key_create(pthread_key_t *key, void (*destr_function)(void *));
+extern int pthread_key_delete(pthread_key_t key);
+extern void *pthread_getspecific(pthread_key_t key);
+extern int pthread_setspecific(pthread_key_t key, void const *pointer);
 
 
 

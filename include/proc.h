@@ -271,10 +271,12 @@ extern __u8  tls_getb(__ptrdiff_t offset);
 extern __u16 tls_getw(__ptrdiff_t offset);
 extern __u32 tls_getl(__ptrdiff_t offset);
 extern __u64 tls_getq(__ptrdiff_t offset);
+extern void *tls_getp(__ptrdiff_t offset);
 extern void  tls_putb(__ptrdiff_t offset, __u8  value);
 extern void  tls_putw(__ptrdiff_t offset, __u16 value);
 extern void  tls_putl(__ptrdiff_t offset, __u32 value);
 extern void  tls_putq(__ptrdiff_t offset, __u64 value);
+extern void  tls_putp(__ptrdiff_t offset, void *value);
 
 __DECL_END
 #else
@@ -289,6 +291,8 @@ __DECL_END
 #define tls_putl   _tls_putl
 #define tls_getq   _tls_getq
 #define tls_putq   _tls_putq
+#define tls_getp   _tls_getp
+#define tls_putp   _tls_putp
 #endif
 
 #endif /* !__KERNEL__ */

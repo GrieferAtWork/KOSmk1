@@ -58,19 +58,21 @@ do{\
 #define KMMUTEX_ONRELEASE(self,id) \
 do{\
  int lid = (id); assert(lid < KMMUTEX_LOCKC);\
- if (DBGSLOT(self,lid).md_holder != ktask_self()) {\
-  /* Non-recursive lock held twice. */\
-  printf("ERROR: Non-recursive multi-lock %d in %p not held by %I32d:%Iu:%s.\n"\
-         "See reference to acquisition by %p:\n"\
-        ,lid,self\
-        ,ktask_self()->t_proc->p_pid\
-        ,ktask_self()->t_tid\
-        ,ktask_getname(ktask_self())\
-        ,DBGSLOT(self,lid).md_holder);\
-  tbtrace_print(DBGSLOT(self,lid).md_locktb);\
-  printf("See reference to attempted release:\n");\
-  tb_printex(1);\
-  abort();\
+ if (!ksignal_isdead_c(&self->mmx_sig)) {\
+  if (DBGSLOT(self,lid).md_holder != ktask_self()) {\
+   /* Non-recursive lock held twice. */\
+   printf("ERROR: Non-recursive multi-lock %d in %p not held by %I32d:%Iu:%s.\n"\
+          "See reference to acquisition by %p:\n"\
+         ,lid,self\
+         ,ktask_self()->t_proc->p_pid\
+         ,ktask_self()->t_tid\
+         ,ktask_getname(ktask_self())\
+         ,DBGSLOT(self,lid).md_holder);\
+   tbtrace_print(DBGSLOT(self,lid).md_locktb);\
+   printf("See reference to attempted release:\n");\
+   tb_printex(1);\
+   abort();\
+  }\
  }\
  free(DBGSLOT(self,lid).md_locktb);\
  DBGSLOT(self,lid).md_locktb = NULL;\
@@ -83,11 +85,11 @@ do{\
  if (DBGSLOT(self,lid).md_holder == ktask_self()) {\
   /* Non-recursive lock held twice. */\
   printf("ERROR: Non-recursive multi-lock %d %p held twice by %I32d:%Iu:%s.\n"\
-         "See reference to previous acquisition:\n"\
+         "See reference to previous acquisition (%I16x):\n"\
         ,lid,self\
         ,ktask_self()->t_proc->p_pid\
         ,ktask_self()->t_tid\
-        ,ktask_getname(ktask_self()));\
+        ,ktask_getname(ktask_self()),self->mmx_locks);\
   tbtrace_print(DBGSLOT(self,lid).md_locktb);\
   printf("See reference to new acquisition:\n");\
   tb_printex(1);\

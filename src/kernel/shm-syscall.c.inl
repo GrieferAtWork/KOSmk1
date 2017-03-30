@@ -30,6 +30,7 @@
 #include <kos/kernel/syscall.h>
 #include <kos/kernel/shm.h>
 #include <kos/kernel/proc.h>
+#include <kos/futex.h>
 
 __DECL_BEGIN
 
@@ -193,6 +194,15 @@ KSYSCALL_DEFINE2(kerrno_t,kmem_validate,
  KTASK_CRIT_END
  return error;
 }
+
+KSYSCALL_DEFINE_EX4(rc,kerrno_t,ktask_futex,
+                    __user unsigned int *,uaddr,unsigned int,futex_op,
+                    unsigned int,val,__user struct timespec *,abstime) {
+ KTASK_CRIT_MARK
+ return kshm_futex(&kproc_self()->p_shm,uaddr,futex_op,
+                   val,abstime,(unsigned int *)&regs->regs.ecx);
+}
+
 
 __DECL_END
 
