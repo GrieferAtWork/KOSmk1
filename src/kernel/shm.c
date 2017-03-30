@@ -1969,7 +1969,7 @@ kshm_touch_unlocked(struct kshm *__restrict self,
  assert(isaligned((uintptr_t)address,PAGEALIGN));
  assertf(touch_pages != 0,"Undefined behavior: 'touch_pages' is ZERO(0)");
  /* First step: Figure out the branch at the start address.
-  * >> If the given address lies outside of a branch, fail immediatly.
+  * >> If the given address lies outside of a branch, fail immediately.
   * >> If the given address is at the start of a branch, no need to split the branch before. */
  pbranch = kshmbranch_plocate(&self->s_map.m_root,(uintptr_t)address,&addr_semi);
  /* Fail if no branch is mapped to the specified base address. */

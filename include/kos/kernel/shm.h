@@ -209,7 +209,7 @@ typedef __uintptr_t      kshmregion_cluster_t;
 #define KSHMPART_OFFSETOF_START  (__SIZEOF_POINTER__)
 #define KSHMPART_OFFSETOF_PAGES  (__SIZEOF_POINTER__+KSHMREGION_PAGE_SIZEOF)
 #ifndef __ASSEMBLY__
-typedef __uintptr_t kshmfutex_id_t; /*< This is the futex's '(kshmregion_addr_t % PAGESIZE) / KTASK_FUTEXWORD_SIZE'. */
+typedef __uintptr_t kshmfutex_id_t; /*< This is the futex's '(kshmregion_addr_t % PAGESIZE) / KFUTEXWORD_SIZE'. */
 #define KSHMFUTEX_ALIGN  16   /* Keep the lower 4 bits unused. */
 
 #define KSHMPART_FUTEX_ADDRESS    (~(__uintptr_t)(KSHMFUTEX_ALIGN-1))
@@ -946,16 +946,17 @@ kshm_getfutex(struct kshm *__restrict self, __user void *address,
 // Perform a futex operations, as specified by 'futex_op'
 // @return: KE_OK:        [*]                The operation completed successfully.
 // @return: KE_FAULT:     [*]                The given 'uaddr' is faulty.
-// @return: KE_FAULT:     [KTASK_FUTEX_WAIT] The given 'abstime' pointer is faulty and non-NULL.
-// @return: KE_AGAIN:     [KTASK_FUTEX_WAIT] The value at '*uaddr' was equal to 'val' (the function didn't block)
-// @return: KE_TIMEDOUT:  [KTASK_FUTEX_WAIT] The given 'abstime' or a previously set timeout has expired.
+// @return: KE_FAULT:     [KFUTEX_WAIT] The given 'abstime' pointer is faulty and non-NULL.
+// @return: KE_AGAIN:     [KFUTEX_WAIT] The value at '*uaddr' was equal to 'val' (the function didn't block)
+// @return: KE_TIMEDOUT:  [KFUTEX_WAIT] The given 'abstime' or a previously set timeout has expired.
 // @return: KE_NOMEM:     [*]                No futex existed at the given address, and not enough memory was available to allocate one.
 // @return: KE_INVAL:     [?]                The specified 'futex_op' is unknown.
 extern __crit __wunused __nonnull((1)) kerrno_t
 kshm_futex(struct kshm *__restrict self,
            __user void *address, unsigned int futex_op, unsigned int val,
-           __user struct timespec *abstime,
-           __kernel unsigned int *woken_tasks);
+           __user void *buf, __user struct timespec *abstime,
+           __kernel unsigned int *woken_tasks,
+           __user void *address2, unsigned int val2);
 
 
 

@@ -85,6 +85,7 @@ struct kexrecord {
 #define KUTHREAD_OFFSETOF_EXH           (__SIZEOF_POINTER__*2)
 #define KUTHREAD_OFFSETOF_STACKBEGIN    (__SIZEOF_POINTER__*3)
 #define KUTHREAD_OFFSETOF_STACKEND      (__SIZEOF_POINTER__*4)
+#define KUTHREAD_OFFSETOF_UNIQUE        (__SIZEOF_POINTER__*5)
 #define KUTHREAD_OFFSETOF_ERRNO         (__SIZEOF_POINTER__*16)
 #define KUTHREAD_OFFSETOF_PID           (__SIZEOF_POINTER__*16+__SIZEOF_INT__)
 #define KUTHREAD_OFFSETOF_TID           (__SIZEOF_POINTER__*16+__SIZEOF_INT__+4)
@@ -107,7 +108,9 @@ struct __packed kuthread {
  __user struct kexrecord  *u_exh;          /*< [0..1] Stack of active exception handlers. */
  __user void              *u_stackbegin;   /*< [1..1] First valid memory address associated with the stack. */
  __user void              *u_stackend;     /*< [1..1] First invalid memory address no longer associated with the stack. */
- __user void              *u_padding1[11]; /*< Padding data. */
+ __uintptr_t               u_unique;       /*< [?..?] An OS-global number unique to this task (useful for SHM-ready owner tracking in synchronization primitives).
+                                            *   WARNING: Once the thread is terminated and all handles are closed, this number may be re-used by new threads. */
+ __user void              *u_padding1[10]; /*< Padding data. */
  /* OFFSET: 16*__SIZEOF_POINTER__ */
 union __packed { struct __packed {
  int                       u_errno;        /*< Used by libc: the 'errno' variable (Placed here to prevent overhead from placing it in an ELF TLS block). */

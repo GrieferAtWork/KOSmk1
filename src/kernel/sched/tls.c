@@ -680,6 +680,7 @@ kproc_tls_pt_setup(struct kproc *__restrict self,
  uthread->u_self       = task->t_tls.pt_uthread;
  uthread->u_stackbegin = task->t_ustackvp;
  uthread->u_stackend   = (__user void *)((uintptr_t)task->t_ustackvp+task->t_ustacksz);
+ uthread->u_unique     = (uintptr_t)task; /* Meh... (doesn't matter if the user knows this. - Beyond identification, it won't do them any good...) */
  uthread->u_parid      = task->t_parid;
  uthread->u_tid        = task->t_tid;
  uthread->u_pid        = task->t_proc->p_pid;

@@ -231,9 +231,9 @@ typedef bool _Bool;
 #define ____INTELLISENE_attribute_unused                     /* nothing */
 #define ____INTELLISENE_attribute___unused                   /* nothing */
 #define ____INTELLISENE_attribute___unused__                 /* nothing */
-#define ____INTELLISENE_attribute_aligned(x)                 ____INTELLISENE_ATTR_VAR/* __declspec(align(x)) */
-#define ____INTELLISENE_attribute___aligned(x)               ____INTELLISENE_ATTR_VAR/* __declspec(align(x)) */
-#define ____INTELLISENE_attribute___aligned__(x)             ____INTELLISENE_ATTR_VAR/* __declspec(align(x)) */
+#define ____INTELLISENE_attribute_aligned(x)                 __declspec(align(x))
+#define ____INTELLISENE_attribute___aligned(x)               __declspec(align(x))
+#define ____INTELLISENE_attribute___aligned__(x)             __declspec(align(x))
 #define ____INTELLISENE_attribute_packed                     /* nothing */
 #define ____INTELLISENE_attribute___packed                   /* nothing */
 #define ____INTELLISENE_attribute___packed__                 /* nothing */

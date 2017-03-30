@@ -23,14 +23,16 @@
 #ifndef __KOS_KERNEL_SHM_FUTEX_C_INL__
 #define __KOS_KERNEL_SHM_FUTEX_C_INL__ 1
 
-#include <kos/compiler.h>
 #include <kos/atomic.h>
+#include <kos/compiler.h>
 #include <kos/futex.h>
-#include <kos/kernel/shm.h>
-#include <kos/syslog.h>
 #include <kos/kernel/rwlock.h>
-#include <sys/types.h>
 #include <kos/kernel/sched_yield.h>
+#include <kos/kernel/shm.h>
+#include <kos/kernel/signal.h>
+#include <kos/kernel/signal_v.h>
+#include <kos/syslog.h>
+#include <sys/types.h>
 
 __DECL_BEGIN
 
@@ -300,15 +302,16 @@ kshm_getfutex(struct kshm *__restrict self, __user void *address,
 
 
 
-#define FUTEXOP_MAYALLOCATE(op) (((op)&KTASK_FUTEX_OP_KINDMASK) == KTASK_FUTEX_WAIT)
+#define FUTEXOP_MAYALLOCATE(op) (((op)&_KFUTEX_MASK_CMD) != _KFUTEX_CMD_SEND)
 
 __crit kerrno_t
 kshm_futex(struct kshm *__restrict self,
            __user void *address, unsigned int futex_op, unsigned int val,
-           __user struct timespec *abstime,
-           __kernel unsigned int *woken_tasks) {
- kerrno_t error;
- __ref struct kshmfutex *user_futex;
+           __user void *buf, __user struct timespec *abstime,
+           __kernel unsigned int *woken_tasks,
+           __user void *address2, unsigned int val2) {
+ kerrno_t error; int opcode,has_write_lock = 0;
+ __ref struct kshmfutex *user_futex,*user_futex2;
  KTASK_CRIT_MARK
  kassert_kshm(self);
  error = krwlock_beginread(&self->s_lock);
@@ -316,6 +319,7 @@ kshm_futex(struct kshm *__restrict self,
  /* Make sure the given pointer is properly aligned (misalignments are silently ignored).
   * TODO: Shouldn't we just fail if it's misaligned? (But with what error...) */
  *(uintptr_t *)&address &= ~((uintptr_t)sizeof(unsigned int)-1);
+ *(uintptr_t *)&address2 &= ~((uintptr_t)sizeof(unsigned int)-1);
  error = kshm_getfutex_unlocked(self,address,&user_futex,
                                 FUTEXOP_MAYALLOCATE(futex_op));
  if __unlikely(KE_ISERR(error)) {
@@ -324,62 +328,200 @@ kshm_futex(struct kshm *__restrict self,
  }
  kassert_kshmfutex(user_futex);
  /* We've got a reference to the futex. Time to do this! */
- switch (futex_op&KTASK_FUTEX_OP_KINDMASK) {
+ opcode = futex_op&_KFUTEX_MASK_CMD;
+ switch (opcode) {
 
-  /* Wait for a futex to be signaled. */
-  case KTASK_FUTEX_WAIT: {
+  { /* Wait for a futex to be signaled (aka. receive it). */
    __kernel unsigned int *kernel_futex,kernel_futex_val;
-   struct timespec kernel_abstime;
+   __kernel unsigned int *kernel_futex2,kernel_futex2_val;
+   struct timespec kernel_abstime; int should_receive;
    size_t kernel_futex_size;
+  case _KFUTEX_CMD_C1:
+  case _KFUTEX_CMD_CX:
+  case _KFUTEX_CMD_RECV:
+  case _KFUTEX_CMD_C0:
+user_lock_again:
    kernel_futex = (unsigned int *)kshm_translateuser(self,self->s_pd,address,
                                                      sizeof(unsigned int),
                                                     &kernel_futex_size,0);
-   if __unlikely(!kernel_futex) {efault: error = KE_FAULT; break; } /* Really shouldn't happen... */
+   if __unlikely(!kernel_futex) { error = KE_FAULT; break; } /* Really shouldn't happen... */
    assertf(kernel_futex_size == sizeof(unsigned int),
            "This should always be the case due to the alignment fix above!");
+   /* Load the secondary futex and its physical address. */
+   if (opcode == _KFUTEX_CMD_RECV) user_futex2 = NULL;
+   else {
+    if (address2 == address) {
+     /* Same userspace address --> Same futex. */
+same_futex:
+     if (opcode != _KFUTEX_CMD_C0) { error = KE_INVAL; break; }
+     kernel_futex2 = kernel_futex;
+     user_futex2 = NULL;
+    } else {
+     error = kshm_getfutex_unlocked(self,address2,&user_futex2,0);
+     if __unlikely(KE_ISERR(error)) {
+      if (error == KE_NOENT) user_futex2 = NULL;
+      else break;
+     }
+     if __unlikely(user_futex2 == user_futex) {
+      /* Special case: Physical memory is mapped more than once
+       * >> These are two different pointers for the same memory location. */
+      kshmfutex_decref(user_futex2);
+      goto same_futex;
+     }
+    }
+    error = krwlock_upgrade(&self->s_lock);
+    if __unlikely(KE_ISERR(error)) goto err_futex2;
+    has_write_lock = 1;
+    if (error == KS_UNLOCKED) goto user_lock_again;
+    kernel_futex2 = (unsigned int *)kshm_translateuser(self,self->s_pd,address2,
+                                                       sizeof(unsigned int),
+                                                      &kernel_futex_size,1);
+    /* Really shouldn't happen... */
+    if __unlikely(!kernel_futex2) {
+err_futex2_fault:
+     error = KE_FAULT;
+err_futex2:
+     if (user_futex2) kshmfutex_decref(user_futex2);
+     break;
+    }
+    assertf(kernel_futex_size == sizeof(unsigned int),
+            "This should always be the case due to the alignment fix above!");
+    assert(kernel_futex2 != kernel_futex);
+   }
+   assert(user_futex2 != user_futex);
    if __unlikely(abstime && kshm_copyfromuser(self,&kernel_abstime,abstime,
                                               sizeof(struct timespec))
-                 ) goto efault;
+                 ) goto err_futex2_fault;
    /* Lock the signal, thus preventing anyone from sending it.
     * >> Past this point, everything we do will appear atomic in userspace. */
    ksignal_lock_c(&user_futex->f_sig,KSIGNAL_LOCK_WAIT);
    /* Atomically load the futex's value from userspace. */
+reload_kernel_futex:
    kernel_futex_val = katomic_load(*kernel_futex);
+   /* Do the ~magical~ comparison, making sure that the futex value matches what is given. */
+   switch ((futex_op & _KFUTEX_RECV_OPMASK) >> _KFUTEX_RECV_OPSHIFT) {
+    case KFUTEX_EQUAL        : should_receive = (kernel_futex_val == val); break;
+    case KFUTEX_LOWER        : should_receive = (kernel_futex_val < val); break;
+    case KFUTEX_LOWER_EQUAL  : should_receive = (kernel_futex_val <= val); break;
+    case KFUTEX_AND          : should_receive = (kernel_futex_val & val); break;
+    case KFUTEX_XOR          : should_receive = (kernel_futex_val ^ val); break;
+    case KFUTEX_SHL          : should_receive = (kernel_futex_val << val); break;
+    case KFUTEX_SHR          : should_receive = (kernel_futex_val >> val); break;
+    case KFUTEX_NOT_EQUAL    : should_receive = (kernel_futex_val != val); break;
+    case KFUTEX_GREATER_EQUAL: should_receive = (kernel_futex_val >= val); break;
+    case KFUTEX_GREATER      : should_receive = (kernel_futex_val > val); break;
+    case KFUTEX_NOT_AND      : should_receive = !(kernel_futex_val & val); break;
+    case KFUTEX_NOT_XOR      : should_receive = !(kernel_futex_val ^ val); break;
+    case KFUTEX_FALSE        : should_receive = 0; break; /* Doesn't make much sense, but it is logical... */
+    default: should_receive = 1; break;
+   }
+   if (opcode != _KFUTEX_CMD_RECV) {
+    unsigned int newval;
+    /* Secondary operation (used for condition variables). */
+    if (user_futex2) {
+     if __unlikely(!ksignal_trylock_c(&user_futex2->f_sig,KSIGNAL_LOCK_WAIT)) {
+      /* Must idle back and try again (can happen if two futex objects try to lock each other). */
+      ksignal_unlock_c(&user_futex->f_sig,KSIGNAL_LOCK_WAIT);
+      has_write_lock ? krwlock_endwrite(&self->s_lock) : krwlock_endread(&self->s_lock);
+      has_write_lock = 0;
+      ktask_yield(); /* Yield execution, hopefully getting the other side to do its job first. */
+      error = krwlock_beginread(&self->s_lock);
+      if __unlikely(KE_ISERR(error)) goto err_futex2;
+      goto user_lock_again;
+     }
+    }
+    if (kernel_futex == kernel_futex2) {
+     kernel_futex2_val = kernel_futex_val;
+    } else {
+reload_kernel_futex2:
+     kernel_futex2_val = katomic_load(*kernel_futex2);
+    }
+    /* Perform the 'KFUTEX_CCMD(*)' operation. */
+    switch ((opcode & _KFUTEX_CCMD_OPMASK) >> _KFUTEX_CCMD_OPSHIFT) {
+     default            : newval = val2; break; /* '*uaddr2 = val2'. */
+     case KFUTEX_ADD    : newval = kernel_futex2_val+val2; break; /* '*uaddr2 += val2' */
+     case KFUTEX_SUB    : newval = kernel_futex2_val-val2; break; /* '*uaddr2 -= val2' */
+     case KFUTEX_MUL    : newval = kernel_futex2_val*val2; break; /* '*uaddr2 *= val2' */
+     case KFUTEX_DIV    : newval = kernel_futex2_val/val2; break; /* '*uaddr2 /= val2' */
+     case KFUTEX_AND    : newval = kernel_futex2_val&val2; break; /* '*uaddr2 &= val2' */
+     case KFUTEX_OR     : newval = kernel_futex2_val|val2; break; /* '*uaddr2 |= val2' */
+     case KFUTEX_XOR    : newval = kernel_futex2_val^val2; break; /* '*uaddr2 ^= val2' */
+     case KFUTEX_SHL    : newval = kernel_futex2_val<<val2; break; /* '*uaddr2 <<= val2' */
+     case KFUTEX_SHR    : newval = kernel_futex2_val>>val2; break; /* '*uaddr2 >>= val2' */
+     case KFUTEX_NOT    : newval = ~(val2); break; /* '*uaddr2 = ~(*uaddr2 + val2)' */
+     case KFUTEX_NOT_ADD: newval = ~(kernel_futex2_val+val2); break; /* '*uaddr2 = ~(*uaddr2 + val2)' */
+     case KFUTEX_NOT_SUB: newval = ~(kernel_futex2_val-val2); break; /* '*uaddr2 = ~(*uaddr2 - val2)' */
+     case KFUTEX_NOT_MUL: newval = ~(kernel_futex2_val*val2); break; /* '*uaddr2 = ~(*uaddr2 * val2)' */
+     case KFUTEX_NOT_DIV: newval = ~(kernel_futex2_val/val2); break; /* '*uaddr2 = ~(*uaddr2 / val2)' */
+     case KFUTEX_NOT_AND: newval = ~(kernel_futex2_val&val2); break; /* '*uaddr2 = ~(*uaddr2 & val2)' */
+     case KFUTEX_NOT_OR : newval = ~(kernel_futex2_val|val2); break; /* '*uaddr2 = ~(*uaddr2 | val2)' */
+     case KFUTEX_NOT_XOR: newval = ~(kernel_futex2_val^val2); break; /* '*uaddr2 = ~(*uaddr2 ^ val2)' */
+     case KFUTEX_NOT_SHL: newval = ~(kernel_futex2_val<<val2); break; /* '*uaddr2 = ~(*uaddr2 << val2)' */
+     case KFUTEX_NOT_SHR: newval = ~(kernel_futex2_val>>val2); break; /* '*uaddr2 = ~(*uaddr2 >> val2)' */
+    }
+    /* Set the new value for the secondary futex. */
+    if (!katomic_cmpxch(*kernel_futex2,kernel_futex2_val,newval)) {
+     /* Failed to apply new futex2 value. */
+     if (kernel_futex == kernel_futex2) {
+      assert(!user_futex2);
+      goto reload_kernel_futex; /* Reload the primary futex. */
+     } else {
+      goto reload_kernel_futex2; /* Reload the secondary futex. */
+     }
+    }
+    /* Send a signal to the secondary futex. */
+    if (user_futex2) {
+     assert(opcode == _KFUTEX_CMD_C1 || opcode == _KFUTEX_CMD_CX);
+     assert(kernel_futex != kernel_futex2);
+     k_syslogf(KLOG_TRACE,"[FUTEX] send(%p)\n",address2);
+     if (opcode == _KFUTEX_CMD_C1) { /* Send one in 'user_futex2' */
+      while (_ksignal_sendone_andunlock_c(&user_futex2->f_sig) == KE_DESTROYED);
+     } else { /* Send all in 'user_futex2' */
+      _ksignal_sendall_andunlock_c(&user_futex2->f_sig);
+     }
+     kshmfutex_decref(user_futex2);
+    } else {
+    }
+   } else {
+    assert(!user_futex2);
+   }
    /* Only unlock the SHM manager after we've dereferenced the userspace
     * value, thus ensuring that no race condition of the user munmap-ing
     * the memory in the meantime. */
-   krwlock_endread(&self->s_lock);
-   /* Do the ~magical~ comparison, making sure that the futex value matches what is given. */
-   switch (futex_op&KTASK_FUTEX_WAIT_MASK) {
-    default                   : if (kernel_futex_val != val) goto fail_again; break;
-    case KTASK_FUTEX_WAIT_LO  : if (kernel_futex_val >= val) goto fail_again; break;
-    case KTASK_FUTEX_WAIT_LE  : if (kernel_futex_val > val) goto fail_again; break;
-    case KTASK_FUTEX_WAIT_AND : if (!(kernel_futex_val & val)) goto fail_again; break;
-    case KTASK_FUTEX_WAIT_XOR : if (!(kernel_futex_val ^ val)) goto fail_again; break;
-    case KTASK_FUTEX_WAIT_NE  : if (kernel_futex_val == val) goto fail_again; break;
-    case KTASK_FUTEX_WAIT_GE  : if (kernel_futex_val < val) goto fail_again; break;
-    case KTASK_FUTEX_WAIT_GR  : if (kernel_futex_val <= val) goto fail_again; break;
-    case KTASK_FUTEX_WAIT_NAND: if (kernel_futex_val & val) goto fail_again; break;
-    case KTASK_FUTEX_WAIT_NXOR: if (kernel_futex_val ^ val) goto fail_again; break;
+   kassert_kshm(self);
+   kassert_krwlock(&self->s_lock);
+   kassert_ksignal(&self->s_lock.rw_sig);
+
+   if (should_receive) {
+    has_write_lock ? krwlock_endwrite(&self->s_lock) : krwlock_endread(&self->s_lock);
+    k_syslogf(KLOG_TRACE,"[FUTEX] recv(%p)\n",address);
+    error = buf
+     ? (abstime /* Unlock and receive the signal. */
+     ?  _ksignal_vtimedrecv_andunlock_c(&user_futex->f_sig,&kernel_abstime,buf)
+     :  _ksignal_vrecv_andunlock_c(&user_futex->f_sig,buf))
+     : (abstime /* Unlock and receive the signal. */
+     ?  _ksignal_timedrecv_andunlock_c(&user_futex->f_sig,&kernel_abstime)
+     :  _ksignal_recv_andunlock_c(&user_futex->f_sig));
+    kshmfutex_decref(user_futex);
+    return error;
+   } else {
+    ksignal_unlock_c(&user_futex->f_sig,KSIGNAL_LOCK_WAIT);
+    if (user_futex2) kshmfutex_decref(user_futex2);
+    k_syslogf(KLOG_TRACE,"[FUTEX] fail(EAGAIN)\n");
+    error = KE_AGAIN;
    }
-   
-   error = abstime /* Unlock and receive the signal. */
-    ? _ksignal_timedrecv_andunlock_c(&user_futex->f_sig,&kernel_abstime)
-    : _ksignal_recv_andunlock_c(&user_futex->f_sig);
-end_futex:
-   kshmfutex_decref(user_futex);
-   return error;
-fail_again:
-   error = KE_AGAIN;
-   ksignal_unlock_c(&user_futex->f_sig,KSIGNAL_LOCK_WAIT);
-   k_syslogf(KLOG_DEBUG,"[FUTEX] fail(EAGAIN)\n");
-   goto end_futex;
   } break;
 
   /* Wake a given amount of threads waiting for a futex. */
-  case KTASK_FUTEX_WAKE: {
+  case _KFUTEX_CMD_SEND: {
    *woken_tasks = 0;
-   while (val-- && (ksignal_sendone(&user_futex->f_sig) != KS_EMPTY)) ++*woken_tasks;
+   k_syslogf(KLOG_TRACE,"[FUTEX] send(%p)\n",address);
+   if (buf) {
+    size_t bufsize = (size_t)abstime;
+    while (val-- && (ksignal_vusendone(&user_futex->f_sig,buf,bufsize) != KS_EMPTY)) ++*woken_tasks;
+   } else {
+    while (val-- && (ksignal_sendone(&user_futex->f_sig) != KS_EMPTY)) ++*woken_tasks;
+   }
    error = KE_OK;
   } break;
 
@@ -390,7 +532,7 @@ fail_again:
 
  kshmfutex_decref(user_futex);
 end_unlock:
- krwlock_endread(&self->s_lock);
+ has_write_lock ? krwlock_endwrite(&self->s_lock) : krwlock_endread(&self->s_lock);
  return error;
 }
 

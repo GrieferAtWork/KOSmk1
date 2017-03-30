@@ -172,8 +172,12 @@ extern __crit __wunused __nonnull((2,3,4)) kerrno_t _ksignal_vtimeoutrecvs_andun
    if (__vrvcaller->t_sigval) {\
     /* No data was transmitted (cleanup sigval pointer,\
        and return KS_NODATA in success case). */\
-    __vrvcaller->t_sigval = NULL;\
-    if (error == KE_OK) error = KS_NODATA;\
+    ktask_lock(__vrvcaller,KTASK_LOCK_SIGVAL);\
+    if (__vrvcaller->t_sigval) {\
+     __vrvcaller->t_sigval = NULL;\
+     if (error == KE_OK) error = KS_NODATA;\
+    }\
+    ktask_unlock(__vrvcaller,KTASK_LOCK_SIGVAL);\
    }\
  }
 #define __KSIGNAL_VRECV(buf,recv) \
@@ -212,6 +216,15 @@ extern __crit __wunused __nonnull((2,3,4)) kerrno_t _ksignal_vtimeoutrecvs_andun
 extern        __nonnull((1)) kerrno_t ksignal_vsendone(struct ksignal *__restrict self, void const *__restrict buf, __size_t bufsize);
 extern __crit __nonnull((1)) kerrno_t _ksignal_vsendone_andunlock_c(struct ksignal *__restrict self, void const *__restrict buf, __size_t bufsize);
 extern __crit __nonnull((1)) kerrno_t ksignal_vsendoneex(struct ksignal *__restrict self, struct kcpu *__restrict newcpu, int hint, void const *__restrict buf, __size_t bufsize);
+
+//////////////////////////////////////////////////////////////////////////
+// Similar to the functions above, but used for user-user data transfer,
+// copying data from the effective page directory of the caller to that
+// of the receiving threads.
+// @return: KE_FAULT: Either the given source buffer, or a destination buffer was faulty.
+extern        __nonnull((1)) kerrno_t ksignal_vusendone(struct ksignal *__restrict self, __user void const *__restrict buf, __size_t bufsize);
+extern __crit __nonnull((1)) kerrno_t _ksignal_vusendone_andunlock_c(struct ksignal *__restrict self, __user void const *__restrict buf, __size_t bufsize);
+extern __crit __nonnull((1)) kerrno_t ksignal_vusendoneex(struct ksignal *__restrict self, struct kcpu *__restrict newcpu, int hint, __user void const *__restrict buf, __size_t bufsize);
 #else
 #define ksignal_vsendone(self,buf,bufsize) \
  ksignal_vsendoneex(self,kcpu_leastload(),KTASK_RESCHEDULE_HINT_DEFAULT,buf,bufsize)
@@ -225,12 +238,28 @@ extern __crit __nonnull((1)) kerrno_t ksignal_vsendoneex(struct ksignal *__restr
             ksignal_endlock();\
             __xreturn __ksoeerr;\
  })
+#define ksignal_vusendone(self,buf,bufsize) \
+ ksignal_vusendoneex(self,kcpu_leastload(),KTASK_RESCHEDULE_HINT_DEFAULT,buf,bufsize)
+#define /*__crit*/ _ksignal_vusendone_andunlock_c(self,buf,bufsize) \
+ _ksignal_vusendoneex_andunlock_c(self,kcpu_leastload(),KTASK_RESCHEDULE_HINT_DEFAULT,buf,bufsize)
+#define ksignal_vusendoneex(self,newcpu,hint,buf,bufsize) \
+ __xblock({ struct ksignal *const __ksoeself = (self);\
+            kerrno_t __ksoeerr; kassert_ksignal(__ksoeself);\
+            ksignal_lock(__ksoeself,KSIGNAL_LOCK_WAIT);\
+            __ksoeerr = _ksignal_vusendoneex_andunlock_c(__ksoeself,newcpu,hint,buf,bufsize);\
+            ksignal_endlock();\
+            __xreturn __ksoeerr;\
+ })
 
 #endif
 extern __crit __nonnull((1,4)) kerrno_t
 _ksignal_vsendoneex_andunlock_c(struct ksignal *__restrict self,
                                 struct kcpu *__restrict newcpu, int hint,
                                 void const *__restrict buf, __size_t bufsize);
+extern __crit __nonnull((1,4)) kerrno_t
+_ksignal_vusendoneex_andunlock_c(struct ksignal *__restrict self,
+                                 struct kcpu *__restrict newcpu, int hint,
+                                 __user void const *__restrict buf, __size_t bufsize);
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -241,6 +270,15 @@ extern __nonnull((1,4)) kerrno_t
 ksignal_vsendn(struct ksignal *__restrict self,
                __size_t n_tasks, __size_t *__restrict woken_tasks,
                void const *__restrict buf, __size_t bufsize);
+
+//////////////////////////////////////////////////////////////////////////
+// Similar to 'ksignal_vsendn', but used for user-user data transfer,
+// copying data from the effective page directory of the caller to
+// that of the receiving threads.
+extern __nonnull((1,4)) kerrno_t
+ksignal_vusendn(struct ksignal *__restrict self,
+                __size_t n_tasks, __size_t *__restrict woken_tasks,
+                __user void const *__restrict buf, __size_t bufsize);
 
 
 
@@ -253,6 +291,14 @@ ksignal_vsendn(struct ksignal *__restrict self,
 extern __nonnull((1,2)) __size_t
 ksignal_vsendall(struct ksignal *__restrict self,
                  void const *__restrict buf, __size_t bufsize);
+
+//////////////////////////////////////////////////////////////////////////
+// Similar to 'ksignal_vsendall', but used for user-user data transfer,
+// copying data from the effective page directory of the caller to
+// that of the receiving threads.
+extern __nonnull((1,2)) __size_t
+ksignal_vusendall(struct ksignal *__restrict self,
+                  __user void const *__restrict buf, __size_t bufsize);
 #else
 #define ksignal_vsendall(self,buf,bufsize)\
  __xblock({ struct ksignal *const __kssaself = (self);\
@@ -262,10 +308,21 @@ ksignal_vsendall(struct ksignal *__restrict self,
             ksignal_endlock();\
             __xreturn __kssares;\
  })
+#define ksignal_vusendall(self,buf,bufsize)\
+ __xblock({ struct ksignal *const __kssaself = (self);\
+            __size_t __kssares; kassert_ksignal(__kssaself);\
+            ksignal_lock(__kssaself,KSIGNAL_LOCK_WAIT);\
+            __kssares = _ksignal_vusendall_andunlock_c(__kssaself,buf,bufsize);\
+            ksignal_endlock();\
+            __xreturn __kssares;\
+ })
 #endif
 extern __crit __nonnull((1,2)) __size_t
 _ksignal_vsendall_andunlock_c(struct ksignal *__restrict self,
                               void const *__restrict buf, __size_t bufsize);
+extern __crit __nonnull((1,2)) __size_t
+_ksignal_vusendall_andunlock_c(struct ksignal *__restrict self,
+                               __user void const *__restrict buf, __size_t bufsize);
 
 
 

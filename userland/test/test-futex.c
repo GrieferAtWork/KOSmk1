@@ -29,33 +29,38 @@
 #include <unistd.h>
 #include <limits.h>
 
+static unsigned int x[2] = {0,0};
 
-static struct kmutex user_mutex = KMUTEX_INIT;
+#define ftx   x[0]
+#define ready x[1]
 
 static void *thread_main(void *p) {
  kerrno_t error;
- outf("[THREAD] begin:lock()\n");
- error = kmutex_lock(&user_mutex);
- outf("[THREAD] end:lock(): %d\n",error);
- outf("[THREAD] begin:unlock()\n");
- error = kmutex_unlock(&user_mutex);
- outf("[THREAD] end:unlock(): %d\n",error);
+ char buffer[256];
+ /* atomic: if (true) { ready = 1; send(ready); vrecv(ftx,buffer); } */
+ outf("[THREAD] Begin receiving data\n");
+ error = kfutex_ccmd(&ftx,KFUTEX_CCMD_SENDALL(KFUTEX_STORE)|
+                          KFUTEX_RECVIF(KFUTEX_TRUE),
+                     0,buffer,NULL,&ready,1);
+ assertf(error == KE_OK,"%d",error);
+ outf("[THREAD] Data: %.256q\n",buffer);
  return p;
 }
 
 
 TEST(futex) {
+ static char const data[] = "This is the data that is send through a signal";
+ kerrno_t error;
  int t = task_newthread(&thread_main,NULL,TASK_NEWTHREAD_DEFAULT);
 
- kerrno_t error;
- outf("[MAIN] begin:lock()\n");
- error = kmutex_lock(&user_mutex);
- outf("[MAIN] end:lock(): %d\n",error);
- ktask_yield();
- outf("[MAIN] begin:unlock()\n");
- error = kmutex_unlock(&user_mutex);
- outf("[MAIN] end:unlock(): %d\n",error);
+ /* atomic: if (ready == 0) { recv(ready). } */
+ error = kfutex_cmd(&ready,KFUTEX_RECVIF(KFUTEX_EQUAL),0,NULL,NULL);
+ outf("[MAIN] Sending data after %d...\n",error);
 
+ /* atomic: vsend(ftx,data,sizeof(data)); */
+ error = kfutex_cmd(&ftx,KFUTEX_SEND,UINT_MAX,(void *)data,(struct timespec *)sizeof(data));
+
+ outf("[MAIN] Joining thread after %d...\n",error);
  task_join(t,NULL);
  outf("[MAIN] Joined thread\n");
  close(t);

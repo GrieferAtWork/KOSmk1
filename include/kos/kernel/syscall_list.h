@@ -139,8 +139,8 @@ print "#endif /" "* SYSCALL_PAD *" "/";
 /*     58|0x003a */ SYSCALL(ktask_fork)
 /*     59|0x003b */ SYSCALL(ktask_exec)
 /*     60|0x003c */ SYSCALL(ktask_fexec)
-/*     61|0x003d */ SYSCALL(ktask_futex)
-/*     62|0x003e */ SYSCALL_NULL
+/*     61|0x003d */ SYSCALL(kfutex_cmd)
+/*     62|0x003e */ SYSCALL(kfutex_ccmd)
 /*     63|0x003f */ SYSCALL_NULL
 /*     64|0x0040 */ SYSCALL_NULL
 /*     65|0x0041 */ SYSCALL(kproc_enumfd)

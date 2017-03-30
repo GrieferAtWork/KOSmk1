@@ -30,41 +30,103 @@
 
 __DECL_BEGIN
 
-#define KTASK_FUTEX_WAIT  0 /* Check if '*uaddr' is equal to 'val', waiting if it is, but returning KE_AGAIN if not. */
-#define KTASK_FUTEX_WAKE  1 /* Wake up to 'val' threads waiting at 'uaddr'. (ECX is set to the amount of woken threads) */
+/* Operation codes for 'KFUTEX_RECVIF*' */
+#define KFUTEX_OPMASK         0xf
+#define KFUTEX_NOT            0x1
+#define KFUTEX_FALSE          0 /* Intentionally ZERO(0) (aka. 'false') */
+#define KFUTEX_TRUE           1 /* Intentionally ONE(1) (aka. 'true') */
+#define KFUTEX_EQUAL          0x2
+#define KFUTEX_LOWER          0x4
+#define KFUTEX_LOWER_EQUAL    0x6
+#define KFUTEX_AND            0x8
+#define KFUTEX_XOR            0xA
+#define KFUTEX_SHL            0xC
+#define KFUTEX_SHR            0xE
+#define KFUTEX_NOT_EQUAL     (KFUTEX_NOT|KFUTEX_EQUAL)
+#define KFUTEX_GREATER_EQUAL (KFUTEX_NOT|KFUTEX_LOWER)
+#define KFUTEX_GREATER       (KFUTEX_NOT|KFUTEX_LOWER_EQUAL)
+#define KFUTEX_NOT_AND       (KFUTEX_NOT|KFUTEX_AND)
+#define KFUTEX_NOT_XOR       (KFUTEX_NOT|KFUTEX_XOR)
 
-#define KTASK_FUTEX_OP_KINDMASK  0x0000ffff
-#define KTASK_FUTEX_OP_FLAGMASK  0xffff0000
+/* Operation codes for 'KFUTEX_CCMD*'
+ * NOTE: When 'uaddr2 == uaddr', these will be applied with atomic_compare_exchange. */
+#  define KFUTEX_STORE   0x00 /* '*uaddr2 = val2'. */
+#  define KFUTEX_ADD     0x10 /* '*uaddr2 += val2' */
+#  define KFUTEX_SUB     0x20 /* '*uaddr2 -= val2' */
+#  define KFUTEX_MUL     0x30 /* '*uaddr2 *= val2' */
+#  define KFUTEX_DIV     0x40 /* '*uaddr2 /= val2' */
+//#define KFUTEX_AND     0x08 /* '*uaddr2 &= val2' */
+#  define KFUTEX_OR      0x50 /* '*uaddr2 |= val2' */
+//#define KFUTEX_XOR     0x0A /* '*uaddr2 ^= val2' */
+//#define KFUTEX_SHL     0x0C /* '*uaddr2 <<= val2' */
+//#define KFUTEX_SHR     0x0E /* '*uaddr2 >>= val2' */
+//#define KFUTEX_NOT     0x01 /* '*uaddr2 = ~(val2)' */
+#  define KFUTEX_NOT_ADD 0x11 /* '*uaddr2 = ~(*uaddr2 + val2)' */
+#  define KFUTEX_NOT_SUB 0x21 /* '*uaddr2 = ~(*uaddr2 - val2)' */
+#  define KFUTEX_NOT_MUL 0x31 /* '*uaddr2 = ~(*uaddr2 * val2)' */
+#  define KFUTEX_NOT_DIV 0x41 /* '*uaddr2 = ~(*uaddr2 / val2)' */
+//#define KFUTEX_NOT_AND 0x09 /* '*uaddr2 = ~(*uaddr2 & val2)' */
+#  define KFUTEX_NOT_OR  0x51 /* '*uaddr2 = ~(*uaddr2 | val2)' */
+//#define KFUTEX_NOT_XOR 0x0B /* '*uaddr2 = ~(*uaddr2 ^ val2)' */
+#  define KFUTEX_NOT_SHL 0x0D /* '*uaddr2 = ~(*uaddr2 << val2)' */
+#  define KFUTEX_NOT_SHR 0x0F /* '*uaddr2 = ~(*uaddr2 >> val2)' */
 
-#define KTASK_FUTEX_WAIT_MASK  0xf0000
-#define KTASK_FUTEX_WAIT_NOT   0x80000 /*< Invert the meaning of any wait operation below. */
-#define KTASK_FUTEX_WAIT_EQ    0x00000                                    /*< 'if (*uaddr == val) wait();' */
-#define KTASK_FUTEX_WAIT_LO    0x10000                                    /*< 'if (*uaddr <  val) wait();' */
-#define KTASK_FUTEX_WAIT_LE    0x20000                                    /*< 'if (*uaddr <= val) wait();' */
-#define KTASK_FUTEX_WAIT_AND   0x30000                                    /*< 'if (*uaddr &  val) wait();' */
-#define KTASK_FUTEX_WAIT_XOR   0x40000                                    /*< 'if (*uaddr ^  val) wait();' */
-#define KTASK_FUTEX_WAIT_NE   (KTASK_FUTEX_WAIT_NOT|KTASK_FUTEX_WAIT_EQ)  /*< 'if (*uaddr != val) wait();' */
-#define KTASK_FUTEX_WAIT_GE   (KTASK_FUTEX_WAIT_NOT|KTASK_FUTEX_WAIT_LO)  /*< 'if (*uaddr >= val) wait();' */
-#define KTASK_FUTEX_WAIT_GR   (KTASK_FUTEX_WAIT_NOT|KTASK_FUTEX_WAIT_LE)  /*< 'if (*uaddr >  val) wait();' */
-#define KTASK_FUTEX_WAIT_NAND (KTASK_FUTEX_WAIT_NOT|KTASK_FUTEX_WAIT_AND) /*< 'if (!(*uaddr & val)) wait();' */
-#define KTASK_FUTEX_WAIT_NXOR (KTASK_FUTEX_WAIT_NOT|KTASK_FUTEX_WAIT_XOR) /*< 'if (!(*uaddr ^ val)) wait();' */
+/* Command bit flags. */
+#define _KFUTEX_MASK_CMD     0x0000000f
+#define _KFUTEX_MASK_FLAGS   0xff000000
+#define _KFUTEX_RECV_OPSHIFT 20
+#define _KFUTEX_RECV_OPMASK  0x00f00000
+#define _KFUTEX_CCMD_OPSHIFT 24
+#define _KFUTEX_CCMD_OPMASK  0xff000000
+
+#define _KFUTEX_CMD_RECV    0x0 /* Wait for a set of futex objects. (NOTE: Accepts secondary commands) */
+#define _KFUTEX_CMD_SEND    0x1 /* Wake a set of futex objects. */
+#define _KFUTEX_CMD_C0      0x2 /* '_KFUTEX_CMD_RECV'+secondary command. */
+#define _KFUTEX_CMD_C1      0x3 /* '_KFUTEX_CMD_RECV'+secondary command+secondary send_one. */
+#define _KFUTEX_CMD_CX      0x4 /* '_KFUTEX_CMD_RECV'+secondary command+secondary send_all. */
+
+
+/* Atomically check '(*uaddr [op] val) != 0' and start waiting if the expression is true.
+ * NOTE: This check is performed before a secondary operation may be executed. */
+#define KFUTEX_RECVIF(op)       (_KFUTEX_CMD_RECV|((op)&0xf) << _KFUTEX_RECV_OPSHIFT)
+
+/* Secondary operations for 'KFUTEX_RECVIF' that can be or'd to it.
+ * WARNING: When 'uaddr2 == uaddr', only 'KFUTEX_CCMD()' may be used.
+ *       >> It is not possible to atomically send and receive the same futex! */
+#define KFUTEX_CCMD(op)         (_KFUTEX_CMD_C0|((op)&0xff) << _KFUTEX_CCMD_OPSHIFT) /*< { *uaddr2 = *uaddr2 [op] val2; } */
+#define KFUTEX_CCMD_SENDALL(op) (_KFUTEX_CMD_C1|((op)&0xff) << _KFUTEX_CCMD_OPSHIFT) /*< { *uaddr2 = *uaddr2 [op] val2; send_all(uaddr2); } */
+#define KFUTEX_CCMD_SENDONE(op) (_KFUTEX_CMD_CX|((op)&0xff) << _KFUTEX_CCMD_OPSHIFT) /*< { *uaddr2 = *uaddr2 [op] val2; send_one(uaddr2); } */
+
+/* Wake up to 'val' threads waiting at 'uaddr'.
+ * Upon success, ECX is set to the amount of woken threads. */
+#define KFUTEX_SEND        _KFUTEX_CMD_SEND
+
 
 #ifndef __NO_PROTOTYPES
 #ifndef __ASSEMBLY__
 struct timespec;
 
+typedef __attribute__((__aligned__(__SIZEOF_INT__))) volatile unsigned int kfutex_t;
+
 //////////////////////////////////////////////////////////////////////////
 // Perform a futex operation:
-// @return: KE_OK:       [*]                The operation completed successfully.
-// @return: KE_FAULT:    [*]                The given 'uaddr' is faulty.
-// @return: KE_FAULT:    [KTASK_FUTEX_WAIT] The given 'abstime' pointer is faulty and non-NULL.
-// @return: KE_AGAIN:    [KTASK_FUTEX_WAIT] The value at '*uaddr' was equal to 'val' (the function didn't block)
-// @return: KE_TIMEDOUT: [KTASK_FUTEX_WAIT] The given 'abstime' or a previously set timeout has expired.
-// @return: KE_NOMEM:    [*]                No futex existed at the given address, and not enough memory was available to allocate one.
-// @return: KE_INVAL:    [?]                The specified 'futex_op' is unknown.
-__local _syscall4(kerrno_t,ktask_futex,
-                  unsigned int *,uaddr,unsigned int,futex_op,
-                  unsigned int,val,struct timespec *,abstime);
+// @return: KE_OK:       [*]           The operation completed successfully.
+// @return: KE_FAULT:    [*]           The given 'uaddr' is faulty.
+// @return: KE_FAULT:    [KFUTEX_WAIT] The given 'abstime' pointer is faulty and non-NULL.
+// @return: KE_AGAIN:    [KFUTEX_WAIT] The value at '*uaddr' was equal to 'val' (the function didn't block)
+// @return: KE_TIMEDOUT: [KFUTEX_WAIT] The given 'abstime' or a previously set timeout has expired.
+// @return: KE_FAULT:    [KFUTEX_SEND] The given 'buf' pointer, or that of a receiver was faulty.
+// @return: KE_NOMEM:    [*]           No futex existed at the given address, and not enough memory was available to allocate one.
+// @return: KE_INVAL:    [?]           The specified 'futex_op' is unknown.
+// @return: KS_NODATA:   [KFUTEX_WAIT && buf != NULL] The futex was signaled, but no data was transmitted.
+// @return: KS_EMPTY:    [KFUTEX_SEND] No threads were woken (ECX is set to ZERO(0))
+__local _syscall5(kerrno_t,kfutex_cmd,
+                  kfutex_t *,uaddr,unsigned int,futex_op,
+                  unsigned int,val,void *,buf,struct timespec *,abstime);
+__local _syscall7(kerrno_t,kfutex_ccmd,
+                  kfutex_t *,uaddr,unsigned int,futex_op,
+                  unsigned int,val,void *,buf,struct timespec *,abstime,
+                  kfutex_t *,uaddr2,unsigned int,val2);
 
 
 #endif /* !__ASSEMBLY__ */

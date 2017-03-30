@@ -278,21 +278,28 @@ extern void  tls_putl(__ptrdiff_t offset, __u32 value);
 extern void  tls_putq(__ptrdiff_t offset, __u64 value);
 extern void  tls_putp(__ptrdiff_t offset, void *value);
 
+/* A system-wide unique identifier for the calling thread
+ * (may be re-used once that thread is no longer used).
+ * NOTE: The kernel-given unique thread number is never ZERO(0),
+ *       meaning you can use ZERO(0) for your own purposes. */
+extern __uintptr_t thread_unique(void);
+
 __DECL_END
 #else
 #include <proc-tls.h>
-#define tls_addr   _tls_addr
-#define tls_self   _tls_self
-#define tls_getb   _tls_getb
-#define tls_getw   _tls_getw
-#define tls_getl   _tls_getl
-#define tls_putb   _tls_putb
-#define tls_putw   _tls_putw
-#define tls_putl   _tls_putl
-#define tls_getq   _tls_getq
-#define tls_putq   _tls_putq
-#define tls_getp   _tls_getp
-#define tls_putp   _tls_putp
+#define tls_addr      _tls_addr
+#define tls_self      _tls_self
+#define tls_getb      _tls_getb
+#define tls_getw      _tls_getw
+#define tls_getl      _tls_getl
+#define tls_putb      _tls_putb
+#define tls_putw      _tls_putw
+#define tls_putl      _tls_putl
+#define tls_getq      _tls_getq
+#define tls_putq      _tls_putq
+#define tls_getp      _tls_getp
+#define tls_putp      _tls_putp
+#define thread_unique _thread_unique
 #endif
 
 #endif /* !__KERNEL__ */

@@ -705,5 +705,8 @@
     <None Include="..\src\kernel\shm-futex.c.inl">
       <Filter>src\kernel</Filter>
     </None>
+    <None Include="..\src\kernel\sched\sync\signal_v-impl.c.inl">
+      <Filter>src\kernel\sched\sync</Filter>
+    </None>
   </ItemGroup>
 </Project>

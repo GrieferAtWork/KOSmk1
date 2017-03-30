@@ -195,12 +195,22 @@ KSYSCALL_DEFINE2(kerrno_t,kmem_validate,
  return error;
 }
 
-KSYSCALL_DEFINE_EX4(rc,kerrno_t,ktask_futex,
-                    __user unsigned int *,uaddr,unsigned int,futex_op,
-                    unsigned int,val,__user struct timespec *,abstime) {
+KSYSCALL_DEFINE_EX5(rc,kerrno_t,kfutex_cmd,
+                    __user kfutex_t *,uaddr,unsigned int,futex_op,unsigned int,val,
+                    __user void *,buf,__user struct timespec *,abstime) {
  KTASK_CRIT_MARK
- return kshm_futex(&kproc_self()->p_shm,uaddr,futex_op,
-                   val,abstime,(unsigned int *)&regs->regs.ecx);
+ return kshm_futex(&kproc_self()->p_shm,(void *)uaddr,futex_op,val,
+                   buf,abstime,(unsigned int *)&regs->regs.ecx,
+                  (void *)uaddr,val);
+}
+KSYSCALL_DEFINE_EX7(rc,kerrno_t,kfutex_ccmd,
+                    __user kfutex_t *,uaddr,unsigned int,futex_op,unsigned int,val,
+                    __user void *,buf,__user struct timespec *,abstime,
+                    __user kfutex_t *,uaddr2,unsigned int,val2) {
+ KTASK_CRIT_MARK
+ return kshm_futex(&kproc_self()->p_shm,(void *)uaddr,futex_op,val,
+                   buf,abstime,(unsigned int *)&regs->regs.ecx,
+                  (void *)uaddr2,val2);
 }
 
 

@@ -210,6 +210,7 @@
     <None Include="..\src\kernel\sched\sync\rwlock.c.inl" />
     <None Include="..\src\kernel\sched\sync\sem.c.inl" />
     <None Include="..\src\kernel\sched\sync\signal.c.inl" />
+    <None Include="..\src\kernel\sched\sync\signal_v-impl.c.inl" />
     <None Include="..\src\kernel\sched\sync\signal_v.c.inl" />
     <None Include="..\src\kernel\sched\sync\sigset.c.inl" />
     <None Include="..\src\kernel\sched\task-attr.c.inl" />

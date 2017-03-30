@@ -55,6 +55,12 @@ extern void  _tls_putl(__ptrdiff_t offset, __u32 value);
 extern void  _tls_putq(__ptrdiff_t offset, __u64 value);
 extern void  _tls_putp(__ptrdiff_t offset, void *value);
 
+/* A system-wide unique identifier for the calling thread
+ * (may be re-used once that thread is no longer used).
+ * NOTE: The kernel-given unique thread number is never ZERO(0),
+ *       meaning you can use ZERO(0) for your own purposes. */
+extern __uintptr_t _thread_unique(void);
+
 __DECL_END
 #else /* __INTELLISENSE__ */
 #ifdef __i386__
@@ -170,8 +176,16 @@ __DECL_END
 #   error "FIXME"
 #endif
 
+#if __SIZEOF_POINTER__ == 4
+#   define _thread_unique()   _tls_getl(20)
+#elif __SIZEOF_POINTER__ == 8
+#   define _thread_unique()   _tls_getq(40)
+#else
+#   define _thread_unique()  (__uintptr_t)_tls_getp(__SIZEOF_POINTER__*5)
+#endif
+
 #ifdef __kuthread_defined
-#define _tls_self    ((struct kuthread *)_tls_addr)
+#define _tls_self     ((struct kuthread *)_tls_addr)
 #endif /* __kuthread_defined */
 
 #endif /* __INTELLISENSE__ */
