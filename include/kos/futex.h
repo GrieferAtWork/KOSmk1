@@ -113,20 +113,41 @@ typedef __attribute__((__aligned__(__SIZEOF_INT__))) volatile unsigned int kfute
 // @return: KE_OK:       [*]           The operation completed successfully.
 // @return: KE_FAULT:    [*]           The given 'uaddr' is faulty.
 // @return: KE_FAULT:    [KFUTEX_WAIT] The given 'abstime' pointer is faulty and non-NULL.
-// @return: KE_AGAIN:    [KFUTEX_WAIT] The value at '*uaddr' was equal to 'val' (the function didn't block)
+// @return: KE_AGAIN:    [KFUTEX_WAIT] The 'KFUTEX_RECVIF' condition was false.
 // @return: KE_TIMEDOUT: [KFUTEX_WAIT] The given 'abstime' or a previously set timeout has expired.
 // @return: KE_FAULT:    [KFUTEX_SEND] The given 'buf' pointer, or that of a receiver was faulty.
 // @return: KE_NOMEM:    [*]           No futex existed at the given address, and not enough memory was available to allocate one.
 // @return: KE_INVAL:    [?]           The specified 'futex_op' is unknown.
 // @return: KS_NODATA:   [KFUTEX_WAIT && buf != NULL] The futex was signaled, but no data was transmitted.
 // @return: KS_EMPTY:    [KFUTEX_SEND] No threads were woken (ECX is set to ZERO(0))
+// @return: KE_INVAL:    [kfutex_ccmd][KFUTEX_WAIT][KFUTEX_CCMD_SENDALL|KFUTEX_CCMD_SENDONE]
+//                       [uaddr2 == uaddr] The specified second futex is equal to the first,
+//                                         but the caller attempted to send & receive a single
+//                                         futex in the same atomic frame (which isn't possible).
 __local _syscall5(kerrno_t,kfutex_cmd,
                   kfutex_t *,uaddr,unsigned int,futex_op,
-                  unsigned int,val,void *,buf,struct timespec *,abstime);
-__local _syscall7(kerrno_t,kfutex_ccmd,
+                  unsigned int,val,void *,buf,struct timespec const *,abstime);
+__local _syscall7(kerrno_t,kfutex_ccmd, /* kfutex_c[onditional]cmd */
                   kfutex_t *,uaddr,unsigned int,futex_op,
-                  unsigned int,val,void *,buf,struct timespec *,abstime,
+                  unsigned int,val,void *,buf,struct timespec const *,abstime,
                   kfutex_t *,uaddr2,unsigned int,val2);
+
+/* Helper macros for easy futex signaling. */
+#define kfutex_sendn(uaddr,max_receivers)             kfutex_cmd(uaddr,KFUTEX_SEND,max_receivers,NULL,NULL)
+#define kfutex_sendone(uaddr)                         kfutex_sendn(uaddr,1)
+#define kfutex_sendall(uaddr)                         kfutex_sendn(uaddr,(unsigned int)-1)
+#define kfutex_vsend(uaddr,max_receivers,buf,bufsize) kfutex_cmd(uaddr,KFUTEX_SEND,max_receivers,(void *)(buf),(struct timespec const *)(__size_t)(bufsize))
+#define kfutex_vsendone(uaddr,buf,bufsize)            kfutex_vsend(uaddr,1,buf,bufsize)
+#define kfutex_vsendall(uaddr,buf,bufsize)            kfutex_vsend(uaddr,(unsigned int)-1,buf,bufsize)
+
+/* NOTE: There are no receiver helpers because 'kfutex_{c}cmd'
+ *       are already as simplified as possible.
+ *       The next higher level would already be something like:
+ * >> #define kfutex_recv_if_notequal(uaddr,val)                   kfutex_cmd(uaddr,KFUTEX_RECVIF(KFUTEX_NOT_EQUAL),val,NULL,NULL)
+ * >> #define kfutex_vrecv_if_notequal(uaddr,val,buf)              kfutex_cmd(uaddr,KFUTEX_RECVIF(KFUTEX_NOT_EQUAL),val,buf,NULL)
+ * >> #define kfutex_timedrecv_if_notequal(uaddr,val,abstime)      kfutex_cmd(uaddr,KFUTEX_RECVIF(KFUTEX_NOT_EQUAL),val,NULL,abstime)
+ * >> #define kfutex_vtimedrecv_if_notequal(uaddr,val,buf,abstime) kfutex_cmd(uaddr,KFUTEX_RECVIF(KFUTEX_NOT_EQUAL),val,buf,abstime)
+ */
 
 
 #endif /* !__ASSEMBLY__ */

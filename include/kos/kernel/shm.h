@@ -954,7 +954,7 @@ kshm_getfutex(struct kshm *__restrict self, __user void *address,
 extern __crit __wunused __nonnull((1)) kerrno_t
 kshm_futex(struct kshm *__restrict self,
            __user void *address, unsigned int futex_op, unsigned int val,
-           __user void *buf, __user struct timespec *abstime,
+           __user void *buf, __user struct timespec const *abstime,
            __kernel unsigned int *woken_tasks,
            __user void *address2, unsigned int val2);
 

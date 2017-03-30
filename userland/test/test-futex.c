@@ -29,15 +29,13 @@
 #include <unistd.h>
 #include <limits.h>
 
-static unsigned int x[2] = {0,0};
-
-#define ftx   x[0]
-#define ready x[1]
+static unsigned int ftx   = 0;
+static unsigned int ready = 0;
 
 static void *thread_main(void *p) {
  kerrno_t error;
  char buffer[256];
- /* atomic: if (true) { ready = 1; send(ready); vrecv(ftx,buffer); } */
+ /* atomic: if (true) { ready = 1; sendall(&ready); vrecv(&ftx,buffer); } */
  outf("[THREAD] Begin receiving data\n");
  error = kfutex_ccmd(&ftx,KFUTEX_CCMD_SENDALL(KFUTEX_STORE)|
                           KFUTEX_RECVIF(KFUTEX_TRUE),
@@ -53,16 +51,17 @@ TEST(futex) {
  kerrno_t error;
  int t = task_newthread(&thread_main,NULL,TASK_NEWTHREAD_DEFAULT);
 
- /* atomic: if (ready == 0) { recv(ready). } */
+ /* atomic: if (ready == 0) { recv(&ready). }
+  * NOTE: This may randomly return 'KE_AGAIN' when
+  *       the thread is already receiving. */
  error = kfutex_cmd(&ready,KFUTEX_RECVIF(KFUTEX_EQUAL),0,NULL,NULL);
  outf("[MAIN] Sending data after %d...\n",error);
 
- /* atomic: vsend(ftx,data,sizeof(data)); */
- error = kfutex_cmd(&ftx,KFUTEX_SEND,UINT_MAX,(void *)data,(struct timespec *)sizeof(data));
+ /* atomic: vsend(&ftx,data,sizeof(data)); */
+ error = kfutex_vsendall(&ftx,data,sizeof(data));
 
  outf("[MAIN] Joining thread after %d...\n",error);
  task_join(t,NULL);
  outf("[MAIN] Joined thread\n");
  close(t);
- outf("[MAIN] Closed thread\n");
 }

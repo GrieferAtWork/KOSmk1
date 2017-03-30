@@ -29,9 +29,9 @@
 #ifndef __ASSEMBLY__
 #ifndef __KERNEL__
 #include <kos/atomic.h>
-#include <kos/futex.h>
 #include <kos/errno.h>
-#if !defined(__INTELLISENSE__) || 1
+#include <kos/futex.h>
+#ifndef __INTELLISENSE__
 #include <proc-tls.h>
 #include <string.h>
 #include <assert.h>
@@ -58,7 +58,7 @@ __local void kmutex_init __P((struct kmutex *__restrict __self));
 // @return: KE_NOMEM:      [kmutex_{timed}lock] Not enough available memory.
 __local kerrno_t kmutex_lock __P((struct kmutex *__restrict __self));
 __local kerrno_t kmutex_trylock __P((struct kmutex *__restrict __self));
-__local kerrno_t kmutex_timedlock __P((struct kmutex *__restrict __self, struct timespec *__abstime));
+__local kerrno_t kmutex_timedlock __P((struct kmutex *__restrict __self, struct timespec const *__abstime));
 __local kerrno_t kmutex_unlock __P((struct kmutex *__restrict __self));
 
 
@@ -81,18 +81,18 @@ __local void krmutex_init __P((struct krmutex *__restrict __self));
 // @return: KS_BLOCKING:   [krmutex_*lock] The lock was successfully acquired because the caller was already holding one.
 __local kerrno_t krmutex_lock __P((struct krmutex *__restrict __self));
 __local kerrno_t krmutex_trylock __P((struct krmutex *__restrict __self));
-__local kerrno_t krmutex_timedlock __P((struct krmutex *__restrict __self, struct timespec *__abstime));
+__local kerrno_t krmutex_timedlock __P((struct krmutex *__restrict __self, struct timespec const *__abstime));
 __local kerrno_t krmutex_unlock __P((struct krmutex *__restrict __self));
 
 
 
-#if !defined(__INTELLISENSE__) || 1
+#ifndef __INTELLISENSE__
 __local void kmutex_init __D1(struct kmutex *__restrict,__self) { __self->m_futex = 0; }
 __local kerrno_t kmutex_trylock __D1(struct kmutex *__restrict,__self) {
  return katomic_cmpxch(*(unsigned int *)&__self->m_futex,0,1) ? KE_OK : KE_WOULDBLOCK;
 }
 __local kerrno_t kmutex_timedlock
-__D2(struct kmutex *__restrict,__self,struct timespec *,__abstime) {
+__D2(struct kmutex *__restrict,__self,struct timespec const *,__abstime) {
  kerrno_t __error;
  while (((__error = kmutex_trylock(__self)) == KE_WOULDBLOCK) &&
          (__error = kfutex_cmd(&__self->m_futex,KFUTEX_RECVIF(KFUTEX_NOT_EQUAL),0,NULL,__abstime),
@@ -104,8 +104,7 @@ __local kerrno_t kmutex_lock __D1(struct kmutex *__restrict,__self) {
 }
 __local kerrno_t kmutex_unlock __D1(struct kmutex *__restrict,__self) {
  return katomic_cmpxch(*(unsigned int *)&__self->m_futex,1,0)
-  ? kfutex_cmd(&__self->m_futex,KFUTEX_SEND,1,NULL,NULL)
-  : KE_PERM;
+  ? kfutex_sendone(&__self->m_futex) : KE_PERM;
 }
 __local void krmutex_init __D1(struct krmutex *__restrict,__self) {
  memset(__self,0,sizeof(struct krmutex));
@@ -126,7 +125,7 @@ __local kerrno_t krmutex_trylock __D1(struct krmutex *__restrict,__self) {
  return KE_WOULDBLOCK;
 }
 __local kerrno_t krmutex_timedlock
-__D2(struct krmutex *__restrict,__self,struct timespec *,__abstime) {
+__D2(struct krmutex *__restrict,__self,struct timespec const *,__abstime) {
  kerrno_t __error;
  while (((__error = krmutex_trylock(__self)) == KE_WOULDBLOCK) &&
          (__error = kfutex_cmd(&__self->rm_futex,KFUTEX_RECVIF(KFUTEX_NOT_EQUAL),0,NULL,__abstime),
@@ -139,7 +138,7 @@ __local kerrno_t krmutex_lock __D1(struct krmutex *__restrict,__self) {
 __local kerrno_t krmutex_unlock __D1(struct krmutex *__restrict,__self) {
  if (__self->rm_owner != _thread_unique() || 
     !katomic_xch(*(unsigned int *)&__self->rm_futex,0)) return KE_PERM;
- return kfutex_cmd(&__self->rm_futex,KFUTEX_SEND,0,NULL,NULL);
+ return kfutex_sendone(&__self->rm_futex);
 }
 #endif
 

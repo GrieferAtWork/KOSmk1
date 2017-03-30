@@ -302,12 +302,12 @@ kshm_getfutex(struct kshm *__restrict self, __user void *address,
 
 
 
-#define FUTEXOP_MAYALLOCATE(op) (((op)&_KFUTEX_MASK_CMD) != _KFUTEX_CMD_SEND)
+#define FUTEXOP_MAYALLOCATE(opcode) ((opcode) != _KFUTEX_CMD_SEND)
 
 __crit kerrno_t
 kshm_futex(struct kshm *__restrict self,
            __user void *address, unsigned int futex_op, unsigned int val,
-           __user void *buf, __user struct timespec *abstime,
+           __user void *buf, __user struct timespec const *abstime,
            __kernel unsigned int *woken_tasks,
            __user void *address2, unsigned int val2) {
  kerrno_t error; int opcode,has_write_lock = 0;
@@ -320,21 +320,24 @@ kshm_futex(struct kshm *__restrict self,
   * TODO: Shouldn't we just fail if it's misaligned? (But with what error...) */
  *(uintptr_t *)&address &= ~((uintptr_t)sizeof(unsigned int)-1);
  *(uintptr_t *)&address2 &= ~((uintptr_t)sizeof(unsigned int)-1);
+ opcode = futex_op&_KFUTEX_MASK_CMD;
  error = kshm_getfutex_unlocked(self,address,&user_futex,
-                                FUTEXOP_MAYALLOCATE(futex_op));
+                                FUTEXOP_MAYALLOCATE(opcode));
  if __unlikely(KE_ISERR(error)) {
-  if (error == KE_NOENT) error = KE_OK;
+  if (error == KE_NOENT) {
+   /* Special error codes for non-present futex. */
+   error = opcode == _KFUTEX_CMD_SEND ? KS_EMPTY : KE_OK;
+  }
   goto end_unlock;
  }
  kassert_kshmfutex(user_futex);
  /* We've got a reference to the futex. Time to do this! */
- opcode = futex_op&_KFUTEX_MASK_CMD;
  switch (opcode) {
 
   { /* Wait for a futex to be signaled (aka. receive it). */
    __kernel unsigned int *kernel_futex,kernel_futex_val;
    __kernel unsigned int *kernel_futex2,kernel_futex2_val;
-   struct timespec kernel_abstime; int should_receive;
+   struct timespec kernel_abstime;
    size_t kernel_futex_size;
   case _KFUTEX_CMD_C1:
   case _KFUTEX_CMD_CX:
@@ -400,20 +403,20 @@ reload_kernel_futex:
    kernel_futex_val = katomic_load(*kernel_futex);
    /* Do the ~magical~ comparison, making sure that the futex value matches what is given. */
    switch ((futex_op & _KFUTEX_RECV_OPMASK) >> _KFUTEX_RECV_OPSHIFT) {
-    case KFUTEX_EQUAL        : should_receive = (kernel_futex_val == val); break;
-    case KFUTEX_LOWER        : should_receive = (kernel_futex_val < val); break;
-    case KFUTEX_LOWER_EQUAL  : should_receive = (kernel_futex_val <= val); break;
-    case KFUTEX_AND          : should_receive = (kernel_futex_val & val); break;
-    case KFUTEX_XOR          : should_receive = (kernel_futex_val ^ val); break;
-    case KFUTEX_SHL          : should_receive = (kernel_futex_val << val); break;
-    case KFUTEX_SHR          : should_receive = (kernel_futex_val >> val); break;
-    case KFUTEX_NOT_EQUAL    : should_receive = (kernel_futex_val != val); break;
-    case KFUTEX_GREATER_EQUAL: should_receive = (kernel_futex_val >= val); break;
-    case KFUTEX_GREATER      : should_receive = (kernel_futex_val > val); break;
-    case KFUTEX_NOT_AND      : should_receive = !(kernel_futex_val & val); break;
-    case KFUTEX_NOT_XOR      : should_receive = !(kernel_futex_val ^ val); break;
-    case KFUTEX_FALSE        : should_receive = 0; break; /* Doesn't make much sense, but it is logical... */
-    default: should_receive = 1; break;
+    case KFUTEX_EQUAL        : if (!(kernel_futex_val == val)) goto dont_receive; break;
+    case KFUTEX_LOWER        : if (!(kernel_futex_val < val)) goto dont_receive; break;
+    case KFUTEX_LOWER_EQUAL  : if (!(kernel_futex_val <= val)) goto dont_receive; break;
+    case KFUTEX_AND          : if (!(kernel_futex_val & val)) goto dont_receive; break;
+    case KFUTEX_XOR          : if (!(kernel_futex_val ^ val)) goto dont_receive; break;
+    case KFUTEX_SHL          : if (!(kernel_futex_val << val)) goto dont_receive; break;
+    case KFUTEX_SHR          : if (!(kernel_futex_val >> val)) goto dont_receive; break;
+    case KFUTEX_NOT_EQUAL    : if (!(kernel_futex_val != val)) goto dont_receive; break;
+    case KFUTEX_GREATER_EQUAL: if (!(kernel_futex_val >= val)) goto dont_receive; break;
+    case KFUTEX_GREATER      : if (!(kernel_futex_val > val)) goto dont_receive; break;
+    case KFUTEX_NOT_AND      : if ((kernel_futex_val & val)) goto dont_receive; break;
+    case KFUTEX_NOT_XOR      : if ((kernel_futex_val ^ val)) goto dont_receive; break;
+    case KFUTEX_FALSE        : goto dont_receive; break; /* Doesn't make much sense, but it is logical... */
+    default: break;
    }
    if (opcode != _KFUTEX_CMD_RECV) {
     unsigned int newval;
@@ -488,28 +491,22 @@ reload_kernel_futex2:
    /* Only unlock the SHM manager after we've dereferenced the userspace
     * value, thus ensuring that no race condition of the user munmap-ing
     * the memory in the meantime. */
-   kassert_kshm(self);
-   kassert_krwlock(&self->s_lock);
-   kassert_ksignal(&self->s_lock.rw_sig);
-
-   if (should_receive) {
-    has_write_lock ? krwlock_endwrite(&self->s_lock) : krwlock_endread(&self->s_lock);
-    k_syslogf(KLOG_TRACE,"[FUTEX] recv(%p)\n",address);
-    error = buf
-     ? (abstime /* Unlock and receive the signal. */
-     ?  _ksignal_vtimedrecv_andunlock_c(&user_futex->f_sig,&kernel_abstime,buf)
-     :  _ksignal_vrecv_andunlock_c(&user_futex->f_sig,buf))
-     : (abstime /* Unlock and receive the signal. */
-     ?  _ksignal_timedrecv_andunlock_c(&user_futex->f_sig,&kernel_abstime)
-     :  _ksignal_recv_andunlock_c(&user_futex->f_sig));
-    kshmfutex_decref(user_futex);
-    return error;
-   } else {
-    ksignal_unlock_c(&user_futex->f_sig,KSIGNAL_LOCK_WAIT);
-    if (user_futex2) kshmfutex_decref(user_futex2);
-    k_syslogf(KLOG_TRACE,"[FUTEX] fail(EAGAIN)\n");
-    error = KE_AGAIN;
-   }
+   has_write_lock ? krwlock_endwrite(&self->s_lock) : krwlock_endread(&self->s_lock);
+   k_syslogf(KLOG_TRACE,"[FUTEX] recv(%p)\n",address);
+   /* Select the appropriate receiver implementation
+    * to unlock and receive the signal. */
+   error = buf ? (abstime
+    ?  _ksignal_vtimedrecv_andunlock_c(&user_futex->f_sig,&kernel_abstime,buf)
+    :       _ksignal_vrecv_andunlock_c(&user_futex->f_sig,buf)) : (abstime
+    ?   _ksignal_timedrecv_andunlock_c(&user_futex->f_sig,&kernel_abstime)
+    :        _ksignal_recv_andunlock_c(&user_futex->f_sig));
+   kshmfutex_decref(user_futex);
+   return error;
+dont_receive:
+   ksignal_unlock_c(&user_futex->f_sig,KSIGNAL_LOCK_WAIT);
+   if (user_futex2) kshmfutex_decref(user_futex2);
+   k_syslogf(KLOG_TRACE,"[FUTEX] fail(EAGAIN)\n");
+   error = KE_AGAIN;
   } break;
 
   /* Wake a given amount of threads waiting for a futex. */
@@ -522,14 +519,13 @@ reload_kernel_futex2:
    } else {
     while (val-- && (ksignal_sendone(&user_futex->f_sig) != KS_EMPTY)) ++*woken_tasks;
    }
-   error = KE_OK;
+   error = *woken_tasks ? KE_OK : KS_EMPTY;
   } break;
 
   default:
    error = KE_INVAL;
    break;
  }
-
  kshmfutex_decref(user_futex);
 end_unlock:
  has_write_lock ? krwlock_endwrite(&self->s_lock) : krwlock_endread(&self->s_lock);
