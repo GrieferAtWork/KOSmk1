@@ -33,6 +33,22 @@ __DECL_BEGIN
 #define KTASK_FUTEX_WAIT  0 /* Check if '*uaddr' is equal to 'val', waiting if it is, but returning KE_AGAIN if not. */
 #define KTASK_FUTEX_WAKE  1 /* Wake up to 'val' threads waiting at 'uaddr'. (ECX is set to the amount of woken threads) */
 
+#define KTASK_FUTEX_OP_KINDMASK  0x0000ffff
+#define KTASK_FUTEX_OP_FLAGMASK  0xffff0000
+
+#define KTASK_FUTEX_WAIT_MASK  0xf0000
+#define KTASK_FUTEX_WAIT_NOT   0x80000 /*< Invert the meaning of any wait operation below. */
+#define KTASK_FUTEX_WAIT_EQ    0x00000                                    /*< 'if (*uaddr == val) wait();' */
+#define KTASK_FUTEX_WAIT_LO    0x10000                                    /*< 'if (*uaddr <  val) wait();' */
+#define KTASK_FUTEX_WAIT_LE    0x20000                                    /*< 'if (*uaddr <= val) wait();' */
+#define KTASK_FUTEX_WAIT_AND   0x30000                                    /*< 'if (*uaddr &  val) wait();' */
+#define KTASK_FUTEX_WAIT_XOR   0x40000                                    /*< 'if (*uaddr ^  val) wait();' */
+#define KTASK_FUTEX_WAIT_NE   (KTASK_FUTEX_WAIT_NOT|KTASK_FUTEX_WAIT_EQ)  /*< 'if (*uaddr != val) wait();' */
+#define KTASK_FUTEX_WAIT_GE   (KTASK_FUTEX_WAIT_NOT|KTASK_FUTEX_WAIT_LO)  /*< 'if (*uaddr >= val) wait();' */
+#define KTASK_FUTEX_WAIT_GR   (KTASK_FUTEX_WAIT_NOT|KTASK_FUTEX_WAIT_LE)  /*< 'if (*uaddr >  val) wait();' */
+#define KTASK_FUTEX_WAIT_NAND (KTASK_FUTEX_WAIT_NOT|KTASK_FUTEX_WAIT_AND) /*< 'if (!(*uaddr & val)) wait();' */
+#define KTASK_FUTEX_WAIT_NXOR (KTASK_FUTEX_WAIT_NOT|KTASK_FUTEX_WAIT_XOR) /*< 'if (!(*uaddr ^ val)) wait();' */
+
 #ifndef __NO_PROTOTYPES
 #ifndef __ASSEMBLY__
 struct timespec;

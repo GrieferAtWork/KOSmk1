@@ -27,6 +27,7 @@
 #include <kos/atomic.h>
 #include <kos/futex.h>
 #include <kos/kernel/shm.h>
+#include <kos/syslog.h>
 #include <kos/kernel/rwlock.h>
 #include <sys/types.h>
 #include <kos/kernel/sched_yield.h>
@@ -247,7 +248,8 @@ kshm_getfutex_unlocked(struct kshm *__restrict self, __user void *address,
  kshmfutex_id_t futex_id;
  KTASK_CRIT_MARK
  kassert_kshm(self);
- assert(krwlock_isreadlocked(&self->s_lock));
+ assert(krwlock_isreadlocked(&self->s_lock) ||
+        krwlock_iswritelocked(&self->s_lock));
  /* Lookup the branch associated with the futex address. */
  branch = kshmmap_locate(&self->s_map,(uintptr_t)address);
  if __unlikely(!branch) return KE_FAULT;
@@ -298,7 +300,7 @@ kshm_getfutex(struct kshm *__restrict self, __user void *address,
 
 
 
-#define FUTEXOP_MAYALLOCATE(op) ((op) == KTASK_FUTEX_WAIT)
+#define FUTEXOP_MAYALLOCATE(op) (((op)&KTASK_FUTEX_OP_KINDMASK) == KTASK_FUTEX_WAIT)
 
 __crit kerrno_t
 kshm_futex(struct kshm *__restrict self,
@@ -318,12 +320,11 @@ kshm_futex(struct kshm *__restrict self,
                                 FUTEXOP_MAYALLOCATE(futex_op));
  if __unlikely(KE_ISERR(error)) {
   if (error == KE_NOENT) error = KE_OK;
-  krwlock_endread(&self->s_lock);
   goto end_unlock;
  }
  kassert_kshmfutex(user_futex);
  /* We've got a reference to the futex. Time to do this! */
- switch (futex_op) {
+ switch (futex_op&KTASK_FUTEX_OP_KINDMASK) {
 
   /* Wait for a futex to be signaled. */
   case KTASK_FUTEX_WAIT: {
@@ -349,12 +350,30 @@ kshm_futex(struct kshm *__restrict self,
     * the memory in the meantime. */
    krwlock_endread(&self->s_lock);
    /* Do the ~magical~ comparison, making sure that the futex value matches what is given. */
-   if (kernel_futex_val != val) { error = KE_AGAIN; break; }
+   switch (futex_op&KTASK_FUTEX_WAIT_MASK) {
+    default                   : if (kernel_futex_val != val) goto fail_again; break;
+    case KTASK_FUTEX_WAIT_LO  : if (kernel_futex_val >= val) goto fail_again; break;
+    case KTASK_FUTEX_WAIT_LE  : if (kernel_futex_val > val) goto fail_again; break;
+    case KTASK_FUTEX_WAIT_AND : if (!(kernel_futex_val & val)) goto fail_again; break;
+    case KTASK_FUTEX_WAIT_XOR : if (!(kernel_futex_val ^ val)) goto fail_again; break;
+    case KTASK_FUTEX_WAIT_NE  : if (kernel_futex_val == val) goto fail_again; break;
+    case KTASK_FUTEX_WAIT_GE  : if (kernel_futex_val < val) goto fail_again; break;
+    case KTASK_FUTEX_WAIT_GR  : if (kernel_futex_val <= val) goto fail_again; break;
+    case KTASK_FUTEX_WAIT_NAND: if (kernel_futex_val & val) goto fail_again; break;
+    case KTASK_FUTEX_WAIT_NXOR: if (kernel_futex_val ^ val) goto fail_again; break;
+   }
+   
    error = abstime /* Unlock and receive the signal. */
     ? _ksignal_timedrecv_andunlock_c(&user_futex->f_sig,&kernel_abstime)
     : _ksignal_recv_andunlock_c(&user_futex->f_sig);
+end_futex:
    kshmfutex_decref(user_futex);
    return error;
+fail_again:
+   error = KE_AGAIN;
+   ksignal_unlock_c(&user_futex->f_sig,KSIGNAL_LOCK_WAIT);
+   k_syslogf(KLOG_INFO,"FAIL: EAGAIN\n");
+   goto end_futex;
   } break;
 
   /* Wake a given amount of threads waiting for a futex. */

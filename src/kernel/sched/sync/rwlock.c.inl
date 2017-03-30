@@ -517,6 +517,9 @@ krwlock_endread(struct krwlock *self) {
  KTASK_CRIT_MARK
  kassert_krwlock(self);
  ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
+#if !KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
+ assert(krwlock_isreadlocked(self));
+#endif
  krwlock_debug_delreader(self,1);
  if (!self->rw_readc) {
   /* Signal a waiting write task

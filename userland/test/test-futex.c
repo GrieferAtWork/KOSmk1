@@ -41,7 +41,7 @@ static void *thread_main(void *p) {
 
 TEST(futex) {
  user_futex = (unsigned int *)malloc(sizeof(unsigned int));
- *user_futex = 0;
+ *user_futex = 1;
  int t = task_newthread(&thread_main,NULL,TASK_NEWTHREAD_DEFAULT);
  outf("[MAIN] Thread spawned (Sleep a bit)\n");
  struct timespec tmo = {1,0};
@@ -52,5 +52,7 @@ TEST(futex) {
  task_join(t,NULL);
  outf("[MAIN] Joined thread\n");
  close(t);
+ outf("[MAIN] Closed thread\n");
  free(user_futex);
+ outf("[MAIN] Free\n");
 }
