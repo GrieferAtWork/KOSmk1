@@ -127,6 +127,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kos", "kos", "{0BC61691-24B
 		..\include\kos\mod.h = ..\include\kos\mod.h
 		..\include\kos\perm.h = ..\include\kos\perm.h
 		..\include\kos\symbol.h = ..\include\kos\symbol.h
+		..\include\kos\sync-mutex.h = ..\include\kos\sync-mutex.h
 		..\include\kos\syscall.h = ..\include\kos\syscall.h
 		..\include\kos\syscallno.h = ..\include\kos\syscallno.h
 		..\include\kos\sysconf.h = ..\include\kos\sysconf.h

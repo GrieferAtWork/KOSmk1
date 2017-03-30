@@ -23,36 +23,41 @@
 
 #include "helper.h"
 #include <kos/futex.h>
+#include <kos/sync-mutex.h>
 #include <malloc.h>
 #include <proc.h>
 #include <unistd.h>
 #include <limits.h>
 
 
-static unsigned int *user_futex;
+static struct kmutex user_mutex = KMUTEX_INIT;
 
 static void *thread_main(void *p) {
- outf("[THREAD] Begin waiting\n");
- kerrno_t wait_error = ktask_futex(user_futex,KTASK_FUTEX_WAIT,0,NULL);
- outf("[THREAD] Done waiting: %d (%d)\n",wait_error,*user_futex);
+ kerrno_t error;
+ outf("[THREAD] begin:lock()\n");
+ error = kmutex_lock(&user_mutex);
+ outf("[THREAD] end:lock(): %d\n",error);
+ outf("[THREAD] begin:unlock()\n");
+ error = kmutex_unlock(&user_mutex);
+ outf("[THREAD] end:unlock(): %d\n",error);
  return p;
 }
 
 
 TEST(futex) {
- user_futex = (unsigned int *)malloc(sizeof(unsigned int));
- *user_futex = 1;
  int t = task_newthread(&thread_main,NULL,TASK_NEWTHREAD_DEFAULT);
- outf("[MAIN] Thread spawned (Sleep a bit)\n");
- struct timespec tmo = {1,0};
- task_sleep(task_self(),&tmo);
- outf("[MAIN] Waking futex\n");
- kerrno_t error = ktask_futex(user_futex,KTASK_FUTEX_WAKE,UINT_MAX,NULL);
- outf("[MAIN] Wake error: %d\n",error);
+
+ kerrno_t error;
+ outf("[MAIN] begin:lock()\n");
+ error = kmutex_lock(&user_mutex);
+ outf("[MAIN] end:lock(): %d\n",error);
+ ktask_yield();
+ outf("[MAIN] begin:unlock()\n");
+ error = kmutex_unlock(&user_mutex);
+ outf("[MAIN] end:unlock(): %d\n",error);
+
  task_join(t,NULL);
  outf("[MAIN] Joined thread\n");
  close(t);
  outf("[MAIN] Closed thread\n");
- free(user_futex);
- outf("[MAIN] Free\n");
 }

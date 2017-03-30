@@ -55,13 +55,13 @@ struct timespec;
 
 //////////////////////////////////////////////////////////////////////////
 // Perform a futex operation:
-// @return: KE_OK:        [*]                The operation completed successfully.
-// @return: KE_FAULT:     [*]                The given 'uaddr' is faulty.
-// @return: KE_FAULT:     [KTASK_FUTEX_WAIT] The given 'abstime' pointer is faulty and non-NULL.
-// @return: KE_AGAIN:     [KTASK_FUTEX_WAIT] The value at '*uaddr' was equal to 'val' (the function didn't block)
-// @return: KE_TIMEDOUT:  [KTASK_FUTEX_WAIT] The given 'abstime' or a previously set timeout has expired.
-// @return: KE_NOMEM:     [*]                No futex existed at the given address, and not enough memory was available to allocate one.
-// @return: KE_INVAL:     [?]                The specified 'futex_op' is unknown.
+// @return: KE_OK:       [*]                The operation completed successfully.
+// @return: KE_FAULT:    [*]                The given 'uaddr' is faulty.
+// @return: KE_FAULT:    [KTASK_FUTEX_WAIT] The given 'abstime' pointer is faulty and non-NULL.
+// @return: KE_AGAIN:    [KTASK_FUTEX_WAIT] The value at '*uaddr' was equal to 'val' (the function didn't block)
+// @return: KE_TIMEDOUT: [KTASK_FUTEX_WAIT] The given 'abstime' or a previously set timeout has expired.
+// @return: KE_NOMEM:    [*]                No futex existed at the given address, and not enough memory was available to allocate one.
+// @return: KE_INVAL:    [?]                The specified 'futex_op' is unknown.
 __local _syscall4(kerrno_t,ktask_futex,
                   unsigned int *,uaddr,unsigned int,futex_op,
                   unsigned int,val,struct timespec *,abstime);

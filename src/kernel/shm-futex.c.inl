@@ -372,7 +372,7 @@ end_futex:
 fail_again:
    error = KE_AGAIN;
    ksignal_unlock_c(&user_futex->f_sig,KSIGNAL_LOCK_WAIT);
-   k_syslogf(KLOG_INFO,"FAIL: EAGAIN\n");
+   k_syslogf(KLOG_DEBUG,"[FUTEX] fail(EAGAIN)\n");
    goto end_futex;
   } break;
 

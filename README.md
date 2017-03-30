@@ -51,7 +51,9 @@ Chaos|KOS - Total anarchy.
      - alarm/pause
      - TLS
        - True TLS memory using segment registers
-   - synchronization primitives (Missing from user-space)
+   - synchronization primitives
+     - futex() (Fast Userspace Mutex)
+       - Can be shared through shared memory
      - semaphore
      - mutex
      - rwlock
