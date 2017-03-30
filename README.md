@@ -92,7 +92,7 @@ Chaos|KOS - Total anarchy.
    - NOTE: I'm using GCC 6.2.0, but older and newer versions should work, too...
  - deemon (https://github.com/GrieferAtWork/deemon)
    - If the latest commit doesn't work, use this one:<br>
-     https://github.com/GrieferAtWork/deemon/commit/1647b55a2b752ae5ef2c45edfedd80841b7eefc7
+     https://github.com/GrieferAtWork/deemon/commit/7204c5c14fba45311ada4fb323cde2f7a4189bb9
  - QEMU
 
 Yes, KOS doesn't have what would technically be considered a toolchain. Instead, everything is done through magic(.dee)
