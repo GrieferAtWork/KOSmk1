@@ -56,10 +56,12 @@ __local void kmutex_init __P((struct kmutex *__restrict __self));
 // @return: KE_WOUDLBLOCK: [kmutex_trylock] Failed to acquire a lock immediately.
 // @return: KE_TIMEDOUT:   [kmutex_{timed}lock] The given 'ABSTIME', or a previously set timeout has expired.
 // @return: KE_NOMEM:      [kmutex_{timed}lock] Not enough available memory.
+// @return: KE_PERM:       [kmutex_unlock_safe] The given mutex was not locked.
 __local kerrno_t kmutex_lock __P((struct kmutex *__restrict __self));
 __local kerrno_t kmutex_trylock __P((struct kmutex *__restrict __self));
 __local kerrno_t kmutex_timedlock __P((struct kmutex *__restrict __self, struct timespec const *__abstime));
 __local kerrno_t kmutex_unlock __P((struct kmutex *__restrict __self));
+__local kerrno_t kmutex_unlock_safe __P((struct kmutex *__restrict __self));
 
 
 struct krmutex {
@@ -79,10 +81,12 @@ __local void krmutex_init __P((struct krmutex *__restrict __self));
 // @return: KE_TIMEDOUT:   [krmutex_{timed}lock] The given 'ABSTIME', or a previously set timeout has expired.
 // @return: KE_NOMEM:      [krmutex_{timed}lock] Not enough available memory.
 // @return: KS_BLOCKING:   [krmutex_*lock] The lock was successfully acquired because the caller was already holding one.
+// @return: KE_PERM:       [krmutex_unlock_safe] The caller is not holding a lock to the rmutex.
 __local kerrno_t krmutex_lock __P((struct krmutex *__restrict __self));
 __local kerrno_t krmutex_trylock __P((struct krmutex *__restrict __self));
 __local kerrno_t krmutex_timedlock __P((struct krmutex *__restrict __self, struct timespec const *__abstime));
 __local kerrno_t krmutex_unlock __P((struct krmutex *__restrict __self));
+__local kerrno_t krmutex_unlock_safe __P((struct krmutex *__restrict __self));
 
 
 
@@ -103,6 +107,10 @@ __local kerrno_t kmutex_lock __D1(struct kmutex *__restrict,__self) {
  return kmutex_timedlock(__self,NULL);
 }
 __local kerrno_t kmutex_unlock __D1(struct kmutex *__restrict,__self) {
+ assertef(katomic_cmpxch(*(unsigned int *)&__self->m_futex,1,0),"Mutex not locked");
+ return kfutex_sendone(&__self->m_futex);
+}
+__local kerrno_t kmutex_unlock_safe __D1(struct kmutex *__restrict,__self) {
  return katomic_cmpxch(*(unsigned int *)&__self->m_futex,1,0)
   ? kfutex_sendone(&__self->m_futex) : KE_PERM;
 }
@@ -136,6 +144,11 @@ __local kerrno_t krmutex_lock __D1(struct krmutex *__restrict,__self) {
  return krmutex_timedlock(__self,NULL);
 }
 __local kerrno_t krmutex_unlock __D1(struct krmutex *__restrict,__self) {
+ assertf(__self->rm_owner == _thread_unique(),"You're not the owner");
+ assertef(katomic_xch(*(unsigned int *)&__self->rm_futex,0),"Mutex not locked");
+ return kfutex_sendone(&__self->rm_futex);
+}
+__local kerrno_t krmutex_unlock_safe __D1(struct krmutex *__restrict,__self) {
  if (__self->rm_owner != _thread_unique() || 
     !katomic_xch(*(unsigned int *)&__self->rm_futex,0)) return KE_PERM;
  return kfutex_sendone(&__self->rm_futex);

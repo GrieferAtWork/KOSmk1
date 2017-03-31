@@ -24,6 +24,7 @@
 #include "helper.h"
 #include <kos/futex.h>
 #include <kos/sync-mutex.h>
+#include <kos/sync-rwlock.h>
 #include <malloc.h>
 #include <proc.h>
 #include <unistd.h>
@@ -57,7 +58,7 @@ TEST(futex) {
  error = kfutex_cmd(&ready,KFUTEX_RECVIF(KFUTEX_EQUAL),0,NULL,NULL);
  outf("[MAIN] Sending data after %d...\n",error);
 
- /* atomic: vsend(&ftx,data,sizeof(data)); */
+ /* atomic: vsendall(&ftx,data,sizeof(data)); */
  error = kfutex_vsendall(&ftx,data,sizeof(data));
 
  outf("[MAIN] Joining thread after %d...\n",error);

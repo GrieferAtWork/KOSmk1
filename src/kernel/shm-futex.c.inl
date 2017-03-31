@@ -310,7 +310,7 @@ kshm_futex(struct kshm *__restrict self,
            __user void *buf, __user struct timespec const *abstime,
            __kernel unsigned int *woken_tasks,
            __user void *address2, unsigned int val2) {
- kerrno_t error; int opcode,has_write_lock = 0;
+ kerrno_t error; int opcode;
  __ref struct kshmfutex *user_futex,*user_futex2;
  KTASK_CRIT_MARK
  kassert_kshm(self);
@@ -374,7 +374,6 @@ same_futex:
     }
     error = krwlock_upgrade(&self->s_lock);
     if __unlikely(KE_ISERR(error)) goto err_futex2;
-    has_write_lock = 1;
     if (error == KS_UNLOCKED) goto user_lock_again;
     kernel_futex2 = (unsigned int *)kshm_translateuser(self,self->s_pd,address2,
                                                        sizeof(unsigned int),
@@ -425,8 +424,7 @@ reload_kernel_futex:
      if __unlikely(!ksignal_trylock_c(&user_futex2->f_sig,KSIGNAL_LOCK_WAIT)) {
       /* Must idle back and try again (can happen if two futex objects try to lock each other). */
       ksignal_unlock_c(&user_futex->f_sig,KSIGNAL_LOCK_WAIT);
-      has_write_lock ? krwlock_endwrite(&self->s_lock) : krwlock_endread(&self->s_lock);
-      has_write_lock = 0;
+      krwlock_end(&self->s_lock); /* Could be a read- or a write-lock. */
       ktask_yield(); /* Yield execution, hopefully getting the other side to do its job first. */
       error = krwlock_beginread(&self->s_lock);
       if __unlikely(KE_ISERR(error)) goto err_futex2;
@@ -491,7 +489,7 @@ reload_kernel_futex2:
    /* Only unlock the SHM manager after we've dereferenced the userspace
     * value, thus ensuring that no race condition of the user munmap-ing
     * the memory in the meantime. */
-   has_write_lock ? krwlock_endwrite(&self->s_lock) : krwlock_endread(&self->s_lock);
+   krwlock_end(&self->s_lock); /* Could be a read- or a write-lock. */
    k_syslogf(KLOG_TRACE,"[FUTEX] recv(%p)\n",address);
    /* Select the appropriate receiver implementation
     * to unlock and receive the signal. */
@@ -528,7 +526,7 @@ dont_receive:
  }
  kshmfutex_decref(user_futex);
 end_unlock:
- has_write_lock ? krwlock_endwrite(&self->s_lock) : krwlock_endread(&self->s_lock);
+ krwlock_end(&self->s_lock); /* Could be a read- or a write-lock. */
  return error;
 }
 

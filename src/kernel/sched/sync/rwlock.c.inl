@@ -551,6 +551,27 @@ krwlock_endwrite(struct krwlock *__restrict self) {
  /* Signal waiting read tasks */
  return _ksignal_sendall_andunlock_c(&self->rw_sig) ? KE_OK : KS_EMPTY;
 }
+__crit kerrno_t
+krwlock_end(struct krwlock *__restrict self) {
+ KTASK_CRIT_MARK
+ kassert_krwlock(self);
+#if !KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
+ assert(krwlock_isreadlocked(self) ||
+        krwlock_iswritelocked(self));
+#endif
+ ksignal_lock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
+ if (krwlock_iswritelocked(self)) {
+  krwlock_debug_delwriter(self,1);
+ } else {
+  krwlock_debug_delreader(self,1);
+  if (self->rw_readc) {
+   ksignal_unlock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
+   return KS_UNCHANGED;
+  }
+ }
+ /* Signal waiting read tasks */
+ return _ksignal_sendall_andunlock_c(&self->rw_sig) ? KE_OK : KS_EMPTY;
+}
 
 __crit RWLOCK_DEBUG_NOINLINE kerrno_t
 krwlock_downgrade(struct krwlock *__restrict self) {
@@ -628,7 +649,7 @@ krwlock_atomic_upgrade(struct krwlock *__restrict self)
   * out read-lock anymore. (We've failed...)
   * >> Tell the caller that the operation wasn't
   *    permitted, which is technically true. */
- error = KE_PERM;
+ error = KE_WOULDBLOCK;
 unlock_and_end:
  ksignal_unlock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  return error;
@@ -696,7 +717,7 @@ krwlock_atomic_timedupgrade(struct krwlock *__restrict self,
   * out read-lock anymore. (We've failed...)
   * >> Tell the caller that the operation wasn't
   *    permitted, which is technically true. */
- error = KE_PERM;
+ error = KE_WOULDBLOCK;
 unlock_and_end:
  ksignal_unlock_c(&self->rw_sig,KSIGNAL_LOCK_WAIT);
  return error;
@@ -756,7 +777,7 @@ krwlock_upgrade(struct krwlock *__restrict self) {
  error = krwlock_atomic_upgrade(self);
 #endif
  if __likely(KE_ISOK(error)) return error;
- if __unlikely(error != KE_PERM) return error;
+ if __unlikely(error != KE_WOULDBLOCK) return error;
  /* The read-lock was lost and atomicity failed due to some other task.
   * >> Try the manual way and acquire a regular write-lock. */
 #if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK
@@ -787,7 +808,7 @@ krwlock_timedupgrade(struct krwlock *__restrict self,
  error = krwlock_atomic_timedupgrade(self,abstime);
 #endif
  if __likely(KE_ISOK(error)) return error;
- if __unlikely(error != KE_PERM) return error;
+ if __unlikely(error != KE_WOULDBLOCK) return error;
  /* The read-lock was lost and atomicity failed due to some other task.
   * >> Try the manual way and acquire a regular write-lock. */
 #if KCONFIG_HAVE_DEBUG_TRACKEDRWLOCK

@@ -243,6 +243,9 @@ extern __crit __wunused __nonnull((1,2)) kerrno_t krwlock_timeoutbeginwrite(stru
 // Release a shared (read-only) or exclusive (read-write) lock,
 // after it has been acquired during a previous call to
 // 'krwlock_beginread' or 'krwlock_beginwrite'
+// NOTE: 'krwlock_end' can be called to either release a read-
+//       or a write-lock, Though a call to this function is not
+//       recommended, as it may lead to half-a$$ed code.
 // @return: KE_OK:        The lock was released, and waiting tasks were signaled.
 // @return: KS_UNCHANGED: [krwlock_endread] More tasks holding read-locks
 //                        are preventing the read-done signal being send.
@@ -254,6 +257,7 @@ extern __crit __wunused __nonnull((1,2)) kerrno_t krwlock_timeoutbeginwrite(stru
 //                              information to the caller.
 extern __crit __nonnull((1)) kerrno_t krwlock_endread(struct krwlock *__restrict self);
 extern __crit __nonnull((1)) kerrno_t krwlock_endwrite(struct krwlock *__restrict self);
+extern __crit __nonnull((1)) kerrno_t krwlock_end(struct krwlock *__restrict self);
 
 //////////////////////////////////////////////////////////////////////////
 // Downgrade a read-write (exclusive) lock to a read-only (shared) lock.
@@ -280,14 +284,14 @@ extern __crit __nonnull((1)) kerrno_t krwlock_downgrade(struct krwlock *__restri
 // WARNING: In all KE_ISERR(return) situations, the read-lock
 //          previously held by the caller will be lost.
 // @return: KE_OK:          The read-lock held by the caller was upgraded into a write-lock.
-// @return: KS_BLOCKING:   [krwlock_*{timed|timeout}upgrade]
+// @return: KS_BLOCKING:   [krwlock_{atomic_}{timed|timeout}upgrade]
 //                          Similar to KE_OK, but the calling task was blocked for a moment,
 //                          meaning that a call to 'krwlock_*tryupgrade' would have
 //                          failed with 'KE_WOULDBLOCK'.
 // @return: KE_TIMEDOUT:   [krwlock_*(timed|timeout)upgrade] The given timeout has expired.
 // @return: KE_INTR:       [!krwlock_*tryupgrade] The calling task was interrupted.
 // @return: KE_WOULDBLOCK: [krwlock_*tryupgrade] Failed to upgrade the lock immediately.
-// @return: KE_PERM:       [krwlock_atomic_upgrade|krwlock_atomic_(timed|timeout)upgrade]
+// @return: KE_WOULDBLOCK: [krwlock_atomic_upgrade|krwlock_atomic_(timed|timeout)upgrade]
 //                          The read lock held by the caller was released,
 //                          but because another task attempted to upgrade
 //                          its lock at the same time, it was impossible
@@ -310,7 +314,7 @@ extern __crit __nonnull((1)) kerrno_t krwlock_downgrade(struct krwlock *__restri
 //                          have when 'krwlock_beginwrite' returned the same error.
 // @return: KS_UNLOCKED:   [!*atomic*] Successfully managed to upgrade the lock,
 //                          but in order to do so, the calling task momentarily held
-//                          no lock at all. (*atomic* would have returned 'KE_PERM')
+//                          no lock at all. (*atomic* would have returned 'KE_WOULDBLOCK')
 //                          The caller should handle this signal by reloading cached
 //                          variables affected by the lock, as their previous values
 //                          may no longer be up to date.

@@ -97,8 +97,8 @@ __DECL_BEGIN
  * WARNING: When 'uaddr2 == uaddr', only 'KFUTEX_CCMD()' may be used.
  *       >> It is not possible to atomically send and receive the same futex! */
 #define KFUTEX_CCMD(op)         (_KFUTEX_CMD_C0|((op)&0xff) << _KFUTEX_CCMD_OPSHIFT) /*< { *uaddr2 = *uaddr2 [op] val2; } */
-#define KFUTEX_CCMD_SENDALL(op) (_KFUTEX_CMD_C1|((op)&0xff) << _KFUTEX_CCMD_OPSHIFT) /*< { *uaddr2 = *uaddr2 [op] val2; send_all(uaddr2); } */
-#define KFUTEX_CCMD_SENDONE(op) (_KFUTEX_CMD_CX|((op)&0xff) << _KFUTEX_CCMD_OPSHIFT) /*< { *uaddr2 = *uaddr2 [op] val2; send_one(uaddr2); } */
+#define KFUTEX_CCMD_SENDONE(op) (_KFUTEX_CMD_C1|((op)&0xff) << _KFUTEX_CCMD_OPSHIFT) /*< { *uaddr2 = *uaddr2 [op] val2; send_one(uaddr2); } */
+#define KFUTEX_CCMD_SENDALL(op) (_KFUTEX_CMD_CX|((op)&0xff) << _KFUTEX_CCMD_OPSHIFT) /*< { *uaddr2 = *uaddr2 [op] val2; send_all(uaddr2); } */
 
 /* Wake up to 'val' threads waiting at 'uaddr'.
  * Upon success, ECX is set to the amount of woken threads. */
@@ -118,15 +118,15 @@ typedef __attribute__((__aligned__(__SIZEOF_INT__))) volatile unsigned int kfute
 // @return: KE_FAULT:    [KFUTEX_WAIT] The given 'abstime' pointer is faulty and non-NULL.
 // @return: KE_AGAIN:    [KFUTEX_WAIT] The 'KFUTEX_RECVIF' condition was false.
 // @return: KE_TIMEDOUT: [KFUTEX_WAIT] The given 'abstime' or a previously set timeout has expired.
-// @return: KE_FAULT:    [KFUTEX_SEND] The given 'buf' pointer, or that of a receiver was faulty.
-// @return: KE_NOMEM:    [*]           No futex existed at the given address, and not enough memory was available to allocate one.
+// @return: KE_NOMEM:    [KFUTEX_WAIT] No futex existed at the given address, and not enough memory was available to allocate one.
 // @return: KE_INVAL:    [?]           The specified 'futex_op' is unknown.
 // @return: KS_NODATA:   [KFUTEX_WAIT && buf != NULL] The futex was signaled, but no data was transmitted.
-// @return: KS_EMPTY:    [KFUTEX_SEND] No threads were woken (ECX is set to ZERO(0))
 // @return: KE_INVAL:    [kfutex_ccmd][KFUTEX_WAIT][KFUTEX_CCMD_SENDALL|KFUTEX_CCMD_SENDONE]
 //                       [uaddr2 == uaddr] The specified second futex is equal to the first,
 //                                         but the caller attempted to send & receive a single
 //                                         futex in the same atomic frame (which isn't possible).
+// @return: KE_FAULT:    [KFUTEX_SEND] The given 'buf' pointer, or that of a receiver was faulty.
+// @return: KS_EMPTY:    [KFUTEX_SEND] No threads were woken (ECX is set to ZERO(0))
 // NOTE: Internally, 'kfutex_cmd' is an alias for 'kfutex_ccmd|uaddr2 = uaddr|val2 = val'
 __local _syscall5(kerrno_t,kfutex_cmd,
                   kfutex_t *,uaddr,unsigned int,futex_op,
