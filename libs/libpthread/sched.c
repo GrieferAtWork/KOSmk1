@@ -34,28 +34,31 @@
 #else
 #include <sys/mman.h>
 #include <kos/task.h>
+#include <kos/perm.h>
 #endif
 
 __DECL_BEGIN
-
-#undef sched_yield
-__public int sched_yield(void) {
- ktask_yield();
- return 0;
-}
 
 __public int sched_get_priority_max(int __unused(policy)) {
 #ifdef __KERNEL__
  return (int)katomic_load(kproc_self()->p_perm.ts_priomax);
 #else
- return 20; // TODO: Lookup value in sandbox
+ struct kperm perm; kerrno_t error;
+ perm.p_name = KPERM_NAME_PRIO_MAX;
+ error = kproc_perm(kproc_self(),&perm,1,KPROC_PERM_MODE_GET);
+ if __unlikely(KE_ISERR(error)) return 20;
+ return perm.p_data.d_prio;
 #endif
 }
 __public int sched_get_priority_min(int __unused(policy)) {
 #ifdef __KERNEL__
  return (int)katomic_load(kproc_self()->p_perm.ts_priomin);
 #else
- return -20; // TODO: Lookup value in sandbox
+ struct kperm perm; kerrno_t error;
+ perm.p_name = KPERM_NAME_PRIO_MIN;
+ error = kproc_perm(kproc_self(),&perm,1,KPROC_PERM_MODE_GET);
+ if __unlikely(KE_ISERR(error)) return 20;
+ return perm.p_data.d_prio;
 #endif
 }
 __public int sched_getscheduler(pid_t pid) {
@@ -125,16 +128,16 @@ end:
 #endif
 }
 
-__public int sched_rr_get_interval(pid_t pid, struct timespec *interval) {
- // TODO: This can be calculated using jiffies
- // >> Put in something that makes sense...
+__public int
+sched_rr_get_interval(pid_t pid, struct timespec *interval) {
  (void)pid;
  interval->tv_sec = 0;
  interval->tv_nsec = 100;
  return 0;
 }
-__public int sched_setscheduler(pid_t pid, int __unused(policy),
-                                struct sched_param const *param) {
+__public int
+sched_setscheduler(pid_t pid, int __unused(policy),
+                   struct sched_param const *param) {
  return sched_setparam(pid,param);
 }
 

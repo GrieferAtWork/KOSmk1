@@ -12,6 +12,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\libs\libpthread\pthread.c" />
+    <ClCompile Include="..\..\libs\libpthread\pthread_key.c" />
+    <ClCompile Include="..\..\libs\libpthread\pthread_mutex.c" />
+    <ClCompile Include="..\..\libs\libpthread\pthread_once.c" />
+    <ClCompile Include="..\..\libs\libpthread\pthread_rwlock.c" />
+    <ClCompile Include="..\..\libs\libpthread\pthread_spin.c" />
     <ClCompile Include="..\..\libs\libpthread\sched.c" />
     <ClCompile Include="..\..\libs\libpthread\semaphore.c" />
   </ItemGroup>

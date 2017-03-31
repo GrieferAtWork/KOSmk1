@@ -24,81 +24,103 @@
 #define __SEMAPHORE_C__ 1
 
 #include <semaphore.h>
-#include <malloc.h>
-#include <fcntl.h>
-#include <stdarg.h>
-#include <unistd.h>
 #include <errno.h>
-#include <kos/fd.h>
+#include <stddef.h>
+#include <kos/atomic.h>
+#include <kos/futex.h>
 
-#if 0
 __DECL_BEGIN
 
-int sem_init(sem_t *__restrict sem, int pshared, unsigned int value) {
- kassertobj(sem);
- // TODO: This syscall is missing
- sem->s_sem = ksem_new(value,pshared ? FD_CLOEXEC ? 0);
- if __likely(KE_ISOK(sem->s_sem)) return 0;
- __set_errno(-sem->s_sem);
- return -1;
+__public int
+sem_init(sem_t *__restrict sem,
+         int pshared,
+         unsigned int value) {
+ if __unlikely(!sem) { __set_errno(EINVAL); return -1; }
+ (void)pshared;
+ sem->__s_cnt = value;
+ return 0;
 }
-int sem_destroy(sem_t *__restrict sem) {
- kassertobj(sem);
- return close(sem->s_sem);
+__public int
+sem_destroy(sem_t *__restrict sem) {
+ return sem ? 0 : (__set_errno(EINVAL),-1);
 }
-int sem_wait(sem_t *__restrict sem) {
- kerrno_t error; kassertobj(sem);
- error = kfd_wait(sem->s_sem);
- if __unlikely(KE_ISOK(error)) return 0;
+__public int
+sem_dotimedwait(sem_t *__restrict sem,
+                struct timespec const *abstime) {
+ unsigned int oldcount;
+ kerrno_t error;
+again: do {
+  oldcount = katomic_load(*(unsigned int *)&sem->__s_cnt);
+  if __unlikely(!oldcount) {
+   /* atomic: if (sem->__s_cnt == 0) { recv(&sem->__s_cnt); } */
+   error = kfutex_cmd(&sem->__s_cnt,KFUTEX_RECVIF(KFUTEX_EQUAL),0,NULL,abstime);
+   if __likely(KE_ISOK(error) || error == KE_AGAIN) goto again;
+   __set_errno(-error);
+   return -1;
+  }
+ } while (!katomic_cmpxch(*(unsigned int *)&sem->__s_cnt,oldcount,oldcount-1));
+ return 0;
+}
+__public int
+sem_wait(sem_t *__restrict sem) {
+ if __unlikely(!sem) { __set_errno(EINVAL); return -1; }
+ return sem_dotimedwait(sem,NULL);
+}
+__public int
+sem_timedwait(sem_t *__restrict sem,
+              struct timespec const *__restrict abstime) {
+ if __unlikely(!sem || !abstime) { __set_errno(EINVAL); return -1; }
+ return sem_dotimedwait(sem,abstime);
+}
+__public int
+sem_trywait(sem_t *__restrict sem) {
+ unsigned int oldcount;
+ if __unlikely(!sem) { __set_errno(EINVAL); return -1; }
+ do {
+  oldcount = katomic_load(*(unsigned int *)&sem->__s_cnt);
+  if __unlikely(!oldcount) { __set_errno(EWOULDBLOCK); return -1; }
+ } while (!katomic_cmpxch(*(unsigned int *)&sem->__s_cnt,oldcount,oldcount-1));
+ return 0;
+}
+__public int
+sem_post(sem_t *__restrict sem) {
+ kerrno_t error;
+ if __unlikely(!sem) { __set_errno(EINVAL); return -1; }
+ katomic_fetchinc(*(unsigned int *)&sem->__s_cnt);
+ error = kfutex_sendone(&sem->__s_cnt);
+ if __likely(KE_ISOK(error)) return 0;
  __set_errno(-error);
  return -1;
 }
-int sem_timedwait(sem_t *__restrict sem, struct timespec const *__restrict abstime) {
- kerrno_t error; kassertobj(sem);
- kassertobj(abstime);
- error = kfd_timedwait(sem->s_sem,abstime);
- if __unlikely(KE_ISOK(error)) return 0;
- __set_errno(-error);
- return -1;
-}
-int sem_trywait(sem_t *__restrict sem) {
- kerrno_t error; kassertobj(sem);
- error = kfd_wait(sem->s_sem);
- if __unlikely(KE_ISOK(error)) return 0;
- __set_errno(-error);
- return -1;
-}
-int sem_post(sem_t *__restrict sem) {
- kassertobj(sem);
-}
-int sem_getvalue(sem_t *__restrict sem, int *__restrict sval) {
- kassertobj(sem);
- kassertobj(sval);
+__public int
+sem_getvalue(sem_t *__restrict sem,
+             unsigned int *__restrict sval) {
+ if __unlikely(!sem || !sval) { __set_errno(EINVAL); return -1; }
+ *sval = katomic_load(sem->__s_cnt);
+ return 0;
 }
 
-sem_t *sem_open(char const *__restrict name, int oflag, ...) {
- sem_t *result; va_list args;
- if __unlikely((result = omalloc(sem_t)) == NULL) return NULL;
- va_start(args,oflag);
- result->s_sem = open(name,oflag,va_arg(args,int));
- va_end(args);
- if __unlikely(result->s_sem == -1) {
-  free(result);
-  result = NULL;
- }
- return result;
+__public sem_t *
+sem_open(char const *__restrict name,
+         int oflag, ...) {
+ (void)name,(void)oflag; /* TODO: mmap shared_memory file. */
+ __set_errno(ENOSYS);
+ return NULL;
 }
-int sem_close(sem_t *__restrict sem) {
- int error; kassertobj(sem);
- error = sem_destroy(sem);
- free(sem);
- return error;
+__public int
+sem_close(sem_t *__restrict sem) {
+ if (!sem) { __set_errno(EINVAL); return -1; }
+ (void)sem; /* TODO: munmap shared_memory block. */
+ __set_errno(ENOSYS);
+ return -1;
 }
-int sem_unlink(char const *__restrict name) {
- return unlink(name);
+__public int
+sem_unlink(char const *__restrict name) {
+ (void)name; /* TODO: delete reference-counted shared_memory file. */
+ __set_errno(ENOSYS);
+ return -1;
 }
 
 __DECL_END
-#endif
 
 #endif /* !__SEMAPHORE_C__ */

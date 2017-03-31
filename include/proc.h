@@ -242,32 +242,6 @@ extern __ptrdiff_t  tls_alloc __P((void const *__template, __size_t __size));
 extern int          tls_free  __P((__ptrdiff_t __offset));
 extern tlsinfo_t   *tls_enum  __P((tlsinfo_t *__restrict __infov, __size_t __infoc));
 
-
-
-
-typedef struct {
- unsigned int __m_ftx;
- unsigned int __m_kind;
- __uintptr_t  __m_owner;
-} mutex_t;
-#define MUTEX_KIND_NORMAL     0x0
-#define MUTEX_KIND_RECURSIVE  0x1
-#define MUTEX_FLAG_ERRORCHECK 0x2
-
-#define MUTEX_INIT           {0,MUTEX_KIND_NORMAL,0}
-#define MUTEX_INIT_RECURSIVE {0,MUTEX_KIND_RECURSIVE,0}
-
-extern int mutex_init __P((mutex_t *__self, unsigned int __kind));
-extern int mutex_trylock __P((mutex_t *__self));
-extern int mutex_timedlock __P((mutex_t *__self, struct timespec const *__restrict __abstime));
-extern int mutex_timeoutlock __P((mutex_t *__self, struct timespec const *__restrict __timeout));
-extern int mutex_lock __P((mutex_t *__self));
-extern int mutex_unlock __P((mutex_t *__self));
-
-
-
-
-
 #ifndef __uthread_t_defined
 #define __uthread_t_defined 1
 typedef struct kuthread uthread_t;

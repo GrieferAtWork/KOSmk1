@@ -26,7 +26,6 @@
 #define _SEMAPHORE_H 1
 
 #include <kos/compiler.h>
-
 #ifdef __KERNEL__
 #include <kos/kernel/sem.h>
 #endif
@@ -34,25 +33,25 @@
 __DECL_BEGIN
 
 #ifdef __KERNEL__
-typedef struct { struct ksem s_sem; } sem_t;
+typedef struct ksem sem_t;
 #else
-typedef struct { int s_sem; } sem_t;
+typedef struct { unsigned int volatile __s_cnt; } sem_t;
 #endif
 
 struct timespec;
 
 // NOTE: In kernel mode, these functions return kerrno_t
 //       values (because the kernel doesn't have errno)
-extern __wunused int sem_init(sem_t *__restrict sem, int pshared, unsigned int value);
-extern           int sem_destroy(sem_t *__restrict sem);
-extern           int sem_wait(sem_t *__restrict sem);
-extern __wunused int sem_timedwait(sem_t *__restrict sem, struct timespec const *__restrict abstime);
-extern __wunused int sem_trywait(sem_t *__restrict sem);
-extern           int sem_post(sem_t *__restrict sem);
-extern __wunused int sem_getvalue(sem_t *__restrict sem, int *__restrict sval);
-extern __wunused sem_t *sem_open(char const *__restrict name, int oflag, ...);
-extern           int sem_close(sem_t *__restrict sem);
-extern           int sem_unlink(char const *__restrict name);
+extern __wunused __nonnull((1))   int sem_init __P((sem_t *__restrict __sem, int __pshared, unsigned int __value));
+extern           __nonnull((1))   int sem_destroy __P((sem_t *__restrict __sem));
+extern           __nonnull((1))   int sem_wait __P((sem_t *__restrict __sem));
+extern __wunused __nonnull((1,2)) int sem_timedwait __P((sem_t *__restrict __sem, struct timespec const *__restrict __abstime));
+extern __wunused __nonnull((1))   int sem_trywait __P((sem_t *__restrict __sem));
+extern           __nonnull((1))   int sem_post __P((sem_t *__restrict __sem));
+extern __wunused __nonnull((1,2)) int sem_getvalue __P((sem_t *__restrict __sem, unsigned int *__restrict __sval));
+extern __wunused __nonnull((1))   sem_t *sem_open __P((char const *__restrict __name, int __oflag, ...));
+extern           __nonnull((1))   int sem_close __P((sem_t *__restrict __sem));
+extern           __nonnull((1))   int sem_unlink __P((char const *__restrict __name));
 
 __DECL_END
 

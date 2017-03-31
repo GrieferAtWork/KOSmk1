@@ -37,8 +37,6 @@
 
 __DECL_BEGIN
 
-#define gettid()  ktask_gettid(ktask_self())
-
 struct pthread_maindata {
  void *(*start_routine)(void *);
  void   *arg;
@@ -51,7 +49,7 @@ pthread_main(struct pthread_maindata *data) {
 
 
 __public int
-pthread_create(pthread_t *newthread, pthread_attr_t const *attr,
+pthread_create(pthread_t *__restrict newthread, pthread_attr_t const *attr,
                void *(*start_routine)(void *), void *arg) {
  struct pthread_maindata closure;
  ktask_t result;
@@ -110,60 +108,45 @@ pthread_setname_np(pthread_t target_thread, char const *__restrict name) {
 }
 
 
-__public int pthread_yield(void) {
- ktask_yield();
- return 0;
-}
+__public int pthread_yield(void) { ktask_yield(); return 0; }
+__public __COMPILER_ALIAS(sched_yield,pthread_yield);
 
 __public int
-pthread_getunique_np(pthread_t *thread, pthread_id_np_t *id) {
+pthread_getunique_np(pthread_t *__restrict thread,
+                     pthread_id_np_t *__restrict id) {
  return ((*id = ktask_gettid(*thread)) == (size_t)-1) ? EBADF : 0;
 }
-
-__public pthread_id_np_t pthread_getthreadid_np(void) {
- return gettid();
+__public pthread_id_np_t
+pthread_getthreadid_np(void) {
+ return ktask_gettid(ktask_self());
 }
-
 __public int
 pthread_setschedparam(pthread_t target_thread, int __unused(policy),
-                      struct sched_param const *param) {
+                      struct sched_param const *__restrict param) {
  int error;
+ if __unlikely(!param) return EINVAL;
  error = ktask_setpriority(target_thread,(ktaskprio_t)param->sched_priority);
  return KE_ISOK(error) ? 0 : -error;
 }
 __public int
 pthread_getschedparam(pthread_t target_thread, int *policy,
-                      struct sched_param *param) {
+                      struct sched_param *__restrict param) {
  ktaskprio_t prio; int error;
+ if __unlikely(!param) return EINVAL;
  *policy = SCHED_RR;
  error = ktask_getpriority(target_thread,&prio);
  param->sched_priority = (int)prio;
  return KE_ISOK(error) ? 0 : -error;
 }
 
-
-
-// int pthread_key_create(pthread_key_t *key, void (*destr_function)(void *)) {
-//  if (destr_function != NULL) return -ENOSYS; // TODO
-//  return -kproc_alloctls(key);
-// }
-// int pthread_key_delete(pthread_key_t key) {
-//  return -kproc_freetls(key);
-// }
-// void *pthread_getspecific(pthread_key_t key) {
-//  return ktask_gettls(key);
-// }
-// int pthread_setspecific(pthread_key_t key, void const *pointer) {
-//  return ktask_settls(key,(void *)pointer,NULL);
-// }
-
-
-
+__public int
+pthread_cancel(pthread_t th) {
+ int error = ktask_terminate(th,NULL,KTASKOPFLAG_NONE);
+ return KE_ISOK(error) ? 0 : -error;
+}
 
 static __atomic int clevel = 0;
-__public int pthread_getconcurrency(void) {
- return katomic_load(clevel);
-}
+__public int pthread_getconcurrency(void) { return katomic_load(clevel); }
 __public int pthread_setconcurrency(int level) {
  if __unlikely(level < 0) return EINVAL;
  katomic_store(clevel,level);
@@ -171,105 +154,142 @@ __public int pthread_setconcurrency(int level) {
 }
 
 
-
-__public int pthread_once(pthread_once_t *once_control,
-                 void (*init_routine)(void)) {
- int oldval;
- if (!once_control || !init_routine) return EINVAL;
- oldval = katomic_cmpxch_val(once_control->__po_done,0,-1);
- if (!oldval) {
-  (*init_routine)();
-  katomic_store(once_control->__po_done,1);
- } else while (oldval < 0) {
-  pthread_yield();
-  oldval = katomic_load(once_control->__po_done);
- }
- return 0;
-}
-
-
-
-
-
-
-__public int pthread_spin_init(pthread_spinlock_t *lock,
-                               int pshared) {
- if __unlikely(!lock) return EINVAL;
- lock->__ps_holder = KTID_INVALID;
- lock->__ps_locked = 0;
- return 0;
-}
-__public int pthread_spin_destroy(pthread_spinlock_t *lock) {
- if __unlikely(!lock) return EINVAL;
- if __unlikely(lock->__ps_locked) return EBUSY;
- return 0;
-}
-__public int pthread_spin_lock(pthread_spinlock_t *lock) {
- __ktid_t tid = gettid();
- if __unlikely(!lock) return EINVAL;
- if (!katomic_cmpxch(lock->__ps_locked,0,1)) {
-  if __unlikely(lock->__ps_holder == tid) return EDEADLK;
-  for (;;) {
-   int spin_counter = 10000;
-   // Spin a bit...
-   while (spin_counter--) {
-    if (katomic_cmpxch(lock->__ps_locked,0,1)) goto end;
-   }
-  }
- }
-end:
- lock->__ps_holder = tid;
- return 0;
-}
-__public int pthread_spin_trylock(pthread_spinlock_t *lock) {
- if __unlikely(!lock) return EINVAL;
- if (!katomic_cmpxch(lock->__ps_locked,0,1)) return EBUSY;
- lock->__ps_holder = gettid();
- return 0;
-}
-__public int pthread_spin_unlock(pthread_spinlock_t *lock) {
- if __unlikely(!lock) return EINVAL;
- if __unlikely(lock->__ps_holder != gettid()) return EPERM;
- assert(lock->__ps_locked);
- lock->__ps_holder = KTID_INVALID;
- lock->__ps_locked = 0; // No need to use atomics here...
- return 0;
-}
-
-
-static ptrdiff_t     pthread_tlsoffset = 0;
-static pthread_key_t pthread_tlsnextkey = 0;
-
-
+/* pthread_attr_t */
 __public int
-pthread_key_create(pthread_key_t *key, void (*destr_function)(void *)) {
- if (!pthread_tlsoffset) {
-  ptrdiff_t newp,oldp;
-  newp = tls_alloc(NULL,__SIZEOF_POINTER__); /* TODO: Size */
-  if __unlikely(!newp) return -errno;
-  oldp = katomic_cmpxch_val(pthread_tlsoffset,0,newp);
-  __asm_volatile__("mfence\n" : : : "memory");
-  if (oldp) tls_free(newp);
- }
- /* TODO: 'destr_function'. */
- *key = katomic_fetchadd(pthread_tlsnextkey,__SIZEOF_POINTER__);
+pthread_attr_init(pthread_attr_t *__restrict attr) {
+ if __unlikely(!attr) return EINVAL;
+ /* TODO */
  return 0;
 }
 __public int
-pthread_key_delete(pthread_key_t key) {
- return 0; /* TODO */
-}
-__public void *
-pthread_getspecific(pthread_key_t key) {
- return tls_getp(pthread_tlsoffset+key);
+pthread_attr_destroy(pthread_attr_t *__restrict attr) {
+ return attr ? 0 : EINVAL;
 }
 __public int
-pthread_setspecific(pthread_key_t key, void const *pointer) {
- tls_putp(pthread_tlsoffset+key,(void *)pointer);
- return 0;
+pthread_attr_getdetachstate(pthread_attr_t const *__restrict attr,
+                            int *__restrict detachstate) {
+ if __unlikely(!attr || !detachstate) return EINVAL;
+ return ENOSYS; /* TODO */
 }
-
-
+__public int
+pthread_attr_setdetachstate(pthread_attr_t *__restrict attr,
+                            int detachstate) {
+ if __unlikely(!attr) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_getguardsize(pthread_attr_t const *__restrict attr,
+                          size_t *__restrict guardsize) {
+ if __unlikely(!attr || !guardsize) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_setguardsize(pthread_attr_t *__restrict attr,
+                          size_t guardsize) {
+ if __unlikely(!attr) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_getschedparam(pthread_attr_t const *__restrict attr,
+                           struct sched_param *__restrict param) {
+ if __unlikely(!attr || !param) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_setschedparam(pthread_attr_t *__restrict attr,
+                           struct sched_param const *__restrict param) {
+ if __unlikely(!attr || !param) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_getschedpolicy(pthread_attr_t const *__restrict attr,
+                            int *__restrict policy) {
+ if __unlikely(!attr || !policy) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_setschedpolicy(pthread_attr_t *__restrict attr,
+                            int policy) {
+ if __unlikely(!attr) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_getinheritsched(pthread_attr_t const *__restrict attr,
+                             int *__restrict inherit) {
+ if __unlikely(!attr || !inherit) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_setinheritsched(pthread_attr_t *__restrict attr,
+                             int inherit) {
+ if __unlikely(!attr) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_getscope(pthread_attr_t const *__restrict attr,
+                      int *__restrict scope) {
+ if __unlikely(!attr || !scope) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_setscope(pthread_attr_t *__restrict attr,
+                      int scope) {
+ if __unlikely(!attr) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_getstackaddr(pthread_attr_t const *__restrict attr,
+                          void **__restrict stackaddr) {
+ if __unlikely(!attr || !stackaddr) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_setstackaddr(pthread_attr_t *__restrict attr,
+                          void *stackaddr) {
+ if __unlikely(!attr) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_getstacksize(pthread_attr_t const *__restrict attr,
+                          size_t *__restrict stacksize) {
+ if __unlikely(!attr || !stacksize) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_setstacksize(pthread_attr_t *__restrict attr,
+                          size_t stacksize) {
+ if __unlikely(!attr) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_getstack(pthread_attr_t const *__restrict attr,
+                      void **__restrict stackaddr,
+                      size_t *__restrict stacksize) {
+ if __unlikely(!attr || !stackaddr || !stacksize) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_attr_setstack(pthread_attr_t *__restrict attr,
+                      void *stackaddr,
+                      size_t stacksize) {
+ if __unlikely(!attr) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_getattr_default_np(pthread_attr_t *__restrict attr) {
+ if __unlikely(!attr) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_setattr_default_np(pthread_attr_t const *__restrict attr) {
+ if __unlikely(!attr) return EINVAL;
+ return ENOSYS; /* TODO */
+}
+__public int
+pthread_getattr_np(pthread_t th, pthread_attr_t *__restrict attr) {
+ if __unlikely(!attr) return EINVAL;
+ return ENOSYS; /* TODO */
+}
 
 __DECL_END
 

@@ -55,165 +55,211 @@ typedef __pthread_barrierattr_t pthread_barrierattr_t;
 typedef __pthread_barrier_t     pthread_barrier_t;
 #endif
 
-struct __pthread_once {
-    __atomic int __po_done; /*< 0: pending; -1: running now; 1: done; */
-};
-#define PTHREAD_ONCE_INIT  {0}
-
+struct __pthread_once { __atomic int __po_done; };
 struct __pthread_spinlock {
-    __atomic unsigned int __ps_locked; /*< 0: unlocked; 1: locked; */
-    __atomic __ktid_t     __ps_holder; /*< Thread currently holding the lock. */
+ __atomic unsigned int __ps_locked;
+ __atomic __uintptr_t  __ps_holder;
 };
 
 struct __key { int __placeholder; };
 struct __pthread_attr { int __placeholder; };
 struct __pthread_cond { int __placeholder; };
 struct __pthread_condattr { int __placeholder; };
-struct __pthread_mutex { int __placeholder; };
-struct __pthread_mutexattr { int __placeholder; };
-struct __pthread_rwlock { int __placeholder; };
-struct __pthread_rwlockattr { int __placeholder; };
 struct __pthread_barrierattr { int __placeholder; };
 struct __pthread_barrier { int __placeholder; };
 
 
+struct __pthread_mutex {
+ unsigned int volatile __m_ftx;
+ unsigned int          __m_kind;
+ __uintptr_t  volatile __m_owner;
+};
+struct __pthread_mutexattr { unsigned int __m_kind; };
 
-struct timespec;
+struct __pthread_rwlock { int __placeholder; };
+struct __pthread_rwlockattr { int __rw_kind; };
 
-extern int pthread_create(pthread_t *newthread, pthread_attr_t const *attr,
-                          void *(*start_routine)(void *), void *arg);
-extern __noreturn void pthread_exit(void *retval);
-extern int pthread_join(pthread_t th, void **thread_return);
-extern int pthread_tryjoin_np(pthread_t th, void **thread_return);
-extern int pthread_timedjoin_np(pthread_t th, void **thread_return, struct timespec const *__restrict abstime);
-extern int pthread_detach(pthread_t th);
-extern __constcall pthread_t pthread_self(void);
-extern __constcall int pthread_equal(pthread_t thread1, pthread_t thread2);
 
-//extern int pthread_attr_init(pthread_attr_t *attr);
-//extern int pthread_attr_destroy(pthread_attr_t *attr);
-//extern int pthread_attr_getdetachstate(pthread_attr_t const *attr, int *detachstate);
-//extern int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate);
-//extern int pthread_attr_getguardsize(pthread_attr_t const *attr, __size_t *guardsize);
-//extern int pthread_attr_setguardsize(pthread_attr_t *attr, __size_t guardsize);
-//extern int pthread_attr_getschedparam(pthread_attr_t const *attr, struct sched_param *param);
-//extern int pthread_attr_setschedparam(pthread_attr_t *attr, struct sched_param const *param);
-//extern int pthread_attr_getschedpolicy(pthread_attr_t const *attr, int *policy);
-//extern int pthread_attr_setschedpolicy(pthread_attr_t *attr, int policy);
-//extern int pthread_attr_getinheritsched(pthread_attr_t const *attr, int *inherit);
-//extern int pthread_attr_setinheritsched(pthread_attr_t *attr, int inherit);
-//extern int pthread_attr_getscope(pthread_attr_t const *attr, int *scope);
-//extern int pthread_attr_setscope(pthread_attr_t *attr, int scope);
-//extern int pthread_attr_getstackaddr(pthread_attr_t const * attr, void **stackaddr);
-//extern int pthread_attr_setstackaddr(pthread_attr_t *attr, void *stackaddr);
-//extern int pthread_attr_getstacksize(pthread_attr_t const *attr, __size_t *stacksize);
-//extern int pthread_attr_setstacksize(pthread_attr_t *attr, __size_t stacksize);
-//extern int pthread_attr_getstack(pthread_attr_t const *attr, void **stackaddr, __size_t *stacksize);
-//extern int pthread_attr_setstack(pthread_attr_t *attr, void *stackaddr, __size_t stacksize);
-//extern int pthread_attr_setaffinity_np(pthread_attr_t *attr, __size_t cpusetsize, cpu_set_t const *cpuset);
-//extern int pthread_attr_getaffinity_np(pthread_attr_t const *attr, __size_t cpusetsize, cpu_set_t *cpuset);
+/* Detach state. */
+#define PTHREAD_CREATE_JOINABLE	0
+#define PTHREAD_CREATE_DETACHED	1
 
-//extern int pthread_getattr_default_np(pthread_attr_t *attr);
-//extern int pthread_setattr_default_np(pthread_attr_t const *attr);
-//extern int pthread_getattr_np(pthread_t th, pthread_attr_t *attr);
-extern int pthread_setschedparam(pthread_t target_thread, int policy, struct sched_param const *param);
-extern int pthread_getschedparam(pthread_t target_thread, int *policy, struct sched_param *param);
-extern int pthread_setschedprio(pthread_t target_thread, int prio);
-extern int pthread_getname_np(pthread_t target_thread, char *__restrict buf, __size_t buflen);
-extern int pthread_setname_np(pthread_t target_thread, char const *__restrict name);
-extern int pthread_getconcurrency(void);
-extern int pthread_setconcurrency(int level);
-extern int pthread_yield(void);
-//extern int pthread_setaffinity_np(pthread_t th, __size_t cpusetsize, cpu_set_t const *cpuset);
-//extern int pthread_getaffinity_np(pthread_t th, __size_t cpusetsize, cpu_set_t *cpuset);
-//extern int pthread_setcancelstate(int state, int *oldstate);
-//extern int pthread_setcanceltype(int type, int *oldtype);
-//extern int pthread_cancel(pthread_t th);
-//extern void pthread_testcancel(void);
+/* Mutex types. */
+#define PTHREAD_MUTEX_TIMED_NP      0
+#define PTHREAD_MUTEX_RECURSIVE_NP  1
+#define PTHREAD_MUTEX_ERRORCHECK_NP 2
+#define PTHREAD_MUTEX_ADAPTIVE_NP   PTHREAD_MUTEX_TIMED_NP /*3*/
+#define PTHREAD_MUTEX_NORMAL        PTHREAD_MUTEX_TIMED_NP
+#define PTHREAD_MUTEX_RECURSIVE     PTHREAD_MUTEX_RECURSIVE_NP
+#define PTHREAD_MUTEX_ERRORCHECK    PTHREAD_MUTEX_ERRORCHECK_NP
+#define PTHREAD_MUTEX_DEFAULT       PTHREAD_MUTEX_NORMAL
+#define PTHREAD_MUTEX_FAST_NP       PTHREAD_MUTEX_TIMED_NP
 
-extern int pthread_once(pthread_once_t *once_control, void (*init_routine)(void));
+/* Robust mutex or not flags. */
+#define PTHREAD_MUTEX_STALLED_NP    0
+#define PTHREAD_MUTEX_STALLED       PTHREAD_MUTEX_STALLED_NP
+#define PTHREAD_MUTEX_ROBUST_NP     1
+#define PTHREAD_MUTEX_ROBUST        PTHREAD_MUTEX_ROBUST_NP
 
-//struct pthread_cleanup_frame { int __placeholder; };
-//#define pthread_cleanup_push(routine,arg) do{
-//extern void pthread_register_cancel(pthread_unwind_buf_t *buf);
-//#define pthread_cleanup_pop(execute)    do{}while(0);}while(0)
-//extern void pthread_unregister_cancel(pthread_unwind_buf_t *buf);
-//#define pthread_cleanup_push_defer_np(routine,arg) do{
-//extern void pthread_register_cancel_defer(pthread_unwind_buf_t *buf);
-//#define pthread_cleanup_pop_restore_np(execute) do{}while(0);}while(0)
-//extern void pthread_unregister_cancel_restore(pthread_unwind_buf_t *buf);
-//extern __noreturn void pthread_unwind_next(pthread_unwind_buf_t *buf);
+/* Mutex protocols. */
+#define PTHREAD_PRIO_NONE    0
+#define PTHREAD_PRIO_INHERIT 1
+#define PTHREAD_PRIO_PROTECT 2
 
-//extern int pthread_mutex_init(pthread_mutex_t *mutex, pthread_mutexattr_t const *mutexattr);
-//extern int pthread_mutex_destroy(pthread_mutex_t *mutex);
-//extern int pthread_mutex_trylock(pthread_mutex_t *mutex);
-//extern int pthread_mutex_lock(pthread_mutex_t *mutex);
-//extern int pthread_mutex_timedlock(pthread_mutex_t *mutex, struct timespec const *__restrict abstime);
-//extern int pthread_mutex_unlock(pthread_mutex_t *mutex);
-//extern int pthread_mutex_getprioceiling(pthread_mutex_t const *mutex, int *prioceiling);
-//extern int pthread_mutex_setprioceiling(pthread_mutex_t *mutex, int prioceiling, int *old_ceiling);
-//extern int pthread_mutex_consistent(pthread_mutex_t *mutex);
-//extern int pthread_mutex_consistent_np(pthread_mutex_t *mutex);
-//extern int pthread_mutexattr_init(pthread_mutexattr_t *attr);
-//extern int pthread_mutexattr_destroy(pthread_mutexattr_t *attr);
-//extern int pthread_mutexattr_getpshared(pthread_mutexattr_t const *attr, int *pshared);
-//extern int pthread_mutexattr_setpshared(pthread_mutexattr_t *attr, int pshared);
-//extern int pthread_mutexattr_gettype(pthread_mutexattr_t const *attr, int *kind);
-//extern int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int kind);
-//extern int pthread_mutexattr_getprotocol(pthread_mutexattr_t const *attr, int *protocol);
-//extern int pthread_mutexattr_setprotocol(pthread_mutexattr_t *attr, int protocol);
-//extern int pthread_mutexattr_getprioceiling(pthread_mutexattr_t const *attr, int *prioceiling);
-//extern int pthread_mutexattr_setprioceiling(pthread_mutexattr_t *attr, int prioceiling);
-//extern int pthread_mutexattr_getrobust(pthread_mutexattr_t const *attr, int *robustness);
-//extern int pthread_mutexattr_getrobust_np(pthread_mutexattr_t const *attr, int *robustness);
-//extern int pthread_mutexattr_setrobust(pthread_mutexattr_t *attr, int robustness);
-//extern int pthread_mutexattr_setrobust_np(pthread_mutexattr_t *attr, int robustness);
+#define PTHREAD_MUTEX_INITIALIZER               {0,PTHREAD_MUTEX_TIMED_NP,0}
+#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER     {0,PTHREAD_MUTEX_RECURSIVE_NP,0}
+#define PTHREAD_ERRORCHECK_MUTEX_INITIALIZER    {0,PTHREAD_MUTEX_ERRORCHECK_NP|PTHREAD_MUTEX_TIMED_NP,0}
+#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP  {0,PTHREAD_MUTEX_RECURSIVE_NP,0}
+#define PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP {0,PTHREAD_MUTEX_ERRORCHECK_NP|PTHREAD_MUTEX_TIMED_NP,0}
 
-//extern int pthread_rwlock_init(pthread_rwlock_t *rwlock, pthread_rwlockattr_t const *attr);
-//extern int pthread_rwlock_destroy(pthread_rwlock_t *rwlock);
-//extern int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock);
-//extern int pthread_rwlock_tryrdlock(pthread_rwlock_t *rwlock);
-//extern int pthread_rwlock_timedrdlock(pthread_rwlock_t *rwlock, struct timespec const *__restrict abstime);
-//extern int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock);
-//extern int pthread_rwlock_trywrlock(pthread_rwlock_t *rwlock);
-//extern int pthread_rwlock_timedwrlock(pthread_rwlock_t *rwlock, struct timespec const *__restrict abstime);
-//extern int pthread_rwlock_unlock(pthread_rwlock_t *rwlock);
-//extern int pthread_rwlockattr_init(pthread_rwlockattr_t *attr);
-//extern int pthread_rwlockattr_destroy(pthread_rwlockattr_t *attr);
-//extern int pthread_rwlockattr_getpshared(pthread_rwlockattr_t const *attr, int *pshared);
-//extern int pthread_rwlockattr_setpshared(pthread_rwlockattr_t *attr, int pshared);
-//extern int pthread_rwlockattr_getkind_np(pthread_rwlockattr_t const *attr, int *pref);
-//extern int pthread_rwlockattr_setkind_np(pthread_rwlockattr_t *attr, int pref);
+/* Read-write lock types. */
+#define PTHREAD_RWLOCK_PREFER_READER_NP              0
+#define PTHREAD_RWLOCK_PREFER_WRITER_NP              1
+#define PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP 2
+#define PTHREAD_RWLOCK_DEFAULT_NP                    PTHREAD_RWLOCK_PREFER_READER_NP
 
-//extern int pthread_cond_init(pthread_cond_t *cond, pthread_condattr_t const *cond_attr);
-//extern int pthread_cond_destroy(pthread_cond_t *cond);
-//extern int pthread_cond_signal(pthread_cond_t *cond);
-//extern int pthread_cond_broadcast(pthread_cond_t *cond);
-//extern int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
-//extern int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex, struct timespec const *__restrict abstime);
-//extern int pthread_condattr_init(pthread_condattr_t *attr);
-//extern int pthread_condattr_destroy(pthread_condattr_t *attr);
-//extern int pthread_condattr_getpshared(pthread_condattr_t const *attr, int *pshared);
-//extern int pthread_condattr_setpshared(pthread_condattr_t *attr, int pshared);
-//extern int pthread_condattr_getclock(pthread_condattr_t const *attr, clockid_t *clock_id);
-//extern int pthread_condattr_setclock(pthread_condattr_t *attr, clockid_t clock_id);
+/* Read-write lock initializers. */
+#define PTHREAD_RWLOCK_INITIALIZER                        {/*TODO*/}
+#define PTHREAD_RWLOCK_WRITER_NONRECURSIVE_INITIALIZER_NP {/*TODO*/}
 
-extern int pthread_spin_init(pthread_spinlock_t *lock, int pshared);
-extern int pthread_spin_destroy(pthread_spinlock_t *lock);
-extern int pthread_spin_lock(pthread_spinlock_t *lock);
-extern int pthread_spin_trylock(pthread_spinlock_t *lock);
-extern int pthread_spin_unlock(pthread_spinlock_t *lock);
+/* Scheduler inheritance. */
+#define PTHREAD_INHERIT_SCHED   0
+#define PTHREAD_EXPLICIT_SCHED  1
 
-//extern int pthread_barrier_init(pthread_barrier_t *barrier, pthread_barrierattr_t const *attr, unsigned int count);
-//extern int pthread_barrier_destroy(pthread_barrier_t *barrier);
-//extern int pthread_barrier_wait(pthread_barrier_t *barrier);
-//extern int pthread_barrierattr_init(pthread_barrierattr_t *attr);
-//extern int pthread_barrierattr_destroy(pthread_barrierattr_t *attr);
-//extern int pthread_barrierattr_getpshared(pthread_barrierattr_t const *attr, int *pshared);
-//extern int pthread_barrierattr_setpshared(pthread_barrierattr_t *attr, int pshared);
+/* Scope handling. */
+#define PTHREAD_SCOPE_SYSTEM    0
+#define PTHREAD_SCOPE_PROCESS   1
 
-//extern int pthread_getcpuclockid(pthread_t thread_id, clockid_t *clock_id);
-//extern int pthread_atfork(void (*prepare)(void), void (*parent)(void), void (*child)(void));
+/* Process shared or private flag. */
+#define PTHREAD_PROCESS_PRIVATE 0
+#define PTHREAD_PROCESS_SHARED  1
+
+/* Conditional variable handling. */
+#define PTHREAD_COND_INITIALIZER {/*TODO*/}
+
+/* Single execution handling. */
+#define PTHREAD_ONCE_INIT  {0}
+
+struct sched_param;
+
+extern __nonnull((1,3)) int pthread_create __P((pthread_t *__restrict __newthread, pthread_attr_t const *__attr, void *(*__start_routine) (void *), void *__restrict __arg));
+extern __noreturn void pthread_exit __P((void *__retval));
+extern int pthread_join __P((pthread_t __th, void **__thread_return));
+extern int pthread_tryjoin_np __P((pthread_t __th, void **__thread_return));
+extern int pthread_timedjoin_np __P((pthread_t __th, void **__thread_return, struct timespec const *__restrict __abstime));
+extern int pthread_detach __P((pthread_t __th));
+extern __constcall pthread_t pthread_self __P((void));
+extern __constcall int pthread_equal __P((pthread_t __thread1, pthread_t __thread2));
+extern __nonnull((1)) int pthread_attr_init __P((pthread_attr_t *__restrict __attr));
+extern __nonnull((1)) int pthread_attr_destroy __P((pthread_attr_t *__restrict __attr));
+extern __nonnull((1,2)) int pthread_attr_getdetachstate __P((pthread_attr_t const *__restrict __attr, int *__restrict __detachstate));
+extern __nonnull((1)) int pthread_attr_setdetachstate __P((pthread_attr_t *__restrict __attr, int __detachstate));
+extern __nonnull((1,2)) int pthread_attr_getguardsize __P((pthread_attr_t const *__restrict __attr, __size_t *__restrict __guardsize));
+extern __nonnull((1)) int pthread_attr_setguardsize __P((pthread_attr_t *__restrict __attr, __size_t __guardsize));
+extern __nonnull((1,2)) int pthread_attr_getschedparam __P((pthread_attr_t const *__restrict __attr, struct sched_param *__restrict __param));
+extern __nonnull((1,2)) int pthread_attr_setschedparam __P((pthread_attr_t *__restrict __attr, struct sched_param const *__restrict __param));
+extern __nonnull((1,2)) int pthread_attr_getschedpolicy __P((pthread_attr_t const *__restrict __attr, int *__restrict __policy));
+extern __nonnull((1)) int pthread_attr_setschedpolicy __P((pthread_attr_t *__restrict __attr, int __policy));
+extern __nonnull((1,2)) int pthread_attr_getinheritsched __P((pthread_attr_t const *__restrict __attr, int *__restrict __inherit));
+extern __nonnull((1)) int pthread_attr_setinheritsched __P((pthread_attr_t *__restrict __attr, int __inherit));
+extern __nonnull((1,2)) int pthread_attr_getscope __P((pthread_attr_t const *__restrict __attr, int *__restrict __scope));
+extern __nonnull((1)) int pthread_attr_setscope __P((pthread_attr_t *__restrict __attr, int __scope));
+extern __nonnull((1,2)) int pthread_attr_getstackaddr __P((pthread_attr_t const *__restrict __attr, void **__restrict __stackaddr));
+extern __nonnull((1)) int pthread_attr_setstackaddr __P((pthread_attr_t *__restrict __attr, void *__stackaddr));
+extern __nonnull((1,2)) int pthread_attr_getstacksize __P((pthread_attr_t const *__restrict __attr, __size_t *__restrict __stacksize));
+extern __nonnull((1)) int pthread_attr_setstacksize __P((pthread_attr_t *__restrict __attr, __size_t __stacksize));
+extern __nonnull((1,2,3)) int pthread_attr_getstack __P((pthread_attr_t const *__restrict __attr, void **__restrict __stackaddr, __size_t *__restrict __stacksize));
+extern __nonnull((1)) int pthread_attr_setstack __P((pthread_attr_t *__restrict __attr, void *__stackaddr, __size_t __stacksize));
+extern __nonnull((1)) int pthread_getattr_default_np __P((pthread_attr_t *__restrict __attr));
+extern __nonnull((1)) int pthread_setattr_default_np __P((pthread_attr_t const *__restrict __attr));
+extern __nonnull((2)) int pthread_getattr_np __P((pthread_t __th, pthread_attr_t *__restrict __attr));
+extern __nonnull((2,3)) int pthread_getschedparam __P((pthread_t __target_thread, int *__restrict __policy, struct sched_param *__restrict __param));
+extern __nonnull((3)) int pthread_setschedparam __P((pthread_t __target_thread, int __policy, struct sched_param const *__restrict __param));
+extern int pthread_setschedprio __P((pthread_t __target_thread, int __prio));
+extern __nonnull((2)) int pthread_getname_np __P((pthread_t __target_thread, char *__restrict __buf, __size_t __buflen));
+extern __nonnull((2)) int pthread_setname_np __P((pthread_t __target_thread, const char *__restrict __name));
+extern int pthread_getconcurrency __P((void));
+extern int pthread_setconcurrency __P((int __level));
+extern int pthread_yield __P((void));
+
+extern __nonnull((1,2)) int pthread_once __P((pthread_once_t *__restrict __once_control, void (*__init_routine)(void)));
+
+extern int pthread_cancel __P((pthread_t __th)); /* Terminate. */
+
+/* Mutex handling. */
+extern __nonnull((1)) int pthread_mutex_init __P((pthread_mutex_t *__restrict __mutex, pthread_mutexattr_t const *__mutexattr));
+extern __nonnull((1)) int pthread_mutex_destroy __P((pthread_mutex_t *__restrict __mutex));
+extern __nonnull((1)) int pthread_mutex_trylock __P((pthread_mutex_t *__restrict __mutex));
+extern __nonnull((1)) int pthread_mutex_lock __P((pthread_mutex_t *__restrict __mutex));
+extern __nonnull((1,2)) int pthread_mutex_timedlock __P((pthread_mutex_t *__restrict __mutex, struct timespec const *__restrict __abstime));
+extern __nonnull((1)) int pthread_mutex_unlock __P((pthread_mutex_t *__restrict __mutex));
+
+/* Functions for handling mutex attributes. */
+extern __nonnull((1)) int pthread_mutexattr_init __P((pthread_mutexattr_t *__restrict __attr));
+extern __nonnull((1)) int pthread_mutexattr_destroy __P((pthread_mutexattr_t *__restrict __attr));
+extern __nonnull((1,2)) int pthread_mutexattr_getpshared __P((pthread_mutexattr_t const *__restrict __attr, int *__restrict __pshared));
+extern __nonnull((1)) int pthread_mutexattr_setpshared __P((pthread_mutexattr_t *__restrict __attr, int __pshared));
+extern __nonnull((1,2)) int pthread_mutexattr_gettype __P((pthread_mutexattr_t const *__restrict __attr, int *__restrict __kind));
+extern __nonnull((1)) int pthread_mutexattr_settype __P((pthread_mutexattr_t *__restrict __attr, int __kind));
+extern __nonnull((1,2)) int pthread_mutexattr_getprotocol __P((pthread_mutexattr_t const *__restrict __attr, int *__restrict __protocol));
+extern __nonnull((1)) int pthread_mutexattr_setprotocol __P((pthread_mutexattr_t *__restrict __attr, int __protocol));
+
+/* Functions for handling read-write locks. */
+extern __nonnull((1)) int pthread_rwlock_init __P((pthread_rwlock_t *__restrict __rwlock, pthread_rwlockattr_t const *__attr));
+extern __nonnull((1)) int pthread_rwlock_destroy __P((pthread_rwlock_t *__restrict __rwlock));
+extern __nonnull((1)) int pthread_rwlock_rdlock __P((pthread_rwlock_t *__restrict __rwlock));
+extern __nonnull((1)) int pthread_rwlock_tryrdlock __P((pthread_rwlock_t *__restrict __rwlock));
+extern __nonnull((1,2)) int pthread_rwlock_timedrdlock __P((pthread_rwlock_t *__restrict __rwlock, struct timespec const *__restrict __abstime));
+extern __nonnull((1)) int pthread_rwlock_wrlock __P((pthread_rwlock_t *__restrict __rwlock));
+extern __nonnull((1)) int pthread_rwlock_trywrlock __P((pthread_rwlock_t *__restrict __rwlock));
+extern __nonnull((1,2)) int pthread_rwlock_timedwrlock __P((pthread_rwlock_t *__restrict __rwlock, struct timespec const *__restrict __abstime));
+extern __nonnull((1)) int pthread_rwlock_unlock __P((pthread_rwlock_t *__restrict __rwlock));
+
+/* Functions for handling read-write lock attributes. */
+extern __nonnull((1)) int pthread_rwlockattr_init __P((pthread_rwlockattr_t *__restrict __attr));
+extern __nonnull((1)) int pthread_rwlockattr_destroy __P((pthread_rwlockattr_t *__restrict __attr));
+extern __nonnull((1,2)) int pthread_rwlockattr_getpshared __P((pthread_rwlockattr_t const *__restrict __attr, int *__restrict __pshared));
+extern __nonnull((1)) int pthread_rwlockattr_setpshared __P((pthread_rwlockattr_t *__restrict __attr, int __pshared));
+extern __nonnull((1,2)) int pthread_rwlockattr_getkind_np __P((pthread_rwlockattr_t const *__restrict __attr, int *__restrict __pref));
+extern __nonnull((1)) int pthread_rwlockattr_setkind_np __P((pthread_rwlockattr_t *__restrict __attr, int __pref));
+
+/* Functions for handling conditional variables. */
+extern __nonnull((1)) int pthread_cond_init __P((pthread_cond_t *__restrict __cond, pthread_condattr_t const *__restrict __cond_attr));
+extern __nonnull((1)) int pthread_cond_destroy __P((pthread_cond_t *__restrict __cond));
+extern __nonnull((1)) int pthread_cond_signal __P((pthread_cond_t *__restrict __cond));
+extern __nonnull((1)) int pthread_cond_broadcast __P((pthread_cond_t *__restrict __cond));
+extern __nonnull((1,2)) int pthread_cond_wait __P((pthread_cond_t *__restrict __cond, pthread_mutex_t *__restrict __mutex));
+extern __nonnull((1,2,3)) int pthread_cond_timedwait __P((pthread_cond_t *__restrict __cond, pthread_mutex_t *__restrict __mutex, struct timespec const *__restrict __abstime));
+
+/* Functions for handling condition variable attributes. */
+extern __nonnull((1)) int pthread_condattr_init __P((pthread_condattr_t *__restrict __attr));
+extern __nonnull((1)) int pthread_condattr_destroy __P((pthread_condattr_t *__restrict __attr));
+extern __nonnull((1,2)) int pthread_condattr_getpshared __P((pthread_condattr_t const * __restrict __attr, int *__restrict __pshared));
+extern __nonnull((1)) int pthread_condattr_setpshared __P((pthread_condattr_t *__restrict __attr, int __pshared));
+
+/* Functions to handle spinlocks. */
+extern __nonnull((1)) int pthread_spin_init __P((pthread_spinlock_t *__restrict __lock, int __pshared));
+extern __nonnull((1)) int pthread_spin_destroy __P((pthread_spinlock_t *__restrict __lock));
+extern __nonnull((1)) int pthread_spin_lock __P((pthread_spinlock_t *__restrict __lock));
+extern __nonnull((1)) int pthread_spin_trylock __P((pthread_spinlock_t *__restrict __lock));
+extern __nonnull((1)) int pthread_spin_unlock __P((pthread_spinlock_t *__restrict __lock));
+
+/* Functions to handle barriers. */
+extern __nonnull((1)) int pthread_barrier_init __P((pthread_barrier_t *__restrict __barrier, pthread_barrierattr_t const *__restrict __attr, unsigned int __count));
+extern __nonnull((1)) int pthread_barrier_destroy __P((pthread_barrier_t *__restrict __barrier));
+extern __nonnull((1)) int pthread_barrier_wait __P((pthread_barrier_t *__restrict __barrier));
+extern __nonnull((1)) int pthread_barrierattr_init __P((pthread_barrierattr_t *__restrict __attr));
+extern __nonnull((1)) int pthread_barrierattr_destroy __P((pthread_barrierattr_t *__restrict __attr));
+extern __nonnull((1,2)) int pthread_barrierattr_getpshared __P((pthread_barrierattr_t const *__restrict __attr, int *__restrict __pshared));
+extern __nonnull((1)) int pthread_barrierattr_setpshared __P((pthread_barrierattr_t *__restrict __attr, int __pshared));
+
+/* Functions for handling thread-specific data. */
+extern __nonnull((1)) int pthread_key_create __P((pthread_key_t *__restrict __key, void (*__destr_function) (void *)));
+extern int pthread_key_delete __P((pthread_key_t __key));
+extern void *pthread_getspecific __P((pthread_key_t __key));
+extern int pthread_setspecific __P((pthread_key_t __key, void const *__pointer));
+
+
 
 
 typedef __ktid_t pthread_id_np_t;
@@ -222,21 +268,8 @@ typedef __ktid_t pthread_id_np_t;
 // Ugh... Lets just look past this and realize that this is
 // nothing but a way too complicated wrapper around 'ktask_gettid()'
 // Oh and yeah: the pthread_id_np_t is just the tid of the thread.
-extern int pthread_getunique_np(pthread_t *thread, pthread_id_np_t *id);
+extern int pthread_getunique_np(pthread_t *__restrict thread, pthread_id_np_t *__restrict id);
 extern pthread_id_np_t pthread_getthreadid_np(void);
-
-
-
-// WARNING: The implementation currently ignored 'destr_function'
-// WARNING: Any future implementation that will actually call 'destr_function',
-//          will be subject to the fact that task_terminate-ing a thread will
-//          not give that thread a chance to ever execute these destructors.
-extern int pthread_key_create(pthread_key_t *key, void (*destr_function)(void *));
-extern int pthread_key_delete(pthread_key_t key);
-extern void *pthread_getspecific(pthread_key_t key);
-extern int pthread_setspecific(pthread_key_t key, void const *pointer);
-
-
 
 __DECL_END
 
