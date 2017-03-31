@@ -179,6 +179,7 @@ __ktask_terminate_r(struct ktask *__restrict self,
   * >> Basically: Recursively terminate all tasks until all
   *    that's left are zombies, or nothing is left all-together. */
  ktask_lock(self,KTASK_LOCK_CHILDREN);
+again_killchildren:
  while (self->t_children.t_taska) {
   found_running = 0;
   for (i = 0; i < self->t_children.t_taska; ++i) {
@@ -218,8 +219,17 @@ __ktask_terminate_r(struct ktask *__restrict self,
   *       by the terminator is the ktask_terminate(ktask_self())
   *       scenario, which for us is covered by the caller running
   *       all of this from within a critical block. */
- error = __ktask_terminate_s(self,exitcode,caller,flags);
- ktask_unlock(self,KTASK_LOCK_CHILDREN);
+ if (self == caller) {
+  error = __ktask_terminate_s(self,exitcode,caller,flags);
+  ktask_unlock(self,KTASK_LOCK_CHILDREN);
+ } else {
+  ktask_unlock(self,KTASK_LOCK_CHILDREN);
+  error = __ktask_terminate_s(self,exitcode,caller,flags);
+  ktask_lock(self,KTASK_LOCK_CHILDREN);
+  /* Must kill more children (Shouldn't happen). */
+  if __unlikely(self->t_children.t_taska) goto again_killchildren;
+  ktask_unlock(self,KTASK_LOCK_CHILDREN);
+ }
  return error;
 }
 
