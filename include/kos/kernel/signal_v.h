@@ -104,15 +104,9 @@ __DECL_BEGIN
 extern           __nonnull((1))   kerrno_t ksignal_vrecv(struct ksignal *__restrict signal, __kernel void *__restrict buf);
 extern __wunused __nonnull((1,2)) kerrno_t ksignal_vtimedrecv(struct ksignal *__restrict signal, struct timespec const *__restrict abstime, __kernel void *__restrict buf);
 extern __wunused __nonnull((1,2)) kerrno_t ksignal_vtimeoutrecv(struct ksignal *__restrict signal, struct timespec const *__restrict timeout, __kernel void *__restrict buf);
-extern           __nonnull((2))   kerrno_t ksignal_vrecvs(__size_t sigc, struct ksignal *const *__restrict sigv, __kernel void *__restrict buf);
-extern __wunused __nonnull((2,3)) kerrno_t ksignal_vtimedrecvs(__size_t sigc, struct ksignal *const *__restrict sigv, struct timespec const *__restrict abstime, __kernel void *__restrict buf);
-extern __wunused __nonnull((2,3)) kerrno_t ksignal_vtimeoutrecvs(__size_t sigc, struct ksignal *const *__restrict sigv, struct timespec const *__restrict timeout, __kernel void *__restrict buf);
 extern __crit           __nonnull((1,2))   kerrno_t _ksignal_vrecv_andunlock_c(struct ksignal *__restrict self, __kernel void *__restrict buf);
-extern __crit           __nonnull((2,3))   kerrno_t _ksignal_vrecvs_andunlock_c(__size_t sigc, struct ksignal *const *__restrict sigv, __kernel void *__restrict buf);
 extern __crit __wunused __nonnull((1,2,3)) kerrno_t _ksignal_vtimedrecv_andunlock_c(struct ksignal *self, struct timespec const *__restrict abstime, __kernel void *__restrict buf);
-extern __crit __wunused __nonnull((2,3,4)) kerrno_t _ksignal_vtimedrecvs_andunlock_c(__size_t sigc, struct ksignal *const *__restrict sigv, struct timespec const *__restrict abstime, __kernel void *__restrict buf);
 extern __crit __wunused __nonnull((1,2,3)) kerrno_t _ksignal_vtimeoutrecv_andunlock_c(struct ksignal *self, struct timespec const *__restrict timeout, __kernel void *__restrict buf);
-extern __crit __wunused __nonnull((2,3,4)) kerrno_t _ksignal_vtimeoutrecvs_andunlock_c(__size_t sigc, struct ksignal *const *__restrict sigv, struct timespec const *__restrict timeout, __kernel void *__restrict buf);
 #else
 #define ksignal_vrecv(signal,buf) \
  __xblock({ struct ksignal *const __ksrcvself = (signal);\
@@ -138,33 +132,6 @@ extern __crit __wunused __nonnull((2,3,4)) kerrno_t _ksignal_vtimeoutrecvs_andun
             ksignal_endlock();\
             __xreturn __kstorcverr;\
  })
-#define ksignal_vrecvs(sigc,sigv,buf) \
- __xblock({ kerrno_t __ksrcvserr; __size_t const __ksrcvssigc = (sigc);\
-            struct ksignal *const *const __ksrcvssigv = (sigv);\
-            kassert_ksignals(__ksrcvssigc,__ksrcvssigv);\
-            ksignal_locks(__ksrcvssigc,__ksrcvssigv,KSIGNAL_LOCK_WAIT);\
-            __ksrcvserr = _ksignal_vrecvs_andunlock_c(__ksrcvssigc,__ksrcvssigv),buf;\
-            ksignal_endlock();\
-            __xreturn __ksrcvserr;\
- })
-#define ksignal_vtimedrecvs(sigc,sigv,abstime,buf) \
- __xblock({ kerrno_t __kstrcvserr; __size_t const __kstrcvssigc = (sigc);\
-            struct ksignal *const *const __kstrcvssigv = (sigv);\
-            kassert_ksignals(__kstrcvssigc,__kstrcvssigv);\
-            ksignal_locks(__kstrcvssigc,__kstrcvssigv,KSIGNAL_LOCK_WAIT);\
-            __kstrcvserr = _ksignal_vtimedrecvs_andunlock_c(__kstrcvssigc,__kstrcvssigv,abstime,buf);\
-            ksignal_endlock();\
-            __xreturn __kstrcvserr;\
- })
-#define ksignal_vtimeoutrecvs(sigc,sigv,timeout,buf) \
- __xblock({ kerrno_t __kstorcvserr; __size_t const __kstorcvssigc = (sigc);\
-            struct ksignal *const *const __kstorcvssigv = (sigv);\
-            kassert_ksignals(__kstorcvssigc,__kstorcvssigv);\
-            ksignal_locks(__kstorcvssigc,__kstorcvssigv,KSIGNAL_LOCK_WAIT);\
-            __kstorcvserr = _ksignal_vtimeoutrecvs_andunlock_c(__kstorcvssigc,__kstorcvssigv,timeout,buf);\
-            ksignal_endlock();\
-            __xreturn __kstorcvserr;\
- })
 #define __KSIGNAL_VRECV_BEGIN(buf) \
  { struct ktask *const __vrvcaller = ktask_self();\
    __vrvcaller->t_sigval = (buf);
@@ -189,16 +156,10 @@ extern __crit __wunused __nonnull((2,3,4)) kerrno_t _ksignal_vtimeoutrecvs_andun
  })
 #define _ksignal_vrecv_andunlock_c(self,buf) \
  __KSIGNAL_VRECV(buf,_ksignal_recv_andunlock_c(self))
-#define _ksignal_vrecvs_andunlock_c(sigc,sigv,buf) \
- __KSIGNAL_VRECV(buf,_ksignal_recvs_andunlock_c(sigc,sigv))
 #define _ksignal_vtimedrecv_andunlock_c(self,abstime,buf) \
  __KSIGNAL_VRECV(buf,_ksignal_timedrecv_andunlock_c(self,abstime))
-#define _ksignal_vtimedrecvs_andunlock_c(sigc,sigv,abstime,buf) \
- __KSIGNAL_VRECV(buf,_ksignal_timedrecvs_andunlock_c(sigc,sigv,abstime))
 #define _ksignal_vtimeoutrecv_andunlock_c(self,timeout,buf) \
  __KSIGNAL_VRECV(buf,_ksignal_timeoutrecv_andunlock_c(self,timeout))
-#define _ksignal_vtimeoutrecvs_andunlock_c(sigc,sigv,timeout,buf) \
- __KSIGNAL_VRECV(buf,_ksignal_timeoutrecvs_andunlock_c(sigc,sigv,timeout))
 #endif
 
 

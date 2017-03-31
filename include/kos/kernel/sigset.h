@@ -155,7 +155,7 @@ extern __crit __nonnull((1)) void ksigset_unlocks_c(struct ksigset const *__rest
 #define ksigset_breakunlocks(sigset,lock) NOIRQ_BREAKUNLOCK(ksigset_unlocks_c(sigset,lock))
 #define ksigset_endlocks()                NOIRQ_END
 #define /*__crit*/ ksigset_locks_c(sigset,lock) \
- __xblock({ struct ksigset const *const __kset = (sigset);\
+ __xblock({ struct ksigset *const __kset = (sigset);\
             ksiglock_t const __kslslock = (lock);\
             KTASK_SPIN(ksigset_trylocks_c(__kset,__kslslock));\
             (void)0;\
