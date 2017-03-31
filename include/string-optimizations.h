@@ -32,13 +32,8 @@
 #ifndef __ASSEMBLY__
 __DECL_BEGIN
 
-#ifdef __GNUC__
 /* Bring some gcc-specific compiler-optimizations into the game. */
-#define __constant_strcmp        __builtin_strcmp
-#define __constant_strncmp       __builtin_strncmp
-#define __constant_strchr        __builtin_strchr
-#define __constant_strrchr       __builtin_strrchr
-
+#ifdef __GNUC__
 /* All of these must be implemented as macros expanding their arguments a million times,
  * because otherwise GCC's __builtin_constant_p doesn't return true for compile-time strings.
  * >> This is due to a shortcoming in GCC that prevents constant_p in strings from

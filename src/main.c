@@ -296,6 +296,10 @@ void smp_test(void) {
 
 void kernel_main(void) {
 
+ // TODO: The VGA terminal crashes when running
+ //       "sh" while at the bottom of the screen.
+ //   >> (SEGFAULT in x86_memcpy).
+
  // TODO: Every CPU needs its own entry in the GDT as to allow
  //       for an easy and efficient mapping of per-cpu memory
  //       regions, similar to how the the new TLS engine works.
