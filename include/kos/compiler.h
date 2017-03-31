@@ -178,6 +178,12 @@ void __compiler_unreachable_impl __D0() { for (;;) {} }
 #   define __attribute_vaformat(func,fmt_idx,varargs_idx) /* nothing */
 #endif
 
+#ifndef _Alignof
+#if 1 /* TODO: '_Alignof' is a C11 keyword. - Blacklist compilers that support it here. */
+#   define _Alignof __compiler_alignof
+#endif
+#endif
+
 #ifndef __asmname
 #   define __NO_asmname
 #   define __asmname(x) /* nothing */

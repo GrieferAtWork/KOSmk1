@@ -109,35 +109,114 @@ __DECL_BEGIN
 #ifndef __ASSEMBLY__
 struct timespec;
 
-typedef __attribute__((__aligned__(__SIZEOF_INT__))) volatile unsigned int kfutex_t;
+/* NOTE: A futex will _always_ be a "[unsigned] int" for compatibility with linux.
+ *       Using this type instead is never necessary and only required for convenience.
+ * WARNING: But be sure to always align a futex pointer by sizeof(int) bytes,
+ *          as the kernel will silently force this alignment, meaning that the
+ *          actual address of the affected futex is up to sizeof(int)-1 bytes
+ *          lower than what you specified.
+ * HINT: Don't worry about memory returned from malloc() though.
+ *       That's always properly aligned for this.
+ * HINT: When you're not sure about alignment, you can always just
+ *       pass a pointer to the second element of an 'int[2]' array,
+ *       as this will always provide enough memory for implicit
+ *       alignment.
+ */
+typedef __attribute__((__aligned__(__SIZEOF_INT__)))
+        volatile unsigned int kfutex_t;
+
+/* v When set, 'fs_align' is used as alignment between vector elements in 'fs_avec'.
+ *   Otherwise, 'fs_offset' is used as
+ *     >> void wait_my_mutex_inl(size_t c, struct my_mutex *v) {
+ *     >>   ...
+ *     >>   set.fs_count = c;
+ *     >>   // 'fs_align' is 'KFUTEXSET_ALIGN_ISALIGN' or'd with the alignment between vector elements
+ *     >>   set.fs_align = KFUTEXSET_ALIGN_ISALIGN|_Alignof(struct my_mutex);
+ *     >>   set.fs_avec  = &v->futex; // Pointer to the first futex
+ *     >>   ...
+ *     >> }
+ *     >> void wait_my_mutex(size_t c, struct my_mutex **v) {
+ *     >>   ...
+ *     >>   set.fs_count  = c;
+ *     >>   // 'fs_offset' is the member offset of each element in the dereferencable vector:
+ *     >>   // >> ELEM(i): deref(fs_dvec+i*sizeof(void *))+fs_offset;
+ *     >>   set.fs_offset = offsetof(struct my_mutex,futex);
+ *     >>   set.fs_dvec   = (void **)v;
+ *     >>   ...
+ *     >> } 
+ */
+#define KFUTEXSET_ALIGN_ISALIGN ((__size_t)1 << (__SIZEOF_POINTER__*8-1))
 
 struct __packed kfutexset {
- struct kfutexset *fs_next;  /*< [0..1] Pointer to another set of futex objects, or NULL. */
- unsigned int      fs_op;    /*< The futex operation that should be applied to those in the vector below. */
- unsigned int      fs_val;   /*< The value used as right-hand-side operand in some recv operations as set by 'fs_op'. */
- __size_t          fs_count; /*< Amount of futex objects, either inline, or dereferenced. */
- __size_t          fs_align; /*< Alignment of futex addresses, or < sizeof(kfutex_t) for a packed vector of pointers that should be dereferenced. */
+ struct kfutexset *fs_next;   /*< [0..1] Pointer to another set of futex objects, or NULL. */
+ unsigned int      fs_op;     /*< The futex operation that should be applied to those in the vector below. */
+ unsigned int      fs_val;    /*< The value used as right-hand-side operand in some recv operations as set by 'fs_op'. */
+ __size_t          fs_count;  /*< Amount of futex objects, either inline, or dereferenced. */
 union __packed {
- kfutex_t         *fs_avec;  /*< [if(fs_align >= sizeof(kfutex_t))][align(fs_align)][0..fs_count]
-                              *   Vector of inline futex objects, each offset from each pother by 'fs_align'.
-                              *   >> AT(int i) { return (kfutex_t *)((uintptr_t)fs_avec+i*fs_align); } */
- kfutex_t        **fs_dvec;  /*< [if(fs_align <  sizeof(kfutex_t))][1..1][0..fs_count]
-                              *   Packed vector of futex addresses.
-                              *   >> AT(int i) { return fs_dvec[i]; } */
+ __size_t          fs_align;  /*< [KFUTEXSET_ALIGN_ISALIGN] Alignment of futex addresses, or offset to each element of
+                               *                            a packed vector of pointers that should be dereferenced.
+                               *  NOTE: Unless the 'KFUTEXSET_ALIGN_ISALIGN' flag is part of this field, fs_align is
+                               *        an offset in bytes that should be added to every element 'fs_dvec[*]'.
+                               *        This way, you can easily set 'fs_dvec' to point to a vector of your custom data
+                               *        structure and simply set fs_align to the offsetof() the futex within your structure.
+                               */
+ __size_t          fs_offset; /*< [!KFUTEXSET_ALIGN_ISALIGN] Offset name for the alignment field (see above). */
+};union __packed {
+ kfutex_t         *fs_avec;   /*< [if(fs_align >= sizeof(kfutex_t))][align(fs_align)][0..fs_count]
+                               *   Vector of inline futex objects, each offset from each pother by 'fs_align'.
+                               *   >> AT(int i) { return (kfutex_t *)((uintptr_t)fs_avec+i*(fs_align&~KFUTEXSET_ALIGN_ISALIGN)); } */
+ void            **fs_dvec;   /*< [if(fs_align <  sizeof(kfutex_t))][1..1][0..fs_count]
+                               *   Packed vector of futex addresses.
+                               *   >> AT(int i) { return (kfutex_t *)((uintptr_t)fs_dvec[i]+fs_align); } */
 };};
+
+/* Return a pointer to the i'th futex stored within a given futex set. */
+#define KFUTEXSET_GET(self,i) \
+ (kfutex_t *)(((self)->fs_align&KFUTEXSET_ALIGN_ISALIGN)\
+  ? ((__uintptr_t)(self)->fs_avec+(i)*((self)->fs_align&~(KFUTEXSET_ALIGN_ISALIGN)))\
+  : ((__uintptr_t)(self)->fs_dvec[i]+(self)->fs_align))
 
 
 //////////////////////////////////////////////////////////////////////////
-// Perform a futex operation:
-// @return: KE_OK:       [*]           The operation completed successfully.
-// @return: KE_FAULT:    [*]           The given 'uaddr' is faulty.
-// @return: KE_FAULT:    [KFUTEX_WAIT] The given 'abstime' pointer is faulty and non-NULL.
-// @return: KE_AGAIN:    [KFUTEX_WAIT] The 'KFUTEX_RECVIF' condition was false.
-// @return: KE_TIMEDOUT: [KFUTEX_WAIT] The given 'abstime' or a previously set timeout has expired.
-// @return: KE_NOMEM:    [KFUTEX_WAIT] No futex existed at the given address, and not enough memory was available to allocate one.
-// @return: KE_INVAL:    [?]           The specified 'futex_op' is unknown.
-// @return: KS_NODATA:   [KFUTEX_WAIT && buf != NULL] The futex was signaled, but no data was transmitted.
-// @return: KE_INVAL:    [kfutex_ccmd][KFUTEX_WAIT][KFUTEX_CCMD_SENDALL|KFUTEX_CCMD_SENDONE]
+// Atomically perform a futex operation:
+// @param: uaddr:    The address of the primary futex to operate on.
+// @param: futex_op: The kind of futex operation that should be performed.
+//                   This argument should either be KFUTEX_RECVIF(*), or'd
+//                   together with an optional secondary operation that should
+//                   be executed within the same atomic frame, or be 'KFUTEX_SEND'
+//                   if you wish to signal waiting tasks.
+// @param: val:     [KFUTEX_RECVIF(*)] The right-hand-side operand for the condition specified by '*'.
+// @param: val:     [KFUTEX_SEND] The max amount of threads to signal (usually '1' or 'UINT_MAX')
+// @param: buf:     [KFUTEX_RECVIF(*)] Base address of a buffer used to store received
+//                                     data if the sender chooses to include some.
+//                                     The caller is responsible to pass a buffer of
+//                                     sufficient size for any single chunk of data
+//                                     a sender might choose to pass.
+//                                     Passing NULL will disable reception of data.
+//                                     WARNING: In the even of an invalid buffer, an attempt
+//                                              at sending will fail with KE_FAULT, not the
+//                                              actual receive command.
+//                                             (Yet the receiver will still be awoken in this case)
+// @param: buf:     [KFUTEX_SEND] Actually a 'void const *', the base of a readable
+//                                buffer of data to be send to all receiving threads.
+//                                Passing NULL disables data transfer and causes a
+//                                receiver providing a buffer to succeed with 'KS_NODATA'.
+// @param: abstime: [KFUTEX_RECVIF(*)] An optional (may be NULL) argument specifying an absolute
+//                                     point when the caller should time out (fail with KE_TIMEDOUT).
+// @param: abstime: [KFUTEX_SEND] Casted to 'struct timespec *', the size of 'buf' in bytes.
+// @param: uaddr2:  [KFUTEX_RECVIF(*)] Secondary futex modified/signaled by 'KFUTEX_CCMD*'
+// @param: val2:    [KFUTEX_RECVIF(*)] Right-hand-side operand used by 'KFUTEX_CCMD*' for modifying a futex at 'uaddr2'
+// @return: KE_OK:       [*] The operation completed successfully.
+// @return: KE_OK:       [KFUTEX_SEND] The operation completed successfully
+//                                  >> ECX is set to the about of threads that have received a signal.
+// @return: KE_FAULT:    [*] The given 'uaddr' is faulty.
+// @return: KE_INVAL:    [?] The specified 'futex_op' is unknown.
+// @return: KE_FAULT:    [KFUTEX_RECVIF(*)] The given 'abstime' pointer is faulty and non-NULL.
+// @return: KE_AGAIN:    [KFUTEX_RECVIF(*)] The 'KFUTEX_RECVIF' condition was false.
+// @return: KE_TIMEDOUT: [KFUTEX_RECVIF(*)] The given 'abstime' or a previously set timeout has expired.
+// @return: KE_NOMEM:    [KFUTEX_RECVIF(*)] No futex existed at the given address, and not enough memory was available to allocate one.
+// @return: KS_NODATA:   [KFUTEX_RECVIF(*)&& buf != NULL] The futex was signaled, but no data was transmitted.
+// @return: KE_INVAL:    [kfutex_ccmd][KFUTEX_RECVIF(*)][KFUTEX_CCMD_SEND(ALL|ONE)]
 //                       [uaddr2 == uaddr] The specified second futex is equal to the first,
 //                                         but the caller attempted to send & receive a single
 //                                         futex in the same atomic frame (which isn't possible).
@@ -166,21 +245,11 @@ __local _syscall7(kerrno_t,kfutex_ccmd, /* kfutex_c[onditional]cmd */
 // WARNING:
 //  - This function can _only_ be used to receive futex objects.
 //    If the futex operation specified in any of the 
-// Example for receiving multiple futex objects:
-// >> static kfutex_t ftxv[][2] = {{0,0},{0,0}};
-// >> static kfutex_t *
-// >> 
-// >> static void *thread_main(void *p) {
-// >>   char buf[256];
-// >>   
-// >>   printf("data from %p: %.256q\n",buf);
-// >>   return p;
-// >> }
 // @return: * :       Same as 'kfutex_cmd'.
 // @return: KE_INVAL: The secondary futex operation attempted to send 'uaddr2' which is already contained in 'ftxset'.
 // @return: KE_INVAL: A primary futex operations attempted to send a signal (This function can only be used to receive futex objects; potentially multiple at once).
 // @return: KE_OK:   'ftxset' is NULL and nothing needed to be done.
-__local _syscall5(kerrno_t,kfutex_ccmds, /* kfutex_c[onditional]cmds (plural) */
+__local _syscall5(kerrno_t,kfutex_ccmds, /* kfutex_c[onditional]cmds[et] */
                   struct kfutexset *,ftxset,void *,buf,
                   struct timespec const *,abstime,
                   kfutex_t *,uaddr2,unsigned int,val2);
@@ -193,7 +262,7 @@ __local _syscall5(kerrno_t,kfutex_ccmds, /* kfutex_c[onditional]cmds (plural) */
 #define kfutex_vsendone(uaddr,buf,bufsize)            kfutex_vsend(uaddr,1,buf,bufsize)
 #define kfutex_vsendall(uaddr,buf,bufsize)            kfutex_vsend(uaddr,(unsigned int)-1,buf,bufsize)
 
-/* NOTE: There are no receiver helpers because 'kfutex_{c}cmd'
+/* NOTE: There are no receiver helpers because 'kfutex_{c}cmd{s}'
  *       are already as simplified as possible.
  *       The next higher level would already be something like:
  * >> #define kfutex_recv_if_notequal(uaddr,val)                   kfutex_cmd(uaddr,KFUTEX_RECVIF(KFUTEX_NOT_EQUAL),val,NULL,NULL)

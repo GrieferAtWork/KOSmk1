@@ -285,6 +285,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "string", "string", "{D1EB47
 		..\include\kos\arch\generic\string\memsum.h = ..\include\kos\arch\generic\string\memsum.h
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libproc", "libs\libproc.vcxproj", "{A2545233-5626-4BAC-A173-5C9EC43BD683}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -395,6 +397,10 @@ Global
 		{6DA33F87-F2A9-45F0-A0AF-3AD4CED7BAB8}.Debug|Win32.Build.0 = Debug|Win32
 		{6DA33F87-F2A9-45F0-A0AF-3AD4CED7BAB8}.Release|Win32.ActiveCfg = Release|Win32
 		{6DA33F87-F2A9-45F0-A0AF-3AD4CED7BAB8}.Release|Win32.Build.0 = Release|Win32
+		{A2545233-5626-4BAC-A173-5C9EC43BD683}.Debug|Win32.ActiveCfg = Debug|Win32
+		{A2545233-5626-4BAC-A173-5C9EC43BD683}.Debug|Win32.Build.0 = Debug|Win32
+		{A2545233-5626-4BAC-A173-5C9EC43BD683}.Release|Win32.ActiveCfg = Release|Win32
+		{A2545233-5626-4BAC-A173-5C9EC43BD683}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -439,5 +445,6 @@ Global
 		{538A4144-32CF-432B-9951-2004DDE63621} = {81DF2AB2-5463-40A2-B23A-6E7F2215F7B0}
 		{6DA33F87-F2A9-45F0-A0AF-3AD4CED7BAB8} = {9430368A-404E-4917-982A-DABD0023453A}
 		{D1EB476C-6129-465D-A549-4AEC60298BDD} = {BE3E30ED-E050-4CCB-B5ED-A8B33A8ACC47}
+		{A2545233-5626-4BAC-A173-5C9EC43BD683} = {2030D081-E96F-4C1C-81A9-6B099CB2D7DB}
 	EndGlobalSection
 EndGlobal

@@ -149,7 +149,7 @@ __public int system(char const *command) {
  typedef int (*pcmd_system)(char const *text, size_t size, uintptr_t *errorcode);
  static mod_t stored_module = MOD_ALL;
  static pcmd_system stored_cmd_system = NULL;
- uintptr_t exitcode; int error,childfd;
+ uintptr_t exitcode; int error; uintptr_t childfd;
  pcmd_system cmd_system;
  /* Lazily load libcmd to get ahold of the system executor.
   * >> If that fails, fall back to executing 'sh -c' */
@@ -178,8 +178,28 @@ __public int system(char const *command) {
   }
   return error;
  }
- if ((childfd = task_fork()) == 0) {
-  /* Child task */
+ error = ktask_fork(&childfd,KTASK_NEW_FLAG_NONE);
+ if (error == KS_UNCHANGED) {
+  /* Parent task: Figure out child PID and close child descriptor */
+  error = ktask_join(childfd,(void **)&exitcode,
+                     KTASKOPFLAG_RECURSIVE);
+  if __unlikely(KE_ISERR(error)) {
+   /* BAIL! */
+   ktask_terminate(childfd,NULL,KTASKOPFLAG_RECURSIVE);
+   kfd_close(childfd);
+   __set_errno(-error);
+   return -1;
+  }
+  kfd_close(childfd);
+  return exitcode;
+ }
+ /* Child process or error */
+ if __unlikely(KE_ISERR(error)) {
+  __set_errno(-error);
+  return -1;
+ }
+ /* Child process */
+ {
   char *argv[] = {
    (char *)"sh",
    (char *)"-c",
@@ -189,16 +209,6 @@ __public int system(char const *command) {
   execv("/bin/sh",argv);
   _exit(127); /* STD wants it this way... */
  }
- if __unlikely(childfd == -1) return -1;
- error = proc_join(childfd,&exitcode);
- if __unlikely(KE_ISERR(error)) {
-  /* BAIL! */
-  ktask_terminate(childfd,NULL,KTASKOPFLAG_TREE);
-  kfd_close(childfd);
-  return -1;
- }
- kfd_close(childfd);
- return (int)exitcode;
 #endif
 }
 

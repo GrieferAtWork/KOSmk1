@@ -1026,13 +1026,22 @@ err: __set_errno(-error);
 
 #ifndef __KERNEL__
 __public pid_t fork(void) {
- pid_t result; task_t child;
- if ((child = task_fork()) == 0) return 0; /*< Returns ZERO for child. */
- if __unlikely(child == -1) return -1;
- /* Parent task: Figure out child PID and close child descriptor */
- result = proc_getpid(child);
- kfd_close(child);
- return result;
+ uintptr_t child; kerrno_t error;
+ error = ktask_fork(&child,KTASK_NEW_FLAG_NONE);
+ if (error == KS_UNCHANGED) {
+  /* Parent task: Figure out child PID and close child descriptor */
+  pid_t result = kproc_getpid(child);
+  kfd_close(child);
+  assert(result != 0);
+  return result;
+ }
+ /* Child process or error */
+ if __unlikely(KE_ISERR(error)) {
+  __set_errno(-error);
+  return -1;
+ }
+ /* Child process */
+ return 0;
 }
 __public void *mmap(void *addr, size_t length, int prot,
                     int flags, int fd, __off_t offset) {

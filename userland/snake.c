@@ -31,7 +31,7 @@
 #include <termios.h>
 #include <string.h>
 #include <proc.h>
-#include <kos\syslog.h>
+#include <kos/syslog.h>
 
 #define IN   STDIN_FILENO
 #define OUT  STDOUT_FILENO

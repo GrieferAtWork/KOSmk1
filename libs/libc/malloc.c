@@ -38,12 +38,14 @@
 #include <kos/kernel/debug.h>
 #include <kos/kernel/task.h>
 #include <kos/kernel/tty.h>
+#include <kos/kernel/sched_yield.h>
+#else
+#include <kos/task.h>
 #endif
 
 #include <format-printer.h>
 #include <alloca.h>
 #include <malloc.h>
-#include <proc.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -212,7 +214,7 @@ static byte_t mall_footer_seed[4] = {0xCF,0x6A,0xB7,0x97};
 
 /* === BEGIN MALL SYSTEM HOOKS === */
 #define MALL_SYSMALLOC        dlmalloc
-#define MALL_SYSYIELD         task_yield()
+#define MALL_SYSYIELD         ktask_yield()
 #define MALL_SYSFREE          dlfree
 #define MALL_SYSUSABLESIZE    dlmalloc_usable_size
 #define MALL_SYSMUSTLOCK      0

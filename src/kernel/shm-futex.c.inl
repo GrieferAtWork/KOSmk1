@@ -283,7 +283,11 @@ kshm_getfutex_unlocked(struct kshm *__restrict self, __user void *address,
                  region->sre_chunk.sc_partv+region->sre_chunk.sc_partc),
          futex_part->sp_start+futex_part->sp_pages <= futex_page)) ++futex_part;
  /* Figure out the futex ID. */
- futex_id = (futex_address%PAGESIZE)/sizeof(unsigned int);
+#if __SIZEOF_INT__ == 4
+ futex_id = (futex_address%PAGESIZE) >> 2;
+#else
+ futex_id = (futex_address%PAGESIZE)/sizeof(int);
+#endif
  /* Lookup/generate the futex. */
  if (alloc_missing) {
   *user_futex = kshmfutex_ptr_getfutex_newmissing(&futex_part->sp_futex,futex_id);
@@ -321,10 +325,6 @@ kshm_futex(struct kshm *__restrict self,
  kassert_kshm(self);
  error = krwlock_beginread(&self->s_lock);
  if __unlikely(KE_ISERR(error)) return error;
- /* Make sure the given pointer is properly aligned (misalignments are silently ignored).
-  * TODO: Shouldn't we just fail if it's misaligned? (But with what error...) */
- *(uintptr_t *)&address &= ~((uintptr_t)sizeof(unsigned int)-1);
- *(uintptr_t *)&address2 &= ~((uintptr_t)sizeof(unsigned int)-1);
  opcode = futex_op&_KFUTEX_MASK_CMD;
  error = kshm_getfutex_unlocked(self,address,&user_futex,
                                 FUTEXOP_MAYALLOCATE(opcode));
@@ -562,7 +562,6 @@ init_futexset(struct kernel_futexset *__restrict self, struct kshm *__restrict s
  assert(krwlock_isreadlocked(&shm->s_lock) ||
         krwlock_iswritelocked(&shm->s_lock));
  currset = self;
- *(uintptr_t *)&address2 &= ~((uintptr_t)sizeof(unsigned int)-1);
  /* Iterate all user futex sets. */
  if (!ftxset) {
   currset->kfs_sigset.ss_elemsiz = 0;
@@ -584,7 +583,9 @@ init_futexset(struct kernel_futexset *__restrict self, struct kshm *__restrict s
   currset->kfs_sigset.ss_elemoff = offsetof(struct kshmfutex,f_sig);
   if (kernel_set.fs_count) error = KE_OK; /* Don't return KS_EMPTY. */
   /* Check for overflow in the futex count. */
-  max_vector_align = kernel_set.fs_align >= sizeof(kfutex_t) ? kernel_set.fs_align : sizeof(void *);
+  max_vector_align = kernel_set.fs_align&KFUTEXSET_ALIGN_ISALIGN
+   ? kernel_set.fs_align&~(KFUTEXSET_ALIGN_ISALIGN)
+   : sizeof(void *);
   if ((kernel_set.fs_count*max_vector_align) <
        kernel_set.fs_count) { error = KE_OVERFLOW; goto err; }
   /* Allocate the buffer for all of the physical addresses.
@@ -592,12 +593,13 @@ init_futexset(struct kernel_futexset *__restrict self, struct kshm *__restrict s
   currset->kfs_addrv = (__kernel unsigned int **)malloc(kernel_set.fs_count*
                                                         sizeof(__kernel unsigned int *));
   /* Copy the userspace futex/futex-pointer vector. */
-  if (kernel_set.fs_align >= sizeof(kfutex_t)) {
+  if (kernel_set.fs_align&KFUTEXSET_ALIGN_ISALIGN) {
    /* Inline vector (Must use 'fs_align' as alignment offset). */
    uintptr_t futex_addr = (uintptr_t)kernel_set.fs_avec;
+   uintptr_t elem_offset = kernel_set.fs_align&~(KFUTEXSET_ALIGN_ISALIGN);
    futex_end = (futex_iter = (kfutex_t **)currset->kfs_addrv)+kernel_set.fs_count;
    /* Calculate the virtual addresses of all futex objects. */
-   for (; futex_iter != futex_end; ++futex_iter,futex_addr += kernel_set.fs_align
+   for (; futex_iter != futex_end; ++futex_iter,futex_addr += elem_offset
         ) *futex_iter = (kfutex_t *)futex_addr;
   } else {
    /* Dereferenced vector (Every element is a pointer). */
@@ -606,6 +608,11 @@ init_futexset(struct kernel_futexset *__restrict self, struct kshm *__restrict s
            error = KE_FAULT;
 err_addrv: free(currset->kfs_addrv);
     goto err;
+   }
+   if (kernel_set.fs_align != 0) {
+    /* Must add an alignment offset to every element. */
+    futex_end = (futex_iter = (kfutex_t **)currset->kfs_addrv)+kernel_set.fs_count;
+    for (; futex_iter != futex_end; ++futex_iter) *(uintptr_t *)futex_iter += kernel_set.fs_align;
    }
   }
   /* At this point 'kfs_addrv' contains the virtual
@@ -624,7 +631,6 @@ err_addrv: free(currset->kfs_addrv);
    __user kfutex_t *user_futex_addr;
    __kernel kfutex_t *kernel_futex_addr;
    user_futex_addr = *futex_iter;
-   *(uintptr_t *)&user_futex_addr &= ~((uintptr_t)sizeof(unsigned int)-1);
    /* Translate the virtual address. */
    kernel_futex_addr = (__kernel kfutex_t *)kshm_qtranslateuser(shm,shm->s_pd,
                                                                (__user void *)user_futex_addr,0);

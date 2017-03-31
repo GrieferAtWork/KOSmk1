@@ -44,7 +44,7 @@ static void *thread_main(void *p) {
                 KFUTEX_CCMD_SENDALL(KFUTEX_ADD);
  set.fs_val   = 0;
  set.fs_count = 2;
- set.fs_align = sizeof(kfutex_t);
+ set.fs_align = KFUTEXSET_ALIGN_ISALIGN|_Alignof(kfutex_t);
  set.fs_avec  = ftx;
  outf("[THREAD] Begin receiving data\n");
  error = kfutex_ccmds(&set,buffer,NULL,&ready,1);
@@ -78,8 +78,11 @@ TEST(futex) {
 
  outf("[MAIN] Sending data...\n");
  /* atomic: vsendall(&ftx,data,sizeof(data)); */
+#if 1 /* Doesn't matter which one */
  error = kfutex_vsendall(&ftx[0],data,sizeof(data));
+#else
  error = kfutex_vsendall(&ftx[1],data,sizeof(data));
+#endif
  outf("[MAIN] Joining thread after %d...\n",error);
  task_join(t[0],NULL);
  task_join(t[1],NULL);

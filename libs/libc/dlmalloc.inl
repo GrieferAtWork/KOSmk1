@@ -10,9 +10,8 @@
 #define SPIN_LOCK_YIELD   ktask_yield();
 #define GC_COLLECT        gc_run()
 #else
-/* Don't use sched_yield() to prevent a dependency on 'libpthread' in 'libc' */
-#include <proc.h>
-#define SPIN_LOCK_YIELD   task_yield();
+#include <kos/task.h>
+#define SPIN_LOCK_YIELD   ktask_yield();
 #endif
 
 #ifndef GC_COLLECT

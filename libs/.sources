@@ -65,12 +65,14 @@
       ,-Wno-maybe-uninitialized)]\
 [define(lint = 1)] { ./libfdlibm/*.c; }
 [project = lib:shared:pthread] [diskfile = /usr/lib/libpthread.so] { ./libpthread/*.c; }
+[project = lib:shared:proc]    [diskfile = /usr/lib/libproc.so] { ./libproc/*.c; }
 [project = lib:shared:dl]      [diskfile = /usr/lib/libdl.so] { ./libdl/*.c; }
 [project = lib:shared:rline]   [diskfile = /usr/lib/librline.so] { ./librline/*.c; }
 [project = lib:shared:term]    [diskfile = /usr/lib/libterm.so] { ./libterm/*.c; }
 [project = lib:shared:disasm]  [diskfile = /usr/lib/libdisasm.so] { ./libdisasm/*.c; }
 [project = lib:shared:curses]  [diskfile = /usr/lib/libcurses.so] [define(__BUILDING_LIBCURSES__ = 1)] { ./libcurses/*.c; }
-[project = lib:shared:cmd]     [diskfile = /usr/lib/libcmd.so] [define(__BUILDING_LIBCMD__ = 1)] { ./libcmd/*.c; }
+[project = lib:shared:cmd][diskfile = /usr/lib/libcmd.so]\
+[libs(proc)][define(__BUILDING_LIBCMD__ = 1)] { ./libcmd/*.c; }
 
 
 

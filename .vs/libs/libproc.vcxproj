@@ -11,42 +11,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\libs\libc\assert.c" />
-    <ClCompile Include="..\..\libs\libc\atoi.c" />
-    <ClCompile Include="..\..\libs\libc\ctype.c" />
-    <ClCompile Include="..\..\libs\libc\dirent.c" />
-    <ClCompile Include="..\..\libs\libc\environ.c" />
-    <ClCompile Include="..\..\libs\libc\exception.c" />
-    <ClCompile Include="..\..\libs\libc\format-printer.c" />
-    <ClCompile Include="..\..\libs\libc\getopt.c" />
-    <ClCompile Include="..\..\libs\libc\itos.c" />
-    <ClCompile Include="..\..\libs\libc\malloc.c" />
-    <ClCompile Include="..\..\libs\libc\mod.c" />
-    <ClCompile Include="..\..\libs\libc\pty.c" />
-    <ClCompile Include="..\..\libs\libc\signal.c" />
-    <ClCompile Include="..\..\libs\libc\stdio.c" />
-    <ClCompile Include="..\..\libs\libc\stdlib.c" />
-    <ClCompile Include="..\..\libs\libc\string.c" />
-    <ClCompile Include="..\..\libs\libc\sys\io.c" />
-    <ClCompile Include="..\..\libs\libc\sys\socket.c" />
-    <ClCompile Include="..\..\libs\libc\time.c" />
-    <ClCompile Include="..\..\libs\libc\traceback.c" />
-    <ClCompile Include="..\..\libs\libc\unistd.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\libs\libc\dlmalloc.inl" />
-    <None Include="..\..\libs\libc\itos.impl.inl" />
-    <None Include="..\..\libs\libc\setjmp.S" />
-    <None Include="..\..\libs\libc\stdio-file.c.inl" />
-    <None Include="..\..\libs\libc\string-wmatch.c.inl" />
-    <None Include="..\..\libs\libc\syscall.S" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\..\libs\libc\traceback-internal.h" />
+    <ClCompile Include="..\..\libs\libproc\proc-sync.c" />
+    <ClCompile Include="..\..\libs\libproc\proc.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{A2791917-78D5-45B6-89E4-89AE7D4760D4}</ProjectGuid>
-    <RootNamespace>libc</RootNamespace>
+    <ProjectGuid>{A2545233-5626-4BAC-A173-5C9EC43BD683}</ProjectGuid>
+    <RootNamespace>libproc</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">

@@ -1,6 +1,6 @@
 
 [project = userland:ls]           [diskfile = /bin/ls]           { ./ls.c; }
-[project = userland:ps]           [diskfile = /bin/ps]           { ./ps.c; }
+[project = userland:ps]           [diskfile = /bin/ps]           [libs(proc)] { ./ps.c; }
 [project = userland:init]         [diskfile = /bin/init]         { ./init.c; }
 [project = userland:cat]          [diskfile = /bin/cat]          { ./cat.c; }
 [project = userland:echo]         [diskfile = /bin/echo]         { ./echo.c; }
@@ -9,18 +9,19 @@
 [project = userland:rmdir]        [diskfile = /bin/rmdir]        { ./rmdir.c; }
 [project = userland:true]         [diskfile = /bin/true]         [no(libc)] { ./true.c; }
 [project = userland:false]        [diskfile = /bin/false]        [no(libc)] { ./false.c; }
-[project = userland:sh]           [diskfile = /bin/sh]           [libs(rline,cmd)] { ./sh/*.c; }
-[project = userland:terminal-vga] [diskfile = /bin/terminal-vga] [libs(term)] { ./terminal-vga.c; }
-[project = userland:snake]        [diskfile = /bin/snake]        { ./snake.c; }
+[project = userland:sh]           [diskfile = /bin/sh]           [libs(rline,cmd,proc)] { ./sh/*.c; }
+[project = userland:terminal-vga] [diskfile = /bin/terminal-vga] [libs(term,proc)] { ./terminal-vga.c; }
+[project = userland:snake]        [diskfile = /bin/snake]        [libs(proc)] { ./snake.c; }
 [pe] {
-	[project = userland:pe-test] [diskfile = /bin/pe-test] { ./pe-test.c; }
-	[project = lib:shared:pe-lib][diskfile = /usr/lib/pe-lib.dll][libs(_start)] { ./pe-test.c; }
+	[project = userland:pe-test] [diskfile = /bin/pe-test][libs(proc)] { ./pe-test.c; }
+	[project = lib:shared:pe-lib][diskfile = /usr/lib/pe-lib.dll][libs(_start,proc)] { ./pe-test.c; }
 }
 
 # Use TPP as preprocessor
 [tpp][compiler = i686-elf-cxx] {
 	[project = userland:test]\
 	[diskfile = /bin/test]\
+	[libs(proc)]\
 	{ ./test/*.c; }
 }
 
