@@ -1226,6 +1226,11 @@ kshmbranch_unmap_portion(struct kshmbranch **__restrict pself,
  assertf(first_page != branch->sb_rstart ||
          page_count != branch->sb_rpages,
          "The full-unmap case isn't handled by this function");
+ assert(first_page >= branch->sb_rstart);
+ assertf(first_page+page_count > first_page,"page_count = %Iu",page_count);
+ assert(first_page+page_count <= branch->sb_rstart+branch->sb_rpages);
+ assert(branch->sb_rstart+branch->sb_rpages > branch->sb_rstart);
+ assert(branch->sb_rstart+branch->sb_rpages <= region->sre_chunk.sc_pages);
  if (first_page == branch->sb_rstart) {
 trim_front:
   /* Trim at the front. */
@@ -1245,15 +1250,22 @@ trim_front:
  }
  if (first_page+page_count == branch->sb_rstart+branch->sb_rpages) {
   /* Trim at the back. */
+  assertf(first_page+page_count <= region->sre_chunk.sc_pages,
+          "%Iu >= %Iu",first_page,region->sre_chunk.sc_pages);
   new_cluster = kshmregion_getcluster(region,first_page);
-  assert(new_cluster <= branch->sb_cluster_max);
+  assertf(new_cluster >= branch->sb_cluster_min &&
+          new_cluster <= branch->sb_cluster_max,
+          "Cluster %Id is out of bounds of %Id..%Id",
+          new_cluster-region->sre_clusterv,
+          branch->sb_cluster_min-region->sre_clusterv,
+          branch->sb_cluster_max-region->sre_clusterv);
   if (branch->sb_cluster_max != new_cluster) {
    /* Must drop reference to all clusters between
     * 'new_cluster+1' and 'branch->sb_cluster_max' */
    kshmregion_decref_clusters(region,new_cluster+1,branch->sb_cluster_max);
    branch->sb_cluster_max = new_cluster;
   }
-  branch->sb_map_min -= page_count*PAGESIZE;
+  branch->sb_map_max -= page_count*PAGESIZE;
   branch->sb_rpages  -= page_count;
   assert(branch->sb_rpages);
   return KE_OK;
@@ -1323,15 +1335,46 @@ search_again:
    /* Only remove a part of this branch. */
    kshmregion_page_t start_page;
    size_t unmap_pages;
-   start_page  = addr_min > root->sb_map_min ? (addr_min-root->sb_map_min)/PAGESIZE : 0;
+   uintptr_t unmap_min;
+   if (addr_min > root->sb_map_min) {
+    unmap_min  = addr_min;
+    start_page = (addr_min-root->sb_map_min)/PAGESIZE;
+   } else {
+    unmap_min  = root->sb_map_min;
+    start_page = 0;
+   }
    start_page += root->sb_rstart;
-   unmap_pages = root->sb_rpages-(addr_max < root->sb_map_max
-    ? ((root->sb_map_max-addr_max)/PAGESIZE) : start_page);
+   unmap_pages = ceildiv((min(addr_max,root->sb_map_max)+1)-unmap_min,PAGESIZE);
+   assert(unmap_pages);
+   assertf(start_page+unmap_pages > start_page,"unmap_pages = %Iu",unmap_pages);
+   assert(start_page >= root->sb_rstart);
+   assertf(root->sb_rpages == ceildiv((root->sb_map_max-root->sb_map_min)+1,PAGESIZE),
+           "%Iu != %Iu",root->sb_rpages,ceildiv((root->sb_map_max-root->sb_map_min)+1,PAGESIZE));
+   assertf(start_page+unmap_pages <= root->sb_rstart+root->sb_rpages,
+           "addr_min                        = %p\n"
+           "addr_max                        = %p\n"
+           "root->sb_map_min                = %p\n"
+           "root->sb_map_max                = %p\n"
+           "start_page                      = %Iu\n"
+           "unmap_pages                     = %Iu\n"
+           "root->sb_rstart                 = %Iu\n"
+           "root->sb_rpages                 = %Iu\n"
+           "root->sb_rstart+root->sb_rpages = %Iu\n",
+           addr_min,addr_max,
+           root->sb_map_min,root->sb_map_max,
+           start_page,unmap_pages,
+           root->sb_rstart,root->sb_rpages,
+           root->sb_rstart+root->sb_rpages);
+   assert(start_page+unmap_pages <= root->sb_region->sre_chunk.sc_pages);
+   k_syslogf(KLOG_DEBUG,"[SHM] Unmap portion %Iu..%Iu (%Iu pages) of region at %p\n",
+             start_page,start_page+unmap_pages,unmap_pages,root->sb_region);
    if __likely(KE_ISOK(kshmbranch_unmap_portion(proot,pd,start_page,unmap_pages,addr_semi))) {
     result += unmap_pages;
    } else {
     /* This is kind-of bad, but hopefully no one will notice...
      * todo: maybe add a syslog for this? */
+    k_syslogf(KLOG_ERROR,"[SHM] Failed to unmap portion %Iu..%Iu (%Iu pages) of region at %p\n",
+              start_page,start_page+unmap_pages,unmap_pages,root->sb_region);
    }
   }
  }
