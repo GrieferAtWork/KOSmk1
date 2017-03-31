@@ -43,6 +43,9 @@
 #define __asm_volatile__  __asm__
 #endif
 
+#ifndef __compiler_alignof
+#define __compiler_alignof   __alignof
+#endif
 #ifndef __compiler_pragma
 #define __compiler_pragma       __pragma
 #endif

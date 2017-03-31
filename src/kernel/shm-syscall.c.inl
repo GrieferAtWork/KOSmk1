@@ -212,6 +212,14 @@ KSYSCALL_DEFINE_EX7(rc,kerrno_t,kfutex_ccmd,
                    buf,abstime,(unsigned int *)&regs->regs.ecx,
                   (void *)uaddr2,val2);
 }
+KSYSCALL_DEFINE_EX5(rc,kerrno_t,kfutex_ccmds,
+                    __user struct kfutexset *,ftxset,__user void *,buf,
+                    __user struct timespec const *,abstime,
+                    __user kfutex_t *,uaddr2,unsigned int,val2) {
+ KTASK_CRIT_MARK
+ return kshm_futexs(&kproc_self()->p_shm,ftxset,buf,abstime,
+                   (void *)uaddr2,val2);
+}
 
 
 __DECL_END

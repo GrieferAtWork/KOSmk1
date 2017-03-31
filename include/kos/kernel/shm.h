@@ -958,6 +958,12 @@ kshm_futex(struct kshm *__restrict self,
            __kernel unsigned int *woken_tasks,
            __user void *address2, unsigned int val2);
 
+struct kfutexset;
+extern __crit __wunused __nonnull((1)) kerrno_t
+kshm_futexs(struct kshm *__restrict self, __user struct kfutexset *ftxset,
+            __user void *buf, __user struct timespec const *abstime,
+            __user void *address2, unsigned int val2);
+
 
 
 //////////////////////////////////////////////////////////////////////////

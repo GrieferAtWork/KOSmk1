@@ -33,6 +33,8 @@
 #include <kos/kernel/signal_v.h>
 #include <kos/syslog.h>
 #include <sys/types.h>
+#include <kos/kernel/sigset.h>
+#include <kos/kernel/sigset_v.h>
 
 __DECL_BEGIN
 
@@ -267,16 +269,19 @@ kshm_getfutex_unlocked(struct kshm *__restrict self, __user void *address,
  assert(futex_address < region->sre_chunk.sc_pages*PAGESIZE);
  futex_page = futex_address/PAGESIZE;
  /* Figure out which cluster the futex belongs to. */
+ assert(futex_page < region->sre_chunk.sc_pages);
  assert(futex_page/KSHM_CLUSTERSIZE < region->sre_clusterc);
- futex_cluster = &region->sre_clusterv[futex_page/KSHM_CLUSTERSIZE];
+ futex_cluster = kshmregion_getcluster(region,futex_page);
  /* Make sure the cluster is allocated (It should always be, but better be careful here...) */
  if __unlikely(!futex_cluster->sc_refcnt) return KE_FAULT;
  futex_part = futex_cluster->sc_part;
  /* Walk to the first part associated with the futex. */
- while ((assert(futex_part >= region->sre_chunk.sc_partv &&
-                futex_part <  region->sre_chunk.sc_partv+
-                              region->sre_chunk.sc_partc),
-         futex_part->sp_start < futex_page)) ++futex_part;
+ while ((assertf(futex_part >= region->sre_chunk.sc_partv &&
+                 futex_part <  region->sre_chunk.sc_partv+
+                               region->sre_chunk.sc_partc,
+                 "%p <= %p < %p",region->sre_chunk.sc_partv,futex_part,
+                 region->sre_chunk.sc_partv+region->sre_chunk.sc_partc),
+         futex_part->sp_start+futex_part->sp_pages <= futex_page)) ++futex_part;
  /* Figure out the futex ID. */
  futex_id = (futex_address%PAGESIZE)/sizeof(unsigned int);
  /* Lookup/generate the futex. */
@@ -338,18 +343,13 @@ kshm_futex(struct kshm *__restrict self,
    __kernel unsigned int *kernel_futex,kernel_futex_val;
    __kernel unsigned int *kernel_futex2,kernel_futex2_val;
    struct timespec kernel_abstime;
-   size_t kernel_futex_size;
   case _KFUTEX_CMD_C1:
   case _KFUTEX_CMD_CX:
   case _KFUTEX_CMD_RECV:
   case _KFUTEX_CMD_C0:
 user_lock_again:
-   kernel_futex = (unsigned int *)kshm_translateuser(self,self->s_pd,address,
-                                                     sizeof(unsigned int),
-                                                    &kernel_futex_size,0);
+   kernel_futex = (unsigned int *)kshm_qtranslateuser(self,self->s_pd,address,0);
    if __unlikely(!kernel_futex) { error = KE_FAULT; break; } /* Really shouldn't happen... */
-   assertf(kernel_futex_size == sizeof(unsigned int),
-           "This should always be the case due to the alignment fix above!");
    /* Load the secondary futex and its physical address. */
    if (opcode == _KFUTEX_CMD_RECV) user_futex2 = NULL;
    else {
@@ -375,9 +375,7 @@ same_futex:
     error = krwlock_upgrade(&self->s_lock);
     if __unlikely(KE_ISERR(error)) goto err_futex2;
     if (error == KS_UNLOCKED) goto user_lock_again;
-    kernel_futex2 = (unsigned int *)kshm_translateuser(self,self->s_pd,address2,
-                                                       sizeof(unsigned int),
-                                                      &kernel_futex_size,1);
+    kernel_futex2 = (unsigned int *)kshm_qtranslateuser(self,self->s_pd,address2,1);
     /* Really shouldn't happen... */
     if __unlikely(!kernel_futex2) {
 err_futex2_fault:
@@ -386,8 +384,6 @@ err_futex2:
      if (user_futex2) kshmfutex_decref(user_futex2);
      break;
     }
-    assertf(kernel_futex_size == sizeof(unsigned int),
-            "This should always be the case due to the alignment fix above!");
     assert(kernel_futex2 != kernel_futex);
    }
    assert(user_futex2 != user_futex);
@@ -414,6 +410,8 @@ reload_kernel_futex:
     case KFUTEX_GREATER      : if (!(kernel_futex_val > val)) goto dont_receive; break;
     case KFUTEX_NOT_AND      : if ((kernel_futex_val & val)) goto dont_receive; break;
     case KFUTEX_NOT_XOR      : if ((kernel_futex_val ^ val)) goto dont_receive; break;
+    case KFUTEX_NOT_SHL      : if ((kernel_futex_val << val)) goto dont_receive; break;
+    case KFUTEX_NOT_SHR      : if ((kernel_futex_val >> val)) goto dont_receive; break;
     case KFUTEX_FALSE        : goto dont_receive; break; /* Doesn't make much sense, but it is logical... */
     default: break;
    }
@@ -461,6 +459,8 @@ reload_kernel_futex2:
      case KFUTEX_NOT_SHR: newval = ~(kernel_futex2_val>>val2); break; /* '*uaddr2 = ~(*uaddr2 >> val2)' */
     }
     /* Set the new value for the secondary futex. */
+    k_syslogf(KLOG_TRACE,"[FUTEX] Update word at %p:%p: %u -> %u\n",
+              address2,kernel_futex2,kernel_futex2_val,newval);
     if (!katomic_cmpxch(*kernel_futex2,kernel_futex2_val,newval)) {
      /* Failed to apply new futex2 value. */
      if (kernel_futex == kernel_futex2) {
@@ -529,6 +529,456 @@ end_unlock:
  krwlock_end(&self->s_lock); /* Could be a read- or a write-lock. */
  return error;
 }
+
+struct kernel_futexset {
+ struct ksigset              kfs_sigset; /*< Signal set initialized to mirror  */
+ /* The following is actually a 'struct kernel_futexset *' */
+#define kfs_next  kfs_sigset.ss_next     /*< [0..1][owned] Next futex set. */
+ /* The following is actually a '__ref struct kshmfutex **' */
+#define kfs_fvec  kfs_sigset.ss_elemvec  /*< [1..1][0..kfs_sigset.ss_elemcnt][owned] Vector of references to futex objects. */
+ unsigned int                kfs_op;     /*< The futex operation that should be applied to those in the vector below. */
+ unsigned int                kfs_val;    /*< The value used as right-hand-side operand in some recv operations as set by 'fs_op'. */
+ __kernel unsigned int     **kfs_addrv;  /*< [1..1][0..kfs_addrc][owned] Vector of physical futex addresses. */
+};
+
+
+/* Load a futexset from userspace.
+ * If the given 'address2' is part of the futex set, fill
+ * '*user_futex2' and '*kernel_futex2' with its data.
+ * @return: KS_EMPTY: empty set. */
+static __crit kerrno_t
+init_futexset(struct kernel_futexset *__restrict self, struct kshm *__restrict shm,
+              __user struct kfutexset *ftxset, __user void *address2,
+              struct kshmfutex **user_futex2, __kernel kfutex_t **kernel_futex2) {
+#define V(x) *((__ref struct kshmfutex ***)&(x)->kfs_fvec)
+ struct kfutexset kernel_set;
+ struct kernel_futexset *currset,*nextset,*iterset;
+ __ref struct kshmfutex **iter;
+ kerrno_t error = KS_EMPTY;
+ kassertobj(self);
+ kassertobj(user_futex2);
+ kassertobj(kernel_futex2);
+ kassert_kshm(shm);
+ assert(krwlock_isreadlocked(&shm->s_lock) ||
+        krwlock_iswritelocked(&shm->s_lock));
+ currset = self;
+ *(uintptr_t *)&address2 &= ~((uintptr_t)sizeof(unsigned int)-1);
+ /* Iterate all user futex sets. */
+ if (!ftxset) {
+  currset->kfs_sigset.ss_elemsiz = 0;
+  currset->kfs_sigset.ss_elemcnt = 0;
+  currset->kfs_sigset.ss_elemoff = offsetof(struct kshmfutex,f_sig);
+  V(currset)                     = NULL;
+ } else for (;;) {
+  size_t max_vector_align;
+  kfutex_t **futex_iter,**futex_end;
+  __ref struct kshmfutex **userfutex_iter;
+  /* Copy the user-descriptor for this futex set. */
+  if __unlikely(kshm_copyfromuser(shm,&kernel_set,ftxset,sizeof(struct kfutexset))
+                ) { error = KE_FAULT; goto err; }
+  /* Start with the simple stuff */
+  currset->kfs_op                = kernel_set.fs_op;
+  currset->kfs_val               = kernel_set.fs_val;
+  currset->kfs_sigset.ss_elemcnt = kernel_set.fs_count;
+  currset->kfs_sigset.ss_elemsiz = 0;
+  currset->kfs_sigset.ss_elemoff = offsetof(struct kshmfutex,f_sig);
+  if (kernel_set.fs_count) error = KE_OK; /* Don't return KS_EMPTY. */
+  /* Check for overflow in the futex count. */
+  max_vector_align = kernel_set.fs_align >= sizeof(kfutex_t) ? kernel_set.fs_align : sizeof(void *);
+  if ((kernel_set.fs_count*max_vector_align) <
+       kernel_set.fs_count) { error = KE_OVERFLOW; goto err; }
+  /* Allocate the buffer for all of the physical addresses.
+   * todo: other than checking for overflow, shouldn't we restrict this buffer? */
+  currset->kfs_addrv = (__kernel unsigned int **)malloc(kernel_set.fs_count*
+                                                        sizeof(__kernel unsigned int *));
+  /* Copy the userspace futex/futex-pointer vector. */
+  if (kernel_set.fs_align >= sizeof(kfutex_t)) {
+   /* Inline vector (Must use 'fs_align' as alignment offset). */
+   uintptr_t futex_addr = (uintptr_t)kernel_set.fs_avec;
+   futex_end = (futex_iter = (kfutex_t **)currset->kfs_addrv)+kernel_set.fs_count;
+   /* Calculate the virtual addresses of all futex objects. */
+   for (; futex_iter != futex_end; ++futex_iter,futex_addr += kernel_set.fs_align
+        ) *futex_iter = (kfutex_t *)futex_addr;
+  } else {
+   /* Dereferenced vector (Every element is a pointer). */
+   if __unlikely(kshm_copyfromuser(shm,currset->kfs_addrv,kernel_set.fs_dvec,
+                                   kernel_set.fs_count*sizeof(void *))) {
+           error = KE_FAULT;
+err_addrv: free(currset->kfs_addrv);
+    goto err;
+   }
+  }
+  /* At this point 'kfs_addrv' contains the virtual
+   * addresses of all futexes in this set part.
+   * >> Now we must align and convert them to physical addresses, as
+   *    well as acquire references to the associated futex objects. */
+  /* Step #1: Allocate the vector of user-futex reference pointers. */
+  V(currset) = (__ref struct kshmfutex **)malloc(kernel_set.fs_count*
+                                                 sizeof(__ref struct kshmfutex *));
+  if (!V(currset)) { error = KE_NOMEM; goto err_addrv; }
+  /* Step #2: Walk along the virtual address vector, converting each into their
+   *          physical counterpart, as well as looking up the associated futex. */
+  futex_end = (futex_iter = (kfutex_t **)currset->kfs_addrv)+kernel_set.fs_count;
+  userfutex_iter = V(currset);
+  for (; futex_iter != futex_end; ++futex_iter,++userfutex_iter) {
+   __user kfutex_t *user_futex_addr;
+   __kernel kfutex_t *kernel_futex_addr;
+   user_futex_addr = *futex_iter;
+   *(uintptr_t *)&user_futex_addr &= ~((uintptr_t)sizeof(unsigned int)-1);
+   /* Translate the virtual address. */
+   kernel_futex_addr = (__kernel kfutex_t *)kshm_qtranslateuser(shm,shm->s_pd,
+                                                               (__user void *)user_futex_addr,0);
+   if __unlikely(!kernel_futex_addr) {
+            error = KE_FAULT;
+err_futexv: while (userfutex_iter-- != V(currset)) kshmfutex_decref(*userfutex_iter);
+            free(V(currset));
+            goto err_addrv;
+   }
+   /* Store the physical address. */
+   *futex_iter = (kfutex_t *)kernel_futex_addr;
+   /* Retrieve the futex object associated with this address. */
+   error = kshm_getfutex_unlocked(shm,(void *)user_futex_addr,userfutex_iter,1);
+   if __unlikely(KE_ISERR(error)) goto err_futexv;
+   if (address2 == user_futex_addr) {
+    *user_futex2   = *userfutex_iter;
+    *kernel_futex2 = kernel_futex_addr;
+   }
+  }
+
+  if ((ftxset = kernel_set.fs_next) == NULL) break; /* This was the last set. */
+  /* Allocate a new futex set and chain it to the last one. */
+  nextset = omalloc(struct kernel_futexset);
+  if __unlikely(!nextset) { error = KE_NOMEM; goto err; }
+  currset->kfs_next = (struct ksigset *)nextset;
+  currset = nextset;
+ }
+ currset->kfs_next = NULL;
+ return error;
+err:
+ iterset = self;
+ while (iterset != currset) {
+  iter = V(iterset)+iterset->kfs_sigset.ss_elemcnt;
+  while (iter-- != V(iterset)) kshmfutex_decref(*iter);
+  free(V(iterset));
+  free(iterset->kfs_addrv);
+  nextset = (struct kernel_futexset *)iterset->kfs_next;
+  if (iterset != self) free(iterset);
+  iterset = nextset;
+ }
+ return error;
+}
+
+
+static __crit void
+quit_futexset(struct kernel_futexset *__restrict self) {
+ __ref struct kshmfutex **iter;
+ struct kernel_futexset *iterset,*nextset;
+ assert(self->kfs_sigset.ss_elemsiz == 0);
+ assert(self->kfs_sigset.ss_elemoff == offsetof(struct kshmfutex,f_sig));
+ iterset = self;
+ for (;;) {
+  iter = V(iterset)+iterset->kfs_sigset.ss_elemcnt;
+  while (iter-- != V(iterset)) kshmfutex_decref(*iter);
+  free(V(iterset));
+  free(iterset->kfs_addrv);
+  nextset = (struct kernel_futexset *)iterset->kfs_next;
+  if (iterset != self) free(iterset);
+  if (!nextset) break;
+  iterset = nextset;
+ }
+}
+
+__crit kerrno_t
+kshm_futexs(struct kshm *__restrict self, __user struct kfutexset *ftxset,
+            __user void *buf, __user struct timespec const *abstime,
+            __user void *address2, unsigned int val2) {
+ kerrno_t error; struct timespec kernel_abstime;
+ int secondary_op,secondary_opcode,has_write_lock = 0;
+ int user_futex2_is_reference,futex_op;
+ unsigned int futex_val,old_addr2_word,addr2_partof_set;
+ __ref struct kshmfutex *user_futex2;
+ __kernel kfutex_t *kernel_futex2;
+ struct kernel_futexset set;
+ struct kernel_futexset *set_iter;
+ __kernel kfutex_t **kernel_futex_iter,**kernel_futex_end;
+ KTASK_CRIT_MARK
+ kassert_kshm(self);
+ k_syslogf(KLOG_INFO,"[IRQ] %d\n",karch_irq_enabled());
+ error = krwlock_beginread(&self->s_lock);
+ if __unlikely(KE_ISERR(error)) return error;
+ if __unlikely(abstime && kshm_copyfromuser(self,&kernel_abstime,
+               abstime,sizeof(struct timespec))) { error = KE_FAULT; goto end_unlock; }
+reload_futexset:
+ user_futex2 = NULL,kernel_futex2 = NULL;
+ error = init_futexset(&set,self,ftxset,address2,&user_futex2,&kernel_futex2);
+#if 0
+ k_syslogf(KLOG_DEBUG
+          ,"set.kfs_sigset.ss_next    = %p\n"
+           "set.kfs_sigset.ss_elemcnt = %Iu\n"
+           "set.kfs_sigset.ss_elemsiz = %Iu\n"
+           "set.kfs_sigset.ss_elemoff = %Iu\n"
+           "set.kfs_sigset.ss_elemvec = %p\n"
+           "set.kfs_op                = %#x\n"
+           "set.kfs_val               = %#x\n"
+           "set.kfs_addrv             = %p\n"
+          ,set.kfs_sigset.ss_next
+          ,set.kfs_sigset.ss_elemcnt
+          ,set.kfs_sigset.ss_elemsiz
+          ,set.kfs_sigset.ss_elemoff
+          ,set.kfs_sigset.ss_elemvec
+          ,set.kfs_op
+          ,set.kfs_val
+          ,set.kfs_addrv);
+#endif
+ if __unlikely(KE_ISERR(error)) goto end_unlock;
+ /* Must handle special case ~empty~ here because the scheduler
+  * would put the calling thread into an unwakeable waiting state. */
+ if __unlikely(error == KS_EMPTY) { error = KE_OK; goto end_futexset; }
+
+ secondary_opcode = (secondary_op = set.kfs_op)&_KFUTEX_MASK_CMD;
+ if (secondary_opcode == _KFUTEX_CMD_C0 ||
+     secondary_opcode == _KFUTEX_CMD_C1 ||
+     secondary_opcode == _KFUTEX_CMD_CX) {
+  if (!has_write_lock) {
+   /* We need a write-lock to perform the secondary command. */
+   error = krwlock_upgrade(&self->s_lock);
+   if __unlikely(KE_ISERR(error)) goto end_futexset;
+   has_write_lock = 1;
+   if (error == KS_UNLOCKED) {
+    /* NOTE: Since we already need to reload the futex set, check
+     *       if we also need to touch the secondary futex page.
+     * >> If we do need to, already touch the page so we don't need to start over twice! */
+    {
+     kpage_t *page = kpagedir_getpage(self->s_pd,address2);
+     if __unlikely(!page || !page->present) goto end_futexset_fault;
+     if __unlikely(!page->read_write) {
+      /* Try to touch the secondary futex page. */
+      if __unlikely(!kshm_touch_unlocked((struct kshm *)self,
+                                         (void *)alignd((uintptr_t)address2,PAGEALIGN),1,
+                                          KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE
+                    )) goto end_futexset_fault;
+      assert(page == kpagedir_getpage(self->s_pd,address2));
+     }
+    }
+quit_futexset_and_reload:
+    /* Must reload the futex set in case something was unmapped. */
+    quit_futexset(&set);
+    goto reload_futexset;
+   }
+  }
+  user_futex2_is_reference = user_futex2 == NULL;
+  addr2_partof_set = !user_futex2_is_reference;
+  if (user_futex2_is_reference) {
+   /* Must manually lookup the secondary futex. */
+   error = kshm_getfutex_unlocked(self,address2,&user_futex2,0);
+   if __unlikely(KE_ISERR(error)) {
+    /* Check for special case: Secondary futex doesn't exist. */
+    if (error != KE_NOENT) goto end_futexset;
+    user_futex2_is_reference = 0;
+    assert(!user_futex2);
+   } else {
+    kassert_kshmfutex(user_futex2);
+   }
+   /* Translate the secondary futex.
+    * NOTE: In the rare even that we need to touch its page, we can't take
+    *       any chances and _have_ to reload the sigset. */
+   {
+    kpage_t *page = kpagedir_getpage(self->s_pd,address2);
+    if __likely(page && page->present) {
+     if __unlikely(!page->read_write) {
+      /* Try to touch the page. */
+      if __unlikely(!kshm_touch_unlocked((struct kshm *)self,
+                                         (void *)alignd((uintptr_t)address2,PAGEALIGN),1,
+                                          KSHMREGION_FLAG_READ|KSHMREGION_FLAG_WRITE
+                    )) goto end_futexset_fault;
+      assert(page == kpagedir_getpage(self->s_pd,address2));
+      goto quit_futexset_and_reload;
+     }
+     page->dirty = 1;
+     *(uintptr_t *)&kernel_futex2  = x86_pte_getpptr(page);
+     *(uintptr_t *)&kernel_futex2 |= X86_VPTR_GET_POFF(address2);
+    }
+   }
+  } else {
+   __kernel kfutex_t *writable_kernel_futex2;
+   assert(kernel_futex2);
+   /* The secondary futex was included as part of the user-given
+    * futex set. - Make sure we're not trying to send anything on it. */
+   if (secondary_opcode != _KFUTEX_CMD_C0) {
+    /* ERROR: Can't send & receive the same futex during the same atomic operation. */
+    error = KE_INVAL;
+    goto end_futexset;
+   }
+   writable_kernel_futex2 = (__kernel kfutex_t *)kshm_qtranslateuser(self,self->s_pd,address2,1);
+   if __unlikely(!writable_kernel_futex2) { end_futexset_fault: error = KE_FAULT; goto end_futexset; } /* Shouldn't happen. */
+   if (writable_kernel_futex2 != kernel_futex2) {
+    /* Must handle special case: The futex2 address wasn't writable due to COW,
+     *                           yet now that now was invoked, its physical address has changed,
+     *                           meaning that the physical address of any number of other
+     *                           futex words may have also changed.
+     *                        >> Sadly this means that we must reload _everything_...
+     */
+    goto quit_futexset_and_reload;
+   }
+  }
+ } else {
+  user_futex2              = NULL;
+  kernel_futex2            = NULL;
+  addr2_partof_set         = 0;
+  user_futex2_is_reference = 0;
+ }
+#define has_address2_partof_set   (addr2_partof_set)
+#define has_address2_value_loaded (addr2_partof_set) /* If it's part of the set, its value was already loaded. */
+
+ /* Lock all 'dem signals! */
+ if (user_futex2 && !has_address2_partof_set) {
+  /* Must also lock the secondary futex. */
+again_load_secondary_futex:
+  ksignal_lock_c(&user_futex2->f_sig,KSIGNAL_LOCK_WAIT);
+  if (!ksigset_trylocks_c(&set.kfs_sigset,KSIGNAL_LOCK_WAIT)) {
+   ksignal_unlock_c(&user_futex2->f_sig,KSIGNAL_LOCK_WAIT);
+   goto again_load_secondary_futex;
+  }
+ } else {
+  ksigset_locks_c(&set.kfs_sigset,KSIGNAL_LOCK_WAIT);
+ }
+ /* This is it! This is where all the atomic magic happens! */
+
+ /* Step #1: Check all the conditions that must apply atomically.
+  *       >> Since we're locking all signals in question,
+  *          everything here will appear atomic to the user. */
+reload_primary_conditions:
+ set_iter = &set;
+ do {
+  futex_op = (set_iter->kfs_op&_KFUTEX_RECV_OPMASK) >> _KFUTEX_RECV_OPSHIFT;
+  /* Minor optimizations for special cases. */
+  if __unlikely(futex_op == KFUTEX_FALSE) goto end_EAGAIN;
+  if           (futex_op == KFUTEX_TRUE) goto next_set;
+  futex_val = set_iter->kfs_val;
+  kernel_futex_end = (kernel_futex_iter = (__kernel kfutex_t **)set_iter->kfs_addrv)+set_iter->kfs_sigset.ss_elemcnt;
+  for (; kernel_futex_iter != kernel_futex_end; ++kernel_futex_iter) {
+   unsigned int futex_word = katomic_load(*(unsigned int *)*kernel_futex_iter);
+   if (*kernel_futex_iter == kernel_futex2) {
+    assert(has_address2_partof_set);
+    k_syslogf(KLOG_INFO,"Found addr2 at %p\n",(unsigned int *)*kernel_futex_iter);
+    old_addr2_word = futex_word;
+   }
+   switch (futex_op) {
+    case KFUTEX_EQUAL        : if (!(futex_word == futex_val)) goto end_EAGAIN; break; /* 'if (*uaddr == val) { ... wait(); }' */
+    case KFUTEX_LOWER        : if (!(futex_word < futex_val)) goto end_EAGAIN; break; /* 'if (*uaddr < val) { ... wait(); }' */
+    case KFUTEX_LOWER_EQUAL  : if (!(futex_word <= futex_val)) goto end_EAGAIN; break; /* 'if (*uaddr <= val) { ... wait(); }' */
+    case KFUTEX_AND          : if (!(futex_word & futex_val)) goto end_EAGAIN; break; /* 'if ((*uaddr & val) != 0) { ... wait(); }' */
+    case KFUTEX_XOR          : if (!(futex_word ^ futex_val)) goto end_EAGAIN; break; /* 'if ((*uaddr ^ val) != 0) { ... wait(); }' */
+    case KFUTEX_SHL          : if (!(futex_word << futex_val)) goto end_EAGAIN; break; /* 'if ((*uaddr << val) != 0) { ... wait(); }' */
+    case KFUTEX_SHR          : if (!(futex_word >> futex_val)) goto end_EAGAIN; break; /* 'if ((*uaddr >> val) != 0) { ... wait(); }' */
+    case KFUTEX_NOT_EQUAL    : if (!(futex_word != futex_val)) goto end_EAGAIN; break; /* 'if (*uaddr != val) { ... wait(); }' */
+    case KFUTEX_GREATER_EQUAL: if (!(futex_word >= futex_val)) goto end_EAGAIN; break; /* 'if (*uaddr >= val) { ... wait(); }' */
+    case KFUTEX_GREATER      : if (!(futex_word > futex_val)) goto end_EAGAIN; break; /* 'if (*uaddr > val) { ... wait(); }' */
+    case KFUTEX_NOT_AND      : if ((futex_word & futex_val)) goto end_EAGAIN; break; /* 'if ((*uaddr & val) == 0) { ... wait(); }' */
+    case KFUTEX_NOT_XOR      : if ((futex_word ^ futex_val)) goto end_EAGAIN; break; /* 'if ((*uaddr ^ val) == 0) { ... wait(); }' */
+    case KFUTEX_NOT_SHL      : if ((futex_word << futex_val)) goto end_EAGAIN; break; /* 'if ((*uaddr << val) == 0) { ... wait(); }' */
+    case KFUTEX_NOT_SHR      : if ((futex_word >> futex_val)) goto end_EAGAIN; break; /* 'if ((*uaddr >> val) == 0) { ... wait(); }' */
+    default: break;
+   }
+  }
+next_set:;
+ } while ((set_iter = (struct kernel_futexset *)set_iter->kfs_next) != NULL);
+
+ /* Step #2: [OPT] Perform the secondary memory-modifying
+  *                operation and signal the futex at 'address2'. */
+ switch (secondary_opcode) {
+  {
+   unsigned int new_addr2_word;
+  case _KFUTEX_CMD_C0:
+  case _KFUTEX_CMD_C1:
+  case _KFUTEX_CMD_CX:
+   /* NOTE: The code above will have acquired write-access to the
+    *       address2 futex word, meaning that we are free to modify it. */
+   if (!user_futex2 || !has_address2_value_loaded) {
+    /* If primary conditions didn't already load the secondary futex word, load it now. */
+reload_secondary_word:
+    old_addr2_word = katomic_load(*(unsigned int *)kernel_futex2);
+   }
+   /* Perform the secondary operation. */
+   switch ((secondary_op & _KFUTEX_CCMD_OPMASK) >> _KFUTEX_CCMD_OPSHIFT) {
+    default            : new_addr2_word = val2; break; /* '*uaddr2 = val2'. */
+    case KFUTEX_ADD    : new_addr2_word = old_addr2_word+val2; break; /* '*uaddr2 += val2' */
+    case KFUTEX_SUB    : new_addr2_word = old_addr2_word-val2; break; /* '*uaddr2 -= val2' */
+    case KFUTEX_MUL    : new_addr2_word = old_addr2_word*val2; break; /* '*uaddr2 *= val2' */
+    case KFUTEX_DIV    : new_addr2_word = old_addr2_word/val2; break; /* '*uaddr2 /= val2' */
+    case KFUTEX_AND    : new_addr2_word = old_addr2_word&val2; break; /* '*uaddr2 &= val2' */
+    case KFUTEX_OR     : new_addr2_word = old_addr2_word|val2; break; /* '*uaddr2 |= val2' */
+    case KFUTEX_XOR    : new_addr2_word = old_addr2_word^val2; break; /* '*uaddr2 ^= val2' */
+    case KFUTEX_SHL    : new_addr2_word = old_addr2_word<<val2; break; /* '*uaddr2 <<= val2' */
+    case KFUTEX_SHR    : new_addr2_word = old_addr2_word>>val2; break; /* '*uaddr2 >>= val2' */
+    case KFUTEX_NOT    : new_addr2_word = ~(val2); break; /* '*uaddr2 = ~(val2)' */
+    case KFUTEX_NOT_ADD: new_addr2_word = ~(old_addr2_word+val2); break; /* '*uaddr2 = ~(*uaddr2 + val2)' */
+    case KFUTEX_NOT_SUB: new_addr2_word = ~(old_addr2_word-val2); break; /* '*uaddr2 = ~(*uaddr2 - val2)' */
+    case KFUTEX_NOT_MUL: new_addr2_word = ~(old_addr2_word*val2); break; /* '*uaddr2 = ~(*uaddr2 * val2)' */
+    case KFUTEX_NOT_DIV: new_addr2_word = ~(old_addr2_word/val2); break; /* '*uaddr2 = ~(*uaddr2 / val2)' */
+    case KFUTEX_NOT_AND: new_addr2_word = ~(old_addr2_word&val2); break; /* '*uaddr2 = ~(*uaddr2 & val2)' */
+    case KFUTEX_NOT_OR : new_addr2_word = ~(old_addr2_word|val2); break; /* '*uaddr2 = ~(*uaddr2 | val2)' */
+    case KFUTEX_NOT_XOR: new_addr2_word = ~(old_addr2_word^val2); break; /* '*uaddr2 = ~(*uaddr2 ^ val2)' */
+    case KFUTEX_NOT_SHL: new_addr2_word = ~(old_addr2_word<<val2); break; /* '*uaddr2 = ~(*uaddr2 << val2)' */
+    case KFUTEX_NOT_SHR: new_addr2_word = ~(old_addr2_word>>val2); break; /* '*uaddr2 = ~(*uaddr2 >> val2)' */
+   }
+   /* Apply the new futex word. */
+   k_syslogf(KLOG_TRACE,"[FUTEX] Update word at %p:%p: %u -> %u\n",
+             address2,kernel_futex2,old_addr2_word,new_addr2_word);
+   if (!katomic_cmpxch(*(unsigned int *)kernel_futex2,old_addr2_word,new_addr2_word)) {
+    if (has_address2_partof_set) {
+     /* Must reload primary conditions because the secondary word depends on them. */
+     k_syslogf(KLOG_DEBUG,"[FUTEX] Reload primary conditions cmpxch(%x,%x,%x)\n",
+               *(unsigned int *)kernel_futex2,old_addr2_word,new_addr2_word);
+     goto reload_primary_conditions;
+    } else {
+     /* Must only reload the secondary codeword. */
+     goto reload_secondary_word;
+    }
+   }
+   assertf(!has_address2_partof_set ||
+           secondary_opcode == _KFUTEX_CMD_C0,
+           "Can only signal a secondary futex if it's not part of the primary set");
+   if (user_futex2) {
+    /* Signal or unlock the secondary futex. */
+    if (secondary_opcode == _KFUTEX_CMD_C1) {
+     k_syslogf(KLOG_DEBUG,"[FUTEX] send(%p)\n",address2);
+     while (_ksignal_sendone_andunlock_c(&user_futex2->f_sig) == KE_DESTROYED);
+    } else if (secondary_opcode == _KFUTEX_CMD_CX) {
+     k_syslogf(KLOG_DEBUG,"[FUTEX] send(%p)\n",address2);
+     _ksignal_sendall_andunlock_c(&user_futex2->f_sig);
+    } else if (!has_address2_partof_set) {
+     ksignal_unlock_c(&user_futex2->f_sig,KSIGNAL_LOCK_WAIT);
+    }
+   }
+  } break;
+  default: break;
+ }
+ krwlock_end(&self->s_lock); /* Could be a read- or a write-lock. */
+
+ /* Step #3: Begin receiving everything from the generated sigset. */
+ error = buf ? (abstime  // TODO: vrecv
+  ?  _ksigset_vtimedrecvs_andunlock_c(&set.kfs_sigset,&kernel_abstime,buf)
+  :       _ksigset_vrecvs_andunlock_c(&set.kfs_sigset,buf)) : (abstime
+  ?   _ksigset_timedrecvs_andunlock_c(&set.kfs_sigset,&kernel_abstime)
+  :        _ksigset_recvs_andunlock_c(&set.kfs_sigset));
+ if (user_futex2_is_reference) kshmfutex_decref(user_futex2);
+ quit_futexset(&set);
+ return error;
+end_EAGAIN: error = KE_AGAIN;
+ k_syslogf(KLOG_DEBUG,"[FUTEX] fail(EAGAIN)\n");
+/*end_unlock_set:*/
+ if (user_futex2 && !has_address2_partof_set) {
+  ksignal_unlock_c(&user_futex2->f_sig,KSIGNAL_LOCK_WAIT);
+ }
+ ksigset_unlocks_c(&set.kfs_sigset,KSIGNAL_LOCK_WAIT);
+/*end_user_futex2:*/ if (user_futex2_is_reference) kshmfutex_decref(user_futex2);
+end_futexset:    quit_futexset(&set);
+end_unlock:      krwlock_end(&self->s_lock); /* Could be a read- or a write-lock. */
+ return error;
+}
+
+#undef V
 
 __DECL_END
 

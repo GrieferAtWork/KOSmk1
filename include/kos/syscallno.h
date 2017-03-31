@@ -95,7 +95,8 @@ __DECL_BEGIN
 #define SYS_ktask_exec         59 /*< _syscall4(kerrno_t,ktask_exec,char const *,path,__size_t,pathmax,struct kexecargs const *,args,__u32,flags); */
 #define SYS_ktask_fexec        60 /*< _syscall3(kerrno_t,ktask_fexec,int,fd,struct kexecargs const *,args,__u32,flags); */
 #define SYS_kfutex_cmd         61 /*< _syscall5(kerrno_t,kfutex_cmd,kfutex_t *,uaddr,unsigned int,futex_op,kfutex_t,val,void *,buf,struct timespec const *,abstime); */
-#define SYS_kfutex_ccmd        62 /*< _syscall5(kerrno_t,kfutex_cmd2,kfutex_t *,uaddr,unsigned int,futex_op,kfutex_t,val,struct timespec const *,abstime,struct kfutex_cmdex *__restrict,exargs); */
+#define SYS_kfutex_ccmd        62 /*< _syscall7(kerrno_t,kfutex_ccmd,kfutex_t *,uaddr,unsigned int,futex_op,unsigned int,val,void *,buf,struct timespec const *,abstime,kfutex_t *,uaddr2,unsigned int,val2); */
+#define SYS_kfutex_ccmds       63 /*< _syscall5(kerrno_t,kfutex_ccmds,struct kfutexset *,ftxset,void *,buf,struct timespec const *,abstime,kfutex_t *,uaddr2,unsigned int,val2); */
 
 #define SYS_kproc_enumfd       65  /*< _syscall4(kerrno_t,kproc_enumfd,int,self,int *__restrict,fdv,size_t,fdc,size_t *,reqfdc); */
 #define SYS_kproc_openfd       66  /*< _syscall3(int,kproc_openfd,int,self,int,fd,int,flags); */

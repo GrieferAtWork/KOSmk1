@@ -74,6 +74,7 @@
     <ClInclude Include="..\include\kos\kernel\signal.h" />
     <ClInclude Include="..\include\kos\kernel\signal_v.h" />
     <ClInclude Include="..\include\kos\kernel\sigset.h" />
+    <ClInclude Include="..\include\kos\kernel\sigset_v.h" />
     <ClInclude Include="..\include\kos\kernel\socket.h" />
     <ClInclude Include="..\include\kos\kernel\spinlock.h" />
     <ClInclude Include="..\include\kos\kernel\stdkernel.h" />

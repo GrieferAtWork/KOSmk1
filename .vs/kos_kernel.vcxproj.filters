@@ -306,6 +306,9 @@
     <ClInclude Include="..\include\kos\kernel\arch\x86\mpfps.h">
       <Filter>include\arch\x86</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\kos\kernel\sigset_v.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\main.c">

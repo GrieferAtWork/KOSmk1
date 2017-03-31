@@ -111,6 +111,22 @@ struct timespec;
 
 typedef __attribute__((__aligned__(__SIZEOF_INT__))) volatile unsigned int kfutex_t;
 
+struct __packed kfutexset {
+ struct kfutexset *fs_next;  /*< [0..1] Pointer to another set of futex objects, or NULL. */
+ unsigned int      fs_op;    /*< The futex operation that should be applied to those in the vector below. */
+ unsigned int      fs_val;   /*< The value used as right-hand-side operand in some recv operations as set by 'fs_op'. */
+ __size_t          fs_count; /*< Amount of futex objects, either inline, or dereferenced. */
+ __size_t          fs_align; /*< Alignment of futex addresses, or < sizeof(kfutex_t) for a packed vector of pointers that should be dereferenced. */
+union __packed {
+ kfutex_t         *fs_avec;  /*< [if(fs_align >= sizeof(kfutex_t))][align(fs_align)][0..fs_count]
+                              *   Vector of inline futex objects, each offset from each pother by 'fs_align'.
+                              *   >> AT(int i) { return (kfutex_t *)((uintptr_t)fs_avec+i*fs_align); } */
+ kfutex_t        **fs_dvec;  /*< [if(fs_align <  sizeof(kfutex_t))][1..1][0..fs_count]
+                              *   Packed vector of futex addresses.
+                              *   >> AT(int i) { return fs_dvec[i]; } */
+};};
+
+
 //////////////////////////////////////////////////////////////////////////
 // Perform a futex operation:
 // @return: KE_OK:       [*]           The operation completed successfully.
@@ -134,6 +150,39 @@ __local _syscall5(kerrno_t,kfutex_cmd,
 __local _syscall7(kerrno_t,kfutex_ccmd, /* kfutex_c[onditional]cmd */
                   kfutex_t *,uaddr,unsigned int,futex_op,
                   unsigned int,val,void *,buf,struct timespec const *,abstime,
+                  kfutex_t *,uaddr2,unsigned int,val2);
+
+//////////////////////////////////////////////////////////////////////////
+// Similar to 'kfutex_ccmd', but wait for multiple signals at once,
+// atomically performing the atomic checks specified in all chained signal
+// sets before starting to wait.
+// NOTES:
+//  - A secondary operation that should be performed on 'uaddr2'
+//    must be specified in the first link of the 'ftxset' chain.
+//    Secondary operations in any other links are silently ignored.
+//  - In the event of KE_AGAIN, you must figure out which ftx
+//    caused a check to fail, just as you have to when figuring
+//    out which one caused you to wake afterwards.
+// WARNING:
+//  - This function can _only_ be used to receive futex objects.
+//    If the futex operation specified in any of the 
+// Example for receiving multiple futex objects:
+// >> static kfutex_t ftxv[][2] = {{0,0},{0,0}};
+// >> static kfutex_t *
+// >> 
+// >> static void *thread_main(void *p) {
+// >>   char buf[256];
+// >>   
+// >>   printf("data from %p: %.256q\n",buf);
+// >>   return p;
+// >> }
+// @return: * :       Same as 'kfutex_cmd'.
+// @return: KE_INVAL: The secondary futex operation attempted to send 'uaddr2' which is already contained in 'ftxset'.
+// @return: KE_INVAL: A primary futex operations attempted to send a signal (This function can only be used to receive futex objects; potentially multiple at once).
+// @return: KE_OK:   'ftxset' is NULL and nothing needed to be done.
+__local _syscall5(kerrno_t,kfutex_ccmds, /* kfutex_c[onditional]cmds (plural) */
+                  struct kfutexset *,ftxset,void *,buf,
+                  struct timespec const *,abstime,
                   kfutex_t *,uaddr2,unsigned int,val2);
 
 /* Helper macros for easy futex signaling. */

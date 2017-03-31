@@ -30,17 +30,29 @@
 #include <unistd.h>
 #include <limits.h>
 
-static unsigned int ftx   = 0;
-static unsigned int ready = 0;
+static unsigned int ready  = 0;
+static unsigned int ftx[2] = {0,0};
 
 static void *thread_main(void *p) {
  kerrno_t error;
  char buffer[256];
  /* atomic: if (true) { ready = 1; sendall(&ready); vrecv(&ftx,buffer); } */
+#if 1
+ struct kfutexset set;
+ set.fs_next  = NULL;
+ set.fs_op    = KFUTEX_RECVIF(KFUTEX_TRUE)|
+                KFUTEX_CCMD_SENDALL(KFUTEX_ADD);
+ set.fs_val   = 0;
+ set.fs_count = 2;
+ set.fs_align = sizeof(kfutex_t);
+ set.fs_avec  = ftx;
  outf("[THREAD] Begin receiving data\n");
+ error = kfutex_ccmds(&set,buffer,NULL,&ready,1);
+#else
  error = kfutex_ccmd(&ftx,KFUTEX_RECVIF(KFUTEX_TRUE)|
-                          KFUTEX_CCMD_SENDALL(KFUTEX_STORE),
+                          KFUTEX_CCMD_SENDALL(KFUTEX_ADD),
                      0,buffer,NULL,&ready,1);
+#endif
  assertf(error == KE_OK,"%d",error);
  outf("[THREAD] Data: %.256q\n",buffer);
  return p;
@@ -50,19 +62,28 @@ static void *thread_main(void *p) {
 TEST(futex) {
  static char const data[] = "This is the data that is send through a signal";
  kerrno_t error;
- int t = task_newthread(&thread_main,NULL,TASK_NEWTHREAD_DEFAULT);
+ int t[] = {
+  task_newthread(&thread_main,NULL,TASK_NEWTHREAD_DEFAULT),
+  task_newthread(&thread_main,NULL,TASK_NEWTHREAD_DEFAULT),
+ };
 
  /* atomic: if (ready == 0) { recv(&ready). }
   * NOTE: This may randomly return 'KE_AGAIN' when
   *       the thread is already receiving. */
- error = kfutex_cmd(&ready,KFUTEX_RECVIF(KFUTEX_EQUAL),0,NULL,NULL);
- outf("[MAIN] Sending data after %d...\n",error);
+ outf("[MAIN] Begin receiving...\n");
+ while (ready != 2) {
+  error = kfutex_cmd(&ready,KFUTEX_RECVIF(KFUTEX_NOT_EQUAL),2,NULL,NULL);
+  outf("[MAIN] Wakeup for %d...\n",error);
+ }
 
+ outf("[MAIN] Sending data...\n");
  /* atomic: vsendall(&ftx,data,sizeof(data)); */
- error = kfutex_vsendall(&ftx,data,sizeof(data));
-
+ error = kfutex_vsendall(&ftx[0],data,sizeof(data));
+ error = kfutex_vsendall(&ftx[1],data,sizeof(data));
  outf("[MAIN] Joining thread after %d...\n",error);
- task_join(t,NULL);
+ task_join(t[0],NULL);
+ task_join(t[1],NULL);
  outf("[MAIN] Joined thread\n");
- close(t);
+ close(t[0]);
+ close(t[1]);
 }
