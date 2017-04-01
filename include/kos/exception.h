@@ -212,8 +212,19 @@ __DECL_BEGIN
 /* Except begin/end */
 #define __KEXCEPT_EXCEPT_BEGIN_CONTINUE   kexcept_continue()
 #define __KEXCEPT_EXCEPT_BEGIN_RETHROW    kexcept_rethrow()
+
+#ifndef __NO_attribute_warning
+__local __attribute_warning("__except() expression never evaluates to 'KEXCEPTION_EXECUTE_HANDLER'")
+void __kexc_NOEXEC(void) {} /* An exception handler that can never do anything is useless. */
+#define __kexc_NOEXEC_CHECK(expr) \
+ if (__builtin_constant_p(expr) && ((expr) != KEXCEPTION_EXECUTE_HANDLER)) __kexc_NOEXEC();
+#else
+#define __kexc_NOEXEC_CHECK(expr) /* nothing */
+#endif
+
 #define __KEXCEPT_EXCEPT_BEGIN(expr) \
  __xblock({ __asm__(__KEXCEPT_LOADREGS_S : : : "memory", "esp");\
+            __kexc_NOEXEC_CHECK(expr)\
             switch ((int)(expr)) {\
              case KEXCEPTION_CONTINUE_EXECUTION: __KEXCEPT_EXCEPT_BEGIN_CONTINUE;\
              case KEXCEPTION_CONTINUE_SEARCH:    __KEXCEPT_EXCEPT_BEGIN_RETHROW;\
