@@ -514,6 +514,7 @@ void ktask_setupuser(struct ktask *self, __user void *useresp, __user void *eip)
 #else
  regs.base.eflags = 0;
 #endif
+ regs.base.eflags |= X86_EFLAGS_IOPL(3); /* TODO: Remove me: enable I/O permissions in userspace. */
  ktask_stackpush_sp_unlocked(self,&regs,sizeof(regs));
 }
 

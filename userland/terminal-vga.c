@@ -26,25 +26,28 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <hw/video/vga.h>
 #include <kos/arch/x86/vga.h>
 #include <kos/atomic.h>
 #include <kos/keyboard.h>
 #include <kos/syslog.h>
 #include <kos/time.h>
-#include <proc.h>
+#include <lib/term.h>
 #include <limits.h>
 #include <math.h>
+#include <proc.h>
 #include <pty.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/io.h>
 #include <sys/mman.h>
-#include <lib/term.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
+#include <exception.h>
 
 static __u8 vga_invert[VGA_COLORS] = {
 #ifndef __INTELLISENSE__
@@ -278,13 +281,14 @@ static void *cursor_blink_threadmain(void *__unused(closure)) {
  for (;;) { usleep(300000); blink_cur(); }
  return NULL;
 }
-static void invert_all(void) {
- cell_t *iter,*end,cell;
+static void blit_inverted(void) {
+ cell_t *iter,*end,*dst,cell;
  iter = vga_buf,end = vga_bufend;
- for (; iter != end; ++iter) {
-  cell  = *iter;
-  cell  = INVERT(cell);
-  *iter = cell;
+ dst = vga_dev;
+ for (; iter != end; ++iter,++dst) {
+  cell = *iter;
+  cell = INVERT(cell);
+  *dst = cell;
  }
 }
 
@@ -352,14 +356,25 @@ static void TERM_CALL term_putc(struct term *__unused(t), char ch) {
   } break;
 #ifdef TERM_BELL
   {
-   struct timespec rem;
-   struct timespec timeout = {0,10};
+   int n;
   case TERM_BELL: // Bell
-   invert_all();
-   nanosleep(&timeout,&rem);
-   invert_all();
-   break;
-  }
+   /* Wait until a current retrace has ended. */
+   while (inb(VGA_IS1_RC)&VGA_IS1_V_RETRACE) task_yield();
+   /* Draw the screen invered. */
+   blit_inverted();
+   /* Wait a couple of frames. */
+   while (!(inb(VGA_IS1_RC)&VGA_IS1_V_RETRACE)) task_yield();
+   while (inb(VGA_IS1_RC)&VGA_IS1_V_RETRACE) task_yield();
+   usleep(1000);
+   while (!(inb(VGA_IS1_RC)&VGA_IS1_V_RETRACE)) task_yield();
+   while (inb(VGA_IS1_RC)&VGA_IS1_V_RETRACE) task_yield();
+   /* Draw the screen normal again. */
+   BLIT();
+   /* Wait until the next retrace starts. */
+   while (!(inb(VGA_IS1_RC)&VGA_IS1_V_RETRACE)) task_yield();
+   while (inb(VGA_IS1_RC)&VGA_IS1_V_RETRACE) task_yield();
+   usleep(1000);
+  } break;
 #endif
   default: term_doput(ch); break;
  }
@@ -420,7 +435,10 @@ static void TERM_CALL term_cls(struct term *__unused(t), int mode) {
 static void TERM_CALL term_el(struct term *__unused(t), int mode) {
  cell_t *begin,*end,*iter,filler = SPACE;
  int refresh_all = vga_bufpos == vga_bufend;
- if (refresh_all) term_doscroll();
+ if (refresh_all) {
+  *(unsigned int *)0xdeadbeef = 0x42;
+  term_doscroll();
+ }
  switch (mode) {
   case TERM_EL_BEFORE: begin = CUR_LINE(); end = vga_bufpos; break;
   case TERM_EL_AFTER : begin = vga_bufpos; end = CUR_LINE()+VGA_WIDTH; break;
@@ -565,6 +583,19 @@ static void *relay_incoming_threadmain(void *__unused(closure)) {
  return NULL;
 }
 
+static int reopen_nonstd(int fd) {
+ if (fd == STDIN_FILENO ||
+     fd == STDOUT_FILENO ||
+     fd == STDERR_FILENO) {
+  int newfd;
+  newfd = dup(fd);
+  if (newfd == -1) return fd;
+  newfd = reopen_nonstd(newfd);
+  close(fd);
+  fd = newfd;
+ }
+ return fd;
+}
 
 
 int main(int argc, char *argv[]) {
@@ -610,6 +641,10 @@ int main(int argc, char *argv[]) {
   perror("Failed to create PTY device");
   _exit(EXIT_FAILURE);
  }
+
+ /* Prevent these from using std handles. */
+ amaster = reopen_nonstd(amaster);
+ aslave = reopen_nonstd(aslave);
 
 #if 1
  if ((child_proc = task_fork()) == 0) {
