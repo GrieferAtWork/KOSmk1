@@ -72,6 +72,14 @@ extern int exc_tbprintex __P((int __tp_only, void *__closure));
 extern __wunused __malloccall struct tbtrace *exc_tbcapture __P((void));
 extern __wunused char const *exc_getname __P((exno_t __exception_number));
 
+//////////////////////////////////////////////////////////////////////////
+// Prints some additional information specified by the
+// given format string before calling 'exc_tbprint(0)'
+// NOTE: The given format string should contain human-readable
+//       information concerning the thread and context that
+//       the exception occurred under, such as local variable
+//       and argument values.
+extern int exc_printf __P((char const *__restrict __fmt, ...));
 
 
 #define exc_try       KEXCEPT_TRY

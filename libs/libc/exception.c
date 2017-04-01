@@ -107,6 +107,16 @@ exc_tbprint(int tp_only) {
  return exc_tbprintex(tp_only,NULL);
 }
 __public int
+exc_printf(char const *__restrict fmt, ...) {
+ int error; va_list args;
+ va_start(args,fmt);
+ error = format_vprintf(&tbprint_callback,NULL,fmt,args);
+ va_end(args);
+ if (error != 0) return error;
+ return exc_tbprintex(0,NULL);
+}
+
+__public int
 exc_tbprintex(int tp_only, void *closure) {
 #if __SIZEOF_POINTER__ == 4
 #   define P  "%.8p"
