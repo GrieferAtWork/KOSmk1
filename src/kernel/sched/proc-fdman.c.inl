@@ -25,6 +25,7 @@
 
 #include <kos/kernel/proc.h>
 #include <kos/kernel/fd.h>
+#include <kos/kernel/fs/fs.h>
 #include <kos/kernel/fs/file.h>
 #include <sys/types.h>
 #include <fcntl.h>
@@ -195,19 +196,13 @@ kerrno_t kproc_insfd_inherited(struct kproc *__restrict self, int *fd, struct kf
  assert(entry->fd_type != KFDTYPE_NONE);
  if __unlikely(KE_ISERR(error = kproc_lock(self,KPROC_LOCK_FDMAN))) return error;
  assert(self->p_fdman.fdm_cnt <= self->p_fdman.fdm_fda);
- // Check for free slots
+ /* Check for free slots */
  if (self->p_fdman.fdm_cnt != self->p_fdman.fdm_fda) for (;;) {
-  assertf(self->p_fdman.fdm_fre < self->p_fdman.fdm_fda,
-          "self->p_fdman.fdm_fre = %u\n"
-          "self->p_fdman.fdm_fda = %u\n"
-          "self->p_fdman.fdm_cnt = %u\n"
-          ,self->p_fdman.fdm_fre
-          ,self->p_fdman.fdm_fda
-          ,self->p_fdman.fdm_cnt);
-  // Check for the next free slot
+  if (self->p_fdman.fdm_fre >= self->p_fdman.fdm_fda) self->p_fdman.fdm_fre = 0;
+  /* Check for the next free slot */
   resfd = &self->p_fdman.fdm_fdv[self->p_fdman.fdm_fre];
   if (!resfd->fd_file) { *fd = self->p_fdman.fdm_fre; goto found; }
-  if (++self->p_fdman.fdm_fre == self->p_fdman.fdm_fda) self->p_fdman.fdm_fre = 0;
+  ++self->p_fdman.fdm_fre;
  }
  // Make sure that the caller has
  // permissions to allocate a new file.
