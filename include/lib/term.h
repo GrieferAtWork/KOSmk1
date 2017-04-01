@@ -49,7 +49,7 @@ struct __packed term_rgba {union __packed {
 #define TERM_RGBA_CHANNEL_A 0
  struct __packed { uint8_t a,b,g,r; };
  struct __packed { int8_t sa,sb,sg,sr; };
-#else
+#elif __BYTE_ORDER == __BIG_ENDIAN
 #define TERM_RGBA_INIT(r,g,b,a) {{{r,g,b,a}}}
 #define TERM_RGBA_CHANNEL_R 0
 #define TERM_RGBA_CHANNEL_G 1
@@ -57,6 +57,8 @@ struct __packed term_rgba {union __packed {
 #define TERM_RGBA_CHANNEL_A 3
  struct __packed { uint8_t r,g,b,a; };
  struct __packed { int8_t sr,sg,sb,sa; };
+#else
+#error FIXME
 #endif
                    uint32_t color;
                    uint8_t channels[4];

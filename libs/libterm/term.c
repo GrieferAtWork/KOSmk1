@@ -292,32 +292,47 @@ static char const *const escape_preface[] = {
  ANSI_ESCAPE_S "T",
 };
 
+#define MODE_TEXT     0
+#define MODE_ESC      1 /* "\033" */
+#define MODE_LBRACKET 2 /* "\033[" */
+#define MODE_RBRACKET 3 /* "\033]" */
+#define MODE_LPAREN   4 /* "\033(" */
+#define MODE_IMGINFO  5 /* "\033T" */
+#define MODE_IMAGE    6 /* Special mode: Image input. */
+#define MODE_BOX     10 /* Special mode: Draw box characters. */
+
 __local void _term_outc(struct term *self, char ch) {
  char **iter,**end;
  assert(self);
  switch (self->tr_escape) {
-  case 0:
+
+  {
+  case MODE_TEXT:
    if (ch == ANSI_ESCAPE) {
 enter_escape_mode:
     /* Enable escape mode. */
-    self->tr_escape = 1;
+    self->tr_escape = MODE_ESC;
     self->tr_argc   = 0;
     self->tr_bufpos = self->tr_buffer;
     return;
    }
    break;
-  case 1:
+  }
+
+  {
+  case MODE_ESC:
    switch (ch) {
-    case ANSI_BRACKET:       self->tr_escape = 2; return;
-    case ANSI_BRACKET_RIGHT: self->tr_escape = 3; return;
-    case ANSI_OPEN_PAREN:    self->tr_escape = 4; return;
-    case 'T':                self->tr_escape = 5; return;
+    case ANSI_BRACKET:       self->tr_escape = MODE_LBRACKET; return;
+    case ANSI_BRACKET_RIGHT: self->tr_escape = MODE_RBRACKET; return;
+    case ANSI_OPEN_PAREN:    self->tr_escape = MODE_LPAREN; return;
+    case 'T':                self->tr_escape = MODE_IMGINFO; return;
     default: /* Not actually escaping... */ goto dump_buffer;
    }
    break;
+  }
 
   {
-  case 2: /* "ESC[" */
+  case MODE_LBRACKET: /* "ESC[" */
 #define ARGC  (SELF->tr_argc)
 #define ARGV  (SELF->tr_argv)
    if (ch < ANSI_LOW || ch > ANSI_HIGH) goto add_to_buffer;
@@ -409,7 +424,7 @@ enter_escape_mode:
          self->tr_attrib |= ANSI_ITALIC;
          break;
         case 2:
-         /* Konsole RGB color support */
+         /* Console RGB color support */
          if ((end-iter) >= 3) {
           struct term_rgba color;
           color.r = atoi(iter[0]);
@@ -569,7 +584,7 @@ enter_escape_mode:
   } break;
 
   {
-  case 3: /* "ESC]" */
+  case MODE_RBRACKET: /* "ESC]" */
    end = (iter = ARGV)+ARGC;
    while (iter != end) {
     int arg = atoi(*iter++);
@@ -583,10 +598,10 @@ enter_escape_mode:
   }
 
   {
-  case 4: /* "ESC(" */
+  case MODE_LPAREN: /* "ESC(" */
    if (ch == '0') {
     /* Enable BOX mode. */
-    self->tr_escape = 10;
+    self->tr_escape = MODE_BOX;
     self->tr_attrib |= ANSI_BOX;
     return;
    } else if (ch == 'B') {
@@ -600,7 +615,7 @@ enter_escape_mode:
   {
    size_t x,y;
    char buf[32];
-  case 5: /* "ESCT" */
+  case MODE_IMGINFO: /* "ESCT" */
    if (ch == 'q') {
     GET_CELL_SIZE(x,y);
     sprintf(buf,ANSI_ESCAPE_S "T%Iu;%Iuq",x,y);
@@ -616,7 +631,7 @@ enter_escape_mode:
     self->tr_imgps = self->tr_imabg;
     memset(self->tr_imabg,0,
           (self->tr_imgnd-self->tr_imabg));
-    self->tr_escape = 6;
+    self->tr_escape = MODE_IMAGE;
     return;
    } else {
     goto dump_buffer;
@@ -624,7 +639,7 @@ enter_escape_mode:
    goto end_escape;
   }
 
-  case 6: /* Draw RGBA cell image. */
+  case MODE_IMAGE: /* Draw RGBA cell image. */
    assert(self->tr_imgps);
    *self->tr_imgps++ = (uint8_t)ch;
    if (self->tr_imgps == self->tr_imgnd) {
@@ -633,7 +648,7 @@ enter_escape_mode:
    }
    return;
 
-  case 10: /* BOX mode. */
+  case MODE_BOX: /* BOX mode. */
    if (ch == ANSI_ESCAPE) goto enter_escape_mode;
    if (ch >= 'a' && ch <= 'z') { PUTB(ch); return; }
    break;
@@ -645,7 +660,7 @@ enter_escape_mode:
 update_colors:
  SET_COLOR(self->tr_fg,self->tr_bg);
 end_escape:
- self->tr_escape = (self->tr_attrib&ANSI_BOX) ? 10 : 0;
+ self->tr_escape = (self->tr_attrib&ANSI_BOX) ? MODE_BOX : MODE_TEXT;
  return;
 add_to_buffer:
  if __unlikely(self->tr_bufpos == self->tr_bufend) {
@@ -653,7 +668,7 @@ add_to_buffer:
   assert(new_size);
   if (!resize_buffer(self,new_size)) goto dump_buffer;
  }
- // Already go ahead and split arguments
+ /* Already go ahead and split arguments */
  assert(self->tr_argv[0] == self->tr_buffer);
  if (!self->tr_argc) self->tr_argc = 1; /*< Non-empty arg-text means at least one argument! */
  if (ch == ';') {
@@ -673,13 +688,14 @@ add_to_buffer:
  }
  return;
 dump_buffer:
- if (self->tr_escape != 0 && self->tr_escape != 10) {
+ if (self->tr_escape != MODE_TEXT &&
+     self->tr_escape != MODE_BOX) {
   char *buf_iter,*buf_end;
   char const *preface;
   /* Repeat the original preface. */
   preface = escape_preface[self->tr_escape];
   for (; *preface; ++preface) PUTC(*preface);
-  self->tr_escape = (self->tr_attrib&ANSI_BOX) ? 10 : 0;
+  self->tr_escape = (self->tr_attrib&ANSI_BOX) ? MODE_BOX : MODE_TEXT;
   /* Dump the escape buffer. */
   buf_iter = self->tr_buffer,buf_end = self->tr_bufpos;
   for (; buf_iter != buf_end; ++buf_iter) PUTC(*buf_iter);
