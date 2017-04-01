@@ -25,6 +25,21 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <format-printer.h>
+
+static int
+do_print_escape(char const *s, size_t maxlen, void *__unused(closure)) {
+ write(STDOUT_FILENO,s,strnlen(s,maxlen)*sizeof(char));
+ return 0;
+}
+static void print_escape(char const *s) {
+ format_dequote(&do_print_escape,NULL,s,(size_t)-1);
+}
+
+static char const LF[] = {'\n'};
+static char const SPACE[] = {' '};
 
 int main(int argc, char *argv[]) {
  char **iter,**end,*arg;
@@ -37,27 +52,28 @@ int main(int argc, char *argv[]) {
  // Check for arguments
  while (iter != end && **iter == '-') {
   arg = (*iter)+1;
-  do {
-   if (*arg == 'n') { ++arg; nolf = 1; continue; }
-   if (*arg == 'e') { ++arg; escape = 1; continue; }
-  } while (0);
-  if (arg == (*iter)+1) break; // Not really an argument
+arg_parse:
+  if (*arg == 'n') { ++arg; nolf = 1; goto arg_parse; }
+  if (*arg == 'e') { ++arg; escape = 1; goto arg_parse; }
+  if (arg == (*iter)+1) break; /* Not really an argument */
   if (*arg) {
    printf("Invalid argument: %q\n",*arg);
    return EXIT_FAILURE;
   }
+  ++iter;
  }
  if (iter != end) for (;;) {
   arg = *iter++;
   if (escape) {
-   // TODO: Decode escape characters
+   /* Decode escape characters */
+   print_escape(arg);
+  } else {
+   write(STDOUT_FILENO,arg,strlen(arg)*sizeof(char));
   }
-  printf("%s",arg); // This can be done better...
   if (iter == end) break;
-  putchar(' ');
+  write(STDOUT_FILENO,SPACE,sizeof(SPACE));
  }
-
- if (!nolf) putchar('\n');
+ if (!nolf) write(STDOUT_FILENO,LF,sizeof(LF));
  return EXIT_SUCCESS;
 }
 
