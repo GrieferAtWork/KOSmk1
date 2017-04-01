@@ -94,10 +94,11 @@ KSYSCALL_DEFINE_EX2(c,kerrno_t,ktask_abssleep,int,taskfd,
  return error;
 }
 
-KSYSCALL_DEFINE_EX3(c,kerrno_t,ktask_terminate,int,taskfd,
+KSYSCALL_DEFINE_EX3(rc,kerrno_t,ktask_terminate,int,taskfd,
                     void *,exitcode,ktaskopflag_t,flags) {
  struct kfdentry fdentry; kerrno_t error;
  KTASK_CRIT_MARK
+ k_syslogf(KLOG_DEBUG,"terminate from %p (%I32x)\n",regs->regs.eip,flags);
  error = kproc_getfd(kproc_self(),taskfd,&fdentry);
  if __likely(KE_ISOK(error)) {
   error = kfdentry_terminate(&fdentry,exitcode,flags);

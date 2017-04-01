@@ -47,6 +47,9 @@
 #include <errno.h>
 #include <stdint.h>
 #endif
+#ifndef __CONFIG_MIN_BSS__
+#include <kos/syslog.h>
+#endif /* !__CONFIG_MIN_BSS__ */
 
 
 __DECL_BEGIN
@@ -265,12 +268,9 @@ _vsnscanf(char const *__restrict data, size_t maxdata,
 
 #ifndef __CONFIG_MIN_BSS__
 __public void perror(char const *s) {
-#ifdef __DEBUG__
- int eno = errno;
- printf("%s: %d: %s\n",s,eno,strerror(eno));
-#else
- printf("%s: %s\n",s,strerror(errno));
-#endif
+ int eno = __get_errno();
+ printf("%s: %s\n",s,eno,strerror(eno));
+ k_syslogf(KLOG_ERROR,"%s: %d: %s\n",s,eno,strerror(eno));
 }
 #endif /* !__CONFIG_MIN_BSS__ */
 

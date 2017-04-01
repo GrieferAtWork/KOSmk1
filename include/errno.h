@@ -62,8 +62,8 @@ __DECL_BEGIN
 
 
 #ifndef __NO_coldcall
-// Take advantage of cold calls to hint the compiler that
-// anything setting the errno this way is unlikely code.
+/* Take advantage of cold calls to hint the compiler that
+ * anything setting the errno this way is unlikely code. */
 __forcelocal __coldcall void __set_errno __D1(errno_t,__eno) { __do_seterrno(__eno); }
 #   define __get_errno __do_geterrno
 #   define __set_errno __set_errno

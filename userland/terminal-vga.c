@@ -419,13 +419,16 @@ static void TERM_CALL term_cls(struct term *__unused(t), int mode) {
 }
 static void TERM_CALL term_el(struct term *__unused(t), int mode) {
  cell_t *begin,*end,*iter,filler = SPACE;
+ int refresh_all = vga_bufpos == vga_bufend;
+ if (refresh_all) term_doscroll();
  switch (mode) {
   case TERM_EL_BEFORE: begin = CUR_LINE(); end = vga_bufpos; break;
   case TERM_EL_AFTER : begin = vga_bufpos; end = CUR_LINE()+VGA_WIDTH; break;
   default            : begin = CUR_LINE(); end = begin+VGA_WIDTH; break;
  }
  for (iter = begin; iter != end; ++iter) *iter = filler;
- BLIT_CNT(begin-vga_buf,end-begin);
+ if (refresh_all) BLIT();
+ else BLIT_CNT(begin-vga_buf,end-begin);
 }
 static void TERM_CALL term_scroll(struct term *__unused(t), offset_t offset) {
  cell_t filler = SPACE;

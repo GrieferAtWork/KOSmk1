@@ -159,7 +159,7 @@ __ktask_terminate_s(struct ktask *self, void *exitcode,
                     struct ktask *__restrict caller, __u32 flags) {
  kerrno_t error;
  KTASK_CRIT_MARK
- if (flags&KTASKOPFLAG_NOCALLER && self == caller) return KE_OK;
+ if (flags&KTASKOPFLAG_NOCALLER && self == caller) return KE_WOULDBLOCK;
  error = _ktask_terminate_k(self,exitcode);
  if (!(flags&KTASKOPFLAG_ASYNC) &&
       (KE_ISOK(error) || error == KE_DESTROYED) &&
@@ -172,7 +172,7 @@ __ktask_terminate_r(struct ktask *__restrict self,
                     struct ktask *__restrict caller,
                     void *exitcode, struct kproc *proc, __u32 flags) {
  kerrno_t error; struct ktask *child;
- size_t i; int found_running;
+ size_t i;  int found_running;
  KTASK_CRIT_MARK
  /* This is really hacky, and might appear like a bad solution,
   * but in actuality it does the job quite well!
@@ -195,8 +195,7 @@ again_killchildren:
       found_running = 1;
       ktask_join(child,NULL);
      }
-    } else if (error != KE_DESTROYED) {
-     assert(KE_ISOK(error));
+    } else if (KE_ISOK(error)) {
      found_running = 1;
     }
     ktask_decref(child);
@@ -227,7 +226,10 @@ again_killchildren:
   error = __ktask_terminate_s(self,exitcode,caller,flags);
   ktask_lock(self,KTASK_LOCK_CHILDREN);
   /* Must kill more children (Shouldn't happen). */
-  if __unlikely(self->t_children.t_taska) goto again_killchildren;
+  if __unlikely(self->t_children.t_taska &&
+                KE_ISOK(error)) {
+   goto again_killchildren;
+  }
   ktask_unlock(self,KTASK_LOCK_CHILDREN);
  }
  return error;
@@ -249,6 +251,8 @@ kerrno_t ktask_terminateex_k(struct ktask *__restrict self,
  KTASK_NOINTR_END
  /* If we have terminated ktask_self(), the following line will kill us. */
  KTASK_CRIT_END
+ /* Handle error signal used to indicate non-termination of the caller. */
+ if (error == KE_WOULDBLOCK) error = KE_OK;
  return error;
 }
 
