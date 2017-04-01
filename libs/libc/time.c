@@ -145,15 +145,17 @@ __public int nanosleep(struct timespec const *req,
  ktime_getnow(&abstime);
  __timespec_add(&abstime,req);
  error = ktask_abssleep(ktask_self(),&abstime);
- if (error == KE_INTR) {
-  *rem = abstime;
-  ktime_getnow(&abstime);
-  if __unlikely(__timespec_cmplo(rem,&abstime)) goto norem;
-  __timespec_sub(rem,&abstime);
- } else {
+ if (rem) {
+  if (error == KE_INTR) {
+   *rem = abstime;
+   ktime_getnow(&abstime);
+   if __unlikely(__timespec_cmplo(rem,&abstime)) goto norem;
+   __timespec_sub(rem,&abstime);
+  } else {
 norem:
-  rem->tv_nsec = 0;
-  rem->tv_sec = 0;
+   rem->tv_nsec = 0;
+   rem->tv_sec = 0;
+  }
  }
  return error;
 #else
@@ -164,15 +166,17 @@ norem:
   __timespec_add(&abstime,req);
   error = ktask_abssleep(ktask_self(),&abstime);
  }
- if (error == KE_INTR) {
-  *rem = abstime;
-  if __unlikely(KE_ISERR(ktime_getnow(&abstime))) goto norem;
-  if __unlikely(__timespec_cmplo(rem,&abstime)) goto norem;
-  __timespec_sub(rem,&abstime);
- } else {
+ if (rem) {
+  if (error == KE_INTR) {
+   *rem = abstime;
+   if __unlikely(KE_ISERR(ktime_getnow(&abstime))) goto norem;
+   if __unlikely(__timespec_cmplo(rem,&abstime)) goto norem;
+   __timespec_sub(rem,&abstime);
+  } else {
 norem:
-  rem->tv_nsec = 0;
-  rem->tv_sec = 0;
+   rem->tv_nsec = 0;
+   rem->tv_sec = 0;
+  }
  }
  if __unlikely(KE_ISERR(error)) {
   __set_errno(-error);
