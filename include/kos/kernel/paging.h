@@ -269,8 +269,9 @@ kpagedir_getpage(struct kpagedir *__restrict self,
 //////////////////////////////////////////////////////////////////////////
 // Returns non-ZERO(0) if the given up to 'bytes' can be accesses
 // quickly (using one translation), starting at 'user_address'.
+// NOTE: THe second check against 'bytes' is necessary to prevent false positives on overflow.
 #define KPAGEDIR_CAN_QUICKACCESS(user_address,bytes) \
- (((__uintptr_t)(user_address)&(PAGESIZE-1))+(bytes) <= PAGESIZE)
+ (((__uintptr_t)(user_address)&(PAGESIZE-1))+(bytes) <= PAGESIZE && (bytes) <= PAGESIZE)
 #define KPAGEDIR_MAYBE_QUICKACCESS(bytes)   ((bytes) <= PAGESIZE)
 
 //////////////////////////////////////////////////////////////////////////
